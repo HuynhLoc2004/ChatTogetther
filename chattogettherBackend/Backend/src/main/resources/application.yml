@@ -1,0 +1,5 @@
+jwt:
+  secret_key: huynhtanloc27102004deptraiquadithoiabcdefghjk
+  exp_access: 5 #min
+  exp_refresh: 10080 #min
+
