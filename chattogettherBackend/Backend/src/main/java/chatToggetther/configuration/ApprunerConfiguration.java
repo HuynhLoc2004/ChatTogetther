@@ -27,7 +27,7 @@ public class ApprunerConfiguration {
     @Bean
     ApplicationRunner applicationRunner(){
         return args -> {
-            if(this.userRepository.findbyAccounnt("admin")){
+            if(this.userRepository.findByAccount("admin").isPresent()){
                 log.info("đã tạo admin");
             }else{
                 UserEntity userEntity = new UserEntity();

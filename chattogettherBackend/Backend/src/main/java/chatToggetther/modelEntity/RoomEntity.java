@@ -31,4 +31,6 @@ public class RoomEntity {
     private LocalDateTime localDateTime;
     @OneToMany(cascade = CascadeType.ALL ,fetch =  FetchType.LAZY , mappedBy = "roomEntity")
     private List<UserRoomEntity> userRoomEntityList = new ArrayList<>();
+    @OneToMany(mappedBy = "roomEntity", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<MessageEntity> messages = new ArrayList<>();
 }

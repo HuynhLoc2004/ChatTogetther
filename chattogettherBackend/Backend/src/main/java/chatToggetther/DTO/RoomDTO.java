@@ -16,5 +16,5 @@ public class RoomDTO {
     private Long id;
     private String nameroom;
     private List<UserRoomDTO> userRoomDTOList = new ArrayList<>();
-
+    private Long soluong;
 }

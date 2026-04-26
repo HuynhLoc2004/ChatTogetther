@@ -53,6 +53,15 @@ public class GlobalHandleException {
         }
         return  ResponseEntity.status(responseErr.getCode()).body(responseErr);
     }
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<ResponseErr> handleAccessDeniedException(org.springframework.security.access.AccessDeniedException e) {
+        ResponseErr responseErr = new ResponseErr();
+        responseErr.setCode(403);
+        responseErr.setMessage("Bạn không có quyền gửi tin nhắn vì đã bị khoá!");
+        responseErr.setStatusCode(403);
+        responseErr.setTime(new Date());
+        return ResponseEntity.status(403).body(responseErr);
+    }
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ResponseErr> handleUncaughtException(Exception e) {
         System.err.println("Dòng lỗi 'Trời ơi đất hỡi': " + e.getMessage());

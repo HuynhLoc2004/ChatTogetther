@@ -18,11 +18,29 @@ const Login = () => {
         password: formData.password
       });
 
-      // Theo ResponseData<String> từ backend, response.data.data chính là token string
       if (response.status === 200) {
-        const token = response.data.data;
+        const { token, roomId } = response.data.data;
         localStorage.setItem('accesstoken', token);
-        window.location.href = '/'; 
+
+        // Giải mã JWT để lấy user_id
+        try {
+          const payloadBase64 = token.split('.')[1]; // Lấy phần Payload của JWT
+          const decodedPayload = JSON.parse(atob(payloadBase64)); // Giải mã Base64 sang JSON
+          const userId = decodedPayload.user_id;
+          
+          if (userId) {
+            localStorage.setItem('user_id', userId);
+            console.log("Đã lưu user_id:", userId);
+          }
+        } catch (decodeError) {
+          console.error("Không thể giải mã token:", decodeError);
+        }
+
+        if (roomId) {
+          window.location.href = `/room/${roomId}`;
+        } else {
+          window.location.href = '/'; 
+        }
       }
     } catch (err) {
       if (err.response) {

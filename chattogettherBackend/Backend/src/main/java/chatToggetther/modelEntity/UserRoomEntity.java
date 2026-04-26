@@ -9,10 +9,15 @@ import org.springframework.cglib.core.Local;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
-@Table(name = "user-room")
+@Table(name = "user_room")
 @AllArgsConstructor
 @NoArgsConstructor
 @Getter
@@ -22,16 +27,23 @@ public class UserRoomEntity {
     @GeneratedValue(strategy =  GenerationType.IDENTITY)
     @Column(name = "user-room_id")
     private Long id;
-    @Column(name = "timeJoin" , nullable = false , columnDefinition = "TIMESTAMP")
-    private LocalDateTime timeJoin;
-    @Column(name = "timeLeft"  , columnDefinition = "TIMESTAMP")
-    private LocalDateTime timeLeft;
-    @OneToOne(cascade = CascadeType.ALL , fetch =  FetchType.LAZY)
+
+    @Column(name = "time_join", columnDefinition = "timestamp[]")
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    private List<LocalDateTime> timeJoin = new ArrayList<>();
+
+    @Column(name = "time_left", columnDefinition = "timestamp[]")
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    private List<LocalDateTime> timeLeft = new ArrayList<>();
+
+    @OneToOne(fetch =  FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private UserEntity userEntity;
-    @ManyToOne(cascade = CascadeType.ALL , fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_room" , nullable = false)
     private RoomEntity roomEntity;
+    @Column(name = "active" , columnDefinition = "BOOLEAN")
+    private Boolean active;
 
 
 }

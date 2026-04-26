@@ -32,17 +32,22 @@ public class UserEntity {
     private String phone;
     @Column(name = "nickname_user" , columnDefinition = "TEXT")
     private String nickname;
-    @Column(name = "active_user"  , columnDefinition = "BOOLEAN")
+    @Column(name = "active_user")
     private Boolean active = true;
-    @Column(name = "email_user ",nullable = true ,   columnDefinition = "TEXT")
-    private Boolean email;
-    @Column(name = "roles_user" , nullable = false , columnDefinition = "TEXT[]")
+
+    @Column(name = "email_user", columnDefinition = "TEXT")
+    private String email;
+
+    @Column(name = "roles_user", nullable = false, columnDefinition = "TEXT[]")
     @JdbcTypeCode(SqlTypes.ARRAY)
     private List<String> roles = new ArrayList<>();
-    @Column(name = "permissions_user" , nullable = false , columnDefinition = "TEXT[]")
+
+    @Column(name = "permissions_user", nullable = false, columnDefinition = "TEXT[]")
     @JdbcTypeCode(SqlTypes.ARRAY)
     private List<String> permissions = new ArrayList<>();
     @OneToOne(mappedBy = "userEntity" , fetch = FetchType.LAZY , cascade =  CascadeType.ALL)
     private UserRoomEntity userRoomEntity;
+    @OneToMany(fetch = FetchType.LAZY , mappedBy = "userEntity")
+    private List<MessageEntity> messageEntityList = new ArrayList<>();
 
 }

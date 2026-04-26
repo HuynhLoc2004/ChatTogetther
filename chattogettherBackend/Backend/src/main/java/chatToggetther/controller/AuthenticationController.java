@@ -22,11 +22,11 @@ public class AuthenticationController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<ResponseData<String>> UserLogin(@RequestBody @Valid UserloginRequest userloginRequest , HttpServletResponse httpServletResponse){
+    public ResponseEntity<ResponseData<chatToggetther.DTO.LoginResponseDTO>> UserLogin(@RequestBody @Valid UserloginRequest userloginRequest , HttpServletResponse httpServletResponse){
         return ResponseEntity.ok(this.authenticationService.userLogin(userloginRequest , httpServletResponse));
     }
     @GetMapping("/refresh_token")
-    public ResponseEntity<ResponseData<String>> refreshToken(JwtAuthenticationToken jwtAuthenticationToken , HttpServletResponse httpServletResponse){
-         return ResponseEntity.ok(this.authenticationService.refreshToken(jwtAuthenticationToken , httpServletResponse));
+    public ResponseEntity<ResponseData<String>> refreshToken(@CookieValue(name = "refreshToken") String refreshToken , HttpServletResponse httpServletResponse){
+         return ResponseEntity.ok(this.authenticationService.refreshToken(refreshToken , httpServletResponse));
     }
 }

@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @AllArgsConstructor
 @NoArgsConstructor
@@ -15,6 +16,6 @@ import java.time.LocalDateTime;
 public class UserRoomDTO {
     private Long id;
     private LocalDateTime timeJoin;
-    private LocalDateTime timeLeft;
+    private List<LocalDateTime> timeLeft;
     private UserDTO userDTO;
 }

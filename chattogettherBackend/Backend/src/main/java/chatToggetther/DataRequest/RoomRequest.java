@@ -15,4 +15,5 @@ public class RoomRequest {
     private String nameRoom;
     @NotNull(message = "password not null")
     private String password;
+    private String nickname;
 }
