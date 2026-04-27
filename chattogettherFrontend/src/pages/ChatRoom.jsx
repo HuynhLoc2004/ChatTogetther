@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Send, Users, LogOut, MessageCircle, Hash, Smile, Paperclip, UserX } from 'lucide-react';
+import { Send, Users, LogOut, MessageCircle, Hash, Smile, Paperclip, MoreVertical, UserX, Shield, ChevronRight, Settings, Trash2, Crown } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import SockJS from 'sockjs-client';
 import Stomp from 'stompjs';
@@ -13,109 +13,171 @@ const ChatRoom = () => {
   const [newMessage, setNewMessage] = useState('');
   const [roomInfo, setRoomInfo] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [activeMenu, setActiveMenu] = useState(null);
   const stompClient = useRef(null);
   const messagesEndRef = useRef(null);
   const currentUserId = localStorage.getItem('user_id');
+  
+  const messageIdsRef = useRef(new Set());
 
-  // Kiểm tra quyền AD_ROOM từ token
-  const hasAdRoomPermission = () => {
-    const token = localStorage.getItem('accesstoken');
-    if (!token) return false;
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      const scope = payload.scope || "";
-      return scope.includes("AD_ROOM");
-    } catch (e) {
-      return false;
-    }
+  // Tính toán quyền Admin thực tế của phòng này dựa trên dữ liệu từ Server
+  const isAdminOfThisRoom = roomInfo?.userRoomDTOList?.find(
+    ur => ur.userDTO?.id.toString() === currentUserId
+  )?.isAdmin === true;
+
+  const scrollToBottom = (behavior = "smooth") => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
   };
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  const fetchRoomDetail = async (isSilent = false) => {
+  const fetchRoomDetail = useCallback(async (isSilent = false) => {
     try {
       if (!isSilent) setLoading(true);
       const response = await axiosClient.get('/rooms/info-rooms');
       const currentRoom = response.data.data.find(r => r.id.toString() === roomId);
       if (currentRoom) {
         setRoomInfo(currentRoom);
+      } else if (!isSilent) {
+        toast.error("Phòng này không còn tồn tại!");
+        navigate('/');
       }
     } catch (err) {
       console.error("Lỗi khi lấy thông tin phòng:", err);
     } finally {
       if (!isSilent) setLoading(false);
     }
-  };
+  }, [roomId, navigate]);
+
+  const fetchHistory = useCallback(async () => {
+    try {
+      const response = await axiosClient.get('/message/history', {
+        params: { room_id: roomId }
+      });
+      if (response.data && response.data.data) {
+        const history = response.data.data.map(msg => {
+          messageIdsRef.current.add(msg.id);
+          return {
+            id: msg.id,
+            text: msg.message,
+            sender: msg.nickname,
+            userId: msg.userId.toString(),
+            time: new Date(msg.timeSend).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            rawTime: msg.timeSend
+          };
+        });
+        setMessages(history);
+        setTimeout(() => scrollToBottom("auto"), 100);
+      }
+    } catch (err) {
+      console.error("Lỗi khi lấy lịch sử tin nhắn:", err);
+    }
+  }, [roomId]);
 
   useEffect(() => {
-    fetchRoomDetail();
+    let isMounted = true;
+    
+    if (stompClient.current && stompClient.current.connected) {
+      return;
+    }
 
-    const socket = new SockJS('http://localhost:8080/ws-gs-guide');
-    const client = Stomp.over(socket);
-    client.debug = null;
+    const initConnection = async () => {
+      messageIdsRef.current.clear();
+      await fetchRoomDetail();
+      await fetchHistory();
+      
+      if (!isMounted) return;
 
-    client.connect({}, () => {
-      console.log('Đã kết nối WebSocket');
-      if (client.connected) {
+      const socket = new SockJS('/ws-gs-guide');
+      const client = Stomp.over(socket);
+      client.debug = null;
+
+      client.connect({}, () => {
+        if (!isMounted) {
+          client.disconnect();
+          return;
+        }
+        
+        stompClient.current = client;
+
         client.subscribe(`/topic/room/${roomId}`, (payload) => {
+          if (!isMounted) return;
           const receivedMsg = JSON.parse(payload.body);
           
-          if (receivedMsg.userId === 0 || receivedMsg.userId === -1) {
-            fetchRoomDetail(true);
-            toast.success(receivedMsg.message, {
-              duration: 3000,
-              style: { background: '#333', color: '#fff', fontSize: '14px', borderRadius: '10px' },
-            });
+          // Kiểm tra trùng lặp tin nhắn dựa trên ID (áp dụng cho tất cả loại tin nhắn có ID)
+          if (receivedMsg.id && receivedMsg.id !== -1 && receivedMsg.id !== -2 && receivedMsg.id !== 0) {
+            if (messageIdsRef.current.has(receivedMsg.id)) return;
+            messageIdsRef.current.add(receivedMsg.id);
+          }
 
-            // Nếu userId là -1 (KICK) và ID bị kick là chính mình
-            if (receivedMsg.userId === -1 && receivedMsg.message.includes("đã bị mời ra khỏi phòng")) {
-               // Một cách đơn giản để check có phải mình bị kick không là check nickname trong msg hoặc fetch lại check active
-               // Ở đây mình fetch lại rồi, nếu UserRoom của mình active = false thì đá ra
-            }
-          } else {
-            setMessages((prev) => {
-              if (prev.find(m => m.id === receivedMsg.id)) return prev;
+          // Logic KICK (id = -1)
+          if (receivedMsg.id === -1) {
+             if (receivedMsg.userId.toString() === currentUserId) {
+                toast.error("Bạn đã bị quản trị viên mời ra khỏi phòng!", { duration: 5000 });
+                navigate('/');
+                return;
+             }
+             toast(`${receivedMsg.message}`, { icon: '🚪' });
+             fetchRoomDetail(true);
+             return;
+          }
+
+          // Logic DISBAND (id = -2)
+          if (receivedMsg.id === -2) {
+             toast.error("Phòng chat này đã được giải tán!", { duration: 6000 });
+             navigate('/');
+             return;
+          }
+
+          if (receivedMsg.userId === 0) {
+            // Tin nhắn hệ thống (vào/rời phòng, chuyển quyền)
+            fetchRoomDetail(true);
+            const sysId = receivedMsg.id || Date.now() + Math.random();
+            setMessages(prev => {
+              if (prev.find(m => m.text === receivedMsg.message && Math.abs(new Date() - new Date(m.rawTime)) < 1000)) return prev;
               return [...prev, {
-                id: receivedMsg.id || Date.now() + Math.random(),
+                id: sysId,
+                text: receivedMsg.message,
+                sender: 'Hệ thống',
+                userId: '0',
+                isSystem: true,
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                rawTime: new Date().toISOString()
+              }];
+            });
+          } else {
+            // Tin nhắn chat bình thường
+            setMessages((prev) => {
+              const msgId = receivedMsg.id || Date.now() + Math.random();
+              // Kiểm tra nội dung và thời gian để tránh lặp tin nhắn vừa gửi (trong trường hợp ID chưa kịp về)
+              if (prev.find(m => m.id === msgId)) return prev;
+              
+              const newMsg = {
+                id: msgId,
                 text: receivedMsg.message,
                 sender: receivedMsg.nickname,
                 userId: receivedMsg.userId.toString(),
                 time: new Date(receivedMsg.timeSend).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 rawTime: receivedMsg.timeSend
-              }].sort((a, b) => new Date(a.rawTime) - new Date(b.rawTime));
+              };
+              return [...prev, newMsg].sort((a, b) => new Date(a.rawTime) - new Date(b.rawTime));
             });
+            setTimeout(() => scrollToBottom(), 50);
           }
         });
-      }
-    }, (error) => {
-      console.error('Lỗi kết nối WebSocket:', error);
-    });
+      }, (error) => {
+        console.error('Lỗi kết nối WebSocket:', error);
+      });
+    };
 
-    stompClient.current = client;
+    initConnection();
 
     return () => {
+      isMounted = false;
       if (stompClient.current && stompClient.current.connected) {
         stompClient.current.disconnect();
+        stompClient.current = null;
       }
     };
-  }, [roomId]);
-
-  // Kiểm tra xem mình có bị mời ra khỏi phòng không sau khi list update
-  useEffect(() => {
-    if (roomInfo && currentUserId) {
-       const myStatus = roomInfo.userRoomDTOList?.find(ur => ur.userDTO?.id.toString() === currentUserId);
-       if (myStatus && !myStatus.active) {
-          toast.error("Bạn đã bị mời ra khỏi phòng!");
-          navigate('/');
-       }
-    }
-  }, [roomInfo, currentUserId]);
+  }, [roomId, fetchRoomDetail, fetchHistory, currentUserId, navigate]);
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
@@ -131,238 +193,306 @@ const ChatRoom = () => {
       });
       setNewMessage('');
     } catch (err) {
-      if (err.response && err.response.status === 403) {
-        toast.error(err.response.data.message || "Bạn không có quyền gửi tin nhắn!");
-      } else {
-        toast.error("Không thể gửi tin nhắn. Vui lòng thử lại!");
-      }
+      toast.error(err.response?.data?.message || "Không thể gửi tin nhắn!");
     }
   };
 
   const handleRemoveUser = async (userIdToRemove, nickname) => {
-    if (window.confirm(`Bạn có chắc muốn mời ${nickname} ra khỏi phòng?`)) {
-      try {
-        await axiosClient.post(`/rooms/remove-user`, null, {
-          params: { user_id: userIdToRemove, room_id: roomId }
-        });
-        toast.success(`Đã mời ${nickname} ra khỏi phòng`);
-      } catch (err) {
-        if (err.response && err.response.status === 403) {
-          toast.error("Bạn không có quyền đuổi người khác!");
-        } else {
-          toast.error("Lỗi khi thực hiện thao tác!");
-        }
+    setActiveMenu(null);
+    if (!window.confirm(`Bạn có chắc muốn loại ${nickname} khỏi phòng?`)) return;
+    try {
+      await axiosClient.post(`/rooms/remove-user`, null, {
+        params: { user_id: userIdToRemove, room_id: roomId }
+      });
+      toast.success(`Đã loại ${nickname} thành công!`);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Lỗi khi thực hiện thao tác!");
+    }
+  };
+
+  const handleDelegateAdmin = async (newAdminId, nickname) => {
+    setActiveMenu(null);
+    if (!window.confirm(`Bạn có chắc muốn chuyển quyền chủ phòng cho ${nickname}?`)) return;
+    try {
+      const response = await axiosClient.post(`/rooms/delegate-admin`, null, {
+        params: { room_id: roomId, new_admin_id: newAdminId }
+      });
+      if (response.status === 200) {
+        toast.success(`Đã chuyển quyền chủ phòng cho ${nickname}!`);
+        // Refresh ngay lập tức để cập nhật UI FE (ẩn các nút admin của mình)
+        await fetchRoomDetail(true);
       }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Lỗi khi ủy quyền!");
+    }
+  };
+
+  const handleDisbandRoom = async () => {
+    if (!window.confirm("CẢNH BÁO: Bạn có chắc muốn GIẢI TÁN phòng này? Tất cả thành viên sẽ bị mời ra ngoài.")) return;
+    try {
+      await axiosClient.post(`/rooms/disband-room`, null, {
+        params: { room_id: roomId }
+      });
+      toast.success("Đã giải tán phòng thành công!");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Lỗi khi giải tán phòng!");
     }
   };
 
   const handleLeaveRoom = async () => {
-    if (window.confirm("Bạn có chắc muốn rời phòng?")) {
+    const activeCount = roomInfo?.userRoomDTOList?.length || 0;
+    
+    if (isAdminOfThisRoom && activeCount > 1) {
+      toast.error("Bạn là chủ phòng. Vui lòng chuyển quyền quản trị hoặc giải tán phòng trước khi rời đi!", { duration: 4000 });
+      return;
+    }
+
+    if (window.confirm("Bạn có chắc muốn thoát khỏi phòng chat này?")) {
       try {
-        await axiosClient.post(`/rooms/leave-room`, null, { params: { room_id: roomId } });
+        await axiosClient.post(`/rooms/leave-room`, null, {
+          params: { room_id: roomId }
+        });
+        toast.success("Đã rời khỏi phòng");
         navigate('/');
       } catch (err) {
-        console.error("Lỗi khi rời phòng:", err);
-        navigate('/');
+        toast.error(err.response?.data?.message || "Có lỗi xảy ra khi rời phòng!");
       }
     }
   };
 
-  if (loading) return <div className="loading" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', fontSize: '1.2rem', color: 'var(--primary)' }}>Đang vào phòng...</div>;
+  useEffect(() => {
+    const handleClickOutside = () => setActiveMenu(null);
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
+
+  if (loading) return (
+    <div className="loading-screen" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#0f172a', color: '#818cf8' }}>
+      <div className="loader"></div>
+      <p style={{ marginTop: '1rem', fontWeight: 500 }}>Đang chuẩn bị phòng chat...</p>
+    </div>
+  );
 
   return (
-    <div className="chat-room-container" style={{ display: 'flex', height: '100vh', background: '#f0f2f5' }}>
-      {/* Sidebar */}
-      <div className="chat-sidebar" style={{ width: '300px', background: '#ffffff', borderRight: '1px solid #e0e0e0', display: 'flex', flexDirection: 'column', boxShadow: '2px 0 5px rgba(0,0,0,0.05)' }}>
-        <div style={{ padding: '1.5rem', borderBottom: '1px solid #f0f0f0', background: 'linear-gradient(135deg, var(--primary) 0%, #6366f1 100%)', color: 'white' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-            <div style={{ background: 'rgba(255,255,255,0.2)', padding: '0.5rem', borderRadius: '12px' }}>
-              <Hash size={24} />
-            </div>
-            <h2 style={{ fontSize: '1.25rem', margin: 0, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{roomInfo?.nameroom}</h2>
-          </div>
-          <p style={{ fontSize: '0.8rem', opacity: 0.8, margin: 0 }}>ID Phòng: {roomId}</p>
-          {hasAdRoomPermission() && <span style={{ fontSize: '0.7rem', background: 'rgba(255,255,255,0.3)', padding: '2px 8px', borderRadius: '4px', marginTop: '5px', display: 'inline-block' }}>Quyền: Quản trị viên</span>}
+    <div className="chat-container">
+      {/* Sidebar Left */}
+      <aside className="sidebar-left">
+        <div className="sidebar-header">
+           <div className="brand">
+              <div className="brand-icon"><MessageCircle size={20} /></div>
+              <span>Chat Togetther</span>
+           </div>
+           <button onClick={() => navigate('/')} className="back-btn" title="Về trang chủ">
+              <ChevronRight size={18} />
+           </button>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: '1rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem', color: '#64748b', padding: '0 0.5rem' }}>
-            <Users size={18} />
-            <span style={{ fontSize: '0.9rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Thành viên ({roomInfo?.userRoomDTOList?.length || 0})</span>
+        <div className="room-profile">
+           <div className="room-avatar">
+              <Hash size={32} />
+           </div>
+           <div className="room-meta">
+              <h3>{roomInfo?.nameroom}</h3>
+              <p>ID: {roomId}</p>
+           </div>
+           {isAdminOfThisRoom && <div className="admin-badge">Chủ phòng</div>}
+        </div>
+
+        <div className="sidebar-content">
+          <div className="section-title">
+             <Users size={14} />
+             <span>Thành viên ({roomInfo?.userRoomDTOList?.length || 0})</span>
           </div>
-          <div className="user-list">
+          
+          <div className="member-list">
             {roomInfo?.userRoomDTOList?.map((ur, idx) => (
-              <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', borderRadius: '12px', marginBottom: '0.5rem', background: ur.userDTO?.id.toString() === currentUserId ? 'rgba(79, 70, 229, 0.05)' : 'transparent', transition: 'all 0.2s' }}>
-                <div style={{ position: 'relative' }}>
-                  <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%)', color: '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', fontWeight: 700 }}>
-                    {ur.userDTO?.nickname?.charAt(0).toUpperCase()}
-                  </div>
-                  {ur.active && <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#10b981', position: 'absolute', bottom: '-2px', right: '-2px', border: '2px solid white' }}></div>}
+              <div key={idx} className={`member-item ${ur.userDTO?.id.toString() === currentUserId ? 'is-me' : ''}`}>
+                <div className="member-avatar">
+                   {ur.userDTO?.nickname?.charAt(0).toUpperCase()}
+                   <span className="online-indicator"></span>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-                  <span style={{ fontSize: '0.95rem', fontWeight: 500, color: '#1e293b' }}>
-                    {ur.userDTO?.nickname} {ur.userDTO?.id.toString() === currentUserId && "(Bạn)"}
-                  </span>
-                  <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{ur.active ? "Đang trực tuyến" : "Ngoại tuyến"}</span>
+                <div className="member-info">
+                   <span className="name">{ur.userDTO?.nickname}</span>
+                   {ur.isAdmin && <Crown size={14} className="crown-icon" title="Chủ phòng" />}
                 </div>
                 
-                {/* Nút đuổi người - chỉ hiện nếu mình là Admin và không phải tự đuổi mình */}
-                {hasAdRoomPermission() && ur.userDTO?.id.toString() !== currentUserId && ur.active && (
-                  <button 
-                    onClick={() => handleRemoveUser(ur.userDTO.id, ur.userDTO.nickname)}
-                    style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '5px', borderRadius: '8px' }}
-                    title="Mời ra khỏi phòng"
-                    className="kick-btn"
-                  >
-                    <UserX size={18} />
-                  </button>
+                {isAdminOfThisRoom && ur.userDTO?.id.toString() !== currentUserId && (
+                  <div className="member-actions">
+                    <button onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === idx ? null : idx); }} className="dots-btn">
+                       <MoreVertical size={14} />
+                    </button>
+                    {activeMenu === idx && (
+                      <div className="member-dropdown">
+                        <button onClick={() => handleDelegateAdmin(ur.userDTO.id, ur.userDTO.nickname)} className="action-item">
+                           <Crown size={14} /> Trao quyền
+                        </button>
+                        <button onClick={() => handleRemoveUser(ur.userDTO.id, ur.userDTO.nickname)} className="action-item kick-item">
+                           <UserX size={14} /> Kick
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             ))}
           </div>
         </div>
 
-        <div style={{ padding: '1rem' }}>
-          <button onClick={handleLeaveRoom} style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', border: 'none', color: '#ef4444', background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem', cursor: 'pointer', fontWeight: 600, transition: 'all 0.2s' }}>
-            <LogOut size={18} /> Rời khỏi phòng
-          </button>
+        <div className="sidebar-footer">
+           {isAdminOfThisRoom && (
+             <button onClick={handleDisbandRoom} className="disband-btn">
+                <Trash2 size={18} />
+                <span>Giải tán nhóm</span>
+             </button>
+           )}
+           <button onClick={handleLeaveRoom} className="leave-btn">
+              <LogOut size={18} />
+              <span>{isAdminOfThisRoom ? 'Thoát' : 'Rời phòng'}</span>
+           </button>
         </div>
-      </div>
+      </aside>
 
       {/* Main Chat Area */}
-      <div className="chat-main" style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative' }}>
-        <header style={{ padding: '1rem 2rem', background: 'white', borderBottom: '1px solid #e0e0e0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{ background: 'var(--primary)', color: 'white', padding: '0.6rem', borderRadius: '14px', boxShadow: '0 4px 6px -1px rgba(79, 70, 229, 0.2)' }}>
-              <MessageCircle size={24} />
-            </div>
-            <div>
-              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#1e293b' }}>{roomInfo?.nameroom}</h3>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }}></div>
-                <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 500 }}>Phòng chat trực tuyến</span>
-              </div>
-            </div>
-          </div>
+      <main className="chat-main">
+        <header className="chat-header">
+           <div className="header-info">
+              <Hash size={20} className="header-hash" />
+              <h2>{roomInfo?.nameroom}</h2>
+           </div>
+           <div className="header-actions">
+              <button className="icon-btn"><Settings size={20} /></button>
+           </div>
         </header>
 
-        <div className="messages-container" style={{ flex: 1, overflowY: 'auto', padding: '1.5rem 2rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', scrollBehavior: 'smooth' }}>
-          {messages.length === 0 ? (
-            <div style={{ textAlign: 'center', marginTop: '5rem', color: '#94a3b8' }}>
-              <div style={{ background: 'white', padding: '2rem', borderRadius: '20px', display: 'inline-block', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-                <MessageCircle size={48} style={{ marginBottom: '1rem', opacity: 0.5 }} />
-                <h4 style={{ margin: '0 0 0.5rem 0', color: '#475569' }}>Chưa có tin nhắn nào</h4>
-                <p style={{ margin: 0, fontSize: '0.9rem' }}>Hãy gửi lời chào đến mọi người trong phòng!</p>
+        <div className="messages-area">
+          <div className="messages-list">
+            {messages.length === 0 ? (
+              <div className="empty-chat">
+                 <div className="empty-icon"><MessageCircle size={48} /></div>
+                 <h3>Chưa có tin nhắn nào</h3>
+                 <p>Hãy gửi lời chào đầu tiên!</p>
               </div>
-            </div>
-          ) : (
-            messages.map((msg, index) => {
-              const isOwnMessage = msg.userId === currentUserId;
-              return (
-                <div key={index} style={{ alignSelf: isOwnMessage ? 'flex-end' : 'flex-start', maxWidth: '75%', display: 'flex', flexDirection: 'column', alignItems: isOwnMessage ? 'flex-end' : 'flex-start' }}>
-                  {!isOwnMessage && (
-                    <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748b', marginBottom: '0.25rem', marginLeft: '0.5rem' }}>
-                      {msg.sender}
-                    </div>
-                  )}
-                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: '0.5rem', flexDirection: isOwnMessage ? 'row-reverse' : 'row' }}>
-                    <div style={{ 
-                      padding: '0.85rem 1.15rem', 
-                      borderRadius: isOwnMessage ? '20px 20px 4px 20px' : '20px 20px 20px 4px', 
-                      background: isOwnMessage ? 'var(--primary)' : 'white', 
-                      color: isOwnMessage ? 'white' : '#1e293b', 
-                      boxShadow: isOwnMessage ? '0 4px 15px rgba(79, 70, 229, 0.2)' : '0 2px 5px rgba(0,0,0,0.05)',
-                      wordBreak: 'break-word',
-                      fontSize: '0.95rem',
-                      lineHeight: 1.5,
-                      border: isOwnMessage ? 'none' : '1px solid #eef2f6'
-                    }}>
-                      {msg.text}
-                    </div>
-                    <span style={{ fontSize: '0.7rem', color: '#94a3b8', marginBottom: '0.25rem', fontWeight: 500 }}>
-                      {msg.time}
-                    </span>
+            ) : (
+              messages.map((msg, index) => {
+                const isMe = msg.userId === currentUserId;
+                const isSystem = msg.userId === '0' || msg.isSystem;
+                
+                if (isSystem) return (
+                  <div key={msg.id || index} className="system-msg">
+                    <span>{msg.text}</span>
                   </div>
-                </div>
-              );
-            })
-          )}
-          <div ref={messagesEndRef} />
+                );
+
+                return (
+                  <div key={msg.id || index} className={`msg-group ${isMe ? 'msg-me' : 'msg-them'}`}>
+                    {!isMe && (
+                      <div className="msg-avatar">
+                         {msg.sender?.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <div className="msg-content-wrapper">
+                      {!isMe && <span className="msg-sender">{msg.sender}</span>}
+                      <div className="msg-bubble">
+                        <p>{msg.text}</p>
+                        <span className="msg-time">{msg.time}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+            <div ref={messagesEndRef} />
+          </div>
         </div>
 
-        <div style={{ padding: '1.5rem 2rem', background: 'transparent' }}>
-          <form onSubmit={handleSendMessage} style={{ 
-            display: 'flex', 
-            gap: '0.75rem', 
-            background: 'white', 
-            padding: '0.6rem', 
-            borderRadius: '18px', 
-            boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)',
-            border: '1px solid #e2e8f0',
-            transition: 'all 0.3s ease',
-            alignItems: 'center'
-          }}
-          className="chat-input-wrapper"
-          >
-            <button type="button" style={{ background: 'transparent', border: 'none', color: '#64748b', padding: '0.5rem', cursor: 'pointer', borderRadius: '10px' }}>
-              <Smile size={22} />
-            </button>
-            <button type="button" style={{ background: 'transparent', border: 'none', color: '#64748b', padding: '0.5rem', cursor: 'pointer', borderRadius: '10px' }}>
-              <Paperclip size={22} />
-            </button>
-            <input 
-              type="text" 
-              placeholder="Nhập tin nhắn của bạn..." 
-              style={{ flex: 1, border: 'none', background: 'transparent', padding: '0.75rem 0.5rem', outline: 'none', fontSize: '1rem', color: '#1e293b' }}
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-            />
-            <button type="submit" style={{ 
-              background: 'var(--primary)', 
-              color: 'white', 
-              border: 'none', 
-              width: '45px',
-              height: '45px',
-              borderRadius: '14px', 
-              cursor: 'pointer', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center',
-              boxShadow: '0 4px 10px rgba(79, 70, 229, 0.3)',
-              transition: 'all 0.2s',
-              flexShrink: 0
-            }}
-            disabled={!newMessage.trim()}
-            >
-              <Send size={20} />
-            </button>
-          </form>
+        <div className="chat-input-area">
+          <div className="input-container">
+            <button className="tool-btn"><Smile size={20} /></button>
+            <button className="tool-btn"><Paperclip size={20} /></button>
+            <form onSubmit={handleSendMessage} className="msg-form">
+              <input 
+                type="text" 
+                placeholder={`Nhắn tin cho #${roomInfo?.nameroom}`} 
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+              />
+              <button type="submit" disabled={!newMessage.trim()} className="send-btn">
+                <Send size={18} />
+              </button>
+            </form>
+          </div>
         </div>
-      </div>
-      
+      </main>
+
       <style dangerouslySetInnerHTML={{ __html: `
-        .chat-input-wrapper:focus-within {
-          border-color: var(--primary) !important;
-          box-shadow: 0 10px 25px -5px rgba(79, 70, 229, 0.2) !important;
-          transform: translateY(-2px);
+        :root {
+          --sidebar-bg: #1e1f22;
+          --sidebar-hover: #35373c;
+          --main-bg: #313338;
+          --header-bg: #313338;
+          --input-bg: #383a40;
+          --text-main: #dbdee1;
+          --text-muted: #949ba4;
+          --primary-brand: #5865f2;
+          --bubble-them: #2b2d31;
+          --bubble-me: #4752c4;
+          --red-accent: #f23f43;
         }
-        .messages-container::-webkit-scrollbar {
-          width: 6px;
-        }
-        .messages-container::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .messages-container::-webkit-scrollbar-thumb {
-          background: #cbd5e1;
-          border-radius: 10px;
-        }
-        .messages-container::-webkit-scrollbar-thumb:hover {
-          background: #94a3b8;
-        }
-        .kick-btn:hover {
-          background: #fee2e2 !important;
-          color: #ef4444 !important;
-        }
+
+        .chat-container { display: flex; height: 100vh; width: 100vw; background: var(--main-bg); color: var(--text-main); font-family: 'Inter', sans-serif; overflow: hidden; }
+        .sidebar-left { width: 280px; background: var(--sidebar-bg); display: flex; flex-direction: column; border-right: 1px solid #1a1b1e; }
+        .sidebar-header { padding: 12px 16px; height: 48px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 0 rgba(0,0,0,0.2); }
+        .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; }
+        .brand-icon { background: var(--primary-brand); padding: 4px; border-radius: 6px; display: flex; }
+        .back-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; transform: rotate(180deg); }
+        .room-profile { padding: 20px 16px; background: linear-gradient(180deg, rgba(88,101,242,0.1) 0%, transparent 100%); display: flex; align-items: center; gap: 12px; }
+        .room-avatar { width: 48px; height: 48px; background: var(--sidebar-hover); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--primary-brand); }
+        .room-meta h3 { margin: 0; font-size: 16px; font-weight: 600; }
+        .room-meta p { margin: 2px 0 0; font-size: 12px; color: var(--text-muted); }
+        .admin-badge { margin-left: auto; font-size: 10px; background: rgba(88,101,242,0.2); color: var(--primary-brand); padding: 2px 6px; border-radius: 4px; font-weight: 700; text-transform: uppercase; }
+        .sidebar-content { flex: 1; overflow-y: auto; padding: 16px 8px; }
+        .section-title { padding: 0 8px 8px; font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; display: flex; align-items: center; gap: 6px; }
+        .member-list { display: flex; flex-direction: column; gap: 2px; }
+        .member-item { display: flex; align-items: center; gap: 12px; padding: 6px 8px; border-radius: 4px; position: relative; transition: background 0.1s; }
+        .member-item:hover { background: var(--sidebar-hover); }
+        .member-avatar { width: 32px; height: 32px; border-radius: 50%; background: #4e5058; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px; position: relative; }
+        .online-indicator { width: 10px; height: 10px; background: #23a55a; border: 2px solid var(--sidebar-bg); border-radius: 50%; position: absolute; bottom: 0; right: 0; }
+        .member-info { display: flex; align-items: center; gap: 4px; flex: 1; }
+        .crown-icon { color: #f1c40f; }
+        .member-actions { position: relative; opacity: 0; }
+        .member-item:hover .member-actions { opacity: 1; }
+        .dots-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; }
+        .member-dropdown { position: absolute; right: 0; top: 100%; background: #111214; border-radius: 4px; padding: 4px; box-shadow: 0 8px 16px rgba(0,0,0,0.3); z-index: 100; min-width: 140px; }
+        .action-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: none; border: none; color: var(--text-main); font-size: 13px; cursor: pointer; width: 100%; border-radius: 2px; text-align: left; }
+        .action-item:hover { background: var(--primary-brand); color: white; }
+        .kick-item:hover { background: var(--red-accent) !important; }
+        .sidebar-footer { padding: 12px; display: flex; flex-direction: column; gap: 8px; background: rgba(0,0,0,0.1); }
+        .leave-btn, .disband-btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.2s; }
+        .leave-btn { background: transparent; border: 1px solid rgba(242, 63, 67, 0.3); color: var(--red-accent); }
+        .leave-btn:hover { background: var(--red-accent); color: white; }
+        .disband-btn { background: rgba(242, 63, 67, 0.1); border: 1px solid var(--red-accent); color: var(--red-accent); }
+        .disband-btn:hover { background: var(--red-accent); color: white; }
+        .chat-main { flex: 1; display: flex; flex-direction: column; background: var(--main-bg); position: relative; }
+        .chat-header { height: 48px; padding: 0 16px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 0 rgba(0,0,0,0.2); }
+        .messages-area { flex: 1; overflow-y: auto; }
+        .messages-list { padding: 20px 0; display: flex; flex-direction: column; }
+        .msg-group { padding: 4px 16px; display: flex; gap: 16px; margin: 4px 0; }
+        .msg-content-wrapper { display: flex; flex-direction: column; max-width: 80%; }
+        .msg-bubble p { margin: 0; padding: 8px 14px; font-size: 15px; line-height: 1.4; word-break: break-word; }
+        .msg-me { flex-direction: row-reverse; }
+        .msg-me .msg-content-wrapper { align-items: flex-end; }
+        .msg-me .msg-bubble p { background: var(--bubble-me); border-radius: 18px 18px 2px 18px; color: white; }
+        .msg-them .msg-bubble p { background: var(--bubble-them); border-radius: 2px 18px 18px 18px; }
+        .msg-time { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+        .system-msg { text-align: center; margin: 12px 0; }
+        .system-msg span { background: rgba(0,0,0,0.2); padding: 4px 12px; border-radius: 20px; font-size: 12px; color: var(--text-muted); }
+        .chat-input-area { padding: 0 16px 24px; }
+        .input-container { background: var(--input-bg); border-radius: 8px; display: flex; align-items: center; padding: 0 12px; height: 44px; gap: 12px; }
+        .msg-form { flex: 1; display: flex; align-items: center; }
+        .msg-form input { flex: 1; background: none; border: none; color: var(--text-main); font-size: 15px; outline: none; }
+        .send-btn { background: none; border: none; color: var(--primary-brand); cursor: pointer; }
+        .loader { width: 40px; height: 40px; border: 4px solid #FFF; border-bottom-color: var(--primary-brand); border-radius: 50%; animation: rotation 1s linear infinite; }
+        @keyframes rotation { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
       `}} />
     </div>
   );

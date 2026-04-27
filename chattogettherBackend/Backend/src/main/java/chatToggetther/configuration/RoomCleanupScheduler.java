@@ -23,24 +23,27 @@ public class RoomCleanupScheduler {
     }
 
     /**
-     * Chạy mỗi phút (60000ms) để dọn dẹp các phòng không có user online.
+     * Chạy mỗi phút (60000ms) để chuyển trạng thái các phòng không có thành viên sang Inactive.
+     * Các phòng này sẽ không còn xuất hiện trong danh sách lấy ra cho người dùng.
      */
     @Scheduled(fixedRate = 60000)
     @Transactional
     public void cleanupEmptyRooms() {
-        log.info("Bắt đầu kiểm tra và dọn dẹp phòng trống...");
+        log.info(">>> Đang kiểm tra các phòng không có thành viên để chuyển sang Inactive...");
         
         List<RoomEntity> emptyRooms = roomRepository.findAllEmptyRooms();
         
         if (!emptyRooms.isEmpty()) {
-            log.info("Tìm thấy {} phòng trống. Đang tiến hành chuyển sang inactive...", emptyRooms.size());
+            log.info(">>> Tìm thấy {} phòng trống. Đang chuyển trạng thái active = false...", emptyRooms.size());
+            
+            // Chỉ set active = false chứ không xóa khỏi DB
             emptyRooms.forEach(room -> room.setActive(false));
             roomRepository.saveAll(emptyRooms);
             
-            // Thông báo qua WebSocket để FE cập nhật lại danh sách phòng
-            messagingTemplate.convertAndSend("/topic/rooms", "ROOM_CLEANUP_SYNC");
-        } else {
-            log.info("Không có phòng trống nào cần dọn dẹp.");
+            // Thông báo qua WebSocket để các Client cập nhật lại danh sách phòng ngay lập tức
+            messagingTemplate.convertAndSend("/topic/rooms", "ROOMS_DEACTIVATED_CLEANUP");
+            
+            log.info(">>> Đã chuyển trạng thái các phòng trống sang Inactive thành công.");
         }
     }
 }

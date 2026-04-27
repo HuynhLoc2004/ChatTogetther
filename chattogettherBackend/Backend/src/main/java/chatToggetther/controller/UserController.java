@@ -4,10 +4,9 @@ import chatToggetther.DataRequest.UserRequest;
 import chatToggetther.service.UserService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.web.bind.annotation.*;
+
 @RestController
 @RequestMapping("/api/users")
 public class UserController {
@@ -15,6 +14,11 @@ public class UserController {
 
     public UserController(UserService userService) {
         this.userService = userService;
+    }
+
+    @GetMapping("/active-room")
+    public ResponseEntity<ResponseData<Long>> getActiveRoom(JwtAuthenticationToken jwtAuthenticationToken) {
+        return ResponseEntity.ok(this.userService.getActiveRoom(jwtAuthenticationToken));
     }
 
     @PostMapping("/create")

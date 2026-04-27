@@ -5,8 +5,6 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.springframework.cglib.core.Local;
-import org.springframework.scheduling.annotation.Schedules;
 
 import java.time.LocalDateTime;
 
@@ -21,14 +19,19 @@ public class MessageEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "messsage_id")
     private Long id;
+    
     @Column(name = "message" , columnDefinition = "TEXT")
     private String message;
+    
     @Column(name = "time_send")
-    private LocalDateTime time_send;
+    private LocalDateTime timeSend;
+    
     @Column(name = "time_retrieve")
-    private LocalDateTime time_retrieve;
-    @ManyToOne(cascade =  CascadeType.ALL , fetch = FetchType.LAZY )
+    private LocalDateTime timeRetrieve;
+    
+    @ManyToOne(cascade = CascadeType.ALL , fetch = FetchType.LAZY )
     private UserEntity userEntity;
+    
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "room_id")
     private RoomEntity roomEntity;

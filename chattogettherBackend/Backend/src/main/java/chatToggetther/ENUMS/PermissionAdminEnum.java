@@ -5,5 +5,6 @@ public enum PermissionAdminEnum {
     READ,
     WRITE,
     UPDATE,
-    DELETE
+    DELETE,
+    ADMIN_ROOM
 }

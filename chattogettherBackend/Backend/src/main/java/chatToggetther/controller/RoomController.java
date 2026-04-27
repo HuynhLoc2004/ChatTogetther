@@ -44,9 +44,21 @@ public class RoomController {
          return ResponseEntity.ok(this.roomService.leaveRoom(jwtAuthenticationToken , room_id));
     }
 
-    @PreAuthorize("hasAuthority('AD_ROOM')")
+    @PreAuthorize("hasAuthority('ADMIN_ROOM')")
     @PostMapping("/remove-user")
-    public ResponseEntity<ResponseData<Boolean>> removeUser(@RequestParam("user_id") Long userId, @RequestParam("room_id") Long roomId) {
-        return ResponseEntity.ok(this.roomService.removeUserFromRoom(userId, roomId));
+    public ResponseEntity<ResponseData<Boolean>> removeUser(JwtAuthenticationToken jwtAuthenticationToken, @RequestParam("user_id") Long userId, @RequestParam("room_id") Long roomId) {
+        return ResponseEntity.ok(this.roomService.removeUserFromRoom(jwtAuthenticationToken, userId, roomId));
+    }
+
+    @PreAuthorize("hasAuthority('ADMIN_ROOM')")
+    @PostMapping("/disband-room")
+    public ResponseEntity<ResponseData<Boolean>> disbandRoom(JwtAuthenticationToken jwtAuthenticationToken, @RequestParam("room_id") Long roomId) {
+        return ResponseEntity.ok(this.roomService.disbandRoom(jwtAuthenticationToken, roomId));
+    }
+
+    @PreAuthorize("hasAuthority('ADMIN_ROOM')")
+    @PostMapping("/delegate-admin")
+    public ResponseEntity<ResponseData<Boolean>> delegateAdmin(JwtAuthenticationToken jwtAuthenticationToken, @RequestParam("room_id") Long roomId, @RequestParam("new_admin_id") Long newAdminUserId) {
+        return ResponseEntity.ok(this.roomService.delegateAdmin(jwtAuthenticationToken, roomId, newAdminUserId));
     }
 }

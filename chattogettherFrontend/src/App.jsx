@@ -6,24 +6,56 @@ import Home from './pages/Home';
 import ChatRoom from './pages/ChatRoom';
 import './App.css';
 
-function App() {
-  const isAuthenticated = !!localStorage.getItem('accesstoken');
+// Component bảo vệ Route
+const ProtectedRoute = ({ children }) => {
+  const token = localStorage.getItem('accesstoken');
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
+};
 
+// Component ngăn truy cập Login/Register khi đã đăng nhập
+const PublicRoute = ({ children }) => {
+  const token = localStorage.getItem('accesstoken');
+  if (token) {
+    return <Navigate to="/" replace />;
+  }
+  return children;
+};
+
+function App() {
   return (
     <Router>
       <div className="app-container">
         <Toaster position="top-right" reverseOrder={false} />
         <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
+          <Route 
+            path="/login" 
+            element={<PublicRoute><Login /></PublicRoute>} 
+          />
+          <Route 
+            path="/register" 
+            element={<PublicRoute><Register /></PublicRoute>} 
+          />
           <Route 
             path="/" 
-            element={isAuthenticated ? <Home /> : <Navigate to="/login" />} 
+            element={
+              <ProtectedRoute>
+                <Home />
+              </ProtectedRoute>
+            } 
           />
           <Route 
             path="/room/:roomId" 
-            element={isAuthenticated ? <ChatRoom /> : <Navigate to="/login" />} 
+            element={
+              <ProtectedRoute>
+                <ChatRoom />
+              </ProtectedRoute>
+            } 
           />
+          {/* Fallback cho các route không tồn tại */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
     </Router>

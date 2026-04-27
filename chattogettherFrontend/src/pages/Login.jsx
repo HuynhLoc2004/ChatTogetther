@@ -37,9 +37,10 @@ const Login = () => {
         }
 
         if (roomId) {
-          window.location.href = `/room/${roomId}`;
+          sessionStorage.setItem('hasCheckedActiveRoom', 'true');
+          navigate(`/room/${roomId}`);
         } else {
-          window.location.href = '/'; 
+          navigate('/'); 
         }
       }
     } catch (err) {

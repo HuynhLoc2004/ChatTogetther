@@ -1,11 +1,14 @@
 package chatToggetther.controller;
 
 import chatToggetther.Customize.ResponseData;
+import chatToggetther.DTO.SendMessageDTO;
 import chatToggetther.DataRequest.MessageRequest;
 import chatToggetther.service.ChatService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/message")
@@ -20,5 +23,10 @@ public class ChatController {
     @PostMapping("/send")
     public ResponseEntity<ResponseData<Boolean>> sendMessage(JwtAuthenticationToken jwtAuthenticationToken , @RequestParam("user_room") Long user_room , @RequestBody MessageRequest messageRequest){
         return ResponseEntity.ok(this.chatService.sendMessage(jwtAuthenticationToken , messageRequest , user_room));
+    }
+
+    @GetMapping("/history")
+    public ResponseEntity<ResponseData<List<SendMessageDTO>>> getHistory(@RequestParam("room_id") Long roomId) {
+        return ResponseEntity.ok(this.chatService.getMessageHistory(roomId));
     }
 }

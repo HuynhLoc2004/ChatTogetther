@@ -1,6 +1,7 @@
 package chatToggetther.controller;
 
 
+import chatToggetther.Customize.AppException;
 import chatToggetther.Customize.ResponseData;
 import chatToggetther.DataRequest.UserloginRequest;
 import chatToggetther.ENUMS.ErrorCode;
@@ -26,7 +27,10 @@ public class AuthenticationController {
         return ResponseEntity.ok(this.authenticationService.userLogin(userloginRequest , httpServletResponse));
     }
     @GetMapping("/refresh_token")
-    public ResponseEntity<ResponseData<String>> refreshToken(@CookieValue(name = "refreshToken") String refreshToken , HttpServletResponse httpServletResponse){
+    public ResponseEntity<ResponseData<String>> refreshToken(@CookieValue(name = "refreshToken", required = false) String refreshToken , HttpServletResponse httpServletResponse){
+         if (refreshToken == null) {
+             throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Refresh token không tồn tại trong cookie!", ErrorCode.UNAUTHENTICATED.getStatusCode().value());
+         }
          return ResponseEntity.ok(this.authenticationService.refreshToken(refreshToken , httpServletResponse));
     }
 }

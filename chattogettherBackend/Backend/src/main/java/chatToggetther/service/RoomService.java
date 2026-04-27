@@ -16,13 +16,10 @@ import chatToggetther.modelEntity.UserRoomEntity;
 import chatToggetther.repository.RoomRepository;
 import chatToggetther.repository.UserRepository;
 import chatToggetther.repository.UserRoomRepository;
-import io.jsonwebtoken.Jwt;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.transaction.Transactional;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import java.time.LocalDateTime;
@@ -57,13 +54,11 @@ public class RoomService {
             userEntity.setNickname(roomRequest.getNickname());
         }
 
-        // Cấp quyền AD_ROOM cho người tạo phòng
-        if (!userEntity.getPermissions().contains("AD_ROOM")) {
-            userEntity.getPermissions().add("AD_ROOM");
+        if (!userEntity.getPermissions().contains("ADMIN_ROOM")) {
+            userEntity.getPermissions().add("ADMIN_ROOM");
         }
         this.userRepository.save(userEntity);
 
-        // Tạo lại token mới chứa quyền AD_ROOM
         String newAccessToken = this.authenticationService.genAccessToken(userEntity);
         this.authenticationService.genRefreshToken(userEntity, httpServletResponse);
 
@@ -73,7 +68,6 @@ public class RoomService {
         roomEntity.setPassword(roomRequest.getPassword());
         roomEntity.setLocalDateTime(LocalDateTime.now());
 
-        // tạo hoặc tái sử dụng userroom
         UserRoomEntity userRoomEntity = userEntity.getUserRoomEntity();
         if (userRoomEntity == null) {
             userRoomEntity = new UserRoomEntity();
@@ -83,13 +77,12 @@ public class RoomService {
         userRoomEntity.getTimeJoin().add(LocalDateTime.now()); 
         userRoomEntity.setRoomEntity(roomEntity);
         userRoomEntity.setActive(true);
+        userRoomEntity.setIsAdmin(true); 
 
         roomEntity.getUserRoomEntityList().add(userRoomEntity);
         userEntity.setUserRoomEntity(userRoomEntity);
 
-        this.roomRepository.save(roomEntity);
-
-        // Gửi tín hiệu thông báo có phòng mới tạo đến tất cả mọi người qua WebSocket
+        this.roomRepository.saveAndFlush(roomEntity);
         messagingTemplate.convertAndSend("/topic/rooms", "NEW_ROOM_CREATED");
 
         return new ResponseData<>(200 , "create room thành công" , new CreateRoomResponseDTO(roomEntity.getId(), newAccessToken));
@@ -103,17 +96,14 @@ public class RoomService {
                 roomDTO.setId(item.getId());
                 roomDTO.setNameroom(item.getRoomName());
                 
-                List<UserRoomDTO> roomDTOS = new ArrayList<>();
-                if (item.getUserRoomEntityList() != null) {
-                    roomDTOS = item.getUserRoomEntityList().stream()
-                        .filter(ur -> ur.getActive() != null && ur.getActive())
+                List<UserRoomDTO> roomDTOS = item.getUserRoomEntityList().stream()
+                        .filter(ur -> Boolean.TRUE.equals(ur.getActive()))
                         .map(ur -> {
                             UserRoomDTO userRoomDTO = new UserRoomDTO();
                             userRoomDTO.setId(ur.getId());
                             if (ur.getTimeJoin() != null && !ur.getTimeJoin().isEmpty()) {
                                 userRoomDTO.setTimeJoin(ur.getTimeJoin().get(ur.getTimeJoin().size() - 1));
                             }
-                            // Trả về toàn bộ danh sách lịch sử logout
                             userRoomDTO.setTimeLeft(ur.getTimeLeft());
 
                             UserDTO userDTO = new UserDTO();
@@ -123,9 +113,9 @@ public class RoomService {
                                 userDTO.setNickname(ur.getUserEntity().getNickname());
                             }
                             userRoomDTO.setUserDTO(userDTO);
+                            userRoomDTO.setIsAdmin(ur.getIsAdmin());
                             return userRoomDTO;
                         }).collect(Collectors.toList());
-                }
                 
                 roomDTO.setUserRoomDTOList(roomDTOS);
                 roomDTO.setSoluong((long) roomDTOS.size());
@@ -152,7 +142,6 @@ public class RoomService {
           }
 
           UserRoomEntity userRoomEntity = userEntity.getUserRoomEntity();
-          
           if (userRoomEntity == null) {
               userRoomEntity = new UserRoomEntity();
               userRoomEntity.setUserEntity(userEntity);
@@ -161,16 +150,14 @@ public class RoomService {
           userRoomEntity.setRoomEntity(roomEntity);
           userRoomEntity.getTimeJoin().add(LocalDateTime.now()); 
           userRoomEntity.setActive(true);
+          userRoomEntity.setIsAdmin(false);
 
           this.userRoomRepository.save(userRoomEntity);
-
-          // Thông báo cập nhật danh sách phòng chung
           messagingTemplate.convertAndSend("/topic/rooms", "ROOM_UPDATED");
           
-          // Thông báo cho mọi người TRONG PHÒNG là có người mới vào
           SendMessageDTO systemMsg = new SendMessageDTO();
           systemMsg.setMessage(userEntity.getNickname() + " vừa vào phòng");
-          systemMsg.setUserId(0L); // 0 là system
+          systemMsg.setUserId(0L);
           systemMsg.setNickname("Hệ thống");
           systemMsg.setTimeSend(LocalDateTime.now());
           messagingTemplate.convertAndSend("/topic/room/" + idRoom, systemMsg);
@@ -186,21 +173,25 @@ public class RoomService {
         });
 
         UserRoomEntity userRoomEntity = userEntity.getUserRoomEntity();
-        if (userRoomEntity != null && userRoomEntity.getRoomEntity().getId().equals(idRoom) && userRoomEntity.getActive()) {
+        if (userRoomEntity != null && userRoomEntity.getRoomEntity().getId().equals(idRoom) && Boolean.TRUE.equals(userRoomEntity.getActive())) {
             RoomEntity roomEntity = userRoomEntity.getRoomEntity();
             
-            userRoomEntity.setActive(false);
-            
-            List<LocalDateTime> timeLeftList = userRoomEntity.getTimeLeft();
-            if (timeLeftList == null) {
-                timeLeftList = new ArrayList<>();
-                userRoomEntity.setTimeLeft(timeLeftList);
+            // RÀNG BUỘC: Nếu là Admin, chỉ được rời khi là người duy nhất
+            if (Boolean.TRUE.equals(userRoomEntity.getIsAdmin())) {
+                long activeUsers = this.userRoomRepository.countByRoomEntityAndActive(roomEntity, true);
+                if (activeUsers > 1) {
+                    throw new AppException(400, "Bạn là quản trị viên, vui lòng chuyển quyền hoặc giải tán nhóm trước khi rời phòng!", 400);
+                }
             }
-            timeLeftList.add(LocalDateTime.now());
-            
+
+            userRoomEntity.setActive(false);
+            if (userRoomEntity.getTimeLeft() == null) {
+                userRoomEntity.setTimeLeft(new ArrayList<>());
+            }
+            userRoomEntity.getTimeLeft().add(LocalDateTime.now());
+            userRoomEntity.setIsAdmin(false); // Reset quyền admin khi rời
             this.userRoomRepository.save(userRoomEntity);
 
-            // Thông báo cho mọi người TRONG PHÒNG là có người rời phòng
             SendMessageDTO systemMsg = new SendMessageDTO();
             systemMsg.setMessage(userEntity.getNickname() + " đã rời khỏi phòng");
             systemMsg.setUserId(0L);
@@ -208,16 +199,12 @@ public class RoomService {
             systemMsg.setTimeSend(LocalDateTime.now());
             messagingTemplate.convertAndSend("/topic/room/" + idRoom, systemMsg);
 
-            // Kiểm tra số lượng user còn lại trong phòng
             long activeUsers = this.userRoomRepository.countByRoomEntityAndActive(roomEntity, true);
-            
             if (activeUsers == 0) {
-                // Nếu không còn ai, chuyển trạng thái active sang false
                 roomEntity.setActive(false);
                 this.roomRepository.save(roomEntity);
                 messagingTemplate.convertAndSend("/topic/rooms", "ROOM_DELETED");
             } else {
-                // Nếu vẫn còn người, chỉ thông báo cập nhật
                 messagingTemplate.convertAndSend("/topic/rooms", "ROOM_UPDATED");
             }
 
@@ -227,13 +214,24 @@ public class RoomService {
     }
 
     @Transactional
-    public ResponseData<Boolean> removeUserFromRoom(Long userIdToRemove, Long roomId) {
+    public ResponseData<Boolean> removeUserFromRoom(JwtAuthenticationToken jwtAuthenticationToken, Long userIdToRemove, Long roomId) {
+        Long adminId = jwtAuthenticationToken.getToken().getClaim("user_id");
+        
+        UserRoomEntity adminRoom = userRoomRepository.findAll().stream()
+                .filter(ur -> ur.getUserEntity().getId().equals(adminId) && ur.getRoomEntity().getId().equals(roomId))
+                .findFirst()
+                .orElseThrow(() -> new AppException(403, "Bạn không có quyền quản trị trong phòng này", 403));
+
+        if (!Boolean.TRUE.equals(adminRoom.getIsAdmin())) {
+             throw new AppException(403, "Bạn không phải là quản trị viên của phòng này", 403);
+        }
+
         UserEntity userToRemove = this.userRepository.findById(userIdToRemove).orElseThrow(() -> {
             throw new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "User cần xóa không tồn tại", 404);
         });
 
         UserRoomEntity userRoomEntity = userToRemove.getUserRoomEntity();
-        if (userRoomEntity != null && userRoomEntity.getRoomEntity().getId().equals(roomId) && userRoomEntity.getActive()) {
+        if (userRoomEntity != null && userRoomEntity.getRoomEntity().getId().equals(roomId) && Boolean.TRUE.equals(userRoomEntity.getActive())) {
             userRoomEntity.setActive(false);
             if (userRoomEntity.getTimeLeft() == null) {
                 userRoomEntity.setTimeLeft(new ArrayList<>());
@@ -241,19 +239,109 @@ public class RoomService {
             userRoomEntity.getTimeLeft().add(LocalDateTime.now());
             this.userRoomRepository.save(userRoomEntity);
 
-            // Thông báo qua WebSocket là người này bị đuổi
             SendMessageDTO systemMsg = new SendMessageDTO();
             systemMsg.setMessage(userToRemove.getNickname() + " đã bị mời ra khỏi phòng");
-            systemMsg.setUserId(-1L); // -1 để FE biết là bị KICK
+            systemMsg.setUserId(userIdToRemove); 
+            systemMsg.setId(-1L); // Đánh dấu là KICK
             systemMsg.setNickname("Hệ thống");
             systemMsg.setTimeSend(LocalDateTime.now());
+            
             messagingTemplate.convertAndSend("/topic/room/" + roomId, systemMsg);
-
             messagingTemplate.convertAndSend("/topic/rooms", "ROOM_UPDATED");
 
-            return new ResponseData<>(200, "Đuổi người dùng thành công", true);
+            return new ResponseData<>(200, "Đuổi thành viên " + userToRemove.getNickname() + " thành công", true);
         }
         return new ResponseData<>(400, "Người dùng này không ở trong phòng", false);
     }
 
+    @Transactional
+    public ResponseData<Boolean> disbandRoom(JwtAuthenticationToken jwtAuthenticationToken, Long roomId) {
+        Long adminId = jwtAuthenticationToken.getToken().getClaim("user_id");
+        RoomEntity roomEntity = roomRepository.findById(roomId).orElseThrow(() -> new AppException(404, "Phòng không tồn tại", 404));
+
+        UserRoomEntity adminRoom = roomEntity.getUserRoomEntityList().stream()
+                .filter(ur -> ur.getUserEntity().getId().equals(adminId) && Boolean.TRUE.equals(ur.getActive()))
+                .findFirst()
+                .orElseThrow(() -> new AppException(403, "Bạn không ở trong phòng này", 403));
+
+        if (!Boolean.TRUE.equals(adminRoom.getIsAdmin())) {
+            throw new AppException(403, "Chỉ quản trị viên mới có quyền giải tán phòng!", 403);
+        }
+
+        // Deactivate room and all members
+        roomEntity.setActive(false);
+        roomEntity.getUserRoomEntityList().forEach(ur -> {
+            if (Boolean.TRUE.equals(ur.getActive())) {
+                ur.setActive(false);
+                if (ur.getTimeLeft() == null) ur.setTimeLeft(new ArrayList<>());
+                ur.getTimeLeft().add(LocalDateTime.now());
+                ur.setIsAdmin(false);
+            }
+        });
+
+        this.roomRepository.saveAndFlush(roomEntity);
+
+        // Notify global topic to refresh room list for everyone on Home page
+        messagingTemplate.convertAndSend("/topic/rooms", "ROOM_DELETED");
+
+        // Notify all clients in the specific room that room is disbanded
+        SendMessageDTO systemMsg = new SendMessageDTO();
+        systemMsg.setMessage("Phòng chat đã được giải tán bởi quản trị viên!");
+        systemMsg.setId(-2L); // Đánh dấu là DISBAND
+        systemMsg.setUserId(0L);
+        systemMsg.setNickname("Hệ thống");
+        systemMsg.setTimeSend(LocalDateTime.now());
+        
+        messagingTemplate.convertAndSend("/topic/room/" + roomId, systemMsg);
+        messagingTemplate.convertAndSend("/topic/rooms", "ROOM_DELETED");
+
+        return new ResponseData<>(200, "Giải tán phòng thành công", true);
+    }
+
+    @Transactional
+    public ResponseData<Boolean> delegateAdmin(JwtAuthenticationToken jwtAuthenticationToken, Long roomId, Long newAdminUserId) {
+        Long currentAdminId = jwtAuthenticationToken.getToken().getClaim("user_id");
+        RoomEntity roomEntity = roomRepository.findById(roomId).orElseThrow(() -> new AppException(404, "Phòng không tồn tại", 404));
+
+        UserRoomEntity currentAdminUR = roomEntity.getUserRoomEntityList().stream()
+                .filter(ur -> ur.getUserEntity().getId().equals(currentAdminId) && Boolean.TRUE.equals(ur.getActive()))
+                .findFirst()
+                .orElseThrow(() -> new AppException(403, "Bạn không ở trong phòng này", 403));
+
+        if (!Boolean.TRUE.equals(currentAdminUR.getIsAdmin())) {
+            throw new AppException(403, "Chỉ quản trị viên mới có quyền ủy quyền!", 403);
+        }
+
+        UserRoomEntity newAdminUR = roomEntity.getUserRoomEntityList().stream()
+                .filter(ur -> ur.getUserEntity().getId().equals(newAdminUserId) && Boolean.TRUE.equals(ur.getActive()))
+                .findFirst()
+                .orElseThrow(() -> new AppException(404, "Thành viên nhận quyền không tồn tại trong phòng!", 404));
+
+        // Transfer rights
+        currentAdminUR.setIsAdmin(false);
+        newAdminUR.setIsAdmin(true);
+        
+        // Ensure new admin has global ADMIN_ROOM permission
+        UserEntity newAdminUser = newAdminUR.getUserEntity();
+        if (!newAdminUser.getPermissions().contains("ADMIN_ROOM")) {
+            newAdminUser.getPermissions().add("ADMIN_ROOM");
+            userRepository.save(newAdminUser);
+        }
+
+        userRoomRepository.save(currentAdminUR);
+        userRoomRepository.save(newAdminUR);
+
+        // Notify all clients
+        SendMessageDTO systemMsg = new SendMessageDTO();
+        systemMsg.setMessage(newAdminUser.getNickname() + " đã trở thành quản trị viên mới của phòng!");
+        systemMsg.setId(0L);
+        systemMsg.setUserId(0L);
+        systemMsg.setNickname("Hệ thống");
+        systemMsg.setTimeSend(LocalDateTime.now());
+        
+        messagingTemplate.convertAndSend("/topic/room/" + roomId, systemMsg);
+        messagingTemplate.convertAndSend("/topic/rooms", "ROOM_UPDATED");
+
+        return new ResponseData<>(200, "Ủy quyền quản trị thành công", true);
+    }
 }

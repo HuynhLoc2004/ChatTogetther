@@ -1,6 +1,5 @@
 package chatToggetther.DTO;
 
-import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -18,4 +17,5 @@ public class UserRoomDTO {
     private LocalDateTime timeJoin;
     private List<LocalDateTime> timeLeft;
     private UserDTO userDTO;
+    private Boolean isAdmin;
 }

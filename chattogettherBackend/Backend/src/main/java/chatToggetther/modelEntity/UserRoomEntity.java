@@ -5,10 +5,6 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.springframework.cglib.core.Local;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -25,7 +21,7 @@ import java.util.List;
 public class UserRoomEntity {
     @Id
     @GeneratedValue(strategy =  GenerationType.IDENTITY)
-    @Column(name = "user-room_id")
+    @Column(name = "user_room_id")
     private Long id;
 
     @Column(name = "time_join", columnDefinition = "timestamp[]")
@@ -39,11 +35,14 @@ public class UserRoomEntity {
     @OneToOne(fetch =  FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private UserEntity userEntity;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_room" , nullable = false)
     private RoomEntity roomEntity;
+
     @Column(name = "active" , columnDefinition = "BOOLEAN")
     private Boolean active;
 
-
+    @Column(name = "is_admin", columnDefinition = "BOOLEAN")
+    private Boolean isAdmin = false;
 }

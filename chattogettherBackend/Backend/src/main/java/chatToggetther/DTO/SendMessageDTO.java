@@ -12,6 +12,7 @@ import java.time.LocalDateTime;
 @Setter
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class SendMessageDTO {
+    private Long id; // ID của tin nhắn từ Database
     private Long userId;
     private String nickname;
     private String message;
