@@ -26,3 +26,4 @@ public class UserController {
             return ResponseEntity.ok(this.userService.create_user(userRequest));
     }
 }
+
