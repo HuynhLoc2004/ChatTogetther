@@ -27,7 +27,7 @@ const PublicRoute = ({ children }) => {
 function App() {
   return (
     <Router>
-      <div className="app-container">
+      <div className="app-root">
         <Toaster 
           position="top-right" 
           reverseOrder={false}
@@ -59,11 +59,11 @@ function App() {
         <Routes>
           <Route 
             path="/login" 
-            element={<PublicRoute><Login /></PublicRoute>} 
+            element={<PublicRoute><div className="auth-wrapper"><Login /></div></PublicRoute>} 
           />
           <Route 
             path="/register" 
-            element={<PublicRoute><Register /></PublicRoute>} 
+            element={<PublicRoute><div className="auth-wrapper"><Register /></div></PublicRoute>} 
           />
           <Route 
             path="/" 

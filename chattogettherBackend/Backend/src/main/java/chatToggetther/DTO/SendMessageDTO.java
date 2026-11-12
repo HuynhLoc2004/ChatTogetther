@@ -18,4 +18,5 @@ public class SendMessageDTO {
     private String message;
     private LocalDateTime timeSend;
     private LocalDateTime time_retrieve;
+    private String formattedTime; // Giờ chuẩn Việt Nam HH:mm để hiển thị trên UI chính xác 100%
 }

@@ -83,6 +83,7 @@ public class ChatService {
             sendMessageDTO.setTime_retrieve(now);
             sendMessageDTO.setUserId(userId);
             sendMessageDTO.setNickname(senderNickname);
+            sendMessageDTO.setFormattedTime(now.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")));
             
             this.simpMessagingTemplate.convertAndSend("/topic/room/" + user_room, sendMessageDTO);
             
@@ -92,6 +93,8 @@ public class ChatService {
     @Transactional
     public ResponseData<List<SendMessageDTO>> getMessageHistory(Long roomId) {
         List<MessageEntity> messages = this.messageRepository.findByRoomEntity_IdOrderByTimeSendAsc(roomId);
+        java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern("HH:mm");
+
         List<SendMessageDTO> history = messages.stream().map(m -> {
             SendMessageDTO dto = new SendMessageDTO();
             dto.setId(m.getId());
@@ -101,6 +104,7 @@ public class ChatService {
                 displayTime = LocalDateTime.now();
             }
             dto.setTimeSend(displayTime); 
+            dto.setFormattedTime(displayTime.format(formatter));
             dto.setUserId(m.getUserEntity() != null ? m.getUserEntity().getId() : 0L);
             String nickname = "Hệ thống";
             if (m.getUserEntity() != null) {

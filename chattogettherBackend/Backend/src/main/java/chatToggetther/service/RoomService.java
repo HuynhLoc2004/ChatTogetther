@@ -215,6 +215,7 @@ public class RoomService {
               leaveMsg.setUserId(0L);
               leaveMsg.setNickname("Hệ thống");
               leaveMsg.setTimeSend(LocalDateTime.now());
+              leaveMsg.setFormattedTime(LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")));
               messagingTemplate.convertAndSend("/topic/room/" + oldRoomId, leaveMsg);
           }
 
@@ -231,6 +232,7 @@ public class RoomService {
           systemMsg.setUserId(0L);
           systemMsg.setNickname("Hệ thống");
           systemMsg.setTimeSend(LocalDateTime.now());
+          systemMsg.setFormattedTime(LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")));
           messagingTemplate.convertAndSend("/topic/room/" + idRoom, systemMsg);
 
           return new ResponseData<>(200 , "tham gia phòng thành công" , roomEntity.getId());
@@ -268,6 +270,7 @@ public class RoomService {
             systemMsg.setUserId(0L);
             systemMsg.setNickname("Hệ thống");
             systemMsg.setTimeSend(LocalDateTime.now());
+            systemMsg.setFormattedTime(LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")));
             messagingTemplate.convertAndSend("/topic/room/" + idRoom, systemMsg);
 
             long activeUsers = this.userRoomRepository.countByRoomEntityAndActive(roomEntity, true);
@@ -316,6 +319,7 @@ public class RoomService {
             systemMsg.setId(-1L); // Đánh dấu là KICK
             systemMsg.setNickname("Hệ thống");
             systemMsg.setTimeSend(LocalDateTime.now());
+            systemMsg.setFormattedTime(LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")));
             
             messagingTemplate.convertAndSend("/topic/room/" + roomId, systemMsg);
             messagingTemplate.convertAndSend("/topic/rooms", "ROOM_UPDATED");
@@ -362,6 +366,7 @@ public class RoomService {
         systemMsg.setUserId(0L);
         systemMsg.setNickname("Hệ thống");
         systemMsg.setTimeSend(LocalDateTime.now());
+        systemMsg.setFormattedTime(LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")));
         
         messagingTemplate.convertAndSend("/topic/room/" + roomId, systemMsg);
         messagingTemplate.convertAndSend("/topic/rooms", "ROOM_DELETED");
@@ -409,6 +414,7 @@ public class RoomService {
         systemMsg.setUserId(0L);
         systemMsg.setNickname("Hệ thống");
         systemMsg.setTimeSend(LocalDateTime.now());
+        systemMsg.setFormattedTime(LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")));
         
         messagingTemplate.convertAndSend("/topic/room/" + roomId, systemMsg);
         messagingTemplate.convertAndSend("/topic/rooms", "ROOM_UPDATED");
