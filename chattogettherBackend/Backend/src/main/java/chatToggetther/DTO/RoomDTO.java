@@ -17,4 +17,5 @@ public class RoomDTO {
     private String nameroom;
     private List<UserRoomDTO> userRoomDTOList = new ArrayList<>();
     private Long soluong;
+    private Boolean hasPassword;
 }

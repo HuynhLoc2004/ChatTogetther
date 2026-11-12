@@ -1,0 +1,24 @@
+services:
+  backend:
+    build:
+      context: ./chattogettherBackend/Backend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://ep-noisy-art-ao5oc2sf.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
+      - SPRING_DATASOURCE_USERNAME=neondb_owner
+      - SPRING_DATASOURCE_PASSWORD=npg_rbka46vhfzjM
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./chattogettherFrontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+

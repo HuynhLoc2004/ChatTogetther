@@ -1,7 +1,9 @@
 import axios from 'axios';
 
+export const BACKEND_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+
 const axiosClient = axios.create({
-  baseURL: '/api',
+  baseURL: BACKEND_URL ? `${BACKEND_URL}/api` : '/api',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -70,17 +72,28 @@ axiosClient.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        // Sử dụng một instance axios mới hoặc gọi trực tiếp để tránh interceptors hiện tại
-        const response = await axios.get('/api/auth/refresh_token', {
+        const refreshEndpoint = BACKEND_URL ? `${BACKEND_URL}/api/auth/refresh_token` : '/api/auth/refresh_token';
+        const storedRefreshToken = localStorage.getItem('refreshToken');
+        
+        const response = await axios.get(refreshEndpoint, {
           withCredentials: true,
           headers: {
-            // Đảm bảo không gửi header Authorization cũ đi kèm
             Authorization: undefined,
+            'x-refresh-token': storedRefreshToken || undefined,
           },
         });
         
         const newAccessToken = response.data.data;
         localStorage.setItem('accesstoken', newAccessToken);
+
+        // Đảm bảo user_id luôn tồn tại
+        try {
+          const payloadBase64 = newAccessToken.split('.')[1];
+          const decoded = JSON.parse(atob(payloadBase64));
+          if (decoded && decoded.user_id) {
+            localStorage.setItem('user_id', decoded.user_id.toString());
+          }
+        } catch (_) {}
         
         // Giải quyết các request đang chờ
         processQueue(null, newAccessToken);

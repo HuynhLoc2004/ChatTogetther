@@ -19,8 +19,11 @@ const Login = () => {
       });
 
       if (response.status === 200) {
-        const { token, roomId } = response.data.data;
+        const { token, roomId, refreshToken } = response.data.data;
         localStorage.setItem('accesstoken', token);
+        if (refreshToken) {
+          localStorage.setItem('refreshToken', refreshToken);
+        }
 
         // Giải mã JWT để lấy user_id
         try {

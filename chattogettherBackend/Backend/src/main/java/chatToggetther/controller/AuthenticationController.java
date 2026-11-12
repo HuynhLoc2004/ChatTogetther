@@ -27,10 +27,14 @@ public class AuthenticationController {
         return ResponseEntity.ok(this.authenticationService.userLogin(userloginRequest , httpServletResponse));
     }
     @GetMapping("/refresh_token")
-    public ResponseEntity<ResponseData<String>> refreshToken(@CookieValue(name = "refreshToken", required = false) String refreshToken , HttpServletResponse httpServletResponse){
-         if (refreshToken == null) {
-             throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Refresh token không tồn tại trong cookie!", ErrorCode.UNAUTHENTICATED.getStatusCode().value());
+    public ResponseEntity<ResponseData<String>> refreshToken(
+            @CookieValue(name = "refreshToken", required = false) String refreshToken,
+            @RequestHeader(name = "x-refresh-token", required = false) String headerRefreshToken,
+            HttpServletResponse httpServletResponse){
+         String token = (refreshToken != null && !refreshToken.isEmpty()) ? refreshToken : headerRefreshToken;
+         if (token == null || token.isEmpty()) {
+             throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Refresh token không tồn tại!", ErrorCode.UNAUTHENTICATED.getStatusCode().value());
          }
-         return ResponseEntity.ok(this.authenticationService.refreshToken(refreshToken , httpServletResponse));
+         return ResponseEntity.ok(this.authenticationService.refreshToken(token , httpServletResponse));
     }
 }

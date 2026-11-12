@@ -42,6 +42,10 @@ public class ChatService {
 
     @Transactional
     public ResponseData<Boolean> sendMessage(JwtAuthenticationToken jwtAuthenticationToken , MessageRequest messageRequest , Long user_room){
+            if (messageRequest.getMessage() == null || messageRequest.getMessage().trim().isEmpty()) {
+                throw new AppException(400, "Tin nhắn không được để trống", 400);
+            }
+
             Long userId = jwtAuthenticationToken.getToken().getClaim("user_id");
             UserEntity userEntity = this.userRepository.findById(userId).orElseThrow(()->{
                 throw new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "không tồn tại user" , ErrorCode.USER_NOT_EXISTED.getStatusCode().value());
@@ -50,30 +54,39 @@ public class ChatService {
                 throw new AppException(ErrorCode.ROOM_NOT_FOUND.getCode(),  "phòng không tồn tại" , ErrorCode.ROOM_NOT_FOUND.getStatusCode().value());
             });
 
+            // Kiểm tra thành viên có đang trong phòng và active hay không trước khi lưu tin nhắn
+            boolean isActiveInRoom = roomEntity.getUserRoomEntityList().stream()
+                    .anyMatch(ur -> ur.getUserEntity() != null 
+                            && ur.getUserEntity().getId().equals(userId) 
+                            && Boolean.TRUE.equals(ur.getActive()));
+
+            if (!isActiveInRoom) {
+                throw new AppException(ErrorCode.NOT_IN_ROOM.getCode(), "Bạn không ở trong phòng này hoặc không còn hoạt động", ErrorCode.NOT_IN_ROOM.getStatusCode().value());
+            }
+
+            LocalDateTime now = LocalDateTime.now();
             MessageEntity messageEntity = new MessageEntity();
-            messageEntity.setMessage(messageRequest.getMessage());
-            messageEntity.setTimeSend(LocalDateTime.now());
-            messageEntity.setTimeRetrieve(messageRequest.getTimeSend());
+            messageEntity.setMessage(messageRequest.getMessage().trim());
+            messageEntity.setTimeSend(now);
+            messageEntity.setTimeRetrieve(now);
             messageEntity.setUserEntity(userEntity);
             messageEntity.setRoomEntity(roomEntity);
             this.messageRepository.save(messageEntity);
 
-            for(UserRoomEntity userRoomEntity : roomEntity.getUserRoomEntityList()){
-                if(userRoomEntity.getUserEntity().getId().equals(userId) && Boolean.TRUE.equals(userRoomEntity.getActive())){
-                    SendMessageDTO sendMessageDTO = new SendMessageDTO();
-                    sendMessageDTO.setId(messageEntity.getId());
-                    sendMessageDTO.setMessage(messageRequest.getMessage());
-                    sendMessageDTO.setTimeSend(messageRequest.getTimeSend());
-                    sendMessageDTO.setUserId(userId);
-                    sendMessageDTO.setNickname(userEntity.getNickname());
-                    
-                    this.simpMessagingTemplate.convertAndSend("/topic/room/" + user_room, sendMessageDTO);
-                    
-                    return new ResponseData<>(ErrorCode.SUCCESS.getCode() , "gửi tin nhắn thành công" , true);
-                }
-            }
+            String senderNickname = (userEntity.getNickname() != null && !userEntity.getNickname().trim().isEmpty())
+                    ? userEntity.getNickname() : userEntity.getAccount();
 
-            throw new AppException(ErrorCode.NOT_IN_ROOM.getCode(), "Bạn không ở trong phòng này hoặc không còn hoạt động", ErrorCode.NOT_IN_ROOM.getStatusCode().value());
+            SendMessageDTO sendMessageDTO = new SendMessageDTO();
+            sendMessageDTO.setId(messageEntity.getId());
+            sendMessageDTO.setMessage(messageEntity.getMessage());
+            sendMessageDTO.setTimeSend(now);
+            sendMessageDTO.setTime_retrieve(now);
+            sendMessageDTO.setUserId(userId);
+            sendMessageDTO.setNickname(senderNickname);
+            
+            this.simpMessagingTemplate.convertAndSend("/topic/room/" + user_room, sendMessageDTO);
+            
+            return new ResponseData<>(ErrorCode.SUCCESS.getCode() , "gửi tin nhắn thành công" , true);
     }
 
     @Transactional
@@ -83,9 +96,18 @@ public class ChatService {
             SendMessageDTO dto = new SendMessageDTO();
             dto.setId(m.getId());
             dto.setMessage(m.getMessage());
-            dto.setTimeSend(m.getTimeRetrieve()); 
+            LocalDateTime displayTime = m.getTimeSend() != null ? m.getTimeSend() : m.getTimeRetrieve();
+            if (displayTime == null) {
+                displayTime = LocalDateTime.now();
+            }
+            dto.setTimeSend(displayTime); 
             dto.setUserId(m.getUserEntity() != null ? m.getUserEntity().getId() : 0L);
-            dto.setNickname(m.getUserEntity() != null ? m.getUserEntity().getNickname() : "Hệ thống");
+            String nickname = "Hệ thống";
+            if (m.getUserEntity() != null) {
+                nickname = (m.getUserEntity().getNickname() != null && !m.getUserEntity().getNickname().trim().isEmpty())
+                        ? m.getUserEntity().getNickname() : m.getUserEntity().getAccount();
+            }
+            dto.setNickname(nickname);
             return dto;
         }).collect(Collectors.toList());
         return new ResponseData<>(200, "Lấy lịch sử tin nhắn thành công", history);

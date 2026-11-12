@@ -119,6 +119,7 @@ public class RoomService {
                 
                 roomDTO.setUserRoomDTOList(roomDTOS);
                 roomDTO.setSoluong((long) roomDTOS.size());
+                roomDTO.setHasPassword(item.getPassword() != null && !item.getPassword().trim().isEmpty());
                 
                 return roomDTO;
         }).collect(Collectors.toList());
@@ -136,21 +137,39 @@ public class RoomService {
               throw new AppException(ErrorCode.ROOM_NOT_FOUND.getCode(),  "phòng không tồn tại" , ErrorCode.ROOM_NOT_FOUND.getStatusCode().value());
           });
 
+          UserRoomEntity userRoomEntity = userEntity.getUserRoomEntity();
+          boolean isAlreadyMemberOfThisRoom = (userRoomEntity != null 
+                  && userRoomEntity.getRoomEntity() != null 
+                  && userRoomEntity.getRoomEntity().getId().equals(idRoom) 
+                  && (Boolean.TRUE.equals(userRoomEntity.getActive()) || Boolean.TRUE.equals(userRoomEntity.getIsAdmin())));
+
+          // Chỉ yêu cầu kiểm tra mật khẩu nếu người dùng chưa phải là thành viên/chủ phòng của phòng này
+          if (!isAlreadyMemberOfThisRoom && roomEntity.getPassword() != null && !roomEntity.getPassword().trim().isEmpty()) {
+              String inputPassword = joinRoomRequest.getPassword();
+              if (inputPassword == null || !roomEntity.getPassword().equals(inputPassword.trim())) {
+                  throw new AppException(400, "Mật khẩu phòng không chính xác!", 400);
+              }
+          }
+
           if (joinRoomRequest.getNickname() != null && !joinRoomRequest.getNickname().isEmpty()) {
               userEntity.setNickname(joinRoomRequest.getNickname());
               this.userRepository.save(userEntity);
           }
 
-          UserRoomEntity userRoomEntity = userEntity.getUserRoomEntity();
           if (userRoomEntity == null) {
               userRoomEntity = new UserRoomEntity();
               userRoomEntity.setUserEntity(userEntity);
           }
           
+          // Giữ lại quyền admin nếu user đã là admin của chính phòng này từ trước
+          boolean wasAdminInThisRoom = (userRoomEntity.getRoomEntity() != null 
+                  && userRoomEntity.getRoomEntity().getId().equals(idRoom) 
+                  && Boolean.TRUE.equals(userRoomEntity.getIsAdmin()));
+
           userRoomEntity.setRoomEntity(roomEntity);
           userRoomEntity.getTimeJoin().add(LocalDateTime.now()); 
           userRoomEntity.setActive(true);
-          userRoomEntity.setIsAdmin(false);
+          userRoomEntity.setIsAdmin(wasAdminInThisRoom);
 
           this.userRoomRepository.save(userRoomEntity);
           messagingTemplate.convertAndSend("/topic/rooms", "ROOM_UPDATED");

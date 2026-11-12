@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, LogOut, Plus, MessageSquare, Shield, User, X, Lock, Hash } from 'lucide-react';
-import axiosClient from '../api/axiosClient';
+import { Users, LogOut, Plus, MessageSquare, Shield, User, X, Lock, Hash, CheckCircle, ArrowRight } from 'lucide-react';
+import axiosClient, { BACKEND_URL } from '../api/axiosClient';
 import SockJS from 'sockjs-client';
 import Stomp from 'stompjs';
+import toast from 'react-hot-toast';
 
 const Home = () => {
   const [rooms, setRooms] = useState([]);
@@ -18,9 +19,16 @@ const Home = () => {
   const [newRoomData, setNewRoomData] = useState({ name: '', password: '', nickname: '' });
   const [joinData, setJoinData] = useState({ nickname: '', password: '' });
 
+  const currentUserId = localStorage.getItem('user_id');
+
+  // Kiểm tra xem user có phải là thành viên của phòng này không
+  const isUserInRoom = (room) => {
+    if (!currentUserId || !room?.userRoomDTOList) return false;
+    return room.userRoomDTOList.some(ur => ur.userDTO?.id?.toString() === currentUserId.toString());
+  };
+
   // Kiểm tra xem user có đang ở trong phòng nào không
   const checkActiveRoom = async () => {
-    // Nếu trong session này đã kiểm tra/redirect một lần rồi thì không tự động làm lại
     if (sessionStorage.getItem('hasCheckedActiveRoom')) {
       return false;
     }
@@ -36,7 +44,6 @@ const Home = () => {
       console.error("Lỗi khi kiểm tra phòng hoạt động:", err);
     }
     
-    // Đánh dấu là đã kiểm tra xong (dù có phòng hay không)
     sessionStorage.setItem('hasCheckedActiveRoom', 'true');
     return false;
   };
@@ -66,7 +73,6 @@ const Home = () => {
     let isMounted = true;
     
     const init = async () => {
-      // Logic: Kiểm tra phòng hoạt động trước, nếu không có mới tải danh sách phòng
       const isInRoom = await checkActiveRoom();
       if (!isInRoom && isMounted) {
         fetchRooms();
@@ -75,17 +81,18 @@ const Home = () => {
 
     init();
     
-    const socket = new SockJS('/ws-gs-guide');
+    const socketUrl = BACKEND_URL ? `${BACKEND_URL}/ws-gs-guide` : '/ws-gs-guide';
+    const socket = new SockJS(socketUrl);
     const stompClient = Stomp.over(socket);
     stompClient.debug = null;
 
     stompClient.connect({}, () => {
       if (!isMounted) return;
-      // Lắng nghe mọi cập nhật về phòng (tạo mới, cập nhật, xóa, giải tán)
       stompClient.subscribe('/topic/rooms', (message) => {
-        console.log("Nhận thông báo cập nhật phòng:", message.body);
-        fetchRooms(true); // Tải lại danh sách phòng mà không hiện loading screen
+        fetchRooms(true);
       });
+    }, (err) => {
+      console.warn("WebSocket kết nối lại sau...", err);
     });
 
     return () => {
@@ -99,16 +106,22 @@ const Home = () => {
   const handleLogout = () => {
     localStorage.clear();
     sessionStorage.clear();
-    window.location.href = '/login';
+    toast.success("Đã đăng xuất tài khoản!");
+    navigate('/login');
   };
 
   const handleCreateRoom = async (e) => {
     e.preventDefault();
+    if (!newRoomData.name.trim()) {
+      toast.error("Vui lòng nhập tên phòng chat!");
+      return;
+    }
+
     try {
       const response = await axiosClient.post('/rooms/create', {
-        nameRoom: newRoomData.name,
+        nameRoom: newRoomData.name.trim(),
         password: newRoomData.password || "",
-        nickname: newRoomData.nickname
+        nickname: newRoomData.nickname.trim()
       });
 
       if (response.status === 200) {
@@ -116,7 +129,7 @@ const Home = () => {
         if (accessToken) {
           localStorage.setItem('accesstoken', accessToken);
         }
-        // Đánh dấu đã vào phòng để không bị redirect ngược lại Home khi mount
+        toast.success("Tạo phòng thành công!");
         sessionStorage.setItem('hasCheckedActiveRoom', 'true');
         setIsCreateModalOpen(false);
         setNewRoomData({ name: '', password: '', nickname: '' });
@@ -124,20 +137,32 @@ const Home = () => {
       }
     } catch (err) {
       console.error("Lỗi khi tạo phòng:", err);
-      alert(err.response?.data?.message || "Đã có lỗi xảy ra!");
+      toast.error(err.response?.data?.message || "Không thể tạo phòng, vui lòng thử lại!");
     }
+  };
+
+  const handleRoomClick = (room) => {
+    // Nếu user đã là thành viên trong phòng này thì vào thẳng, không cần nhập mật khẩu
+    if (isUserInRoom(room)) {
+      sessionStorage.setItem('hasCheckedActiveRoom', 'true');
+      navigate(`/room/${room.id}`);
+      return;
+    }
+    setJoinData({ nickname: '', password: '' });
+    setSelectedRoom(room);
   };
 
   const handleJoinRoom = async (e) => {
     e.preventDefault();
     try {
       const response = await axiosClient.post(`/rooms/join-room`, 
-        { nickname: joinData.nickname, password: joinData.password },
+        { nickname: joinData.nickname.trim(), password: joinData.password.trim() },
         { params: { room_id: selectedRoom.id } }
       );
 
       if (response.status === 200) {
         const roomId = response.data.data;
+        toast.success("Tham gia phòng thành công!");
         setSelectedRoom(null);
         setJoinData({ nickname: '', password: '' });
         sessionStorage.setItem('hasCheckedActiveRoom', 'true');
@@ -145,197 +170,687 @@ const Home = () => {
       }
     } catch (err) {
       console.error("Lỗi khi tham gia phòng:", err);
-      alert(err.response?.data?.message || "Không thể tham gia phòng!");
+      toast.error(err.response?.data?.message || "Mật khẩu không chính xác hoặc không thể vào phòng!");
     }
   };
 
   return (
-    <div className="home-container" style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto', color: '#f8fafc' }}>
-      <header className="home-header" style={{ marginBottom: '3rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)', padding: '0.6rem', borderRadius: '1rem', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)' }}>
-             <MessageSquare color="white" size={28} />
+    <div className="home-wrapper">
+      <div className="home-container">
+        <header className="home-header">
+          <div className="header-brand">
+            <div className="brand-logo-badge">
+              <MessageSquare color="white" size={24} />
+            </div>
+            <div>
+              <h1 className="logo-text">Chat Togetther</h1>
+              <span className="app-subtitle">Nền tảng chat thời gian thực</span>
+            </div>
           </div>
-          <h1 className="logo-text" style={{ margin: 0, fontSize: '2.2rem', fontWeight: 800 }}>Chat Togetther</h1>
-        </div>
-        
-        <div style={{ display: 'flex', gap: '1rem' }}>
-          <motion.button 
-            whileHover={{ scale: 1.05, boxShadow: '0 0 20px rgba(79, 70, 229, 0.4)' }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setIsCreateModalOpen(true)}
-            className="auth-button" 
-            style={{ marginTop: 0, width: 'auto', display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.7rem 1.5rem', borderRadius: '1rem' }}
-          >
-            <Plus size={20} /> Tạo Phòng
-          </motion.button>
           
-          <button onClick={handleLogout} className="join-btn" style={{ width: 'auto', padding: '0.7rem 1.2rem', borderRadius: '1rem', display: 'flex', alignItems: 'center', gap: '0.6rem', border: '1px solid #334155', color: '#94a3b8' }}>
-            <LogOut size={18} /> Đăng xuất
-          </button>
-        </div>
-      </header>
+          <div className="header-actions">
+            <button 
+              onClick={() => setIsCreateModalOpen(true)}
+              className="btn-create-room" 
+            >
+              <Plus size={18} />
+              <span>Tạo Phòng</span>
+            </button>
+            
+            <button onClick={handleLogout} className="btn-logout" title="Đăng xuất">
+              <LogOut size={18} />
+              <span className="hide-on-mobile">Đăng xuất</span>
+            </button>
+          </div>
+        </header>
 
-      <div style={{ marginBottom: '2.5rem' }}>
-        <h2 style={{ fontSize: '1.8rem', marginBottom: '0.5rem', fontWeight: 700 }}>Phòng Đang Hoạt Động</h2>
-        <p style={{ color: '#94a3b8', fontSize: '1rem' }}>Tham gia một cộng đồng và bắt đầu trò chuyện ngay bây giờ.</p>
-      </div>
+        <section className="section-title-area">
+          <h2 className="section-heading">Phòng Đang Hoạt Động</h2>
+          <p className="section-desc">Chọn một phòng để trò chuyện hoặc tự tạo phòng cho riêng bạn.</p>
+        </section>
 
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: '5rem', color: '#94a3b8' }}>
-          <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }} style={{ display: 'inline-block', marginBottom: '1rem' }}>
-             <Hash size={40} />
-          </motion.div>
-          <p>Đang tải danh sách phòng...</p>
-        </div>
-      ) : error ? (
-        <div style={{ textAlign: 'center', padding: '5rem', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '1.5rem', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
-          <p style={{ color: '#ef4444', fontWeight: 600 }}>{error}</p>
-          <button onClick={() => fetchRooms()} style={{ marginTop: '1rem', background: 'none', border: '1px solid #ef4444', color: '#ef4444', padding: '0.5rem 1.5rem', borderRadius: '0.75rem', cursor: 'pointer' }}>Thử lại</button>
-        </div>
-      ) : (
-        <motion.div layout className="rooms-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '2rem' }}>
-          {rooms.length > 0 ? (
-            rooms.map((room) => (
-              <motion.div 
-                key={room.id}
-                layout
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                whileHover={{ y: -8, boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)' }}
-                className="room-card"
-                style={{ position: 'relative', overflow: 'hidden', padding: '2rem', border: '1px solid #334155', borderRadius: '1.5rem', background: '#1e293b' }}
-              >
-                <div className="room-info" style={{ marginBottom: '1.5rem' }}>
-                  <div style={{ width: '100%' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-                      <h3 className="room-name" style={{ margin: 0, fontSize: '1.3rem', fontWeight: 700, color: '#f8fafc' }}>{room.nameroom}</h3>
-                      <div style={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        gap: '0.5rem', 
-                        background: 'rgba(16, 185, 129, 0.15)', 
-                        padding: '0.3rem 0.8rem', 
-                        borderRadius: '2rem',
-                        border: '1px solid rgba(16, 185, 129, 0.3)'
-                      }}>
-                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 8px #10b981' }}></span>
-                        <span style={{ fontSize: '0.75rem', color: '#10b981', fontWeight: 700, textTransform: 'uppercase' }}>Online</span>
+        {loading ? (
+          <div className="status-box">
+            <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}>
+              <Hash size={40} className="spinner-icon" />
+            </motion.div>
+            <p>Đang tải danh sách phòng...</p>
+          </div>
+        ) : error ? (
+          <div className="status-box error-box">
+            <p className="error-text">{error}</p>
+            <button onClick={() => fetchRooms()} className="btn-retry">Thử lại</button>
+          </div>
+        ) : (
+          <div className="rooms-grid">
+            {rooms.length > 0 ? (
+              rooms.map((room) => {
+                const alreadyIn = isUserInRoom(room);
+                return (
+                  <motion.div 
+                    key={room.id}
+                    layout
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    whileHover={{ y: -6 }}
+                    className={`room-card ${alreadyIn ? 'is-my-room' : ''}`}
+                  >
+                    <div className="room-card-header">
+                      <div className="room-title-group">
+                        <h3 className="room-name">{room.nameroom}</h3>
+                        <div className="badge-row">
+                          {room.hasPassword && (
+                            <span className="badge badge-locked" title="Phòng có mật khẩu bảo vệ">
+                              <Lock size={12} /> Khóa
+                            </span>
+                          )}
+                          {alreadyIn && (
+                            <span className="badge badge-joined" title="Bạn đã là thành viên trong phòng này">
+                              <CheckCircle size={12} /> Phòng của bạn
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div className="online-pill">
+                        <span className="online-dot"></span>
+                        <span>{room.soluong || 0} online</span>
                       </div>
                     </div>
-                    <span style={{ fontSize: '0.9rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <Users size={16} /> <strong>{room.soluong || 0}</strong> thành viên trực tuyến
-                    </span>
-                  </div>
-                </div>
 
-                <div style={{ marginBottom: '2rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', minHeight: '1.8rem' }}>
-                  {room.userRoomDTOList && room.userRoomDTOList.slice(0, 4).map((ur, index) => (
-                    <span key={index} style={{ fontSize: '0.75rem', background: 'rgba(79, 70, 229, 0.15)', color: '#818cf8', padding: '0.2rem 0.7rem', borderRadius: '0.5rem', border: '1px solid rgba(79, 70, 229, 0.2)' }}>
-                      {ur.userDTO?.nickname || "User"}
-                    </span>
-                  ))}
-                  {room.userRoomDTOList?.length > 4 && (
-                    <span style={{ fontSize: '0.75rem', color: '#64748b', alignSelf: 'center' }}>+{room.userRoomDTOList.length - 4}</span>
-                  )}
-                </div>
+                    <div className="members-preview">
+                      {room.userRoomDTOList && room.userRoomDTOList.slice(0, 4).map((ur, index) => (
+                        <span key={index} className="member-tag">
+                          {ur.userDTO?.nickname || "User"}
+                        </span>
+                      ))}
+                      {room.userRoomDTOList?.length > 4 && (
+                        <span className="more-members">+{room.userRoomDTOList.length - 4}</span>
+                      )}
+                    </div>
 
-                <button 
-                  className="auth-button"
-                  onClick={() => setSelectedRoom(room)}
-                  style={{ width: '100%', borderRadius: '1rem', marginTop: 0, padding: '0.8rem', background: 'linear-gradient(to right, #4f46e5, #6366f1)' }}
-                >
-                  Tham Gia Ngay
+                    <button 
+                      className={`btn-action-room ${alreadyIn ? 'btn-rejoin' : 'btn-join'}`}
+                      onClick={() => handleRoomClick(room)}
+                    >
+                      <span>{alreadyIn ? 'Vào Lại Phòng' : 'Tham Gia Ngay'}</span>
+                      <ArrowRight size={16} />
+                    </button>
+                  </motion.div>
+                );
+              })
+            ) : (
+              <div className="empty-rooms">
+                <MessageSquare size={48} className="empty-icon" />
+                <h3>Chưa có phòng nào hoạt động</h3>
+                <p>Hãy tạo phòng đầu tiên để bắt đầu trò chuyện cùng mọi người!</p>
+                <button onClick={() => setIsCreateModalOpen(true)} className="btn-create-first">
+                  <Plus size={18} /> Tạo phòng mới
                 </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Modal Tạo Phòng */}
+        <AnimatePresence>
+          {isCreateModalOpen && (
+            <div className="modal-backdrop" onClick={() => setIsCreateModalOpen(false)}>
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95, y: 15 }} 
+                animate={{ opacity: 1, scale: 1, y: 0 }} 
+                exit={{ opacity: 0, scale: 0.95, y: 15 }} 
+                className="modal-box" 
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="modal-header">
+                  <h2 className="modal-title">Tạo Phòng Mới</h2>
+                  <button onClick={() => setIsCreateModalOpen(false)} className="btn-close-modal">
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <form onSubmit={handleCreateRoom} className="modal-form">
+                  <div className="form-item">
+                    <label>
+                      <User size={15} /> Nickname của bạn
+                    </label>
+                    <input 
+                      type="text" 
+                      required 
+                      placeholder="VD: Lộc Đẹp Trai" 
+                      value={newRoomData.nickname} 
+                      onChange={(e) => setNewRoomData({...newRoomData, nickname: e.target.value})} 
+                    />
+                  </div>
+
+                  <div className="form-item">
+                    <label>
+                      <MessageSquare size={15} /> Tên phòng chat
+                    </label>
+                    <input 
+                      type="text" 
+                      required 
+                      placeholder="VD: Nhóm Công Việc..." 
+                      value={newRoomData.name} 
+                      onChange={(e) => setNewRoomData({...newRoomData, name: e.target.value})} 
+                    />
+                  </div>
+
+                  <div className="form-item">
+                    <label>
+                      <Lock size={15} /> Mật khẩu phòng (tùy chọn)
+                    </label>
+                    <input 
+                      type="password" 
+                      placeholder="Để trống nếu muốn phòng công khai" 
+                      value={newRoomData.password} 
+                      onChange={(e) => setNewRoomData({...newRoomData, password: e.target.value})} 
+                    />
+                  </div>
+                  
+                  <div className="modal-actions">
+                    <button type="button" onClick={() => setIsCreateModalOpen(false)} className="btn-cancel">
+                      Hủy
+                    </button>
+                    <button type="submit" className="btn-submit">
+                      Tạo Phòng Ngay
+                    </button>
+                  </div>
+                </form>
               </motion.div>
-            ))
-          ) : (
-            <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '5rem', color: '#94a3b8', background: 'rgba(30, 41, 59, 0.5)', borderRadius: '2rem', border: '2px dashed #334155' }}>
-              <MessageSquare size={48} style={{ opacity: 0.2, marginBottom: '1rem' }} />
-              <p>Chưa có phòng nào hoạt động. Hãy tạo phòng đầu tiên để bắt đầu!</p>
             </div>
           )}
-        </motion.div>
-      )}
+        </AnimatePresence>
 
-      {/* Modal Tạo Phòng */}
-      <AnimatePresence>
-        {isCreateModalOpen && (
-          <div className="modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 20 }} 
-              animate={{ opacity: 1, scale: 1, y: 0 }} 
-              exit={{ opacity: 0, scale: 0.9, y: 20 }} 
-              className="modal-content" 
-              style={{ background: '#1e293b', padding: '2.5rem', borderRadius: '2rem', width: '100%', maxWidth: '450px', border: '1px solid #334155', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-                <h2 style={{ margin: 0, fontSize: '1.6rem', fontWeight: 800, background: 'linear-gradient(to right, #818cf8, #c084fc)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Tạo Phòng Mới</h2>
-                <button onClick={() => setIsCreateModalOpen(false)} style={{ background: 'rgba(255,255,255,0.05)', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '0.5rem', borderRadius: '0.75rem' }}><X size={20} /></button>
-              </div>
+        {/* Modal Tham Gia Phòng */}
+        <AnimatePresence>
+          {selectedRoom && (
+            <div className="modal-backdrop" onClick={() => setSelectedRoom(null)}>
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95, y: 15 }} 
+                animate={{ opacity: 1, scale: 1, y: 0 }} 
+                exit={{ opacity: 0, scale: 0.95, y: 15 }} 
+                className="modal-box" 
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="modal-header">
+                  <div>
+                    <h2 className="modal-title">Tham Gia Phòng</h2>
+                    <p className="modal-subtitle">Phòng: <strong>{selectedRoom.nameroom}</strong></p>
+                  </div>
+                  <button onClick={() => setSelectedRoom(null)} className="btn-close-modal">
+                    <X size={20} />
+                  </button>
+                </div>
 
-              <form onSubmit={handleCreateRoom}>
-                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.7rem', fontSize: '0.9rem', color: '#94a3b8', fontWeight: 500 }}>
-                    <User size={16} /> Nickname của bạn
-                  </label>
-                  <input type="text" className="form-input" required placeholder="VD: Lộc Đẹp Trai" value={newRoomData.nickname} onChange={(e) => setNewRoomData({...newRoomData, nickname: e.target.value})} style={{ width: '100%', padding: '0.9rem 1.2rem', borderRadius: '1rem', border: '1px solid #334155', background: '#0f172a', color: 'white', outline: 'none' }} />
-                </div>
-                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.7rem', fontSize: '0.9rem', color: '#94a3b8', fontWeight: 500 }}>
-                    <MessageSquare size={16} /> Tên phòng chat
-                  </label>
-                  <input type="text" className="form-input" required placeholder="VD: Nhóm Học Tập..." value={newRoomData.name} onChange={(e) => setNewRoomData({...newRoomData, name: e.target.value})} style={{ width: '100%', padding: '0.9rem 1.2rem', borderRadius: '1rem', border: '1px solid #334155', background: '#0f172a', color: 'white', outline: 'none' }} />
-                </div>
-                <div className="form-group" style={{ marginBottom: '2.5rem' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.7rem', fontSize: '0.9rem', color: '#94a3b8', fontWeight: 500 }}>
-                    <Lock size={16} /> Mật khẩu (tùy chọn)
-                  </label>
-                  <input type="password" className="form-input" placeholder="Để trống nếu muốn phòng công khai" value={newRoomData.password} onChange={(e) => setNewRoomData({...newRoomData, password: e.target.value})} style={{ width: '100%', padding: '0.9rem 1.2rem', borderRadius: '1rem', border: '1px solid #334155', background: '#0f172a', color: 'white', outline: 'none' }} />
-                </div>
-                
-                <div style={{ display: 'flex', gap: '1.2rem' }}>
-                  <button type="submit" className="auth-button" style={{ flex: 1, marginTop: 0, padding: '1rem', borderRadius: '1.2rem', background: 'linear-gradient(to right, #4f46e5, #7c3aed)', boxShadow: '0 10px 15px -3px rgba(79, 70, 229, 0.4)' }}>Tạo Phòng Ngay</button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+                <form onSubmit={handleJoinRoom} className="modal-form">
+                  <div className="form-item">
+                    <label>
+                      <User size={15} /> Nickname hiển thị
+                    </label>
+                    <input 
+                      type="text" 
+                      required 
+                      placeholder="Nhập tên hiển thị của bạn" 
+                      value={joinData.nickname} 
+                      onChange={(e) => setJoinData({...joinData, nickname: e.target.value})} 
+                    />
+                  </div>
 
-      {/* Modal Tham Gia Phòng */}
-      <AnimatePresence>
-        {selectedRoom && (
-          <div className="modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="modal-content" style={{ background: '#1e293b', padding: '2.5rem', borderRadius: '2rem', width: '100%', maxWidth: '450px', border: '1px solid #334155', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                 <h2 style={{ margin: 0, fontSize: '1.6rem', fontWeight: 800 }}>Tham gia</h2>
-                 <button onClick={() => setSelectedRoom(null)} style={{ background: 'rgba(255,255,255,0.05)', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '0.5rem', borderRadius: '0.75rem' }}><X size={20} /></button>
-              </div>
-              <p style={{ color: '#94a3b8', marginBottom: '2rem', fontSize: '1rem' }}>Vào phòng: <strong style={{ color: '#f8fafc' }}>{selectedRoom.nameroom}</strong></p>
+                  {selectedRoom.hasPassword ? (
+                    <div className="form-item">
+                      <label className="label-warning">
+                        <Lock size={15} /> Mật khẩu phòng (Bắt buộc)
+                      </label>
+                      <input 
+                        type="password" 
+                        required 
+                        placeholder="Nhập mật khẩu để vào phòng" 
+                        value={joinData.password} 
+                        onChange={(e) => setJoinData({...joinData, password: e.target.value})} 
+                        className="input-password"
+                      />
+                    </div>
+                  ) : (
+                    <div className="info-banner">
+                      <Shield size={16} />
+                      <span>Phòng công khai — Bạn có thể vào trực tiếp</span>
+                    </div>
+                  )}
+                  
+                  <div className="modal-actions">
+                    <button type="button" onClick={() => setSelectedRoom(null)} className="btn-cancel">
+                      Hủy
+                    </button>
+                    <button type="submit" className="btn-submit btn-submit-join">
+                      Vào Phòng Chat
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+      </div>
 
-              <form onSubmit={handleJoinRoom}>
-                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.7rem', fontSize: '0.9rem', color: '#94a3b8', fontWeight: 500 }}>
-                    <User size={16} /> Nickname của bạn
-                  </label>
-                  <input type="text" className="form-input" required placeholder="VD: Lộc Đẹp Trai" value={joinData.nickname} onChange={(e) => setJoinData({...joinData, nickname: e.target.value})} style={{ width: '100%', padding: '0.9rem 1.2rem', borderRadius: '1rem', border: '1px solid #334155', background: '#0f172a', color: 'white', outline: 'none' }} />
-                </div>
-                <div className="form-group" style={{ marginBottom: '2.5rem' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.7rem', fontSize: '0.9rem', color: '#94a3b8', fontWeight: 500 }}>
-                    <Shield size={16} /> Mật khẩu phòng
-                  </label>
-                  <input type="password" className="form-input" placeholder="Nhập mật khẩu nếu phòng yêu cầu" value={joinData.password} onChange={(e) => setJoinData({...joinData, password: e.target.value})} style={{ width: '100%', padding: '0.9rem 1.2rem', borderRadius: '1rem', border: '1px solid #334155', background: '#0f172a', color: 'white', outline: 'none' }} />
-                </div>
-                
-                <div style={{ display: 'flex', gap: '1.2rem' }}>
-                  <button type="submit" className="auth-button" style={{ flex: 1, marginTop: 0, padding: '1rem', borderRadius: '1.2rem', background: 'linear-gradient(to right, #10b981, #059669)', boxShadow: '0 10px 15px -3px rgba(16, 185, 129, 0.4)' }}>Vào Phòng Chat</button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <style dangerouslySetInnerHTML={{ __html: `
+        .home-wrapper {
+          min-height: 100vh;
+          background: #0f172a;
+          color: #f8fafc;
+          padding: 1.5rem 1rem;
+          font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .home-container {
+          max-width: 1200px;
+          margin: 0 auto;
+        }
+        .home-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 1rem;
+          margin-bottom: 2.5rem;
+          flex-wrap: wrap;
+        }
+        .header-brand {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+        }
+        .brand-logo-badge {
+          background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+          padding: 0.6rem;
+          border-radius: 1rem;
+          box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .logo-text {
+          margin: 0;
+          font-size: 1.8rem;
+          font-weight: 800;
+          background: linear-gradient(to right, #ffffff, #cbd5e1);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+        }
+        .app-subtitle {
+          font-size: 0.85rem;
+          color: #64748b;
+        }
+        .header-actions {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+        }
+        .btn-create-room {
+          background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+          color: white;
+          border: none;
+          padding: 0.65rem 1.25rem;
+          border-radius: 0.85rem;
+          font-weight: 600;
+          font-size: 0.95rem;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          box-shadow: 0 4px 14px rgba(79, 70, 229, 0.35);
+          transition: transform 0.15s, box-shadow 0.15s;
+        }
+        .btn-create-room:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(79, 70, 229, 0.45);
+        }
+        .btn-logout {
+          background: #1e293b;
+          color: #94a3b8;
+          border: 1px solid #334155;
+          padding: 0.65rem 1rem;
+          border-radius: 0.85rem;
+          font-weight: 500;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          transition: background 0.15s, color 0.15s;
+        }
+        .btn-logout:hover {
+          background: #334155;
+          color: #f1f5f9;
+        }
+        .section-title-area {
+          margin-bottom: 2rem;
+        }
+        .section-heading {
+          font-size: 1.5rem;
+          font-weight: 700;
+          margin: 0 0 0.35rem 0;
+        }
+        .section-desc {
+          color: #94a3b8;
+          font-size: 0.95rem;
+          margin: 0;
+        }
+        .rooms-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+          gap: 1.5rem;
+        }
+        .room-card {
+          background: #1e293b;
+          border: 1px solid #334155;
+          border-radius: 1.25rem;
+          padding: 1.5rem;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .room-card:hover {
+          border-color: #4f46e5;
+          box-shadow: 0 12px 24px -10px rgba(0, 0, 0, 0.4);
+        }
+        .room-card.is-my-room {
+          border-color: rgba(16, 185, 129, 0.4);
+          background: linear-gradient(180deg, rgba(16, 185, 129, 0.05) 0%, #1e293b 100%);
+        }
+        .room-card-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 0.75rem;
+          margin-bottom: 1rem;
+        }
+        .room-name {
+          font-size: 1.2rem;
+          font-weight: 700;
+          margin: 0 0 0.4rem 0;
+          color: #f8fafc;
+          word-break: break-word;
+        }
+        .badge-row {
+          display: flex;
+          gap: 0.4rem;
+          flex-wrap: wrap;
+        }
+        .badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.25rem;
+          font-size: 0.75rem;
+          padding: 0.2rem 0.5rem;
+          border-radius: 0.5rem;
+          font-weight: 600;
+        }
+        .badge-locked {
+          background: rgba(239, 68, 68, 0.15);
+          color: #f87171;
+          border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        .badge-joined {
+          background: rgba(16, 185, 129, 0.15);
+          color: #34d399;
+          border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        .online-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.4rem;
+          background: rgba(16, 185, 129, 0.1);
+          border: 1px solid rgba(16, 185, 129, 0.25);
+          color: #34d399;
+          font-size: 0.75rem;
+          padding: 0.25rem 0.6rem;
+          border-radius: 1rem;
+          font-weight: 600;
+          white-space: nowrap;
+        }
+        .online-dot {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          background: #10b981;
+          box-shadow: 0 0 8px #10b981;
+        }
+        .members-preview {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.4rem;
+          min-height: 2rem;
+          margin-bottom: 1.5rem;
+        }
+        .member-tag {
+          font-size: 0.75rem;
+          background: rgba(79, 70, 229, 0.15);
+          color: #a5b4fc;
+          padding: 0.2rem 0.6rem;
+          border-radius: 0.5rem;
+          border: 1px solid rgba(79, 70, 229, 0.25);
+        }
+        .more-members {
+          font-size: 0.75rem;
+          color: #64748b;
+          align-self: center;
+        }
+        .btn-action-room {
+          width: 100%;
+          border: none;
+          padding: 0.75rem 1rem;
+          border-radius: 0.85rem;
+          font-weight: 600;
+          font-size: 0.95rem;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+          transition: transform 0.15s, opacity 0.15s;
+        }
+        .btn-action-room:hover {
+          transform: translateY(-1px);
+          opacity: 0.95;
+        }
+        .btn-join {
+          background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+          color: white;
+        }
+        .btn-rejoin {
+          background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+          color: white;
+        }
+        .empty-rooms {
+          grid-column: 1 / -1;
+          text-align: center;
+          padding: 4rem 1.5rem;
+          background: rgba(30, 41, 59, 0.4);
+          border: 2px dashed #334155;
+          border-radius: 1.5rem;
+        }
+        .empty-icon {
+          color: #475569;
+          margin-bottom: 0.75rem;
+        }
+        .empty-rooms h3 {
+          margin: 0 0 0.5rem 0;
+          font-size: 1.25rem;
+        }
+        .empty-rooms p {
+          color: #94a3b8;
+          margin: 0 0 1.5rem 0;
+          font-size: 0.95rem;
+        }
+        .btn-create-first {
+          background: #4f46e5;
+          color: white;
+          border: none;
+          padding: 0.7rem 1.5rem;
+          border-radius: 0.75rem;
+          font-weight: 600;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+        .status-box {
+          text-align: center;
+          padding: 4rem 1rem;
+          color: #94a3b8;
+        }
+        .spinner-icon {
+          color: #6366f1;
+          margin-bottom: 0.75rem;
+        }
+        .error-box {
+          background: rgba(239, 68, 68, 0.1);
+          border: 1px solid rgba(239, 68, 68, 0.25);
+          border-radius: 1rem;
+        }
+        .error-text {
+          color: #f87171;
+          font-weight: 600;
+          margin-bottom: 1rem;
+        }
+        .btn-retry {
+          background: transparent;
+          border: 1px solid #ef4444;
+          color: #ef4444;
+          padding: 0.5rem 1.2rem;
+          border-radius: 0.6rem;
+          cursor: pointer;
+        }
+        /* Modal Styles */
+        .modal-backdrop {
+          position: fixed;
+          inset: 0;
+          background: rgba(15, 23, 42, 0.85);
+          backdrop-filter: blur(8px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+          padding: 1rem;
+        }
+        .modal-box {
+          background: #1e293b;
+          border: 1px solid #334155;
+          border-radius: 1.5rem;
+          padding: 2rem;
+          width: 100%;
+          max-width: 440px;
+          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+        .modal-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          margin-bottom: 1.5rem;
+        }
+        .modal-title {
+          margin: 0;
+          font-size: 1.4rem;
+          font-weight: 800;
+        }
+        .modal-subtitle {
+          margin: 0.35rem 0 0 0;
+          color: #94a3b8;
+          font-size: 0.9rem;
+        }
+        .btn-close-modal {
+          background: rgba(255, 255, 255, 0.05);
+          border: none;
+          color: #94a3b8;
+          padding: 0.4rem;
+          border-radius: 0.6rem;
+          cursor: pointer;
+          display: flex;
+        }
+        .modal-form {
+          display: flex;
+          flex-direction: column;
+          gap: 1.25rem;
+        }
+        .form-item label {
+          display: flex;
+          align-items: center;
+          gap: 0.4rem;
+          font-size: 0.85rem;
+          color: #94a3b8;
+          font-weight: 600;
+          margin-bottom: 0.45rem;
+        }
+        .label-warning {
+          color: #f87171 !important;
+        }
+        .form-item input {
+          width: 100%;
+          padding: 0.8rem 1rem;
+          border-radius: 0.85rem;
+          border: 1px solid #334155;
+          background: #0f172a;
+          color: white;
+          outline: none;
+          font-size: 0.95rem;
+          box-sizing: border-box;
+          transition: border-color 0.2s;
+        }
+        .form-item input:focus {
+          border-color: #6366f1;
+        }
+        .input-password:focus {
+          border-color: #f87171 !important;
+        }
+        .info-banner {
+          background: rgba(16, 185, 129, 0.1);
+          border: 1px solid rgba(16, 185, 129, 0.25);
+          color: #34d399;
+          font-size: 0.85rem;
+          padding: 0.75rem 1rem;
+          border-radius: 0.85rem;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+        .modal-actions {
+          display: flex;
+          gap: 0.75rem;
+          margin-top: 0.5rem;
+        }
+        .btn-cancel {
+          flex: 1;
+          background: #334155;
+          color: #cbd5e1;
+          border: none;
+          padding: 0.85rem;
+          border-radius: 0.85rem;
+          font-weight: 600;
+          cursor: pointer;
+        }
+        .btn-submit {
+          flex: 2;
+          background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+          color: white;
+          border: none;
+          padding: 0.85rem;
+          border-radius: 0.85rem;
+          font-weight: 600;
+          cursor: pointer;
+          box-shadow: 0 4px 14px rgba(79, 70, 229, 0.4);
+        }
+        .btn-submit-join {
+          background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+          box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);
+        }
+        @media (max-width: 640px) {
+          .home-wrapper { padding: 1rem 0.75rem; }
+          .logo-text { font-size: 1.5rem; }
+          .hide-on-mobile { display: none; }
+          .rooms-grid { grid-template-columns: 1fr; }
+          .modal-box { padding: 1.5rem; border-radius: 1.25rem; }
+        }
+      `}} />
     </div>
   );
 };

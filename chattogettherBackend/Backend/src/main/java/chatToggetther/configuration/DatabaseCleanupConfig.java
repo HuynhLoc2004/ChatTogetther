@@ -20,8 +20,9 @@ public class DatabaseCleanupConfig {
         this.messageRepository = messageRepository;
     }
 
-    @PostConstruct
-    @Transactional
+    // Tắt tự động dọn dẹp để không bị mất phòng và tin nhắn mỗi khi restart server
+    // @PostConstruct
+    // @Transactional
     public void cleanDatabaseOnStartup() {
         System.out.println(">>> Đang thực hiện DỌN DẸP SẠCH Database (Xóa hoàn toàn)...");
         try {

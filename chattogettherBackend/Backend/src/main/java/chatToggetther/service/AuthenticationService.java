@@ -56,7 +56,7 @@ public class AuthenticationService {
             
             if(this.passwordEncoder.matches(userloginRequest.getPassword() , userEntity.getPassword())){
                 String accessToken = this.genAccessToken(userEntity);
-                this.genRefreshToken(userEntity ,httpServletResponse);
+                String refreshToken = this.genRefreshToken(userEntity ,httpServletResponse);
                 
                 Long roomId = null;
                 UserRoomEntity userRoom = userEntity.getUserRoomEntity();
@@ -64,7 +64,7 @@ public class AuthenticationService {
                     roomId = userRoom.getRoomEntity().getId();
                 }
                 
-                chatToggetther.DTO.LoginResponseDTO loginResponseDTO = new chatToggetther.DTO.LoginResponseDTO(accessToken, roomId);
+                chatToggetther.DTO.LoginResponseDTO loginResponseDTO = new chatToggetther.DTO.LoginResponseDTO(accessToken, roomId, refreshToken);
                 return new ResponseData<>(200 , "login thành công" , loginResponseDTO);
 
             } else {
@@ -91,7 +91,7 @@ public class AuthenticationService {
                 .compact();
     }
 
-    public void genRefreshToken(UserEntity userEntity , HttpServletResponse httpServletResponse){
+    public String genRefreshToken(UserEntity userEntity , HttpServletResponse httpServletResponse){
         SecretKey key = Keys.hmacShaKeyFor(this.secretKey.getBytes(StandardCharsets.UTF_8));
 
         List<String> authorites = new ArrayList<>();
@@ -109,12 +109,17 @@ public class AuthenticationService {
                 .signWith(key)
                 .compact();
                 
-        Cookie cookie = new Cookie("refreshToken" , refreshToken);
-        cookie.setMaxAge(expRefresh * 60);
-        cookie.setSecure(false);
-        cookie.setHttpOnly(true);
-        cookie.setPath("/");
-        httpServletResponse.addCookie(cookie);
+        // Dùng ResponseCookie với SameSite=None và Secure=true để hoạt động mượt mà khi deploy cross-domain (Vercel + Render)
+        org.springframework.http.ResponseCookie responseCookie = org.springframework.http.ResponseCookie.from("refreshToken", refreshToken)
+                .httpOnly(true)
+                .secure(true)
+                .sameSite("None")
+                .path("/")
+                .maxAge(expRefresh * 60L)
+                .build();
+        httpServletResponse.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE, responseCookie.toString());
+
+        return refreshToken;
     }
 
     public ResponseData<String> refreshToken(String refreshToken , HttpServletResponse httpServletResponse){

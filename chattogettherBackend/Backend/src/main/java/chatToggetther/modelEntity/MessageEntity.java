@@ -29,7 +29,8 @@ public class MessageEntity {
     @Column(name = "time_retrieve")
     private LocalDateTime timeRetrieve;
     
-    @ManyToOne(cascade = CascadeType.ALL , fetch = FetchType.LAZY )
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
     private UserEntity userEntity;
     
     @ManyToOne(fetch = FetchType.LAZY)
