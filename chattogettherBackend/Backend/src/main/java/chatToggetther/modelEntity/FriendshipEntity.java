@@ -35,3 +35,4 @@ public class FriendshipEntity {
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();
 }
+

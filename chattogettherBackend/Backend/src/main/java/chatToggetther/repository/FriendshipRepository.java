@@ -28,3 +28,4 @@ public interface FriendshipRepository extends JpaRepository<FriendshipEntity, Lo
            "WHERE f.friend = :user AND f.status = 'PENDING'")
     List<FriendshipEntity> findPendingRequestsFor(@Param("user") UserEntity user);
 }
+

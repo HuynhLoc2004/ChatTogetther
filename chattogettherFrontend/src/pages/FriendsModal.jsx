@@ -357,3 +357,4 @@ const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall }) => {
 };
 
 export default FriendsModal;
+

@@ -52,3 +52,4 @@ public class FriendController {
         return ResponseEntity.ok(this.friendService.getPendingRequests(token));
     }
 }
+

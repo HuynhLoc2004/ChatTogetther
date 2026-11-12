@@ -614,3 +614,4 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
 };
 
 export default UserProfileModal;
+

@@ -16,3 +16,4 @@ public class UpdateProfileRequest {
     private String location;
     private String bio;
 }
+
