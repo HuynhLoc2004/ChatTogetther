@@ -34,6 +34,11 @@ public class RoomController {
         return ResponseEntity.ok(this.roomService.getAllRoomActive());
     }
 
+    @GetMapping("/detail")
+    public ResponseEntity<ResponseData<RoomDTO>> getRoomDetail(@RequestParam("room_id") Long roomId) {
+        return ResponseEntity.ok(this.roomService.getRoomDetail(roomId));
+    }
+
     @PostMapping("/join-room")
     public ResponseEntity<ResponseData<Long>> joinRoom(JwtAuthenticationToken jwtAuthenticationToken, @RequestParam("room_id") Long idRoom, @RequestBody JoinRoomRequest joinRoomRequest){
          return ResponseEntity.ok(this.roomService.joinRoom(jwtAuthenticationToken , idRoom , joinRoomRequest));

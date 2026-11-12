@@ -127,6 +127,44 @@ public class RoomService {
     }
 
     @Transactional
+    public ResponseData<RoomDTO> getRoomDetail(Long roomId) {
+        RoomEntity roomEntity = this.roomRepository.findActiveRoomByIdWithUsers(roomId).orElseThrow(() -> 
+            new AppException(404, "Phòng không tồn tại hoặc đã ngừng hoạt động", 404)
+        );
+
+        RoomDTO roomDTO = new RoomDTO();
+        roomDTO.setId(roomEntity.getId());
+        roomDTO.setNameroom(roomEntity.getRoomName());
+        roomDTO.setHasPassword(roomEntity.getPassword() != null && !roomEntity.getPassword().trim().isEmpty());
+
+        List<UserRoomDTO> roomDTOS = roomEntity.getUserRoomEntityList().stream()
+                .filter(ur -> Boolean.TRUE.equals(ur.getActive()))
+                .map(ur -> {
+                    UserRoomDTO userRoomDTO = new UserRoomDTO();
+                    userRoomDTO.setId(ur.getId());
+                    if (ur.getTimeJoin() != null && !ur.getTimeJoin().isEmpty()) {
+                        userRoomDTO.setTimeJoin(ur.getTimeJoin().get(ur.getTimeJoin().size() - 1));
+                    }
+                    userRoomDTO.setTimeLeft(ur.getTimeLeft());
+
+                    UserDTO userDTO = new UserDTO();
+                    if (ur.getUserEntity() != null) {
+                        userDTO.setId(ur.getUserEntity().getId());
+                        userDTO.setActive(ur.getUserEntity().getActive());
+                        userDTO.setNickname(ur.getUserEntity().getNickname());
+                    }
+                    userRoomDTO.setUserDTO(userDTO);
+                    userRoomDTO.setIsAdmin(ur.getIsAdmin());
+                    return userRoomDTO;
+                }).collect(Collectors.toList());
+
+        roomDTO.setUserRoomDTOList(roomDTOS);
+        roomDTO.setSoluong((long) roomDTOS.size());
+
+        return new ResponseData<>(200, "Lấy thông tin phòng thành công", roomDTO);
+    }
+
+    @Transactional
     public ResponseData<Long> joinRoom(JwtAuthenticationToken jwtAuthenticationToken ,Long idRoom, JoinRoomRequest joinRoomRequest){
           Long userId = jwtAuthenticationToken.getToken().getClaim("user_id");
           UserEntity userEntity = this.userRepository.findById(userId).orElseThrow(()->{

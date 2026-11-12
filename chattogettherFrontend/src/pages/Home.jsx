@@ -84,10 +84,9 @@ const Home = () => {
     let isMounted = true;
     
     const init = async () => {
-      const isInRoom = await checkActiveRoom();
-      if (!isInRoom && isMounted) {
-        fetchRooms();
-      }
+      // Tải danh sách phòng ngay lập tức không cần đợi tuần tự
+      fetchRooms();
+      checkActiveRoom();
     };
 
     init();

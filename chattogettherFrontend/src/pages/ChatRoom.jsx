@@ -59,16 +59,21 @@ const ChatRoom = () => {
   const fetchRoomDetail = useCallback(async (isSilent = false) => {
     try {
       if (!isSilent) setLoading(true);
-      const response = await axiosClient.get('/rooms/info-rooms');
-      const currentRoom = response.data.data.find(r => r.id.toString() === roomId);
-      if (currentRoom) {
-        setRoomInfo(currentRoom);
+      const response = await axiosClient.get('/rooms/detail', {
+        params: { room_id: roomId }
+      });
+      if (response.data && response.data.data) {
+        setRoomInfo(response.data.data);
       } else if (!isSilent) {
         toast.error("Phòng này không còn tồn tại hoặc đã bị giải tán!");
         navigate('/');
       }
     } catch (err) {
       console.error("Lỗi khi lấy thông tin phòng:", err);
+      if (!isSilent && err.response?.status === 404) {
+        toast.error("Phòng này không còn tồn tại hoặc đã bị giải tán!");
+        navigate('/');
+      }
     } finally {
       if (!isSilent) setLoading(false);
     }
