@@ -3,10 +3,12 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Send, Users, LogOut, MessageCircle, Hash, 
   MoreVertical, UserX, ChevronRight, Trash2, Crown, X, Menu, AlertTriangle,
-  Phone, PhoneOff, Mic, MicOff, WifiOff
+  Phone, PhoneOff, Mic, MicOff, WifiOff, User, UserCheck
 } from 'lucide-react';
 import axiosClient, { BACKEND_URL } from '../api/axiosClient';
-import { saveMessagesOffline, getMessagesOffline } from '../utils/offlineDB';
+import { saveMessagesOffline, getMessagesOffline, getRoomsOffline } from '../utils/offlineDB';
+import UserProfileModal from './UserProfileModal';
+import FriendsModal from './FriendsModal';
 import SockJS from 'sockjs-client';
 import Stomp from 'stompjs';
 import toast from 'react-hot-toast';
@@ -47,11 +49,16 @@ const ChatRoom = () => {
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
-  // Trạng thái cuộc gọi thoại WebRTC
+  // Modal Hồ Sơ Người Dùng & Bạn Bè
+  const [selectedProfileUserId, setSelectedProfileUserId] = useState(null);
+  const [isFriendsModalOpen, setIsFriendsModalOpen] = useState(false);
+
+  // Trạng thái cuộc gọi thoại WebRTC (Hỗ trợ cả Gọi Nhóm & Gọi Riêng 1-1)
   const [isCallActive, setIsCallActive] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
   const [incomingCall, setIncomingCall] = useState(null);
+  const [privateCallTarget, setPrivateCallTarget] = useState(null);
 
   const stompClient = useRef(null);
   const messagesEndRef = useRef(null);
@@ -127,20 +134,20 @@ const ChatRoom = () => {
       });
       if (response.data && response.data.data) {
         setRoomInfo(response.data.data);
-      } else if (!isSilent) {
-        toast.error("Phòng này không còn tồn tại hoặc đã bị giải tán!");
-        navigate('/');
+      } else {
+        const cached = await getRoomsOffline();
+        const found = cached?.find(r => r.id?.toString() === roomId?.toString());
+        if (found) setRoomInfo(found);
       }
     } catch (err) {
       console.error("Lỗi khi lấy thông tin phòng:", err);
-      if (!isSilent && err.response?.status === 404) {
-        toast.error("Phòng này không còn tồn tại hoặc đã bị giải tán!");
-        navigate('/');
-      }
+      const cached = await getRoomsOffline();
+      const found = cached?.find(r => r.id?.toString() === roomId?.toString());
+      if (found) setRoomInfo(found);
     } finally {
       if (!isSilent) setLoading(false);
     }
-  }, [roomId, navigate]);
+  }, [roomId]);
 
   const fetchHistory = useCallback(async () => {
     try {
@@ -201,6 +208,7 @@ const ChatRoom = () => {
     setIsMuted(false);
     setCallDuration(0);
     setIncomingCall(null);
+    setPrivateCallTarget(null);
   }, []);
 
   const sendCallSignal = (payload) => {
@@ -215,7 +223,8 @@ const ChatRoom = () => {
     }
   };
 
-  const startVoiceCall = async () => {
+  // Khởi động cuộc gọi nhóm
+  const startGroupVoiceCall = async () => {
     if (!navigator.onLine) {
       toast.error("Yêu cầu kết nối Internet để thực hiện cuộc gọi!");
       return;
@@ -247,17 +256,76 @@ const ChatRoom = () => {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      sendCallSignal({ type: 'OFFER', offer });
+      sendCallSignal({ type: 'OFFER', offer, isPrivate: false });
 
       setIsCallActive(true);
       callTimerRef.current = setInterval(() => {
         setCallDuration(prev => prev + 1);
       }, 1000);
 
-      toast.success("Đang bắt đầu cuộc gọi thoại...");
+      toast.success("Đang bắt đầu cuộc gọi nhóm...");
     } catch (err) {
       console.error("Lỗi khởi tạo cuộc gọi:", err);
       toast.error("Không thể truy cập microphone. Vui lòng cấp quyền!");
+    }
+  };
+
+  // Khởi động cuộc gọi riêng 1-1
+  const startPrivateVoiceCall = async (targetUser) => {
+    if (!navigator.onLine) {
+      toast.error("Yêu cầu kết nối Internet để gọi riêng!");
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      localStreamRef.current = stream;
+
+      const pc = new RTCPeerConnection(ICE_SERVERS);
+      peerConnectionRef.current = pc;
+
+      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+      pc.onicecandidate = (e) => {
+        if (e.candidate) {
+          sendCallSignal({ 
+            type: 'CANDIDATE', 
+            candidate: e.candidate,
+            isPrivate: true,
+            targetUserId: targetUser.id 
+          });
+        }
+      };
+
+      pc.ontrack = (e) => {
+        if (!remoteAudioRef.current) {
+          remoteAudioRef.current = new Audio();
+          remoteAudioRef.current.autoplay = true;
+        }
+        remoteAudioRef.current.srcObject = e.streams[0];
+      };
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      sendCallSignal({ 
+        type: 'OFFER', 
+        offer,
+        isPrivate: true,
+        targetUserId: targetUser.id,
+        targetUserName: targetUser.nickname || targetUser.account
+      });
+
+      setPrivateCallTarget(targetUser);
+      setIsCallActive(true);
+      callTimerRef.current = setInterval(() => {
+        setCallDuration(prev => prev + 1);
+      }, 1000);
+
+      toast.success(`Đang gọi riêng cho ${targetUser.nickname || targetUser.account}...`);
+    } catch (err) {
+      console.error("Lỗi gọi riêng:", err);
+      toast.error("Không thể truy cập microphone!");
     }
   };
 
@@ -274,7 +342,12 @@ const ChatRoom = () => {
 
       pc.onicecandidate = (e) => {
         if (e.candidate) {
-          sendCallSignal({ type: 'CANDIDATE', candidate: e.candidate });
+          sendCallSignal({ 
+            type: 'CANDIDATE', 
+            candidate: e.candidate,
+            isPrivate: incomingCall.isPrivate,
+            targetUserId: incomingCall.callerId
+          });
         }
       };
 
@@ -290,7 +363,16 @@ const ChatRoom = () => {
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
 
-      sendCallSignal({ type: 'ANSWER', answer });
+      sendCallSignal({ 
+        type: 'ANSWER', 
+        answer,
+        isPrivate: incomingCall.isPrivate,
+        targetUserId: incomingCall.callerId
+      });
+
+      if (incomingCall.isPrivate) {
+        setPrivateCallTarget({ id: incomingCall.callerId, nickname: incomingCall.callerName });
+      }
 
       setIncomingCall(null);
       setIsCallActive(true);
@@ -315,7 +397,11 @@ const ChatRoom = () => {
   };
 
   const endCall = () => {
-    sendCallSignal({ type: 'END' });
+    sendCallSignal({ 
+      type: 'END',
+      isPrivate: !!privateCallTarget,
+      targetUserId: privateCallTarget?.id
+    });
     cleanupCall();
     toast("Đã kết thúc cuộc gọi", { icon: '📞' });
   };
@@ -323,10 +409,19 @@ const ChatRoom = () => {
   const handleCallSignal = useCallback(async (msg) => {
     if (msg.senderId?.toString() === currentUserId) return; // Bỏ qua tín hiệu từ chính mình
 
+    // Nếu là cuộc gọi riêng, kiểm tra xem có gửi đích danh cho mình không
+    if (msg.isPrivate) {
+      if (msg.targetUserId?.toString() !== currentUserId) {
+        return; // Không phải gửi cho mình -> bỏ qua
+      }
+    }
+
     if (msg.type === 'OFFER') {
       setIncomingCall({
         callerName: msg.senderName,
-        offer: msg.offer
+        callerId: msg.senderId,
+        offer: msg.offer,
+        isPrivate: msg.isPrivate
       });
     } else if (msg.type === 'ANSWER') {
       if (peerConnectionRef.current && peerConnectionRef.current.signalingState !== 'stable') {
@@ -594,7 +689,7 @@ const ChatRoom = () => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
-  if (loading) return (
+  if (loading && !roomInfo) return (
     <div className="loading-screen">
       <div className="loader"></div>
       <p>Đang chuẩn bị phòng chat...</p>
@@ -630,7 +725,7 @@ const ChatRoom = () => {
               <Hash size={24} />
            </div>
            <div className="room-meta">
-              <h3>{roomInfo?.nameroom}</h3>
+              <h3>{roomInfo?.nameroom || `Phòng #${roomId}`}</h3>
               <p>ID: #{roomId}</p>
            </div>
            {isAdminOfThisRoom && <div className="admin-badge">Chủ phòng</div>}
@@ -644,7 +739,12 @@ const ChatRoom = () => {
           
           <div className="member-list">
             {roomInfo?.userRoomDTOList?.map((ur, idx) => (
-              <div key={idx} className={`member-item ${ur.userDTO?.id?.toString() === currentUserId ? 'is-me' : ''}`}>
+              <div 
+                key={idx} 
+                className={`member-item ${ur.userDTO?.id?.toString() === currentUserId ? 'is-me' : ''}`}
+                onClick={() => setSelectedProfileUserId(ur.userDTO?.id)}
+                title="Nhấp để xem thông tin cá nhân & kết bạn"
+              >
                 <div className="member-avatar">
                    {ur.userDTO?.nickname?.charAt(0).toUpperCase() || "U"}
                    <span className="online-indicator"></span>
@@ -655,7 +755,7 @@ const ChatRoom = () => {
                 </div>
                 
                 {isAdminOfThisRoom && ur.userDTO?.id?.toString() !== currentUserId && (
-                  <div className="member-actions">
+                  <div className="member-actions" onClick={(e) => e.stopPropagation()}>
                     <button onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === idx ? null : idx); }} className="dots-btn">
                        <MoreVertical size={14} />
                     </button>
@@ -677,6 +777,15 @@ const ChatRoom = () => {
         </div>
 
         <div className="sidebar-footer">
+           <button 
+             onClick={() => setSelectedProfileUserId(currentUserId)} 
+             className="my-profile-btn"
+             title="Xem và chỉnh sửa hồ sơ của bạn"
+           >
+              <User size={16} />
+              <span>Hồ sơ của tôi</span>
+           </button>
+
            {isAdminOfThisRoom && (
              <button onClick={handleDisbandRoom} className="disband-btn">
                 <Trash2 size={16} />
@@ -705,7 +814,9 @@ const ChatRoom = () => {
           <div className="active-call-bar">
             <div className="call-info">
               <div className="pulse-indicator" />
-              <span className="call-title">Cuộc gọi thoại đang kết nối</span>
+              <span className="call-title">
+                {privateCallTarget ? `Đang gọi riêng với ${privateCallTarget.nickname || 'bạn'}` : 'Cuộc gọi nhóm đang kết nối'}
+              </span>
               <span className="call-timer">{formatCallDuration(callDuration)}</span>
             </div>
             <div className="call-controls">
@@ -734,21 +845,31 @@ const ChatRoom = () => {
               </button>
               <div className="header-info">
                  <Hash size={20} className="header-hash" />
-                 <h2>{roomInfo?.nameroom}</h2>
+                 <h2>{roomInfo?.nameroom || `Phòng #${roomId}`}</h2>
                  <span className="header-room-id">#{roomId}</span>
               </div>
            </div>
            
            <div className="header-actions">
-              {/* Nút Gọi Thoại Trực Tiếp */}
+              {/* Nút Bạn Bè */}
               <button 
-                onClick={startVoiceCall} 
+                onClick={() => setIsFriendsModalOpen(true)}
+                className="header-friends-btn"
+                title="Xem danh sách bạn bè & lời mời"
+              >
+                <Users size={15} />
+                <span>Bạn bè</span>
+              </button>
+
+              {/* Nút Gọi Thoại Nhóm */}
+              <button 
+                onClick={startGroupVoiceCall} 
                 disabled={isCallActive}
-                className={`header-call-btn ${isCallActive ? 'in-call' : ''}`} 
-                title="Gọi thoại trực tiếp qua Internet"
+                className={`header-call-btn ${isCallActive && !privateCallTarget ? 'in-call' : ''}`} 
+                title="Gọi thoại nhóm với mọi người trong phòng"
               >
                  <Phone size={15} />
-                 <span>{isCallActive ? 'Đang gọi' : 'Gọi thoại'}</span>
+                 <span>{isCallActive && !privateCallTarget ? 'Đang gọi' : 'Gọi nhóm'}</span>
               </button>
 
               <button onClick={() => setIsSidebarOpen(true)} className="members-indicator-btn" title="Xem danh sách thành viên">
@@ -768,9 +889,9 @@ const ChatRoom = () => {
               <div className="welcome-hash-circle">
                 <Hash size={32} />
               </div>
-              <h2 className="welcome-title">Chào mừng đến với #{roomInfo?.nameroom}!</h2>
+              <h2 className="welcome-title">Chào mừng đến với #{roomInfo?.nameroom || `Phòng #${roomId}`}!</h2>
               <p className="welcome-subtitle">
-                Đây là điểm khởi đầu của cuộc trò chuyện trong phòng #{roomInfo?.nameroom}. Hãy cùng trao đổi vui vẻ nhé!
+                Đây là điểm khởi đầu của cuộc trò chuyện trong phòng #{roomInfo?.nameroom || `phòng #${roomId}`}. Nhấp vào avatar để xem thông tin cá nhân và kết bạn!
               </p>
               <div className="welcome-divider" />
             </div>
@@ -788,12 +909,24 @@ const ChatRoom = () => {
               return (
                 <div key={msg.id || index} className={`msg-group ${isMe ? 'msg-me' : 'msg-them'}`}>
                   {!isMe && (
-                    <div className="msg-avatar">
+                    <div 
+                      className="msg-avatar"
+                      onClick={() => setSelectedProfileUserId(msg.userId)}
+                      title={`Xem thông tin của ${msg.sender}`}
+                    >
                        {msg.sender?.charAt(0).toUpperCase() || "U"}
                     </div>
                   )}
                   <div className="msg-content-wrapper">
-                    {!isMe && <span className="msg-sender">{msg.sender}</span>}
+                    {!isMe && (
+                      <span 
+                        className="msg-sender"
+                        onClick={() => setSelectedProfileUserId(msg.userId)}
+                        title={`Xem thông tin của ${msg.sender}`}
+                      >
+                        {msg.sender}
+                      </span>
+                    )}
                     <div className="msg-bubble">
                       <p className="msg-text">{msg.text}</p>
                       <span className="msg-time">{msg.time}</span>
@@ -824,21 +957,45 @@ const ChatRoom = () => {
         </div>
       </main>
 
-      {/* Modal Cuộc Gọi Đến (Incoming Call Alert) */}
+      {/* Modal Xem Hồ Sơ Người Dùng */}
+      {selectedProfileUserId && (
+        <UserProfileModal 
+          userId={selectedProfileUserId}
+          currentUserId={currentUserId}
+          onClose={() => setSelectedProfileUserId(null)}
+          onStartPrivateCall={startPrivateVoiceCall}
+        />
+      )}
+
+      {/* Modal Bạn Bè & Lời Mời Kết Bạn */}
+      {isFriendsModalOpen && (
+        <FriendsModal 
+          onClose={() => setIsFriendsModalOpen(false)}
+          onSelectUser={(uid) => {
+            setIsFriendsModalOpen(false);
+            setSelectedProfileUserId(uid);
+          }}
+          onStartPrivateCall={startPrivateVoiceCall}
+        />
+      )}
+
+      {/* Modal Cuộc Gọi Đến (Incoming Call Alert - Hỗ trợ cả Nhóm và Riêng 1-1) */}
       {incomingCall && !isCallActive && (
         <div className="incoming-call-overlay">
           <div className="incoming-call-card">
             <div className="incoming-phone-pulse">
               <Phone size={24} className="ring-animate" />
             </div>
-            <h3>Cuộc gọi thoại đến</h3>
-            <p><strong>{incomingCall.callerName}</strong> đang bắt đầu cuộc gọi thoại trong phòng #{roomInfo?.nameroom}</p>
+            <h3>{incomingCall.isPrivate ? "Cuộc gọi riêng 1-1" : "Cuộc gọi thoại nhóm"}</h3>
+            <p>
+              <strong>{incomingCall.callerName}</strong> {incomingCall.isPrivate ? "đang gọi riêng cho bạn" : `đang bắt đầu cuộc gọi thoại trong phòng #${roomInfo?.nameroom || roomId}`}
+            </p>
             <div className="incoming-call-btns">
               <button onClick={joinIncomingCall} className="btn-join-call">
-                <Phone size={16} /> Tham gia
+                <Phone size={16} /> Trả lời
               </button>
               <button onClick={() => setIncomingCall(null)} className="btn-dismiss-call">
-                Bỏ qua
+                Từ chối
               </button>
             </div>
           </div>
@@ -920,7 +1077,7 @@ const ChatRoom = () => {
 
         /* Active Call Bar */
         .active-call-bar {
-          background: linear-gradient(90deg, rgba(16, 185, 129, 0.2) 0%, rgba(99, 102, 241, 0.2) 100%);
+          background: linear-gradient(90deg, rgba(16, 185, 129, 0.25) 0%, rgba(99, 102, 241, 0.25) 100%);
           border-bottom: 1px solid rgba(16, 185, 129, 0.4);
           padding: 8px 18px;
           display: flex;
@@ -1182,6 +1339,7 @@ const ChatRoom = () => {
           padding: 8px 10px;
           border-radius: 8px;
           position: relative;
+          cursor: pointer;
           transition: background 0.15s;
         }
         .member-item:hover { background: #131c2e; }
@@ -1189,7 +1347,7 @@ const ChatRoom = () => {
           width: 34px;
           height: 34px;
           border-radius: 50%;
-          background: linear-gradient(135deg, #4f46e5, #7c3aed);
+          background: linear-gradient(135deg, #6366f1, #a855f7);
           color: white;
           display: flex;
           align-items: center;
@@ -1265,25 +1423,44 @@ const ChatRoom = () => {
         }
         .action-item:hover { background: var(--primary-brand); color: white; }
         .kick-item:hover { background: var(--red-accent) !important; color: white; }
+
         .sidebar-footer {
-          padding: 14px;
+          padding: 12px;
           display: flex;
           flex-direction: column;
           gap: 8px;
           background: rgba(0,0,0,0.25);
           border-top: 1px solid rgba(255, 255, 255, 0.06);
         }
+        .my-profile-btn {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          padding: 9px;
+          border-radius: 8px;
+          cursor: pointer;
+          font-weight: 600;
+          font-size: 13px;
+          background: rgba(99, 102, 241, 0.12);
+          border: 1px solid rgba(99, 102, 241, 0.3);
+          color: #a5b4fc;
+          transition: all 0.2s;
+        }
+        .my-profile-btn:hover { background: #4f46e5; color: white; }
+
         .leave-btn, .disband-btn {
           width: 100%;
           display: flex;
           align-items: center;
           justify-content: center;
           gap: 8px;
-          padding: 10px;
+          padding: 9px;
           border-radius: 8px;
           cursor: pointer;
           font-weight: 600;
-          font-size: 13.5px;
+          font-size: 13px;
           transition: all 0.2s;
         }
         .leave-btn {
@@ -1362,8 +1539,24 @@ const ChatRoom = () => {
         .header-actions {
           display: flex;
           align-items: center;
-          gap: 10px;
+          gap: 8px;
         }
+        .header-friends-btn {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          background: rgba(99, 102, 241, 0.12);
+          border: 1px solid rgba(99, 102, 241, 0.3);
+          color: #a5b4fc;
+          font-size: 12.5px;
+          font-weight: 600;
+          padding: 6px 12px;
+          border-radius: 8px;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        .header-friends-btn:hover { background: #4f46e5; color: white; }
+
         .header-call-btn {
           display: flex;
           align-items: center;
@@ -1489,7 +1682,11 @@ const ChatRoom = () => {
           justify-content: center;
           flex-shrink: 0;
           box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+          cursor: pointer;
+          transition: transform 0.15s;
         }
+        .msg-avatar:hover { transform: scale(1.08); }
+
         .msg-content-wrapper {
           display: flex;
           flex-direction: column;
@@ -1501,7 +1698,10 @@ const ChatRoom = () => {
           color: #818cf8;
           margin-bottom: 4px;
           padding-left: 2px;
+          cursor: pointer;
         }
+        .msg-sender:hover { text-decoration: underline; color: #a5b4fc; }
+
         .msg-bubble {
           position: relative;
           padding: 10px 14px;

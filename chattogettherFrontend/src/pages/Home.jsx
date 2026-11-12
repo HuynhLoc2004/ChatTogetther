@@ -8,11 +8,16 @@ import SockJS from 'sockjs-client';
 import Stomp from 'stompjs';
 import toast from 'react-hot-toast';
 
+import UserProfileModal from './UserProfileModal';
+import FriendsModal from './FriendsModal';
+
 const Home = () => {
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isFriendsOpen, setIsFriendsOpen] = useState(false);
   const navigate = useNavigate();
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -239,6 +244,24 @@ const Home = () => {
           </div>
           
           <div className="header-actions">
+            <button 
+              onClick={() => setIsFriendsOpen(true)}
+              className="btn-header-secondary"
+              title="Danh sách bạn bè & Lời mời"
+            >
+              <Users size={16} />
+              <span className="hide-on-mobile">Bạn bè</span>
+            </button>
+
+            <button 
+              onClick={() => setIsProfileOpen(true)}
+              className="btn-header-secondary"
+              title="Hồ sơ cá nhân của bạn"
+            >
+              <User size={16} />
+              <span className="hide-on-mobile">Hồ sơ</span>
+            </button>
+
             <button 
               onClick={() => setIsCreateModalOpen(true)}
               className="btn-create-room" 
@@ -487,9 +510,48 @@ const Home = () => {
             </div>
           )}
         </AnimatePresence>
+
+        {/* Modal Hồ Sơ Cá Nhân */}
+        {isProfileOpen && (
+          <UserProfileModal 
+            userId={currentUserId}
+            currentUserId={currentUserId}
+            onClose={() => setIsProfileOpen(false)}
+          />
+        )}
+
+        {/* Modal Bạn Bè */}
+        {isFriendsOpen && (
+          <FriendsModal 
+            onClose={() => setIsFriendsOpen(false)}
+            onSelectUser={(uid) => {
+              setIsFriendsOpen(false);
+              setIsProfileOpen(true);
+            }}
+          />
+        )}
       </div>
 
       <style dangerouslySetInnerHTML={{ __html: `
+        .btn-header-secondary {
+          background: #1e293b;
+          color: #cbd5e1;
+          border: 1px solid #334155;
+          padding: 0.65rem 1rem;
+          border-radius: 0.85rem;
+          font-weight: 500;
+          font-size: 0.9rem;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          transition: all 0.15s;
+        }
+        .btn-header-secondary:hover {
+          background: #334155;
+          color: white;
+          border-color: #475569;
+        }
         .offline-banner {
           background: rgba(245, 158, 11, 0.15);
           border: 1px solid rgba(245, 158, 11, 0.35);

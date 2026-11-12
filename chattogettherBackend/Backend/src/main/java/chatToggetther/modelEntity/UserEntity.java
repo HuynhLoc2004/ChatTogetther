@@ -35,6 +35,15 @@ public class UserEntity {
     @Column(name = "active_user")
     private Boolean active = true;
 
+    @Column(name = "age_user")
+    private Integer age;
+
+    @Column(name = "location_user", columnDefinition = "TEXT")
+    private String location;
+
+    @Column(name = "bio_user", columnDefinition = "TEXT")
+    private String bio;
+
     @Column(name = "email_user", columnDefinition = "TEXT")
     private String email;
 

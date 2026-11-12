@@ -108,9 +108,15 @@ public class RoomService {
 
                             UserDTO userDTO = new UserDTO();
                             if (ur.getUserEntity() != null) {
-                                userDTO.setId(ur.getUserEntity().getId());
-                                userDTO.setActive(ur.getUserEntity().getActive());
-                                userDTO.setNickname(ur.getUserEntity().getNickname());
+                                UserEntity u = ur.getUserEntity();
+                                userDTO.setId(u.getId());
+                                userDTO.setActive(u.getActive());
+                                userDTO.setNickname(u.getNickname() != null && !u.getNickname().isEmpty() ? u.getNickname() : u.getAccount());
+                                userDTO.setAccount(u.getAccount());
+                                userDTO.setAvatar(u.getAvatar());
+                                userDTO.setAge(u.getAge());
+                                userDTO.setLocation(u.getLocation());
+                                userDTO.setBio(u.getBio());
                             }
                             userRoomDTO.setUserDTO(userDTO);
                             userRoomDTO.setIsAdmin(ur.getIsAdmin());
@@ -149,9 +155,15 @@ public class RoomService {
 
                     UserDTO userDTO = new UserDTO();
                     if (ur.getUserEntity() != null) {
-                        userDTO.setId(ur.getUserEntity().getId());
-                        userDTO.setActive(ur.getUserEntity().getActive());
-                        userDTO.setNickname(ur.getUserEntity().getNickname());
+                        UserEntity u = ur.getUserEntity();
+                        userDTO.setId(u.getId());
+                        userDTO.setActive(u.getActive());
+                        userDTO.setNickname(u.getNickname() != null && !u.getNickname().isEmpty() ? u.getNickname() : u.getAccount());
+                        userDTO.setAccount(u.getAccount());
+                        userDTO.setAvatar(u.getAvatar());
+                        userDTO.setAge(u.getAge());
+                        userDTO.setLocation(u.getLocation());
+                        userDTO.setBio(u.getBio());
                     }
                     userRoomDTO.setUserDTO(userDTO);
                     userRoomDTO.setIsAdmin(ur.getIsAdmin());
