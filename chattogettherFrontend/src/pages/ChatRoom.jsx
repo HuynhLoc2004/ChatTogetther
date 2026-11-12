@@ -2,12 +2,22 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Send, Users, LogOut, MessageCircle, Hash, 
-  MoreVertical, UserX, ChevronRight, Trash2, Crown, X, Menu, AlertTriangle
+  MoreVertical, UserX, ChevronRight, Trash2, Crown, X, Menu, AlertTriangle,
+  Phone, PhoneOff, Mic, MicOff, WifiOff
 } from 'lucide-react';
 import axiosClient, { BACKEND_URL } from '../api/axiosClient';
+import { saveMessagesOffline, getMessagesOffline } from '../utils/offlineDB';
 import SockJS from 'sockjs-client';
 import Stomp from 'stompjs';
 import toast from 'react-hot-toast';
+
+// Cấu hình Google STUN servers miễn phí cho WebRTC P2P Voice Call
+const ICE_SERVERS = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' }
+  ]
+};
 
 // Helper format thời gian chuẩn Việt Nam
 const formatMsgTime = (msg) => {
@@ -35,9 +45,20 @@ const ChatRoom = () => {
   const [activeMenu, setActiveMenu] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState(null);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+
+  // Trạng thái cuộc gọi thoại WebRTC
+  const [isCallActive, setIsCallActive] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [callDuration, setCallDuration] = useState(0);
+  const [incomingCall, setIncomingCall] = useState(null);
 
   const stompClient = useRef(null);
   const messagesEndRef = useRef(null);
+  const localStreamRef = useRef(null);
+  const peerConnectionRef = useRef(null);
+  const remoteAudioRef = useRef(null);
+  const callTimerRef = useRef(null);
   
   // Hàm lấy user_id an toàn (kết hợp localStorage và giải mã JWT token)
   const getUserId = () => {
@@ -63,14 +84,40 @@ const ChatRoom = () => {
   const currentUserId = getUserId();
   const messageIdsRef = useRef(new Set());
 
-  // Tính toán quyền Admin thực tế của phòng này dựa trên dữ liệu từ Server
-  const isAdminOfThisRoom = roomInfo?.userRoomDTOList?.find(
+  // Lấy nickname hiện tại của user trong phòng
+  const myUserRoom = roomInfo?.userRoomDTOList?.find(
     ur => ur.userDTO?.id?.toString() === currentUserId
-  )?.isAdmin === true;
+  );
+  const currentNickname = myUserRoom?.userDTO?.nickname || localStorage.getItem('nickname') || 'Người dùng';
+
+  // Tính toán quyền Admin thực tế của phòng này dựa trên dữ liệu từ Server
+  const isAdminOfThisRoom = myUserRoom?.isAdmin === true;
 
   const scrollToBottom = (behavior = "smooth") => {
     messagesEndRef.current?.scrollIntoView({ behavior });
   };
+
+  // Lắng nghe sự kiện Online / Offline
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOffline(false);
+      toast.success("Đã khôi phục kết nối mạng!");
+      fetchRoomDetail(true);
+      fetchHistory();
+    };
+    const handleOffline = () => {
+      setIsOffline(true);
+      toast("Đang ngoại tuyến. Bạn có thể xem tin nhắn đã lưu.", { icon: '📶' });
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   const fetchRoomDetail = useCallback(async (isSilent = false) => {
     try {
@@ -113,13 +160,193 @@ const ChatRoom = () => {
           };
         });
         setMessages(history);
+        saveMessagesOffline(roomId, history); // Lưu bộ nhớ máy ngoại tuyến
         setTimeout(() => scrollToBottom("auto"), 100);
       }
     } catch (err) {
       console.error("Lỗi khi lấy lịch sử tin nhắn:", err);
+      // Nạp tin nhắn ngoại tuyến từ IndexedDB nếu API thất bại
+      const cached = await getMessagesOffline(roomId);
+      if (cached && cached.length > 0) {
+        setMessages(cached);
+        setTimeout(() => scrollToBottom("auto"), 100);
+      }
     }
   }, [roomId]);
 
+  // ====================== WEBRTC VOICE CALL LOGIC ======================
+  const formatCallDuration = (sec) => {
+    const m = Math.floor(sec / 60).toString().padStart(2, '0');
+    const s = (sec % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
+
+  const cleanupCall = useCallback(() => {
+    if (callTimerRef.current) {
+      clearInterval(callTimerRef.current);
+      callTimerRef.current = null;
+    }
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(track => track.stop());
+      localStreamRef.current = null;
+    }
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
+    }
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.srcObject = null;
+    }
+    setIsCallActive(false);
+    setIsMuted(false);
+    setCallDuration(0);
+    setIncomingCall(null);
+  }, []);
+
+  const sendCallSignal = (payload) => {
+    if (stompClient.current && stompClient.current.connected) {
+      stompClient.current.send(`/topic/room/${roomId}`, {}, JSON.stringify({
+        isVoiceSignal: true,
+        roomId,
+        senderId: currentUserId,
+        senderName: currentNickname,
+        ...payload
+      }));
+    }
+  };
+
+  const startVoiceCall = async () => {
+    if (!navigator.onLine) {
+      toast.error("Yêu cầu kết nối Internet để thực hiện cuộc gọi!");
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      localStreamRef.current = stream;
+
+      const pc = new RTCPeerConnection(ICE_SERVERS);
+      peerConnectionRef.current = pc;
+
+      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+      pc.onicecandidate = (e) => {
+        if (e.candidate) {
+          sendCallSignal({ type: 'CANDIDATE', candidate: e.candidate });
+        }
+      };
+
+      pc.ontrack = (e) => {
+        if (!remoteAudioRef.current) {
+          remoteAudioRef.current = new Audio();
+          remoteAudioRef.current.autoplay = true;
+        }
+        remoteAudioRef.current.srcObject = e.streams[0];
+      };
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      sendCallSignal({ type: 'OFFER', offer });
+
+      setIsCallActive(true);
+      callTimerRef.current = setInterval(() => {
+        setCallDuration(prev => prev + 1);
+      }, 1000);
+
+      toast.success("Đang bắt đầu cuộc gọi thoại...");
+    } catch (err) {
+      console.error("Lỗi khởi tạo cuộc gọi:", err);
+      toast.error("Không thể truy cập microphone. Vui lòng cấp quyền!");
+    }
+  };
+
+  const joinIncomingCall = async () => {
+    if (!incomingCall) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      localStreamRef.current = stream;
+
+      const pc = new RTCPeerConnection(ICE_SERVERS);
+      peerConnectionRef.current = pc;
+
+      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+      pc.onicecandidate = (e) => {
+        if (e.candidate) {
+          sendCallSignal({ type: 'CANDIDATE', candidate: e.candidate });
+        }
+      };
+
+      pc.ontrack = (e) => {
+        if (!remoteAudioRef.current) {
+          remoteAudioRef.current = new Audio();
+          remoteAudioRef.current.autoplay = true;
+        }
+        remoteAudioRef.current.srcObject = e.streams[0];
+      };
+
+      await pc.setRemoteDescription(new RTCSessionDescription(incomingCall.offer));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+
+      sendCallSignal({ type: 'ANSWER', answer });
+
+      setIncomingCall(null);
+      setIsCallActive(true);
+      callTimerRef.current = setInterval(() => {
+        setCallDuration(prev => prev + 1);
+      }, 1000);
+      toast.success("Đã kết nối cuộc gọi thoại!");
+    } catch (err) {
+      console.error("Lỗi tham gia cuộc gọi:", err);
+      toast.error("Không thể tham gia cuộc gọi!");
+    }
+  };
+
+  const toggleMute = () => {
+    if (localStreamRef.current) {
+      const audioTrack = localStreamRef.current.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = !audioTrack.enabled;
+        setIsMuted(!audioTrack.enabled);
+      }
+    }
+  };
+
+  const endCall = () => {
+    sendCallSignal({ type: 'END' });
+    cleanupCall();
+    toast("Đã kết thúc cuộc gọi", { icon: '📞' });
+  };
+
+  const handleCallSignal = useCallback(async (msg) => {
+    if (msg.senderId?.toString() === currentUserId) return; // Bỏ qua tín hiệu từ chính mình
+
+    if (msg.type === 'OFFER') {
+      setIncomingCall({
+        callerName: msg.senderName,
+        offer: msg.offer
+      });
+    } else if (msg.type === 'ANSWER') {
+      if (peerConnectionRef.current && peerConnectionRef.current.signalingState !== 'stable') {
+        await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(msg.answer));
+      }
+    } else if (msg.type === 'CANDIDATE') {
+      if (peerConnectionRef.current && msg.candidate) {
+        try {
+          await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(msg.candidate));
+        } catch (e) {
+          console.error("Lỗi thêm ICE candidate:", e);
+        }
+      }
+    } else if (msg.type === 'END') {
+      cleanupCall();
+      toast("Cuộc gọi đã kết thúc", { icon: '📞' });
+    }
+  }, [currentUserId, cleanupCall]);
+
+  // ====================== WEBSOCKET & INITIALIZATION ======================
   useEffect(() => {
     let isMounted = true;
     
@@ -129,6 +356,14 @@ const ChatRoom = () => {
 
     const initConnection = async () => {
       messageIdsRef.current.clear();
+      
+      // Nạp tin nhắn ngoại tuyến từ IndexedDB trước để hiển thị tức thì (< 50ms)
+      const offlineCache = await getMessagesOffline(roomId);
+      if (offlineCache && offlineCache.length > 0 && isMounted) {
+        setMessages(offlineCache);
+        setLoading(false);
+      }
+
       await fetchRoomDetail();
       await fetchHistory();
       
@@ -150,6 +385,12 @@ const ChatRoom = () => {
         client.subscribe(`/topic/room/${roomId}`, (payload) => {
           if (!isMounted) return;
           const receivedMsg = JSON.parse(payload.body);
+
+          // Xử lý tín hiệu cuộc gọi thoại WebRTC
+          if (receivedMsg.isVoiceSignal) {
+            handleCallSignal(receivedMsg);
+            return;
+          }
           
           // Kiểm tra trùng lặp tin nhắn dựa trên ID
           if (receivedMsg.id && receivedMsg.id !== -1 && receivedMsg.id !== -2 && receivedMsg.id !== 0) {
@@ -182,7 +423,7 @@ const ChatRoom = () => {
             const sysId = receivedMsg.id || Date.now() + Math.random();
             setMessages(prev => {
               if (prev.find(m => m.text === receivedMsg.message && Math.abs(new Date() - new Date(m.rawTime)) < 1000)) return prev;
-              return [...prev, {
+              const nextMsgs = [...prev, {
                 id: sysId,
                 text: receivedMsg.message,
                 sender: 'Hệ thống',
@@ -191,6 +432,8 @@ const ChatRoom = () => {
                 time: receivedMsg.formattedTime || formatMsgTime(receivedMsg) || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false }),
                 rawTime: new Date().toISOString()
               }];
+              saveMessagesOffline(roomId, nextMsgs);
+              return nextMsgs;
             });
             setTimeout(() => scrollToBottom(), 50);
           } else {
@@ -207,7 +450,9 @@ const ChatRoom = () => {
                 time: receivedMsg.formattedTime || formatMsgTime(receivedMsg),
                 rawTime: receivedMsg.timeSend
               };
-              return [...prev, newMsg].sort((a, b) => new Date(a.rawTime) - new Date(b.rawTime));
+              const next = [...prev, newMsg].sort((a, b) => new Date(a.rawTime) - new Date(b.rawTime));
+              saveMessagesOffline(roomId, next);
+              return next;
             });
             setTimeout(() => scrollToBottom(), 50);
           }
@@ -221,17 +466,23 @@ const ChatRoom = () => {
 
     return () => {
       isMounted = false;
+      cleanupCall();
       if (stompClient.current && stompClient.current.connected) {
         stompClient.current.disconnect();
         stompClient.current = null;
       }
     };
-  }, [roomId, fetchRoomDetail, fetchHistory, currentUserId, navigate]);
+  }, [roomId, fetchRoomDetail, fetchHistory, currentUserId, navigate, handleCallSignal, cleanupCall]);
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
     const trimmed = newMessage.trim();
     if (!trimmed) return;
+
+    if (!navigator.onLine) {
+      toast.error("Bạn đang ngoại tuyến. Vui lòng kết nối Internet để gửi tin nhắn!");
+      return;
+    }
     
     try {
       setNewMessage('');
@@ -362,7 +613,7 @@ const ChatRoom = () => {
         <div className="sidebar-header">
            <div className="brand" onClick={() => navigate('/')}>
               <div className="brand-icon"><MessageCircle size={20} /></div>
-              <span>Chat Togetther</span>
+              <span>Chat Together</span>
            </div>
            <div style={{ display: 'flex', gap: '0.25rem' }}>
               <button onClick={() => navigate('/')} className="back-btn" title="Về trang chủ">
@@ -380,7 +631,7 @@ const ChatRoom = () => {
            </div>
            <div className="room-meta">
               <h3>{roomInfo?.nameroom}</h3>
-              <p>ID: {roomId}</p>
+              <p>ID: #{roomId}</p>
            </div>
            {isAdminOfThisRoom && <div className="admin-badge">Chủ phòng</div>}
         </div>
@@ -441,6 +692,41 @@ const ChatRoom = () => {
 
       {/* Main Chat Area */}
       <main className="chat-main">
+        {/* Banner Offline Thông Minh */}
+        {isOffline && (
+          <div className="offline-top-banner">
+            <WifiOff size={15} />
+            <span>Chế độ Ngoại tuyến: Đang xem các tin nhắn đã lưu trong thiết bị</span>
+          </div>
+        )}
+
+        {/* Thanh Điều Khiển Cuộc Gọi Thoại Đang Hoạt Động */}
+        {isCallActive && (
+          <div className="active-call-bar">
+            <div className="call-info">
+              <div className="pulse-indicator" />
+              <span className="call-title">Cuộc gọi thoại đang kết nối</span>
+              <span className="call-timer">{formatCallDuration(callDuration)}</span>
+            </div>
+            <div className="call-controls">
+              <button 
+                onClick={toggleMute} 
+                className={`call-ctrl-btn ${isMuted ? 'muted' : ''}`}
+                title={isMuted ? "Bật micro" : "Tắt micro"}
+              >
+                {isMuted ? <MicOff size={16} /> : <Mic size={16} />}
+              </button>
+              <button 
+                onClick={endCall} 
+                className="call-ctrl-btn end-call"
+                title="Kết thúc cuộc gọi"
+              >
+                <PhoneOff size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+
         <header className="chat-header">
            <div className="header-left">
               <button onClick={() => setIsSidebarOpen(true)} className="mobile-toggle-btn" title="Mở danh sách thành viên">
@@ -454,6 +740,17 @@ const ChatRoom = () => {
            </div>
            
            <div className="header-actions">
+              {/* Nút Gọi Thoại Trực Tiếp */}
+              <button 
+                onClick={startVoiceCall} 
+                disabled={isCallActive}
+                className={`header-call-btn ${isCallActive ? 'in-call' : ''}`} 
+                title="Gọi thoại trực tiếp qua Internet"
+              >
+                 <Phone size={15} />
+                 <span>{isCallActive ? 'Đang gọi' : 'Gọi thoại'}</span>
+              </button>
+
               <button onClick={() => setIsSidebarOpen(true)} className="members-indicator-btn" title="Xem danh sách thành viên">
                  <Users size={15} />
                  <span>{roomInfo?.userRoomDTOList?.length || 0}</span>
@@ -514,17 +811,39 @@ const ChatRoom = () => {
             <form onSubmit={handleSendMessage} className="msg-form">
               <input 
                 type="text" 
-                placeholder={`Nhắn tin trong #${roomInfo?.nameroom || 'phòng'}...`} 
+                placeholder={isOffline ? "Đang ngoại tuyến, chỉ có thể xem lịch sử..." : `Nhắn tin trong #${roomInfo?.nameroom || 'phòng'}...`}
                 value={newMessage}
+                disabled={isOffline}
                 onChange={(e) => setNewMessage(e.target.value)}
               />
-              <button type="submit" disabled={!newMessage.trim()} className="send-btn" title="Gửi tin nhắn">
+              <button type="submit" disabled={!newMessage.trim() || isOffline} className="send-btn" title="Gửi tin nhắn">
                 <Send size={18} />
               </button>
             </form>
           </div>
         </div>
       </main>
+
+      {/* Modal Cuộc Gọi Đến (Incoming Call Alert) */}
+      {incomingCall && !isCallActive && (
+        <div className="incoming-call-overlay">
+          <div className="incoming-call-card">
+            <div className="incoming-phone-pulse">
+              <Phone size={24} className="ring-animate" />
+            </div>
+            <h3>Cuộc gọi thoại đến</h3>
+            <p><strong>{incomingCall.callerName}</strong> đang bắt đầu cuộc gọi thoại trong phòng #{roomInfo?.nameroom}</p>
+            <div className="incoming-call-btns">
+              <button onClick={joinIncomingCall} className="btn-join-call">
+                <Phone size={16} /> Tham gia
+              </button>
+              <button onClick={() => setIncomingCall(null)} className="btn-dismiss-call">
+                Bỏ qua
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Confirmation Dialog Modal */}
       {confirmDialog && (
@@ -556,16 +875,16 @@ const ChatRoom = () => {
 
       <style dangerouslySetInnerHTML={{ __html: `
         :root {
-          --chat-bg: #0f172a;
-          --sidebar-bg: #0b0f19;
-          --header-bg: #1e293b;
-          --input-bg: #1e293b;
+          --chat-bg: #090d16;
+          --sidebar-bg: #060911;
+          --header-bg: #0f172a;
+          --input-bg: #141c2e;
           --text-main: #f8fafc;
           --text-muted: #94a3b8;
           --primary-brand: #6366f1;
           --primary-brand-hover: #4f46e5;
-          --bubble-them: #1e293b;
-          --bubble-them-border: #334155;
+          --bubble-them: #131c2e;
+          --bubble-them-border: rgba(255, 255, 255, 0.08);
           --bubble-me: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
           --red-accent: #ef4444;
         }
@@ -584,13 +903,161 @@ const ChatRoom = () => {
           z-index: 10;
         }
 
+        /* Top Offline Banner */
+        .offline-top-banner {
+          background: rgba(245, 158, 11, 0.18);
+          border-bottom: 1px solid rgba(245, 158, 11, 0.4);
+          color: #fbbf24;
+          padding: 6px 16px;
+          font-size: 12.5px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          font-weight: 500;
+          z-index: 40;
+        }
+
+        /* Active Call Bar */
+        .active-call-bar {
+          background: linear-gradient(90deg, rgba(16, 185, 129, 0.2) 0%, rgba(99, 102, 241, 0.2) 100%);
+          border-bottom: 1px solid rgba(16, 185, 129, 0.4);
+          padding: 8px 18px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          z-index: 40;
+          backdrop-filter: blur(8px);
+        }
+        .call-info {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        .pulse-indicator {
+          width: 10px;
+          height: 10px;
+          background: #10b981;
+          border-radius: 50%;
+          box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+          animation: pulseGreen 1.5s infinite;
+        }
+        @keyframes pulseGreen {
+          0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+          70% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+        .call-title {
+          font-size: 13px;
+          font-weight: 600;
+          color: #e2e8f0;
+        }
+        .call-timer {
+          font-size: 12px;
+          background: rgba(0, 0, 0, 0.4);
+          color: #34d399;
+          padding: 2px 8px;
+          border-radius: 10px;
+          font-family: monospace;
+          font-weight: 700;
+        }
+        .call-controls {
+          display: flex;
+          gap: 8px;
+        }
+        .call-ctrl-btn {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          border: none;
+          background: rgba(255, 255, 255, 0.1);
+          color: white;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s;
+        }
+        .call-ctrl-btn:hover { background: rgba(255, 255, 255, 0.2); }
+        .call-ctrl-btn.muted { background: #ef4444; color: white; }
+        .call-ctrl-btn.end-call { background: #ef4444; color: white; }
+        .call-ctrl-btn.end-call:hover { background: #dc2626; transform: scale(1.05); }
+
+        /* Incoming Call Modal */
+        .incoming-call-overlay {
+          position: fixed;
+          top: 70px;
+          right: 20px;
+          z-index: 1000;
+          animation: slideDown 0.3s ease-out;
+        }
+        @keyframes slideDown {
+          from { opacity: 0; transform: translateY(-20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .incoming-call-card {
+          background: #1e293b;
+          border: 1px solid #10b981;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+          border-radius: 16px;
+          padding: 16px 20px;
+          width: 320px;
+          text-align: center;
+        }
+        .incoming-phone-pulse {
+          width: 48px;
+          height: 48px;
+          background: rgba(16, 185, 129, 0.2);
+          border-radius: 50%;
+          color: #10b981;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin: 0 auto 10px auto;
+        }
+        .ring-animate { animation: ring 1.5s infinite; }
+        @keyframes ring {
+          0%, 100% { transform: rotate(0deg); }
+          20%, 60% { transform: rotate(-15deg); }
+          40%, 80% { transform: rotate(15deg); }
+        }
+        .incoming-call-card h3 { margin: 0 0 6px 0; font-size: 16px; color: #f8fafc; }
+        .incoming-call-card p { margin: 0 0 14px 0; font-size: 13px; color: #94a3b8; }
+        .incoming-call-btns { display: flex; gap: 10px; }
+        .btn-join-call {
+          flex: 1;
+          background: #10b981;
+          color: white;
+          border: none;
+          padding: 8px;
+          border-radius: 8px;
+          font-weight: 600;
+          font-size: 13px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+        }
+        .btn-dismiss-call {
+          flex: 1;
+          background: #334155;
+          color: #cbd5e1;
+          border: none;
+          padding: 8px;
+          border-radius: 8px;
+          font-weight: 600;
+          font-size: 13px;
+          cursor: pointer;
+        }
+
         /* Sidebar */
         .sidebar-left {
           width: 280px;
           background: var(--sidebar-bg);
           display: flex;
           flex-direction: column;
-          border-right: 1px solid #1e293b;
+          border-right: 1px solid rgba(255, 255, 255, 0.06);
           z-index: 50;
           transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         }
@@ -600,7 +1067,7 @@ const ChatRoom = () => {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          border-bottom: 1px solid #1e293b;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.06);
           box-sizing: border-box;
         }
         .brand {
@@ -646,7 +1113,7 @@ const ChatRoom = () => {
           display: flex;
           align-items: center;
           gap: 12px;
-          border-bottom: 1px solid #1e293b;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.06);
         }
         .room-avatar {
           width: 42px;
@@ -717,7 +1184,7 @@ const ChatRoom = () => {
           position: relative;
           transition: background 0.15s;
         }
-        .member-item:hover { background: #1e293b; }
+        .member-item:hover { background: #131c2e; }
         .member-avatar {
           width: 34px;
           height: 34px;
@@ -735,7 +1202,7 @@ const ChatRoom = () => {
         .online-indicator {
           width: 10px;
           height: 10px;
-          background: #22c55e;
+          background: #10b981;
           border: 2px solid var(--sidebar-bg);
           border-radius: 50%;
           position: absolute;
@@ -804,7 +1271,7 @@ const ChatRoom = () => {
           flex-direction: column;
           gap: 8px;
           background: rgba(0,0,0,0.25);
-          border-top: 1px solid #1e293b;
+          border-top: 1px solid rgba(255, 255, 255, 0.06);
         }
         .leave-btn, .disband-btn {
           width: 100%;
@@ -849,7 +1316,7 @@ const ChatRoom = () => {
           align-items: center;
           justify-content: space-between;
           background: var(--header-bg);
-          border-bottom: 1px solid #334155;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.08);
           box-sizing: border-box;
           flex-shrink: 0;
         }
@@ -897,12 +1364,35 @@ const ChatRoom = () => {
           align-items: center;
           gap: 10px;
         }
+        .header-call-btn {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          background: rgba(16, 185, 129, 0.15);
+          border: 1px solid rgba(16, 185, 129, 0.35);
+          color: #34d399;
+          font-size: 12.5px;
+          font-weight: 600;
+          padding: 6px 12px;
+          border-radius: 8px;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        .header-call-btn:hover:not(:disabled) {
+          background: #10b981;
+          color: white;
+          transform: translateY(-1px);
+        }
+        .header-call-btn.in-call {
+          background: #10b981;
+          color: white;
+        }
         .members-indicator-btn {
           display: flex;
           align-items: center;
           gap: 6px;
           background: rgba(255,255,255,0.06);
-          border: 1px solid #334155;
+          border: 1px solid rgba(255,255,255,0.1);
           color: #e2e8f0;
           font-size: 12.5px;
           font-weight: 600;
@@ -911,7 +1401,7 @@ const ChatRoom = () => {
           cursor: pointer;
           transition: background 0.15s;
         }
-        .members-indicator-btn:hover { background: #334155; }
+        .members-indicator-btn:hover { background: #1e293b; }
         .exit-top-btn {
           background: none;
           border: none;
@@ -922,7 +1412,7 @@ const ChatRoom = () => {
           border-radius: 6px;
           transition: background 0.15s;
         }
-        .exit-top-btn:hover { color: white; background: #334155; }
+        .exit-top-btn:hover { color: white; background: #1e293b; }
         
         /* Message Area */
         .messages-area {
@@ -971,7 +1461,7 @@ const ChatRoom = () => {
         }
         .welcome-divider {
           height: 1px;
-          background: linear-gradient(to right, #334155, transparent);
+          background: linear-gradient(to right, rgba(255, 255, 255, 0.1), transparent);
           width: 100%;
         }
 
@@ -1077,12 +1567,12 @@ const ChatRoom = () => {
         .chat-input-area {
           padding: 12px 20px 16px;
           background: var(--chat-bg);
-          border-top: 1px solid #1e293b;
+          border-top: 1px solid rgba(255, 255, 255, 0.06);
           flex-shrink: 0;
         }
         .input-container {
           background: var(--input-bg);
-          border: 1px solid #334155;
+          border: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 12px;
           display: flex;
           align-items: center;
@@ -1135,7 +1625,7 @@ const ChatRoom = () => {
           transform: scale(0.96);
         }
         .send-btn:disabled {
-          background: #334155;
+          background: #1e293b;
           color: #64748b;
           cursor: not-allowed;
         }
@@ -1219,7 +1709,7 @@ const ChatRoom = () => {
           justify-content: center;
           align-items: center;
           height: 100vh;
-          background: #0b0f19;
+          background: #090d16;
           color: #818cf8;
           gap: 12px;
         }
@@ -1264,6 +1754,13 @@ const ChatRoom = () => {
             padding: 8px 12px max(12px, env(safe-area-inset-bottom));
           }
           .welcome-title { font-size: 20px; }
+          .incoming-call-overlay {
+            top: auto;
+            bottom: 80px;
+            left: 14px;
+            right: 14px;
+          }
+          .incoming-call-card { width: auto; }
         }
       `}} />
     </div>

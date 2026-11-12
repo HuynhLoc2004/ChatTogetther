@@ -1,0 +1,16 @@
+{
+  "short_name": "ChatTogether",
+  "name": "Chat Together - Nền Tảng Trò Chuyện & Gọi Thoại",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192 512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#090d16",
+  "theme_color": "#0f172a",
+  "display": "standalone",
+  "orientation": "portrait"
+}

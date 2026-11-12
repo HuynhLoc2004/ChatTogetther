@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, LogOut, Plus, MessageSquare, Shield, User, X, Lock, Hash, CheckCircle, ArrowRight } from 'lucide-react';
+import { Users, LogOut, Plus, MessageSquare, Shield, User, X, Lock, Hash, CheckCircle, ArrowRight, WifiOff } from 'lucide-react';
 import axiosClient, { BACKEND_URL } from '../api/axiosClient';
+import { saveRoomsOffline, getRoomsOffline } from '../utils/offlineDB';
 import SockJS from 'sockjs-client';
 import Stomp from 'stompjs';
 import toast from 'react-hot-toast';
@@ -11,6 +12,7 @@ const Home = () => {
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const navigate = useNavigate();
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -59,7 +61,7 @@ const Home = () => {
     return false;
   };
 
-  // Lấy danh sách phòng từ Backend
+  // Lấy danh sách phòng từ Backend (kèm sao lưu ngoại tuyến)
   const fetchRooms = async (isSilent = false, retries = 2) => {
     try {
       if (!isSilent) setLoading(true);
@@ -67,13 +69,19 @@ const Home = () => {
       if (response.data && response.data.data) {
         setRooms(response.data.data);
         setError(null);
+        saveRoomsOffline(response.data.data);
       }
     } catch (err) {
       console.error("Lỗi khi lấy danh sách phòng:", err);
-      if (retries > 0) {
+      // Nạp danh sách từ bộ nhớ ngoại tuyến nếu mất mạng
+      const cached = await getRoomsOffline();
+      if (cached && cached.length > 0) {
+        setRooms(cached);
+        setError(null);
+      } else if (retries > 0) {
         setTimeout(() => fetchRooms(isSilent, retries - 1), 2000);
       } else {
-        if (!isSilent) setError("Hệ thống đang bận, vui lòng thử lại sau!");
+        if (!isSilent) setError("Hệ thống đang bận hoặc ngoại tuyến, vui lòng thử lại sau!");
       }
     } finally {
       if (!isSilent) setLoading(false);
@@ -81,10 +89,36 @@ const Home = () => {
   };
 
   useEffect(() => {
+    const handleOnline = () => {
+      setIsOffline(false);
+      fetchRooms(true);
+    };
+    const handleOffline = () => {
+      setIsOffline(true);
+      toast("Đang hoạt động ở chế độ ngoại tuyến", { icon: '📶' });
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  useEffect(() => {
     let isMounted = true;
     
     const init = async () => {
-      // Tải danh sách phòng ngay lập tức không cần đợi tuần tự
+      // Đọc bộ nhớ đệm trước để hiển thị siêu tốc < 50ms
+      const cached = await getRoomsOffline();
+      if (cached && cached.length > 0 && isMounted) {
+        setRooms(cached);
+        setLoading(false);
+      }
+      
+      // Đồng bộ từ máy chủ
       fetchRooms();
       checkActiveRoom();
     };
@@ -187,6 +221,12 @@ const Home = () => {
   return (
     <div className="home-wrapper">
       <div className="home-container">
+        {isOffline && (
+          <div className="offline-banner">
+            <WifiOff size={16} />
+            <span>Bạn đang ở chế độ Ngoại tuyến. Đang hiển thị danh sách phòng đã lưu trong máy.</span>
+          </div>
+        )}
         <header className="home-header">
           <div className="header-brand">
             <div className="brand-logo-badge">
@@ -450,6 +490,19 @@ const Home = () => {
       </div>
 
       <style dangerouslySetInnerHTML={{ __html: `
+        .offline-banner {
+          background: rgba(245, 158, 11, 0.15);
+          border: 1px solid rgba(245, 158, 11, 0.35);
+          color: #fbbf24;
+          padding: 8px 16px;
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          font-size: 13px;
+          font-weight: 500;
+          margin-bottom: 1.5rem;
+        }
         .home-wrapper {
           min-height: 100vh;
           background: #0f172a;
