@@ -166,6 +166,20 @@ public class RoomService {
                   && userRoomEntity.getRoomEntity().getId().equals(idRoom) 
                   && Boolean.TRUE.equals(userRoomEntity.getIsAdmin()));
 
+          // Nếu user đang ở một phòng khác trước đó, thông báo rời phòng cũ để danh sách phòng cũ được đồng bộ
+          if (userRoomEntity.getRoomEntity() != null 
+                  && !userRoomEntity.getRoomEntity().getId().equals(idRoom) 
+                  && Boolean.TRUE.equals(userRoomEntity.getActive())) {
+              Long oldRoomId = userRoomEntity.getRoomEntity().getId();
+              SendMessageDTO leaveMsg = new SendMessageDTO();
+              String name = (userEntity.getNickname() != null && !userEntity.getNickname().isEmpty()) ? userEntity.getNickname() : userEntity.getAccount();
+              leaveMsg.setMessage(name + " đã rời khỏi phòng");
+              leaveMsg.setUserId(0L);
+              leaveMsg.setNickname("Hệ thống");
+              leaveMsg.setTimeSend(LocalDateTime.now());
+              messagingTemplate.convertAndSend("/topic/room/" + oldRoomId, leaveMsg);
+          }
+
           userRoomEntity.setRoomEntity(roomEntity);
           userRoomEntity.getTimeJoin().add(LocalDateTime.now()); 
           userRoomEntity.setActive(true);

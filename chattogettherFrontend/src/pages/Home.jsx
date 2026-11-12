@@ -18,6 +18,17 @@ const Home = () => {
   
   const [newRoomData, setNewRoomData] = useState({ name: '', password: '', nickname: '' });
   const [joinData, setJoinData] = useState({ nickname: '', password: '' });
+  const [isWakingUp, setIsWakingUp] = useState(false);
+
+  useEffect(() => {
+    let timer;
+    if (loading) {
+      timer = setTimeout(() => setIsWakingUp(true), 2500);
+    } else {
+      setIsWakingUp(false);
+    }
+    return () => clearTimeout(timer);
+  }, [loading]);
 
   const currentUserId = localStorage.getItem('user_id');
 
@@ -215,6 +226,11 @@ const Home = () => {
               <Hash size={40} className="spinner-icon" />
             </motion.div>
             <p>Đang tải danh sách phòng...</p>
+            {isWakingUp && (
+              <p style={{ fontSize: '0.85rem', color: '#818cf8', marginTop: '0.5rem', maxWidth: '400px', marginInline: 'auto', lineHeight: '1.4' }}>
+                🚀 Đang đánh thức máy chủ Render... Quá trình này mất khoảng 20-30 giây cho lần truy cập đầu tiên sau khi nghỉ.
+              </p>
+            )}
           </div>
         ) : error ? (
           <div className="status-box error-box">

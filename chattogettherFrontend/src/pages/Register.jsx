@@ -2,33 +2,46 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import axiosClient from '../api/axiosClient';
+import toast from 'react-hot-toast';
 
 const Register = () => {
   const [formData, setFormData] = useState({ account: '', password: '' });
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [slowMessage, setSlowMessage] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setSubmitting(true);
+    setSlowMessage(false);
+
+    const timer = setTimeout(() => {
+      setSlowMessage(true);
+    }, 2500);
 
     try {
       const response = await axiosClient.post('/users/create', {
-        account: formData.account,
+        account: formData.account.trim(),
         password: formData.password
       });
 
+      clearTimeout(timer);
       if (response.status === 200) {
-        alert('Đăng ký thành công! Hãy đăng nhập.');
+        toast.success('Đăng ký thành công! Hãy đăng nhập.');
         navigate('/login');
       }
     } catch (err) {
       if (err.response) {
-        // Backend ném AppException nếu user đã tồn tại (thường là 400)
-        setError(err.response.data.message || 'Đăng ký thất bại, vui lòng thử lại!');
+        setError(err.response.data?.message || 'Đăng ký thất bại, vui lòng thử lại!');
       } else {
-        setError('Không thể kết nối đến server!');
+        setError('Không thể kết nối đến máy chủ! Kiểm tra lại đường truyền mạng.');
       }
+    } finally {
+      clearTimeout(timer);
+      setSubmitting(false);
+      setSlowMessage(false);
     }
   };
 
@@ -69,7 +82,14 @@ const Register = () => {
             onChange={(e) => setFormData({...formData, password: e.target.value})}
           />
         </div>
-        <button type="submit" className="auth-button">Đăng Ký</button>
+        <button type="submit" disabled={submitting} className="auth-button">
+          {submitting ? 'Đang Đăng Ký...' : 'Đăng Ký'}
+        </button>
+        {slowMessage && (
+          <p style={{ fontSize: '0.8rem', color: '#818cf8', textAlign: 'center', marginTop: '0.75rem', lineHeight: '1.4' }}>
+            🚀 Đang kết nối và đánh thức máy chủ Render, vui lòng đợi trong giây lát...
+          </p>
+        )}
       </form>
 
       <div className="auth-footer">

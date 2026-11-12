@@ -1,5 +1,5 @@
 jwt:
-  secret_key: huynhtanloc27102004deptraiquadithoiabcdefghjk
-  exp_access: 5 #min
-  exp_refresh: 10080 #min
+  secret_key: ${JWT_SECRET_KEY:huynhtanloc27102004deptraiquadithoiabcdefghjk}
+  exp_access: ${JWT_EXP_ACCESS:60} #min
+  exp_refresh: ${JWT_EXP_REFRESH:10080} #min
 

@@ -6,17 +6,27 @@ import axiosClient from '../api/axiosClient';
 const Login = () => {
   const [formData, setFormData] = useState({ account: '', password: '' });
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [slowMessage, setSlowMessage] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setSubmitting(true);
+    setSlowMessage(false);
+
+    const timer = setTimeout(() => {
+      setSlowMessage(true);
+    }, 2500);
     
     try {
       const response = await axiosClient.post('/auth/login', {
         account: formData.account,
         password: formData.password
       });
+
+      clearTimeout(timer);
 
       if (response.status === 200) {
         const { token, roomId, refreshToken } = response.data.data;
@@ -60,6 +70,10 @@ const Login = () => {
       } else {
         setError('Không thể kết nối đến server!');
       }
+    } finally {
+      clearTimeout(timer);
+      setSubmitting(false);
+      setSlowMessage(false);
     }
   };
 
@@ -100,7 +114,14 @@ const Login = () => {
             onChange={(e) => setFormData({...formData, password: e.target.value})}
           />
         </div>
-        <button type="submit" className="auth-button">Đăng Nhập</button>
+        <button type="submit" disabled={submitting} className="auth-button">
+          {submitting ? 'Đang Đăng Nhập...' : 'Đăng Nhập'}
+        </button>
+        {slowMessage && (
+          <p style={{ fontSize: '0.8rem', color: '#818cf8', textAlign: 'center', marginTop: '0.75rem', lineHeight: '1.4' }}>
+            🚀 Đang kết nối và đánh thức máy chủ Render, vui lòng đợi trong giây lát...
+          </p>
+        )}
       </form>
 
       <div className="auth-footer">

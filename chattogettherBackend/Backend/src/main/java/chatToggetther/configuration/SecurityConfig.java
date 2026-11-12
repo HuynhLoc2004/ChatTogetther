@@ -44,7 +44,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/api/users/create", "/api/auth/login").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/rooms/info-rooms", "/api/auth/refresh_token").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/rooms/info-rooms", "/api/auth/refresh_token", "/api/ping").permitAll()
                         .requestMatchers("/ws-gs-guide/**").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .anyRequest().authenticated()
@@ -61,13 +61,27 @@ public class SecurityConfig {
     }
 
     @Bean
-    public UrlBasedCorsConfigurationSource corsConfigurationSource() {
+    public org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(Arrays.asList("*"));
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        
+        // Hỗ trợ biến môi trường CORS_ORIGINS trên Render (VD: https://chat-togetther.vercel.app,http://localhost:5173)
+        String envCors = System.getenv("CORS_ORIGINS");
+        if (envCors != null && !envCors.trim().isEmpty() && !envCors.trim().equals("*")) {
+            java.util.List<String> origins = Arrays.stream(envCors.split(","))
+                    .map(String::trim)
+                    .toList();
+            configuration.setAllowedOriginPatterns(origins);
+        } else {
+            // Mặc định cho phép tất cả các nguồn (bao gồm mọi domain *.vercel.app và localhost)
+            configuration.setAllowedOriginPatterns(Arrays.asList("*"));
+        }
+
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
+        configuration.setExposedHeaders(Arrays.asList("Authorization", "Set-Cookie", "x-refresh-token"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
+
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;

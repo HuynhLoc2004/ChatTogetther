@@ -1,9 +1,12 @@
 import axios from 'axios';
 
-export const BACKEND_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+// Nhận diện linh hoạt cả VITE_API_URL và VITE_API_BASE_URL (bóc tách /api nếu người dùng lỡ viết vào cuối)
+const rawEndpoint = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/$/, '');
+export const BACKEND_URL = rawEndpoint.replace(/\/api$/, '');
 
 const axiosClient = axios.create({
   baseURL: BACKEND_URL ? `${BACKEND_URL}/api` : '/api',
+  timeout: 60000, // 60s để chờ Render thức giấc nếu máy chủ đang ở chế độ ngủ (Free tier)
   headers: {
     'Content-Type': 'application/json',
   },

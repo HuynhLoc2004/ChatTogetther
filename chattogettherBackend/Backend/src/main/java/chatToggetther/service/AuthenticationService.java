@@ -61,7 +61,9 @@ public class AuthenticationService {
                 Long roomId = null;
                 UserRoomEntity userRoom = userEntity.getUserRoomEntity();
                 if (userRoom != null && Boolean.TRUE.equals(userRoom.getActive()) && userRoom.getRoomEntity() != null) {
-                    roomId = userRoom.getRoomEntity().getId();
+                    if (Boolean.TRUE.equals(userRoom.getRoomEntity().getActive())) {
+                        roomId = userRoom.getRoomEntity().getId();
+                    }
                 }
                 
                 chatToggetther.DTO.LoginResponseDTO loginResponseDTO = new chatToggetther.DTO.LoginResponseDTO(accessToken, roomId, refreshToken);

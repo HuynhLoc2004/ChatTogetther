@@ -34,7 +34,9 @@ public class UserService {
 
         UserRoomEntity userRoomEntity = userEntity.getUserRoomEntity();
         if (userRoomEntity != null && Boolean.TRUE.equals(userRoomEntity.getActive()) && userRoomEntity.getRoomEntity() != null) {
-            return new ResponseData<>(200, "User đang ở trong phòng", userRoomEntity.getRoomEntity().getId());
+            if (Boolean.TRUE.equals(userRoomEntity.getRoomEntity().getActive())) {
+                return new ResponseData<>(200, "User đang ở trong phòng", userRoomEntity.getRoomEntity().getId());
+            }
         }
 
         return new ResponseData<>(200, "User không ở trong phòng nào", null);
