@@ -22,3 +22,4 @@ public interface PostRepository extends JpaRepository<PostEntity, Long> {
            "ORDER BY p.createdAt DESC")
     List<PostEntity> searchPosts(@Param("kw") String keyword);
 }
+

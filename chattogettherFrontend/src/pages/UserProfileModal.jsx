@@ -51,7 +51,7 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
     }
 
     return () => { isMounted = false; };
-  }, [userId, onClose]);
+  }, [userId]);
 
   const handleSendFriendRequest = async () => {
     try {

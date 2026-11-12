@@ -65,3 +65,4 @@ public class PostController {
         return ResponseEntity.ok(this.postService.searchPosts(token, keyword));
     }
 }
+

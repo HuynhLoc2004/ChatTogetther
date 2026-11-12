@@ -29,3 +29,4 @@ public class PostLikeEntity {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 }
+

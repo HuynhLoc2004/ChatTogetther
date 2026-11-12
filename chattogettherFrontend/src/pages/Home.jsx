@@ -271,21 +271,32 @@ const Home = () => {
 
     init();
 
-    // WebSocket lắng nghe cập nhật phòng và bài đăng mới
-    const socketUrl = BACKEND_URL ? `${BACKEND_URL}/ws-gs-guide` : '/ws-gs-guide';
-    const socket = new SockJS(socketUrl);
-    const stompClient = Stomp.over(socket);
-    stompClient.debug = null;
+    // WebSocket lắng nghe cập nhật phòng và bài đăng mới (được bọc an toàn)
+    let stompClient = null;
+    try {
+      const socketUrl = BACKEND_URL ? `${BACKEND_URL}/ws-gs-guide` : '/ws-gs-guide';
+      const socket = new SockJS(socketUrl);
+      stompClient = Stomp.over(socket);
+      stompClient.debug = null;
 
-    stompClient.connect({}, () => {
-      if (!isMounted) return;
-      stompClient.subscribe('/topic/rooms', () => fetchRooms(true));
-      stompClient.subscribe('/topic/posts', () => fetchPosts(true));
-    }, () => {});
+      stompClient.connect({}, () => {
+        if (!isMounted) return;
+        stompClient.subscribe('/topic/rooms', () => fetchRooms(true));
+        stompClient.subscribe('/topic/posts', () => fetchPosts(true));
+      }, (err) => {
+        console.warn("WebSocket reconnection/notice:", err);
+      });
+    } catch (wsErr) {
+      console.warn("Không thể khởi tạo WebSocket trong Home:", wsErr);
+    }
 
     return () => {
       isMounted = false;
-      if (stompClient.connected) stompClient.disconnect();
+      try {
+        if (stompClient && stompClient.connected) {
+          stompClient.disconnect(() => {});
+        }
+      } catch (_) {}
     };
   }, [fetchPosts]);
 

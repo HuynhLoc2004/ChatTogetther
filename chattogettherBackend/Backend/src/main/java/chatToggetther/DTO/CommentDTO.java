@@ -22,3 +22,4 @@ public class CommentDTO {
     private String authorAccount;
     private String authorAvatar;
 }
+

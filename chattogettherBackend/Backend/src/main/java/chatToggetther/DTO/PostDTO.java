@@ -29,3 +29,4 @@ public class PostDTO {
     private Integer commentsCount;
     private Boolean isLikedByMe;
 }
+

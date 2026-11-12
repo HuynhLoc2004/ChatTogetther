@@ -19,3 +19,4 @@ public interface CommentRepository extends JpaRepository<CommentEntity, Long> {
     
     int countByPost(PostEntity post);
 }
+
