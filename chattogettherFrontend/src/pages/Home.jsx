@@ -128,6 +128,59 @@ const parsePostMedia = (raw) => {
   };
 };
 
+// Helper tổ chức cây phân cấp bình luận chuẩn mực (Threaded Comments)
+const buildCommentThreads = (comments) => {
+  if (!Array.isArray(comments) || comments.length === 0) return [];
+  
+  const rootComments = [];
+  const repliesMap = new Map();
+
+  // 1. Phân loại root comments và replies
+  comments.forEach(c => {
+    if (!c.parentId) {
+      rootComments.push({ ...c, replies: [] });
+    } else {
+      if (!repliesMap.has(c.parentId)) {
+        repliesMap.set(c.parentId, []);
+      }
+      repliesMap.get(c.parentId).push(c);
+    }
+  });
+
+  // 2. Map nhanh id của comment về root thread ID
+  const commentIdToRootId = new Map();
+  rootComments.forEach(r => {
+    commentIdToRootId.set(r.id, r.id);
+  });
+
+  // Đăng ký các direct replies của root
+  rootComments.forEach(root => {
+    const directReplies = repliesMap.get(root.id) || [];
+    directReplies.forEach(dr => {
+      commentIdToRootId.set(dr.id, root.id);
+    });
+  });
+
+  // 3. Ghép replies vào root thread tương ứng
+  comments.forEach(c => {
+    if (c.parentId) {
+      const targetRootId = commentIdToRootId.get(c.parentId) || c.parentId;
+      const root = rootComments.find(r => r.id === targetRootId);
+      if (root) {
+        if (!root.replies.some(existing => existing.id === c.id)) {
+          root.replies.push(c);
+        }
+      } else {
+        // Fallback: nếu không tìm thấy root, coi như 1 root comment mới
+        rootComments.push({ ...c, replies: [] });
+        commentIdToRootId.set(c.id, c.id);
+      }
+    }
+  });
+
+  return rootComments;
+};
+
 const Home = () => {
   const navigate = useNavigate();
   const currentUserId = localStorage.getItem('user_id');
@@ -2132,127 +2185,144 @@ const Home = () => {
                             {(!commentsMap[post.id] || commentsMap[post.id].length === 0) ? (
                               <p className="empty-cmt-notice">Chưa có phản hồi nào. Hãy là người đầu tiên chia sẻ góc nhìn!</p>
                             ) : (
-                              commentsMap[post.id].map((cmt) => {
-                                const isCmtMe = currentUserId && cmt.authorId?.toString() === currentUserId.toString();
-                                const canDeleteCmt = isCmtMe || (currentUserId && post.authorId?.toString() === currentUserId.toString());
-                                const isEditingThisCmt = editingCommentId === cmt.id;
-                                const isReply = Boolean(cmt.parentId || cmt.replyToUser);
+                              buildCommentThreads(commentsMap[post.id]).map((thread) => {
+                                const renderCommentBubble = (cmt, isReply = false) => {
+                                  const isCmtMe = currentUserId && cmt.authorId?.toString() === currentUserId.toString();
+                                  const canDeleteCmt = isCmtMe || (currentUserId && post.authorId?.toString() === currentUserId.toString());
+                                  const isEditingThisCmt = editingCommentId === cmt.id;
 
-                                return (
-                                  <div key={cmt.id} className={`cmt-row ${isReply ? 'cmt-reply-indented' : ''}`}>
-                                    <div 
-                                      className="cursor-pointer flex-shrink-0"
-                                      onClick={() => setSelectedProfileUserId(cmt.authorId)}
-                                      title="Xem hồ sơ cá nhân"
-                                    >
-                                      <UserAvatar 
-                                        avatar={cmt.authorAvatar} 
-                                        name={cmt.authorNickname || cmt.authorAccount} 
-                                        size={isReply ? 24 : 28} 
-                                      />
-                                    </div>
-                                    <div className="cmt-bubble-content">
-                                      <div className="cmt-name-row">
-                                        <div className="flex items-center gap-1.5 flex-wrap">
-                                          <span 
-                                            className="cmt-user-name cursor-pointer hover:underline"
-                                            onClick={() => setSelectedProfileUserId(cmt.authorId)}
-                                          >
-                                            {cmt.authorNickname || cmt.authorAccount || 'Thành viên'}
-                                          </span>
-                                          <span className="font-mono text-[10.5px] text-zinc-500">@{cmt.authorAccount || 'user'}</span>
-                                          <span className="text-zinc-600">·</span>
-                                          <span className="cmt-time-label font-mono">{cmt.formattedTime || 'Vừa xong'}</span>
-                                        </div>
-
-                                        <div className="cmt-action-btns">
-                                          {/* Nút Trả lời phản hồi */}
-                                          <button 
-                                            type="button" 
-                                            onClick={() => {
-                                              setReplyTargetMap(prev => ({
-                                                ...prev,
-                                                [post.id]: {
-                                                  commentId: cmt.id,
-                                                  authorAccount: cmt.authorAccount || 'user',
-                                                  authorNickname: cmt.authorNickname || cmt.authorAccount || 'Thành viên'
-                                                }
-                                              }));
-                                              const inputEl = document.getElementById(`comment-input-${post.id}`);
-                                              if (inputEl) inputEl.focus();
-                                            }} 
-                                            className="btn-cmt-act reply"
-                                            title="Trả lời bình luận này"
-                                          >
-                                            <CornerDownRight size={11} />
-                                            <span>Trả lời</span>
-                                          </button>
-
-                                          {isCmtMe && !isEditingThisCmt && (
-                                            <button 
-                                              type="button" 
-                                              onClick={() => handleStartEditComment(cmt)} 
-                                              className="btn-cmt-act"
-                                              title="Sửa phản hồi"
-                                            >
-                                              <Edit3 size={11} />
-                                            </button>
-                                          )}
-                                          {canDeleteCmt && (
-                                            <button 
-                                              type="button" 
-                                              onClick={() => handleDeleteComment(post.id, cmt.id)} 
-                                              className="btn-cmt-act danger"
-                                              title="Xóa phản hồi"
-                                            >
-                                              <Trash2 size={11} />
-                                            </button>
-                                          )}
-                                        </div>
+                                  return (
+                                    <div key={cmt.id} className={isReply ? "cmt-reply-item" : "cmt-row cmt-root-row"}>
+                                      <div 
+                                        className="cursor-pointer flex-shrink-0"
+                                        onClick={() => setSelectedProfileUserId(cmt.authorId)}
+                                        title="Xem hồ sơ cá nhân"
+                                      >
+                                        <UserAvatar 
+                                          avatar={cmt.authorAvatar} 
+                                          name={cmt.authorNickname || cmt.authorAccount} 
+                                          size={isReply ? 24 : 30} 
+                                        />
                                       </div>
+                                      <div className={`cmt-bubble-content ${isReply ? 'reply-bubble' : 'root-bubble'}`}>
+                                        <div className="cmt-name-row">
+                                          <div className="cmt-author-info">
+                                            <span 
+                                              className={`cmt-user-name ${isReply ? 'reply-name' : ''} cursor-pointer hover:underline`}
+                                              onClick={() => setSelectedProfileUserId(cmt.authorId)}
+                                            >
+                                              {cmt.authorNickname || cmt.authorAccount || 'Thành viên'}
+                                            </span>
+                                            <span className={`cmt-user-handle ${isReply ? 'reply-handle' : ''}`}>
+                                              @{cmt.authorAccount || 'user'}
+                                            </span>
+                                            <span className="cmt-meta-dot">·</span>
+                                            <span className="cmt-time-label">{cmt.formattedTime || 'Vừa xong'}</span>
+                                          </div>
 
-                                      {isEditingThisCmt ? (
-                                        <div className="cmt-inline-edit-box">
-                                          <input 
-                                            type="text" 
-                                            value={editingCommentText}
-                                            onChange={(e) => setEditingCommentText(e.target.value)}
-                                            className="cmt-inline-edit-input"
-                                            autoFocus
-                                            onKeyDown={(e) => {
-                                              if (e.key === 'Enter') handleSaveEditComment(post.id, cmt.id);
-                                              if (e.key === 'Escape') setEditingCommentId(null);
-                                            }}
-                                          />
-                                          <div className="cmt-inline-edit-actions">
+                                          <div className="cmt-action-btns">
+                                            {/* Nút Trả lời phản hồi */}
                                             <button 
                                               type="button" 
-                                              onClick={() => setEditingCommentId(null)} 
-                                              className="btn-cancel-inline-cmt"
+                                              onClick={() => {
+                                                setReplyTargetMap(prev => ({
+                                                  ...prev,
+                                                  [post.id]: {
+                                                    commentId: cmt.id,
+                                                    authorAccount: cmt.authorAccount || 'user',
+                                                    authorNickname: cmt.authorNickname || cmt.authorAccount || 'Thành viên'
+                                                  }
+                                                }));
+                                                const inputEl = document.getElementById(`comment-input-${post.id}`);
+                                                if (inputEl) inputEl.focus();
+                                              }} 
+                                              className="btn-cmt-act reply"
+                                              title="Trả lời bình luận này"
                                             >
-                                              Hủy
+                                              <CornerDownRight size={11} />
+                                              <span>Trả lời</span>
                                             </button>
-                                            <button 
-                                              type="button" 
-                                              onClick={() => handleSaveEditComment(post.id, cmt.id)} 
-                                              disabled={isSavingComment}
-                                              className="btn-save-inline-cmt"
-                                            >
-                                              {isSavingComment ? 'Đang lưu...' : 'Lưu'}
-                                            </button>
+
+                                            {isCmtMe && !isEditingThisCmt && (
+                                              <button 
+                                                type="button" 
+                                                onClick={() => handleStartEditComment(cmt)} 
+                                                className="btn-cmt-act"
+                                                title="Sửa phản hồi"
+                                              >
+                                                <Edit3 size={11} />
+                                              </button>
+                                            )}
+                                            {canDeleteCmt && (
+                                              <button 
+                                                type="button" 
+                                                onClick={() => handleDeleteComment(post.id, cmt.id)} 
+                                                className="btn-cmt-act danger"
+                                                title="Xóa phản hồi"
+                                              >
+                                                <Trash2 size={11} />
+                                              </button>
+                                            )}
                                           </div>
                                         </div>
-                                      ) : (
-                                        <p className="cmt-body-text">
-                                          {cmt.replyToUser && (
-                                            <span className="cmt-reply-tag font-mono">
-                                              @{cmt.replyToUser}
-                                            </span>
-                                          )}
-                                          {cmt.content}
-                                        </p>
-                                      )}
+
+                                        {isEditingThisCmt ? (
+                                          <div className="cmt-inline-edit-box">
+                                            <input 
+                                              type="text" 
+                                              value={editingCommentText}
+                                              onChange={(e) => setEditingCommentText(e.target.value)}
+                                              className="cmt-inline-edit-input"
+                                              autoFocus
+                                              onKeyDown={(e) => {
+                                                if (e.key === 'Enter') handleSaveEditComment(post.id, cmt.id);
+                                                if (e.key === 'Escape') setEditingCommentId(null);
+                                              }}
+                                            />
+                                            <div className="cmt-inline-edit-actions">
+                                              <button 
+                                                type="button" 
+                                                onClick={() => setEditingCommentId(null)} 
+                                                className="btn-cancel-inline-cmt"
+                                              >
+                                                Hủy
+                                              </button>
+                                              <button 
+                                                type="button" 
+                                                onClick={() => handleSaveEditComment(post.id, cmt.id)} 
+                                                disabled={isSavingComment}
+                                                className="btn-save-inline-cmt"
+                                              >
+                                                {isSavingComment ? 'Đang lưu...' : 'Lưu'}
+                                              </button>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <p className="cmt-body-text">
+                                            {cmt.replyToUser && (
+                                              <span className="cmt-mention-badge font-mono">
+                                                @{cmt.replyToUser}
+                                              </span>
+                                            )}
+                                            {cmt.content}
+                                          </p>
+                                        )}
+                                      </div>
                                     </div>
+                                  );
+                                };
+
+                                return (
+                                  <div key={thread.id} className="cmt-thread-group">
+                                    {/* 1. Bình luận gốc cấp 1 */}
+                                    {renderCommentBubble(thread, false)}
+
+                                    {/* 2. Nhánh các phản hồi con có đường kẻ dọc phân cấp rõ rệt */}
+                                    {thread.replies && thread.replies.length > 0 && (
+                                      <div className="cmt-replies-branch-thread">
+                                        {thread.replies.map((replyCmt) => renderCommentBubble(replyCmt, true))}
+                                      </div>
+                                    )}
                                   </div>
                                 );
                               })
@@ -4158,38 +4228,80 @@ const Home = () => {
           color: #71717a;
           padding: 8px 4px;
         }
-        .cmt-row {
+        /* CẤU TRÚC PHÂN CẤP BÌNH LUẬN (Threaded Comments Hierarchy) */
+        .cmt-thread-group {
+          display: flex;
+          flex-direction: column;
+          position: relative;
+          margin-bottom: 12px;
+        }
+
+        .cmt-root-row {
           display: flex;
           align-items: flex-start;
           gap: 10px;
+          position: relative;
+          z-index: 2;
         }
-        .cmt-reply-indented {
-          margin-left: 28px;
+
+        /* Nhánh phản hồi con: Thụt lề và có đường kẻ dọc nối từ avatar cha */
+        .cmt-replies-branch-thread {
+          margin-left: 15px;
+          padding-left: 20px;
+          border-left: 2px solid #282f44;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          margin-top: 8px;
           position: relative;
         }
-        .cmt-reply-indented::before {
+
+        .cmt-reply-item {
+          display: flex;
+          align-items: flex-start;
+          gap: 8px;
+          position: relative;
+        }
+
+        /* Đường nhánh rẽ ngang nối từ thanh dọc sang từng reply */
+        .cmt-reply-item::before {
           content: '';
           position: absolute;
-          left: -16px;
-          top: 10px;
-          width: 12px;
-          height: 12px;
-          border-left: 1.5px solid #3f3f46;
-          border-bottom: 1.5px solid #3f3f46;
-          border-bottom-left-radius: 6px;
+          left: -20px;
+          top: 14px;
+          width: 14px;
+          height: 2px;
+          background: #282f44;
+          border-bottom-left-radius: 4px;
         }
+
+        /* Bong bóng bình luận gốc: Rõ ràng, nổi khối */
         .cmt-bubble-content {
-          background: #1c2030;
-          border: 1px solid #2d344d;
-          padding: 10px 14px;
           border-radius: 12px;
           flex: 1;
           min-width: 0;
           transition: border-color 0.15s;
         }
-        .cmt-bubble-content:hover {
+        .cmt-bubble-content.root-bubble {
+          background: #181c2a;
+          border: 1px solid #2d354d;
+          padding: 10px 14px;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+        }
+        .cmt-bubble-content.root-bubble:hover {
           border-color: #434c6a;
         }
+
+        /* Bong bóng phản hồi con: Thon gọn, phân tầng cấp 2 */
+        .cmt-bubble-content.reply-bubble {
+          background: #131622;
+          border: 1px solid #242a3c;
+          padding: 8px 12px;
+        }
+        .cmt-bubble-content.reply-bubble:hover {
+          border-color: #38425d;
+        }
+
         .cmt-name-row {
           display: flex;
           justify-content: space-between;
@@ -4197,15 +4309,44 @@ const Home = () => {
           margin-bottom: 4px;
           gap: 8px;
         }
+        .cmt-author-info {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          flex-wrap: wrap;
+        }
         .cmt-user-name {
           font-size: 12.5px;
+          font-weight: 700;
+          color: #f8fafc;
+          letter-spacing: -0.01em;
+        }
+        .cmt-user-name.reply-name {
+          font-size: 12px;
           font-weight: 600;
-          color: #ffffff;
+          color: #e2e8f0;
+        }
+        .cmt-user-handle {
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+          font-size: 11px;
+          color: #8b9bb4;
+        }
+        .cmt-user-handle.reply-handle {
+          font-size: 10.5px;
+          color: #64748b;
+        }
+        .cmt-meta-dot {
+          color: #475569;
+          font-weight: bold;
+          font-size: 11px;
+          user-select: none;
         }
         .cmt-time-label {
           font-size: 10.5px;
-          color: #94a3b8;
+          color: #64748b;
+          font-family: ui-monospace, SFMono-Regular, monospace;
         }
+
         .cmt-body-text {
           margin: 0;
           font-size: 13px;
@@ -4213,15 +4354,18 @@ const Home = () => {
           line-height: 1.5;
           word-break: break-word;
         }
-        .cmt-reply-tag {
+        .cmt-mention-badge {
+          display: inline-flex;
+          align-items: center;
           color: #38bdf8;
           font-size: 11px;
           background: rgba(56, 189, 248, 0.12);
-          padding: 1px 6px;
-          border-radius: 4px;
-          border: 1px solid rgba(56, 189, 248, 0.25);
+          padding: 1px 7px;
+          border-radius: 5px;
+          border: 1px solid rgba(56, 189, 248, 0.28);
           margin-right: 6px;
           user-select: none;
+          font-weight: 600;
         }
         .cmt-action-btns {
           display: flex;
