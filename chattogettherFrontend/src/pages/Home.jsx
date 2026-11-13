@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { Component, useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -75,7 +75,7 @@ export const UserAvatar = ({ avatar, name = '', size = 36, className = "" }) => 
   );
 };
 
-class SectionErrorBoundary extends React.Component {
+class SectionErrorBoundary extends Component {
   constructor(props) {
     super(props);
     this.state = { hasError: false };
