@@ -210,11 +210,17 @@ public class RoomService {
                   && userRoomEntity.getRoomEntity().getId().equals(idRoom) 
                   && (Boolean.TRUE.equals(userRoomEntity.getActive()) || Boolean.TRUE.equals(userRoomEntity.getIsAdmin())));
 
-          // Chỉ yêu cầu kiểm tra mật khẩu nếu người dùng chưa phải là thành viên/chủ phòng của phòng này
-          if (!isAlreadyMemberOfThisRoom && roomEntity.getPassword() != null && !roomEntity.getPassword().trim().isEmpty()) {
-              String inputPassword = joinRoomRequest.getPassword();
-              if (inputPassword == null || !roomEntity.getPassword().equals(inputPassword.trim())) {
-                  throw new AppException(400, "Mật khẩu phòng không chính xác!", 400);
+          // Kiểm tra mật khẩu phòng chặt chẽ:
+          // 1. Nếu người dùng nhập mật khẩu -> Bắt buộc phải trùng khớp với mật khẩu phòng!
+          // 2. Nếu không nhập mật khẩu -> Chỉ cho phép nếu đã là thành viên đang hoạt động trong phòng!
+          if (roomEntity.getPassword() != null && !roomEntity.getPassword().trim().isEmpty()) {
+              String inputPassword = joinRoomRequest != null ? joinRoomRequest.getPassword() : null;
+              if (inputPassword != null && !inputPassword.trim().isEmpty()) {
+                  if (!roomEntity.getPassword().equals(inputPassword.trim())) {
+                      throw new AppException(400, "Mật khẩu phòng không chính xác!", 400);
+                  }
+              } else if (!isAlreadyMemberOfThisRoom) {
+                  throw new AppException(400, "Phòng này yêu cầu mật khẩu bảo vệ!", 400);
               }
           }
 

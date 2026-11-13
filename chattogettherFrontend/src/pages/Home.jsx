@@ -870,6 +870,31 @@ const Home = () => {
     setSharePost(null);
   };
 
+  const handleSharePostToRoom = async (post, room) => {
+    try {
+      const payload = JSON.stringify({
+        type: 'shared_post',
+        postId: post.id,
+        author: post.authorNickname || post.authorAccount || 'Thành viên',
+        authorAvatar: post.authorAvatar || null,
+        content: post.content,
+        imageUrl: post.imageUrl || null
+      });
+
+      await axiosClient.post('/message/send', {
+        message: payload,
+        timeSend: new Date().toISOString()
+      }, {
+        params: { user_room: room.id }
+      });
+
+      toast.success(`Đã chia sẻ bài viết vào phòng #${room.nameroom || room.id}!`);
+      setSharePost(null);
+    } catch (err) {
+      toast.error("Không thể chia sẻ bài viết vào phòng lúc này!");
+    }
+  };
+
   useEffect(() => {
     const handleOnline = () => {
       setIsOffline(false);
@@ -1898,9 +1923,9 @@ const Home = () => {
 
                         <button 
                           type="button"
-                          onClick={() => handleCopyPostLink(post)}
+                          onClick={() => setSharePost(post)}
                           className="action-btn"
-                          title="Sao chép liên kết bài viết"
+                          title="Chia sẻ bài viết"
                         >
                           <Share2 size={15} strokeWidth={1.5} />
                           <span className="text-xs">Chia sẻ</span>
@@ -2109,17 +2134,17 @@ const Home = () => {
           {/* ============================================================== */}
           {activeTab === 'rooms' && (
             <div className="rooms-section-wrapper py-2">
-              <div className="rooms-header-banner flex items-center justify-between p-5 rounded-2xl bg-zinc-900/80 border border-zinc-800/80 mb-6">
+              <div className="rooms-header-banner flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 sm:p-5 rounded-2xl bg-zinc-900/80 border border-zinc-800/80 mb-6 gap-3 sm:gap-4">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <h3 className="text-zinc-100 font-bold text-lg tracking-tight">Phòng Trò Chuyện & Đàm Thoại Trực Tiếp</h3>
+                    <h3 className="text-zinc-100 font-bold text-base sm:text-lg tracking-tight">Phòng Trò Chuyện & Đàm Thoại Trực Tiếp</h3>
                   </div>
                   <p className="text-zinc-400 text-xs font-sans">
                     Tham gia các không gian voice call âm thanh đa chiều độ trễ cực thấp
                   </p>
                 </div>
-                <button onClick={() => setIsCreateModalOpen(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-100 hover:bg-white text-zinc-950 font-medium text-xs shadow-md transition-all active:scale-95">
+                <button onClick={() => setIsCreateModalOpen(true)} className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-zinc-100 hover:bg-white text-zinc-950 font-medium text-xs shadow-md transition-all active:scale-95 w-full sm:w-auto">
                   <Plus size={14} strokeWidth={2} /> 
                   <span>Tạo phòng mới</span>
                 </button>
@@ -2375,6 +2400,63 @@ const Home = () => {
           toast.success("Đã đưa câu hỏi vào khung đăng bài!", { id: 'challenge-share' });
         }}
       />
+
+      {/* MODAL CHIA SẺ BÀI VIẾT VÀO PHÒNG CHAT HOẶC SAO CHÉP LIÊN KẾT */}
+      {sharePost && (
+        <div className="modal-veil" onClick={() => setSharePost(null)}>
+          <div className="modal-dialog-box" style={{ maxWidth: '400px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="dialog-header">
+              <div className="dialog-title-flex">
+                <Share2 size={16} color="#818cf8" />
+                <h4>Chia Sẻ Bài Viết</h4>
+              </div>
+              <button onClick={() => setSharePost(null)} className="btn-close-dialog"><X size={15} /></button>
+            </div>
+            
+            <div style={{ padding: '16px' }} className="space-y-4">
+              {/* Nút Sao chép liên kết */}
+              <button
+                type="button"
+                onClick={() => handleCopyPostLink(sharePost)}
+                className="w-full py-2.5 px-3 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-100 flex items-center justify-between text-xs font-semibold transition-all border border-zinc-700/60"
+              >
+                <div className="flex items-center gap-2">
+                  <Copy size={15} className="text-zinc-400" />
+                  <span>Sao chép liên kết bài viết</span>
+                </div>
+                <ArrowRight size={13} className="text-zinc-500" />
+              </button>
+
+              {/* Danh sách phòng đàm thoại để chia sẻ trực tiếp */}
+              <div className="pt-2 border-t border-zinc-800">
+                <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block mb-2">
+                  Gửi vào phòng đàm thoại:
+                </span>
+                <div className="max-h-48 overflow-y-auto space-y-1.5 no-scrollbar">
+                  {rooms.length === 0 ? (
+                    <p className="text-zinc-500 text-xs italic py-2">Chưa có phòng đàm thoại nào đang mở.</p>
+                  ) : (
+                    rooms.map((room) => (
+                      <button
+                        key={room.id}
+                        type="button"
+                        onClick={() => handleSharePostToRoom(sharePost, room)}
+                        className="w-full py-2 px-3 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between text-xs transition-all border border-zinc-800"
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <MessageCircle size={14} className="text-emerald-400 flex-shrink-0" />
+                          <span className="truncate font-medium">{room.nameroom || `Phòng #${room.id}`}</span>
+                        </div>
+                        <span className="text-[10px] text-zinc-400 font-mono flex-shrink-0 px-2 py-0.5 rounded bg-zinc-800">Gửi</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL TẠO PHÒNG */}
       {isCreateModalOpen && (
@@ -4450,8 +4532,18 @@ const Home = () => {
         @media (max-width: 768px) {
           .nav-sidebar { display: none; }
           .mobile-top-bar { display: flex; }
-          .mobile-bottom-nav { display: flex; }
-          .main-stream { max-width: 100%; min-width: 0; padding-bottom: 60px; }
+          .mobile-bottom-nav { 
+            display: flex; 
+            transition: transform 0.2s ease, opacity 0.2s ease;
+          }
+          /* Tự động trượt ẩn thanh điều hướng dưới khi bàn phím mở hoặc đang gõ để tránh cấn input */
+          body:has(textarea:focus) .mobile-bottom-nav,
+          body:has(input:focus) .mobile-bottom-nav {
+            transform: translateY(100%);
+            opacity: 0;
+            pointer-events: none;
+          }
+          .main-stream { max-width: 100%; min-width: 0; padding-bottom: max(75px, env(safe-area-inset-bottom)); }
           .rooms-active-grid { grid-template-columns: 1fr; }
           .creator-bottom-row { padding-left: 0; }
           .post-body-content { margin-left: 0; }

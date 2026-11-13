@@ -50,12 +50,9 @@ const Login = () => {
           console.error("Không thể giải mã token:", decodeError);
         }
 
-        if (roomId) {
-          sessionStorage.setItem('hasCheckedActiveRoom', 'true');
-          navigate(`/room/${roomId}`);
-        } else {
-          navigate('/'); 
-        }
+        // Luôn chuyển về Trang chủ (Sảnh). Khi nào người dùng chủ động muốn vào phòng thì tự bấm vào
+        sessionStorage.setItem('hasCheckedActiveRoom', 'true');
+        navigate('/');
       }
     } catch (err) {
       if (err.response) {

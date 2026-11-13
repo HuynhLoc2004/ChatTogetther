@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { 
   X, Camera, Upload, Trash2, User, Mail, Phone, 
   MapPin, Calendar, Lock, ShieldCheck, Check, Edit3, 
-  Loader2, UserCheck, Clock, UserPlus, PhoneCall, KeyRound, Sparkles
+  Loader2, UserCheck, Clock, UserPlus, PhoneCall, KeyRound, Sparkles,
+  ArrowLeft, ChevronLeft
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
@@ -240,27 +241,35 @@ export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentU
   const isAdmin = profile?.roles?.includes('ROLE_ADMIN') || profile?.roles?.includes('ROLE_AMDIN');
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in" onClick={onClose}>
       <div 
-        className="relative w-full sm:max-w-xl h-[92vh] sm:h-auto sm:max-h-[90vh] rounded-t-3xl sm:rounded-3xl bg-zinc-900 border border-zinc-800 shadow-2xl flex flex-col overflow-hidden animate-slide-up sm:animate-fade-in"
+        className="relative w-full sm:max-w-xl h-[100dvh] sm:h-auto sm:max-h-[90vh] rounded-none sm:rounded-3xl bg-zinc-900 border-0 sm:border border-zinc-800 shadow-2xl flex flex-col overflow-hidden animate-slide-up sm:animate-fade-in"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Mobile drag pill */}
-        <div className="w-10 h-1 rounded-full bg-zinc-700/80 mx-auto mt-2.5 sm:hidden flex-shrink-0"></div>
-
-        {/* Modal Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-zinc-800/80 flex-shrink-0 bg-zinc-900">
+        {/* Sticky Header - Cố định trên cùng, luôn có nút Back rõ ràng trên Mobile & Desktop */}
+        <div className="sticky top-0 z-30 flex items-center justify-between px-4 sm:px-6 py-3 border-b border-zinc-800 bg-zinc-900/98 backdrop-blur-md flex-shrink-0">
           <div className="flex items-center gap-2">
-            <TalovinLogo size={18} showText={false} />
-            <h2 className="text-zinc-100 font-bold text-sm tracking-tight">
+            <button 
+              type="button"
+              onClick={onClose} 
+              className="px-2.5 py-1.5 rounded-xl bg-zinc-800/90 hover:bg-zinc-700 text-zinc-200 hover:text-white flex items-center gap-1.5 text-xs font-semibold transition-all active:scale-95 border border-zinc-700/60"
+              title="Quay lại"
+            >
+              <ArrowLeft size={16} />
+              <span>Quay lại</span>
+            </button>
+            <div className="h-4 w-[1px] bg-zinc-800"></div>
+            <h2 className="text-zinc-100 font-bold text-xs sm:text-sm tracking-tight truncate">
               {isMe ? "Quản Lý Tài Khoản & Hồ Sơ" : "Hồ Sơ Người Dùng"}
             </h2>
           </div>
           <button 
+            type="button"
             onClick={onClose} 
-            className="w-7 h-7 rounded-lg bg-zinc-800/60 hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center transition-colors"
+            className="w-8 h-8 rounded-xl bg-zinc-800/60 hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center transition-colors"
+            title="Đóng"
           >
-            <X size={15} />
+            <X size={16} />
           </button>
         </div>
 
@@ -270,7 +279,7 @@ export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentU
             <span>Đang đồng bộ hồ sơ người dùng...</span>
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto flex flex-col">
+          <div className="flex-1 overflow-y-auto flex flex-col overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
             
             {/* HERO PROFILE SECTION */}
             <div className="relative bg-gradient-to-b from-zinc-800/60 to-zinc-900/40 p-5 border-b border-zinc-800/80 flex-shrink-0">
