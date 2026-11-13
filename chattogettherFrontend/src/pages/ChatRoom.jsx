@@ -10,6 +10,7 @@ import { saveMessagesOffline, getMessagesOffline, getRoomsOffline } from '../uti
 import UserProfileModal from './UserProfileModal';
 import FriendsModal from './FriendsModal';
 import TalovinLogo from '../components/TalovinLogo';
+import GroupCollageAvatar from '../components/GroupCollageAvatar';
 import SockJS from 'sockjs-client';
 import Stomp from 'stompjs';
 import toast from 'react-hot-toast';
@@ -131,6 +132,17 @@ const ChatRoom = () => {
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
+  // Tự động kết nối cuộc gọi nếu được chuyển hướng từ thông báo cuộc gọi
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('autoCall') === 'true') {
+      const timer = setTimeout(() => {
+        startGroupVoiceCall();
+      }, 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [roomId]);
 
   const fetchRoomDetail = useCallback(async (isSilent = false) => {
     try {
@@ -297,13 +309,29 @@ const ChatRoom = () => {
 
   const sendCallSignal = (payload) => {
     if (stompClient.current && stompClient.current.connected) {
-      stompClient.current.send(`/topic/room/${roomId}`, {}, JSON.stringify({
+      const msg = {
         isVoiceSignal: true,
         roomId,
+        roomName: roomInfo?.nameroom || `Phòng ${roomId}`,
         senderId: currentUserId,
         senderName: currentNickname,
+        callerAvatar: currentUserAvatar,
         ...payload
-      }));
+      };
+      stompClient.current.send(`/topic/room/${roomId}`, {}, JSON.stringify(msg));
+
+      if (payload.type === 'OFFER') {
+        try {
+          stompClient.current.send('/topic/calls', {}, JSON.stringify({
+            roomId,
+            roomName: roomInfo?.nameroom || `Phòng ${roomId}`,
+            callerId: currentUserId,
+            callerName: currentNickname,
+            callerAvatar: currentUserAvatar,
+            timestamp: Date.now()
+          }));
+        } catch (e) {}
+      }
     }
   };
 
@@ -926,10 +954,17 @@ const ChatRoom = () => {
               <button onClick={() => setIsSidebarOpen(true)} className="mobile-toggle-btn" title="Mở danh sách thành viên">
                  <Menu size={20} />
               </button>
-              <div className="header-info">
-                 <Radio size={18} color="#818cf8" className="header-hash" />
-                 <h2>{roomInfo?.nameroom || `Phòng ${roomId}`}</h2>
-                 <span className="header-room-id">Phòng {roomId}</span>
+              <div className="header-info flex items-center gap-2.5">
+                 <GroupCollageAvatar 
+                   avatar={roomInfo?.avatar} 
+                   name={roomInfo?.nameroom} 
+                   members={roomInfo?.userRoomDTOList || []}
+                   size={32}
+                 />
+                 <div className="flex flex-col leading-tight">
+                   <h2 className="text-zinc-100 text-sm font-semibold">{roomInfo?.nameroom || `Phòng ${roomId}`}</h2>
+                   <span className="header-room-id text-[10px] text-zinc-400 font-mono">Phòng #{roomId}</span>
+                 </div>
               </div>
            </div>
            

@@ -16,4 +16,6 @@ public class RoomRequest {
     @NotNull(message = "password not null")
     private String password;
     private String nickname;
+    private String avatar;
+    private String description;
 }

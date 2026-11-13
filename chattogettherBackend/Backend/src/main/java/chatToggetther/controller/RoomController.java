@@ -95,4 +95,14 @@ public class RoomController {
         Long effectiveId = roomId != null ? roomId : idRoomAlt;
         return ResponseEntity.ok(this.roomService.delegateAdmin(jwtAuthenticationToken, effectiveId, newAdminUserId));
     }
+
+    @RequestMapping(value = {"/{id}/avatar", "/{id}/update-avatar"}, method = {RequestMethod.PUT, RequestMethod.POST})
+    public ResponseEntity<ResponseData<RoomDTO>> updateRoomAvatar(
+            JwtAuthenticationToken token,
+            @PathVariable("id") Long roomId,
+            @RequestBody java.util.Map<String, String> body
+    ) {
+        String avatar = body != null ? body.get("avatar") : null;
+        return ResponseEntity.ok(this.roomService.updateRoomAvatar(token, roomId, avatar));
+    }
 }

@@ -67,6 +67,8 @@ public class RoomService {
         roomEntity.setActive(true);
         roomEntity.setRoomName(roomRequest.getNameRoom());
         roomEntity.setPassword(roomRequest.getPassword());
+        roomEntity.setAvatar(roomRequest.getAvatar());
+        roomEntity.setDescription(roomRequest.getDescription());
         roomEntity.setLocalDateTime(LocalDateTime.now());
 
         UserRoomEntity userRoomEntity = userEntity.getUserRoomEntity();
@@ -127,6 +129,8 @@ public class RoomService {
                 roomDTO.setUserRoomDTOList(roomDTOS);
                 roomDTO.setSoluong((long) roomDTOS.size());
                 roomDTO.setHasPassword(item.getPassword() != null && !item.getPassword().trim().isEmpty());
+                roomDTO.setAvatar(item.getAvatar());
+                roomDTO.setDescription(item.getDescription());
                 
                 return roomDTO;
         }).collect(Collectors.toList());
@@ -173,8 +177,20 @@ public class RoomService {
 
         roomDTO.setUserRoomDTOList(roomDTOS);
         roomDTO.setSoluong((long) roomDTOS.size());
+        roomDTO.setAvatar(roomEntity.getAvatar());
+        roomDTO.setDescription(roomEntity.getDescription());
 
         return new ResponseData<>(200, "Lấy thông tin phòng thành công", roomDTO);
+    }
+
+    @Transactional
+    public ResponseData<RoomDTO> updateRoomAvatar(JwtAuthenticationToken token, Long roomId, String avatar) {
+        RoomEntity roomEntity = this.roomRepository.findById(roomId).orElseThrow(() ->
+            new AppException(404, "Phòng không tồn tại", 404)
+        );
+        roomEntity.setAvatar(avatar);
+        this.roomRepository.save(roomEntity);
+        return getRoomDetail(roomId);
     }
 
     @Transactional

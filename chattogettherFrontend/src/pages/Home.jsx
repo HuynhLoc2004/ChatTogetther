@@ -18,6 +18,9 @@ import SockJS from 'sockjs-client';
 import Stomp from 'stompjs';
 import toast from 'react-hot-toast';
 import TalovinLogo from '../components/TalovinLogo';
+import GroupCollageAvatar from '../components/GroupCollageAvatar';
+import IncomingCallModal from '../components/IncomingCallModal';
+import CommunitySection from '../components/CommunitySection';
 
 // Avatar: Ưu tiên ảnh thật người dùng tải lên. Nếu chưa có ảnh, dùng Monogram chữ cái tối giản (Tuyệt đối không dùng avatar robot hoạt hình)
 export const UserAvatar = ({ avatar, name = '', size = 36, className = "" }) => {
@@ -149,6 +152,7 @@ const Home = () => {
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [newRoomData, setNewRoomData] = useState({ name: '', password: '' });
   const [joinData, setJoinData] = useState({ nickname: '', password: '' });
+  const [globalIncomingCall, setGlobalIncomingCall] = useState(null);
 
   // State Bài Viết
   const [posts, setPosts] = useState([]);
@@ -265,11 +269,18 @@ const Home = () => {
     setConfirmDialog(prev => ({ ...prev, isOpen: false, onConfirm: null }));
   };
 
-  // Kiểm tra phòng đang tham gia
+  // Kiểm tra phòng đang tham gia hoặc đã từng vào
   const isUserInRoom = (room) => {
-    if (!room || !room.userRoomDTOList) return false;
+    if (!room) return false;
     const account = localStorage.getItem('account');
-    return room.userRoomDTOList.some(ur => ur.userDTO && (ur.userDTO.account === account || ur.userDTO.id?.toString() === currentUserId?.toString()));
+    if (room.userRoomDTOList && room.userRoomDTOList.some(ur => ur.userDTO && (ur.userDTO.account === account || ur.userDTO.id?.toString() === currentUserId?.toString()))) {
+      return true;
+    }
+    try {
+      const entered = JSON.parse(localStorage.getItem('talovin_entered_rooms') || '[]');
+      if (entered.includes(room.id)) return true;
+    } catch (e) {}
+    return false;
   };
 
   const checkActiveRoom = async () => {
@@ -776,9 +787,17 @@ const Home = () => {
     if (!editingCommentText.trim()) return;
     try {
       setIsSavingComment(true);
-      const res = await axiosClient.put(`/posts/${postId}/comments/${commentId}`, {
-        content: editingCommentText.trim()
-      });
+      let res;
+      try {
+        res = await axiosClient.put(`/posts/${postId}/comments/${commentId}`, {
+          content: editingCommentText.trim()
+        });
+      } catch (putErr) {
+        // Fallback to POST update
+        res = await axiosClient.post(`/posts/${postId}/comments/${commentId}/update`, {
+          content: editingCommentText.trim()
+        });
+      }
       if (res.data && res.data.data) {
         setCommentsMap(prev => ({
           ...prev,
@@ -975,6 +994,26 @@ const Home = () => {
               fetchPendingFriendsCount();
             }
           });
+
+          // Lắng nghe cuộc gọi trực tiếp gửi đến người dùng
+          stompClient.subscribe(`/topic/call/user/${currentUserId}`, (message) => {
+            try {
+              const call = JSON.parse(message.body);
+              if (call && call.callerId?.toString() !== currentUserId?.toString()) {
+                setGlobalIncomingCall(call);
+              }
+            } catch (e) {}
+          });
+
+          // Lắng nghe cuộc gọi nhóm trong hệ thống
+          stompClient.subscribe('/topic/calls', (message) => {
+            try {
+              const call = JSON.parse(message.body);
+              if (call && call.callerId?.toString() !== currentUserId?.toString()) {
+                setGlobalIncomingCall(call);
+              }
+            } catch (e) {}
+          });
         }
       }, (err) => {
         console.warn("WebSocket notice:", err);
@@ -1052,11 +1091,31 @@ const Home = () => {
   };
 
   const onRoomCardClick = (room) => {
+    // Nếu người dùng đã là thành viên hoặc đã từng tham gia phòng này -> vào thẳng không cần hỏi mật khẩu!
+    if (isUserInRoom(room)) {
+      try {
+        const entered = JSON.parse(localStorage.getItem('talovin_entered_rooms') || '[]');
+        if (!entered.includes(room.id)) {
+          entered.push(room.id);
+          localStorage.setItem('talovin_entered_rooms', JSON.stringify(entered));
+        }
+      } catch (e) {}
+      navigate(`/room/${room.id}`);
+      return;
+    }
+
     if (room.hasPassword) {
       setSelectedRoom(room);
     } else {
       axiosClient.post('/rooms/join-room', { roomId: room.id, password: null }, { params: { room_id: room.id, idRoom: room.id } })
         .then(() => {
+          try {
+            const entered = JSON.parse(localStorage.getItem('talovin_entered_rooms') || '[]');
+            if (!entered.includes(room.id)) {
+              entered.push(room.id);
+              localStorage.setItem('talovin_entered_rooms', JSON.stringify(entered));
+            }
+          } catch (e) {}
           navigate(`/room/${room.id}`);
         })
         .catch(() => {
@@ -1200,15 +1259,23 @@ const Home = () => {
           <div className="nav-menu">
             <button 
               className={`nav-item ${activeTab === 'feed' ? 'active' : ''}`}
-              onClick={() => setActiveTab('feed')}
+              onClick={() => { setActiveTab('feed'); setActiveFilterTag(null); }}
             >
               <Compass size={15} strokeWidth={1.5} />
               <span>Sảnh trực tuyến</span>
             </button>
 
             <button 
+              className={`nav-item ${activeTab === 'groups' ? 'active' : ''}`}
+              onClick={() => { setActiveTab('groups'); setActiveFilterTag(null); }}
+            >
+              <Users size={15} strokeWidth={1.5} />
+              <span>Cộng đồng</span>
+            </button>
+
+            <button 
               className={`nav-item ${activeTab === 'rooms' ? 'active' : ''}`}
-              onClick={() => setActiveTab('rooms')}
+              onClick={() => { setActiveTab('rooms'); setActiveFilterTag(null); }}
             >
               <Radio size={15} strokeWidth={1.5} />
               <span>Phòng đàm thoại</span>
@@ -1312,6 +1379,12 @@ const Home = () => {
                 Sảnh trực tuyến
               </button>
               <button 
+                className={`stream-tab ${activeTab === 'groups' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('groups'); setActiveFilterTag(null); }}
+              >
+                Cộng đồng
+              </button>
+              <button 
                 className={`stream-tab ${activeTab === 'trending' ? 'active' : ''}`}
                 onClick={() => { setActiveTab('trending'); setActiveFilterTag(null); }}
               >
@@ -1327,7 +1400,7 @@ const Home = () => {
                 className={`stream-tab ${activeTab === 'rooms' ? 'active' : ''}`}
                 onClick={() => { setActiveTab('rooms'); setActiveFilterTag(null); }}
               >
-                Tất cả phòng ({rooms.length})
+                Phòng thoại ({rooms.length})
               </button>
             </div>
 
@@ -1398,90 +1471,6 @@ const Home = () => {
                 <X size={12} /> Bỏ lọc
               </button>
             </div>
-          )}
-
-          {/* ============================================================== */}
-          {/* KHU VỰC A: KHÔNG GIAN ĐANG MỞ (Live Active Rooms - Ưu tiên trên đầu) */}
-          {/* ============================================================== */}
-          {activeTab !== 'rooms' && (
-            <section className="live-rooms-showcase-section">
-              <div className="rooms-section-header">
-                <div className="rooms-header-title-flex">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                  <h3 className="section-heading-title">Không Gian Đang Mở</h3>
-                  <span className="rooms-count-pill font-mono">{rooms.length} phòng</span>
-                </div>
-                <button 
-                  onClick={() => setIsCreateModalOpen(true)}
-                  className="btn-create-room-cta"
-                >
-                  <Plus size={13} /> Tạo phòng
-                </button>
-              </div>
-
-              {loadingRooms ? (
-                <div className="rooms-loading-state font-mono">
-                  Đang đồng bộ danh sách phòng đàm thoại...
-                </div>
-              ) : rooms.length === 0 ? (
-                <div className="rooms-empty-card">
-                  <p>Chưa có phòng đàm thoại nào đang mở lúc này.</p>
-                  <button 
-                    onClick={() => setIsCreateModalOpen(true)}
-                    className="btn-create-room-cta mt-2"
-                  >
-                    <Plus size={13} /> Tạo không gian trò chuyện đầu tiên
-                  </button>
-                </div>
-              ) : (
-                <div className="rooms-active-grid">
-                  {rooms.slice(0, 4).map(room => (
-                    <div key={room.id} className="room-card-matte" onClick={() => onRoomCardClick(room)}>
-                      <div className="room-card-top">
-                        <div className="room-name-line">
-                          <span className="room-code-tag font-mono">{room.nameroom}</span>
-                          {room.hasPassword && <Lock size={12} className="text-zinc-500" />}
-                        </div>
-                        <div className="room-status-indicator">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                          <span className="font-mono text-[11px] text-zinc-400">{room.soluong || 0} người</span>
-                        </div>
-                      </div>
-
-                      <div className="room-card-bottom">
-                        <div className="room-avatar-stack">
-                          {room.userRoomDTOList?.slice(0, 3).map((ur, idx) => (
-                            <UserAvatar 
-                              key={ur.id || idx}
-                              avatar={ur.userDTO?.avatar}
-                              name={ur.userDTO?.nickname}
-                              size={22}
-                              className="stacked-avatar"
-                            />
-                          ))}
-                          {(room.soluong || 0) > 3 && (
-                            <span className="stacked-avatar-more font-mono">
-                              +{(room.soluong || 0) - 3}
-                            </span>
-                          )}
-                        </div>
-
-                        <button 
-                          type="button" 
-                          className="btn-join-room-compact"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onRoomCardClick(room);
-                          }}
-                        >
-                          Tham gia <ChevronRight size={13} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
           )}
 
           {/* ============================================================== */}
@@ -2124,49 +2113,122 @@ const Home = () => {
           )}
 
           {/* ============================================================== */}
+          {/* TAB: CỘNG ĐỒNG & NHÓM THẢO LUẬN */}
+          {/* ============================================================== */}
+          {activeTab === 'groups' && (
+            <CommunitySection 
+              currentUserId={currentUserId}
+              currentUserName={currentUserName}
+              onNavigateFeed={() => setActiveTab('feed')}
+            />
+          )}
+
+          {/* ============================================================== */}
           {/* TAB: TẤT CẢ PHÒNG ĐÀM THOẠI */}
           {/* ============================================================== */}
           {activeTab === 'rooms' && (
-            <div className="rooms-section-wrapper">
-              <div className="rooms-header-banner">
+            <div className="rooms-section-wrapper py-2">
+              <div className="rooms-header-banner flex items-center justify-between p-5 rounded-2xl bg-zinc-900/80 border border-zinc-800/80 mb-6">
                 <div>
-                  <h3 className="text-zinc-100 font-semibold text-base mb-1">Không Gian Trò Chuyện Âm Thanh</h3>
-                  <p className="text-zinc-400 text-xs">Tham gia các phòng đàm thoại trực tiếp thời gian thực</p>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <h3 className="text-zinc-100 font-bold text-lg tracking-tight">Phòng Trò Chuyện & Đàm Thoại Trực Tiếp</h3>
+                  </div>
+                  <p className="text-zinc-400 text-xs font-sans">
+                    Tham gia các không gian voice call âm thanh đa chiều độ trễ cực thấp
+                  </p>
                 </div>
-                <button onClick={() => setIsCreateModalOpen(true)} className="btn-add-room-action">
-                  <Plus size={14} /> Tạo phòng mới
+                <button onClick={() => setIsCreateModalOpen(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-100 hover:bg-white text-zinc-950 font-medium text-xs shadow-md transition-all active:scale-95">
+                  <Plus size={14} strokeWidth={2} /> 
+                  <span>Tạo phòng mới</span>
                 </button>
               </div>
 
               {loadingRooms ? (
-                <div className="feed-status-box font-mono">Đang nạp danh sách phòng...</div>
+                <div className="py-16 text-center text-zinc-500 text-xs font-mono">Đang nạp danh sách phòng đàm thoại...</div>
               ) : rooms.length === 0 ? (
-                <div className="feed-status-box">Chưa có phòng nào hoạt động.</div>
+                <div className="py-16 px-4 text-center rounded-2xl bg-zinc-900/40 border border-zinc-800/60">
+                  <Radio size={32} className="mx-auto mb-3 text-zinc-600 opacity-60" />
+                  <p className="text-zinc-400 text-sm font-medium mb-1">Chưa có phòng đàm thoại nào đang mở</p>
+                  <p className="text-zinc-500 text-xs mb-4">Hãy tạo một phòng riêng để trò chuyện cùng bạn bè!</p>
+                  <button 
+                    onClick={() => setIsCreateModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium border border-zinc-700 transition-all"
+                  >
+                    <Plus size={13} /> Tạo phòng ngay
+                  </button>
+                </div>
               ) : (
-                <div className="rooms-cards-grid">
-                  {rooms.map(room => (
-                    <div key={room.id} className="room-simple-card">
-                      <div className="room-top-info">
-                        <h4 className="font-mono text-zinc-100 flex items-center gap-1"><Radio size={12} className="text-zinc-400" />{room.nameroom}</h4>
-                        <span className="room-online-tag font-mono">
-                          <span className="green-circle"></span> {room.soluong || 0} người
-                        </span>
-                      </div>
-
-                      <div className="room-chips-list">
-                        {room.hasPassword && <span className="room-flag locked"><Lock size={10} /> Khóa</span>}
-                        {isUserInRoom(room) && <span className="room-flag joined">Đang tham gia</span>}
-                      </div>
-
-                      <button 
-                        type="button" 
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {rooms.map(room => {
+                    const joined = isUserInRoom(room);
+                    return (
+                      <div 
+                        key={room.id} 
+                        className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800/80 hover:border-zinc-700 transition-all flex flex-col justify-between cursor-pointer shadow-sm hover:shadow-md"
                         onClick={() => onRoomCardClick(room)}
-                        className={`btn-join-room ${isUserInRoom(room) ? 'btn-rejoin' : ''}`}
                       >
-                        {isUserInRoom(room) ? 'Quay lại phòng' : 'Vào trò chuyện'}
-                      </button>
-                    </div>
-                  ))}
+                        <div className="flex items-start justify-between gap-3 mb-4">
+                          <div className="flex items-center gap-3">
+                            <GroupCollageAvatar 
+                              avatar={room.avatar} 
+                              name={room.nameroom} 
+                              members={room.userRoomDTOList || []}
+                              size={48}
+                              className="border border-white/10"
+                            />
+                            <div>
+                              <h4 className="font-semibold text-zinc-100 text-sm flex items-center gap-1.5 mb-0.5">
+                                {room.nameroom}
+                                {room.hasPassword && <Lock size={12} className="text-zinc-500" title="Phòng có mật khẩu" />}
+                              </h4>
+                              <span className="text-[11px] text-zinc-400 font-mono flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                {room.soluong || 0} người đang trò chuyện
+                              </span>
+                            </div>
+                          </div>
+
+                          {joined && (
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-mono">
+                              Đã tham gia
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-between pt-3 border-t border-zinc-800/80">
+                          <div className="flex -space-x-2 overflow-hidden">
+                            {room.userRoomDTOList?.slice(0, 4).map((ur, idx) => (
+                              <UserAvatar 
+                                key={ur.id || idx}
+                                avatar={ur.userDTO?.avatar}
+                                name={ur.userDTO?.nickname}
+                                size={24}
+                                className="ring-2 ring-zinc-900"
+                              />
+                            ))}
+                            {(room.soluong || 0) > 4 && (
+                              <span className="w-6 h-6 rounded-full bg-zinc-800 border border-white/10 text-[9px] font-mono text-zinc-400 flex items-center justify-center ring-2 ring-zinc-900">
+                                +{(room.soluong || 0) - 4}
+                              </span>
+                            )}
+                          </div>
+
+                          <button 
+                            type="button" 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onRoomCardClick(room);
+                            }}
+                            className={`px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all flex items-center gap-1 ${joined ? 'bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30' : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/80'}`}
+                          >
+                            <span>{joined ? 'Vào lại phòng' : 'Vào trò chuyện'}</span>
+                            <ChevronRight size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -2259,6 +2321,14 @@ const Home = () => {
         >
           <Compass size={18} strokeWidth={1.5} />
           <span>Sảnh</span>
+        </button>
+
+        <button 
+          className={`b-nav-item ${activeTab === 'groups' ? 'active' : ''}`}
+          onClick={() => setActiveTab('groups')}
+        >
+          <Users size={18} strokeWidth={1.5} />
+          <span>Cộng đồng</span>
         </button>
 
         <button 
@@ -2581,6 +2651,19 @@ const Home = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* MODAL CUỘC GỌI ĐẾN THỜI GIAN THỰC (INCOMING CALL POPUP) */}
+      {globalIncomingCall && (
+        <IncomingCallModal 
+          call={globalIncomingCall}
+          onAccept={(call) => {
+            const rId = call.roomId;
+            setGlobalIncomingCall(null);
+            navigate(`/room/${rId}?autoCall=true`);
+          }}
+          onDecline={() => setGlobalIncomingCall(null)}
+        />
       )}
 
       {/* ============================================================== */}

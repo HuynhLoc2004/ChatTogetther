@@ -18,4 +18,6 @@ public class RoomDTO {
     private List<UserRoomDTO> userRoomDTOList = new ArrayList<>();
     private Long soluong;
     private Boolean hasPassword;
+    private String avatar;
+    private String description;
 }

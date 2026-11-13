@@ -27,6 +27,10 @@ public class RoomEntity {
     private String password;
     @Column(name = "active" , nullable = false , columnDefinition = "BOOLEAN")
     private Boolean active;
+    @Column(name = "avatar", columnDefinition = "TEXT")
+    private String avatar;
+    @Column(name = "description", columnDefinition = "TEXT")
+    private String description;
     @Column(name = "create_time" , nullable = false , columnDefinition = "TIMESTAMP")
     private LocalDateTime localDateTime;
     @OneToMany(cascade = CascadeType.ALL ,fetch =  FetchType.LAZY , mappedBy = "roomEntity")
