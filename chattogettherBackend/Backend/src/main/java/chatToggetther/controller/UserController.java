@@ -40,6 +40,14 @@ public class UserController {
         return ResponseEntity.ok(this.userService.updateUserProfile(jwtAuthenticationToken, request));
     }
 
+    @PutMapping("/change-password")
+    public ResponseEntity<ResponseData<Boolean>> changePassword(
+            JwtAuthenticationToken jwtAuthenticationToken,
+            @RequestBody @Valid chatToggetther.DataRequest.ChangePasswordRequest request
+    ) {
+        return ResponseEntity.ok(this.userService.changePassword(jwtAuthenticationToken, request));
+    }
+
     @PostMapping("/create")
     public ResponseEntity<ResponseData<Boolean>> createUser(@RequestBody @Valid UserRequest userRequest){
         return ResponseEntity.ok(this.userService.create_user(userRequest));

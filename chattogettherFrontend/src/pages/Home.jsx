@@ -67,13 +67,6 @@ const VIBE_TAGS = [
   { id: 'Tâm sự', label: 'Tâm sự', icon: MessageSquare },
 ];
 
-// Kênh âm thanh thư giãn
-const RADIO_CHANNELS = [
-  { name: 'Giai điệu Lo-Fi', genre: 'Chill Beats', audioSrc: 'https://stream.zeno.fm/f3wvbbqmdg8uv' },
-  { name: 'Sóng đêm Neon', genre: 'Retro Synth', audioSrc: 'https://stream.zeno.fm/0r0xa792kwzuv' },
-  { name: 'Mưa acoustic êm dịu', genre: 'Acoustic Rain', audioSrc: 'https://stream.zeno.fm/e0r45u72kwzuv' },
-];
-
 // Gợi ý mở đầu kết nối ngẫu nhiên
 const ICEBREAKER_PROMPTS = [
   "Nếu chỉ được chọn một bản nhạc phát lặp lại cả tuần này, bạn sẽ nghe bài nào?",
@@ -194,8 +187,10 @@ const Home = () => {
   });
 
   // Radio Lo-Fi
+  // Âm nhạc hệ thống (Dynamic từ API, không mock data)
   const [isPlayingRadio, setIsPlayingRadio] = useState(false);
-  const [currentRadioIndex, setCurrentRadioIndex] = useState(0);
+  const [tracks, setTracks] = useState([]);
+  const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
   const audioRef = useRef(null);
   const newPostInputRef = useRef(null);
 
@@ -215,11 +210,7 @@ const Home = () => {
   const [isFriendsOpen, setIsFriendsOpen] = useState(false);
   const [sharePost, setSharePost] = useState(null);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
-  const [notifications, setNotifications] = useState([
-    { id: 1, text: 'Thành viên mới vừa kết nối vào Sảnh', time: '5p trước', unread: true },
-    { id: 2, text: 'Phòng [XaoXAO] đang có cuộc đàm thoại sôi nổi', time: '15p trước', unread: false },
-    { id: 3, text: 'Chào mừng bạn đến với Talovin Social Lounge', time: '1 giờ trước', unread: false }
-  ]);
+  const [notifications, setNotifications] = useState([]);
 
   // Kiểm tra phòng đang tham gia
   const isUserInRoom = (room) => {
@@ -480,7 +471,7 @@ const Home = () => {
       }
 
       const res = await axiosClient.post('/posts', {
-        content: newPostContent.trim() || (voiceBase64 ? "Tín hiệu giọng nói mới" : "Khoảnh khắc hình ảnh"),
+        content: newPostContent.trim() || (voiceBase64 ? "Ghi âm giọng nói" : "Khoảnh khắc hình ảnh"),
         imageUrl: payloadMedia,
         vibe: combinedVibe || null
       });
@@ -495,7 +486,7 @@ const Home = () => {
         clearVoiceRecording();
         setSelectedTags([]);
         setShowSparkInput(false);
-        toast.success("Đã phát tín hiệu lên sảnh thành công!");
+        toast.success("Đã đăng bài viết thành công!");
       }
     } catch (err) {
       toast.error(err.response?.data?.message || "Không thể đăng bài viết lúc này!");
@@ -736,13 +727,17 @@ const Home = () => {
   // Lo-Fi Radio
   const togglePlayRadio = () => {
     if (!audioRef.current) return;
+    if (!tracks || tracks.length === 0) {
+      toast("Chưa có bản nhạc nào trong hệ thống");
+      return;
+    }
     if (isPlayingRadio) {
       audioRef.current.pause();
       setIsPlayingRadio(false);
     } else {
       audioRef.current.play().then(() => {
         setIsPlayingRadio(true);
-        toast.success(`Đang phát: ${RADIO_CHANNELS[currentRadioIndex].name}`);
+        toast.success(`Đang phát: ${tracks[currentTrackIndex]?.name || 'Âm nhạc'}`);
       }).catch(err => {
         console.warn("Lỗi phát audio:", err);
       });
@@ -750,10 +745,11 @@ const Home = () => {
   };
 
   const playNextRadio = () => {
-    const nextIdx = (currentRadioIndex + 1) % RADIO_CHANNELS.length;
-    setCurrentRadioIndex(nextIdx);
+    if (!tracks || tracks.length === 0) return;
+    const nextIdx = (currentTrackIndex + 1) % tracks.length;
+    setCurrentTrackIndex(nextIdx);
     if (audioRef.current) {
-      audioRef.current.src = RADIO_CHANNELS[nextIdx].audioSrc;
+      audioRef.current.src = tracks[nextIdx]?.audioSrc || '';
       if (isPlayingRadio) {
         audioRef.current.play().catch(() => {});
       }
@@ -825,6 +821,17 @@ const Home = () => {
     };
   }, [fetchPosts]);
 
+  const fetchTracks = useCallback(async () => {
+    try {
+      const res = await axiosClient.get('/tracks');
+      if (res.data?.data && Array.isArray(res.data.data)) {
+        setTracks(res.data.data);
+      }
+    } catch (e) {
+      console.warn("Lỗi tải bản nhạc:", e);
+    }
+  }, []);
+
   // Khởi tạo & Websocket
   useEffect(() => {
     let isMounted = true;
@@ -836,6 +843,7 @@ const Home = () => {
       }
       fetchRooms();
       fetchPosts();
+      fetchTracks();
       checkActiveRoom();
     };
 
@@ -964,9 +972,8 @@ const Home = () => {
     return true;
   });
 
-  const allCommunitySparks = Array.from(new Set([
-    'lo-fi', 'thao-luan', 'goc-chill', 'lap-trinh', 'am-nhac', 'tam-su',
-    ...posts.flatMap(p => {
+  const allCommunitySparks = Array.from(new Set(
+    posts.flatMap(p => {
       const tags = [];
       if (p.vibe) {
         p.vibe.split(/[|\s]+/).forEach(token => {
@@ -976,13 +983,15 @@ const Home = () => {
       }
       return tags;
     })
-  ])).slice(0, 10);
+  )).slice(0, 10);
+
+  const currentTrack = tracks && tracks.length > 0 ? tracks[currentTrackIndex] : null;
 
   return (
     <div className="social-app-wrapper">
       <audio 
         ref={audioRef} 
-        src={RADIO_CHANNELS[currentRadioIndex].audioSrc} 
+        src={currentTrack ? currentTrack.audioSrc : ""} 
         preload="none"
       />
       {/* Audio element ẩn để phát voice note của các bài viết */}
@@ -1002,39 +1011,47 @@ const Home = () => {
             <TalovinLogo size={30} />
           </div>
 
-          {/* Live Music Deck (Giai điệu Lo-Fi) */}
+          {/* Live Music Deck */}
           <div className="ambient-radio-widget">
             <div className="radio-top-row">
               <Music size={13} className="text-zinc-400" />
-              <span className="radio-name-text">{RADIO_CHANNELS[currentRadioIndex].name}</span>
-              <div className="equalizer-bars-group">
-                <span className={`eq-bar ${isPlayingRadio ? 'animating' : ''}`}></span>
-                <span className={`eq-bar ${isPlayingRadio ? 'animating' : ''}`}></span>
-                <span className={`eq-bar ${isPlayingRadio ? 'animating' : ''}`}></span>
-                <span className={`eq-bar ${isPlayingRadio ? 'animating' : ''}`}></span>
-              </div>
-            </div>
-            <div className="radio-btns-row">
-              <button 
-                type="button"
-                onClick={togglePlayRadio} 
-                className="btn-radio-toggle"
-                title={isPlayingRadio ? "Tạm dừng" : "Phát nhạc"}
-              >
-                {isPlayingRadio ? <Pause size={12} /> : <Play size={12} />}
-              </button>
-              <button 
-                type="button"
-                onClick={playNextRadio} 
-                className="btn-radio-next"
-                title="Chuyển kênh"
-              >
-                <Shuffle size={12} />
-              </button>
-              <span className="radio-genre-label font-mono">
-                {RADIO_CHANNELS[currentRadioIndex].genre}
+              <span className="radio-name-text">
+                {currentTrack ? currentTrack.name : "Âm nhạc hệ thống"}
               </span>
+              {currentTrack && (
+                <div className="equalizer-bars-group">
+                  <span className={`eq-bar ${isPlayingRadio ? 'animating' : ''}`}></span>
+                  <span className={`eq-bar ${isPlayingRadio ? 'animating' : ''}`}></span>
+                  <span className={`eq-bar ${isPlayingRadio ? 'animating' : ''}`}></span>
+                  <span className={`eq-bar ${isPlayingRadio ? 'animating' : ''}`}></span>
+                </div>
+              )}
             </div>
+            {currentTrack ? (
+              <div className="radio-btns-row">
+                <button 
+                  type="button"
+                  onClick={togglePlayRadio} 
+                  className="btn-radio-toggle"
+                  title={isPlayingRadio ? "Tạm dừng" : "Phát nhạc"}
+                >
+                  {isPlayingRadio ? <Pause size={12} /> : <Play size={12} />}
+                </button>
+                <button 
+                  type="button"
+                  onClick={playNextRadio} 
+                  className="btn-radio-next"
+                  title="Chuyển bài"
+                >
+                  <Shuffle size={12} />
+                </button>
+                <span className="radio-genre-label font-mono">
+                  {currentTrack.genre || "Bản nhạc"}
+                </span>
+              </div>
+            ) : (
+              <p className="text-[11px] text-zinc-500 mt-1">Chưa có bản nhạc nào</p>
+            )}
           </div>
 
           {/* Menu Điều Hướng (Clean Active State - Bỏ nền tím) */}
@@ -1113,7 +1130,7 @@ const Home = () => {
                 className={`m-radio-pill ${isPlayingRadio ? 'active' : ''}`}
               >
                 <Music size={12} />
-                <span>{isPlayingRadio ? 'Đang phát' : 'Lo-Fi'}</span>
+                <span>{isPlayingRadio ? 'Đang phát' : (currentTrack ? 'Phát nhạc' : 'Âm nhạc')}</span>
               </button>
               <button onClick={() => setIsNotifOpen(!isNotifOpen)} className="btn-header-notif">
                 <Bell size={16} strokeWidth={1.5} />
@@ -1472,26 +1489,26 @@ const Home = () => {
                   disabled={isPosting || (!newPostContent.trim() && !attachedMedia && !voiceBase64)}
                   className="btn-publish-submit"
                 >
-                  {isPosting ? 'Đang gửi...' : 'Đăng tín hiệu'}
+                  {isPosting ? 'Đang gửi...' : 'Đăng bài'}
                 </button>
               </div>
             </div>
           )}
 
           {/* ============================================================== */}
-          {/* TAB: DANH SÁCH BÀI VIẾT (TÍN HIỆU ĐA PHƯƠNG TIỆN) */}
+          {/* TAB: DANH SÁCH BÀI VIẾT */}
           {/* ============================================================== */}
           {activeTab !== 'rooms' && (
             <div className="posts-stream-container">
               {loadingPosts ? (
                 <div className="feed-status-box font-mono">
                   <div className="feed-spinner"></div>
-                  <p>Đang chuẩn bị sảnh trực tuyến...</p>
+                  <p>Đang tải bài viết...</p>
                 </div>
               ) : displayedPosts.length === 0 ? (
                 <div className="feed-status-box">
                   <MessageSquare size={28} className="text-zinc-600 mb-2 mx-auto" />
-                  <p className="text-zinc-400 text-sm">Chưa có tín hiệu nào ở chế độ xem này.</p>
+                  <p className="text-zinc-400 text-sm">Chưa có bài viết nào ở chế độ xem này.</p>
                 </div>
               ) : (
                 displayedPosts.map((post) => {

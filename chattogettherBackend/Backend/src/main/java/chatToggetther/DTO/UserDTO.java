@@ -20,6 +20,8 @@ public class UserDTO {
     private Integer age;
     private String location;
     private String bio;
+    private String email;
+    private String phone;
     private String friendshipStatus; // NONE, PENDING_SENT, PENDING_RECEIVED, ACCEPTED
     
     // Đặc quyền & Danh hiệu người dùng

@@ -81,24 +81,23 @@ public class UserService {
         dto.setAge(targetUser.getAge());
         dto.setLocation(targetUser.getLocation());
         dto.setBio(targetUser.getBio());
+        dto.setEmail(targetUser.getEmail());
+        dto.setPhone(targetUser.getPhone());
         dto.setActive(targetUser.getActive());
         dto.setRoles(targetUser.getRoles());
 
-        // Thiết lập đặc quyền, danh hiệu & badge
+        // Phân quyền thực tế (không mock dữ liệu ảo)
         boolean isAdmin = targetUser.getRoles() != null && (targetUser.getRoles().contains("ROLE_AMDIN") || targetUser.getRoles().contains("ROLE_ADMIN"));
-        dto.setIsVerified(isAdmin || (targetUser.getId() != null && targetUser.getId() <= 5));
-        dto.setLevel(isAdmin ? 99 : (targetUser.getId() != null ? (int)(10 + (targetUser.getId() * 3) % 40) : 15));
-        dto.setStreakDays(7);
+        dto.setIsVerified(isAdmin);
+        dto.setLevel(null);
+        dto.setStreakDays(null);
 
         if (isAdmin) {
-            dto.setVipTier("FOUNDER");
-            dto.setCustomTitle("👑 Sáng Lập & Quản Trị Viên");
-        } else if (targetUser.getId() != null && targetUser.getId() % 2 == 0) {
-            dto.setVipTier("VIP_DIAMOND");
-            dto.setCustomTitle("💎 VIP Kim Cương");
+            dto.setVipTier("ADMIN");
+            dto.setCustomTitle("Quản trị viên");
         } else {
-            dto.setVipTier("VIP_PRO");
-            dto.setCustomTitle("✨ Vibe Master");
+            dto.setVipTier("MEMBER");
+            dto.setCustomTitle("Thành viên");
         }
 
         if (currentUserId.equals(lookupId)) {
@@ -152,10 +151,36 @@ public class UserService {
         if (request.getBio() != null) {
             currentUser.setBio(request.getBio().trim());
         }
+        if (request.getEmail() != null) {
+            currentUser.setEmail(request.getEmail().trim());
+        }
+        if (request.getPhone() != null) {
+            currentUser.setPhone(request.getPhone().trim());
+        }
 
         this.userRepository.save(currentUser);
 
         return getUserProfile(jwtAuthenticationToken, currentUser.getId());
+    }
+
+    @Transactional
+    public ResponseData<Boolean> changePassword(JwtAuthenticationToken jwtAuthenticationToken, chatToggetther.DataRequest.ChangePasswordRequest request) {
+        Long userId = SecurityUtils.extractUserId(jwtAuthenticationToken);
+        if (userId == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
+        }
+        UserEntity user = this.userRepository.findById(userId).orElseThrow(() ->
+            new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "Người dùng không tồn tại", 404)
+        );
+        if (request.getOldPassword() == null || !passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
+            throw new AppException(400, "Mật khẩu hiện tại không chính xác", 400);
+        }
+        if (request.getNewPassword() == null || request.getNewPassword().length() < 6) {
+            throw new AppException(400, "Mật khẩu mới phải có ít nhất 6 ký tự", 400);
+        }
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        this.userRepository.save(user);
+        return new ResponseData<>(200, "Đổi mật khẩu thành công", true);
     }
 
     public ResponseData<Boolean> create_user(UserRequest userRequest){

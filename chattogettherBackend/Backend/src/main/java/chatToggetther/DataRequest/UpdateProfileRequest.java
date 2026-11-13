@@ -16,7 +16,7 @@ public class UpdateProfileRequest {
     @Size(max = 50, message = "Tên hiển thị tối đa 50 ký tự")
     private String nickname;
 
-    @Size(max = 1000, message = "Đường dẫn ảnh đại diện tối đa 1000 ký tự")
+    @Size(max = 2000000, message = "Dữ liệu ảnh đại diện vượt quá kích thước cho phép")
     private String avatar;
 
     @Min(value = 1, message = "Tuổi không hợp lệ")
@@ -28,5 +28,11 @@ public class UpdateProfileRequest {
 
     @Size(max = 500, message = "Tiểu sử tối đa 500 ký tự")
     private String bio;
+
+    @Size(max = 100, message = "Email tối đa 100 ký tự")
+    private String email;
+
+    @Size(max = 20, message = "Số điện thoại tối đa 20 ký tự")
+    private String phone;
 }
 
