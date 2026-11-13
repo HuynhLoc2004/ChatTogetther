@@ -49,8 +49,8 @@ public class SecurityConfig {
                         .httpStrictTransportSecurity(hsts -> hsts.includeSubDomains(true).maxAgeInSeconds(31536000))
                 )
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.POST, "/api/users/create", "/api/auth/login").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/rooms/info-rooms", "/api/auth/refresh_token", "/api/ping", "/api/posts", "/api/posts/**", "/api/tracks", "/api/tracks/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/users/create", "/api/auth/login", "/api/challenges").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/rooms/info-rooms", "/api/auth/refresh_token", "/api/ping", "/api/posts", "/api/posts/**", "/api/tracks", "/api/tracks/**", "/api/challenges", "/api/challenges/**").permitAll()
                         .requestMatchers("/ws-gs-guide/**").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .anyRequest().authenticated()

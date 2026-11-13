@@ -22,6 +22,7 @@ import GroupCollageAvatar from '../components/GroupCollageAvatar';
 import IncomingCallModal from '../components/IncomingCallModal';
 import CommunitySection from '../components/CommunitySection';
 import ResonanceMatchModal from '../components/ResonanceMatchModal';
+import ChallengeDeckModal from '../components/ChallengeDeckModal';
 
 // Avatar: Ưu tiên ảnh thật người dùng tải lên. Nếu chưa có ảnh, dùng Monogram chữ cái tối giản (Tuyệt đối không dùng avatar robot hoạt hình)
 export const UserAvatar = ({ avatar, name = '', size = 36, className = "" }) => {
@@ -100,15 +101,6 @@ const ICEBREAKER_PROMPTS = [
   "Nếu có một cánh cửa dẫn đến bất kỳ thành phố nào đêm nay, bạn muốn đến đâu?",
   "Gu âm nhạc lúc làm việc hay học tập của bạn là gì: Lo-Fi, không lời hay Acoustic?",
   "Thói quen nhỏ nào mỗi ngày giúp bạn nạp lại năng lượng nhanh nhất?"
-];
-
-// Danh sách câu hỏi Thử Thách Party
-const PARTY_QUESTIONS = [
-  "Thú nhận: Điều ngớ ngẩn nhất bạn từng làm khi thích một ai đó?",
-  "Thử thách: Hát 1 câu bất kỳ bằng giọng ngọng trong 10 giây!",
-  "Thú nhận: Bạn có đang crush ai trong danh sách bạn bè không?",
-  "Thử thách: Đổi bio trang cá nhân thành một câu siêu sến trong 1 tiếng!",
-  "Thú nhận: Lời nói dối vô hại gần đây nhất của bạn là gì?",
 ];
 
 // Helper phân tích dữ liệu đa phương tiện từ trường imageUrl
@@ -229,10 +221,8 @@ const Home = () => {
   const [matchingStatus, setMatchingStatus] = useState('idle');
   const [matchedPartner, setMatchedPartner] = useState(null);
 
-  // Party Wheel
+  // Modal Thẻ Bài Thử Thách & Tương Tác
   const [isPartyWheelOpen, setIsPartyWheelOpen] = useState(false);
-  const [wheelSpinning, setWheelSpinning] = useState(false);
-  const [wheelResult, setWheelResult] = useState(null);
 
   // Modals & Menu
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
@@ -871,18 +861,6 @@ const Home = () => {
   // Bộ ghép đôi đồng điệu 1-1 (Resonance Matchmaker)
   const handleStartSpeedMatch = () => {
     setIsSpeedMatchOpen(true);
-  };
-
-  // Party Wheel
-  const handleSpinPartyWheel = () => {
-    if (wheelSpinning) return;
-    setWheelSpinning(true);
-    setWheelResult(null);
-    setTimeout(() => {
-      const q = PARTY_QUESTIONS[Math.floor(Math.random() * PARTY_QUESTIONS.length)];
-      setWheelResult(q);
-      setWheelSpinning(false);
-    }, 1200);
   };
 
   const handleCopyPostLink = (post) => {
@@ -2286,7 +2264,7 @@ const Home = () => {
             </p>
             <button 
               type="button" 
-              onClick={() => { setIsPartyWheelOpen(true); handleSpinPartyWheel(); }} 
+              onClick={() => setIsPartyWheelOpen(true)} 
               className="btn-widget-action secondary"
             >
               Bốc câu hỏi ngẫu nhiên
@@ -2383,57 +2361,20 @@ const Home = () => {
         navigate={navigate}
       />
 
-      {/* MODAL PARTY WHEEL */}
-      {isPartyWheelOpen && (
-        <div className="modal-veil" onClick={() => setIsPartyWheelOpen(false)}>
-          <div className="modal-dialog-box modal-wheel-zinc" onClick={(e) => e.stopPropagation()}>
-            <div className="dialog-header">
-              <div className="dialog-title-flex">
-                <Dices size={16} color="#a1a1aa" />
-                <h4>Thẻ Bài Thử Thách</h4>
-              </div>
-              <button onClick={() => setIsPartyWheelOpen(false)} className="btn-close-dialog"><X size={15} /></button>
-            </div>
-
-            <div className="wheel-dialog-body">
-              <div className={`clean-wheel-dial ${wheelSpinning ? 'spinning' : ''}`}>
-                <Dices size={24} color="#e4e4e7" />
-              </div>
-
-              {wheelResult && (
-                <div className="party-challenge-card-zinc">
-                  <div className="challenge-card-badge">
-                    <Dices size={12} /> LÁ BÀI THỬ THÁCH
-                  </div>
-                  <p className="challenge-card-question">"{wheelResult}"</p>
-                  <button 
-                    type="button"
-                    className="btn-share-challenge-feed"
-                    onClick={() => {
-                      setNewPostContent(`[Thử thách câu hỏi]: "${wheelResult}"\n\nBạn nghĩ sao về câu hỏi này? Cùng chia sẻ góc nhìn nhé!`);
-                      setIsPartyWheelOpen(false);
-                      setActiveTab('feed');
-                      setTimeout(() => newPostInputRef.current?.focus(), 150);
-                      toast.success("Đã đưa câu hỏi vào khung đăng bài!");
-                    }}
-                  >
-                    <Share2 size={13} /> Đưa câu hỏi này ra Sảnh
-                  </button>
-                </div>
-              )}
-
-              <button 
-                type="button"
-                onClick={handleSpinPartyWheel} 
-                disabled={wheelSpinning}
-                className="btn-spin-action-zinc"
-              >
-                {wheelSpinning ? 'Đang bốc thăm câu hỏi...' : (wheelResult ? 'Bốc câu hỏi khác' : 'Bốc câu hỏi ngẫu nhiên')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* MODAL THẺ BÀI THỬ THÁCH (DATA THẬT, NHIỀU THỂ LOẠI, KHÔNG MOCK) */}
+      <ChallengeDeckModal
+        isOpen={isPartyWheelOpen}
+        onClose={() => setIsPartyWheelOpen(false)}
+        onShareToFeed={(challenge) => {
+          setNewPostContent(`[Thử thách]: "${challenge.question}"\n\nBạn nghĩ sao về câu hỏi này? Cùng chia sẻ góc nhìn nhé!`);
+          if (!selectedTags.includes('✦ Thử thách')) {
+            setSelectedTags(prev => [...prev, '✦ Thử thách']);
+          }
+          setActiveTab('feed');
+          setTimeout(() => newPostInputRef.current?.focus(), 150);
+          toast.success("Đã đưa câu hỏi vào khung đăng bài!", { id: 'challenge-share' });
+        }}
+      />
 
       {/* MODAL TẠO PHÒNG */}
       {isCreateModalOpen && (

@@ -219,7 +219,7 @@ export const ResonanceMatchModal = ({
     } catch (err) {
       // Fallback nếu không tạo được phòng thì thông báo và sao chép lời chào
       navigator.clipboard.writeText(matchedPartner.icebreaker);
-      toast.success(`Đã sao chép câu mở đầu! Hãy gửi lời mời kết bạn để trò chuyện.`);
+      toast.success(`Đã sao chép câu mở đầu! Hãy gửi lời mời kết bạn để trò chuyện.`, { id: 'copy-icebreaker' });
     } finally {
       setIsCreatingRoom(false);
     }
@@ -233,9 +233,9 @@ export const ResonanceMatchModal = ({
         params: { receiverId: matchedPartner.userId }
       });
       setIsSentFriendReq(true);
-      toast.success(`Đã gửi lời mời kết bạn đến ${matchedPartner.nickname}!`);
+      toast.success(`Đã gửi lời mời kết bạn đến ${matchedPartner.nickname}!`, { id: 'send-friend-req' });
     } catch (err) {
-      toast.error(err.response?.data?.message || "Không thể gửi lời mời kết bạn lúc này");
+      toast.error(err.response?.data?.message || "Không thể gửi lời mời kết bạn lúc này", { id: 'send-friend-req' });
     }
   };
 
@@ -405,7 +405,7 @@ export const ResonanceMatchModal = ({
               onClick={() => {
                 navigator.clipboard.writeText(matchedPartner.icebreaker);
                 setIsCopied(true);
-                toast.success("Đã sao chép câu mở đầu!");
+                toast.success("Đã sao chép câu mở đầu!", { id: 'copy-icebreaker' });
                 setTimeout(() => setIsCopied(false), 2000);
               }}
               className="p-3.5 rounded-2xl bg-zinc-900 border border-zinc-800/80 hover:border-zinc-700 cursor-pointer transition-all group"
