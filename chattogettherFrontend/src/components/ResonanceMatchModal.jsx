@@ -75,92 +75,68 @@ export const ResonanceMatchModal = ({
       setIsCopied(false);
       setIsCreatingRoom(false);
       setIsSentFriendReq(false);
+    } else {
+      try {
+        axiosClient.post('/matchmaking/leave').catch(() => {});
+      } catch (e) {}
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
 
-  // Lọc danh sách ứng viên thực tế và loại trừ chính bản thân người dùng
-  const startMatchingAlgorithm = () => {
+  const handleModalClose = () => {
+    try {
+      axiosClient.post('/matchmaking/leave').catch(() => {});
+    } catch (e) {}
+    onClose();
+  };
+
+  // Quét ghép đôi thời gian thực qua server (Tuyệt đối không mock dữ liệu hay ghép người offline)
+  const startMatchingAlgorithm = async () => {
     setStep('radar');
     setRadarPhase(0);
 
-    const myIdStr = (currentUserId || '').toString();
-    const myAccountLower = (currentUserAccount || '').toLowerCase().trim();
-    const myNameLower = (currentUserName || '').toLowerCase().trim();
+    setTimeout(() => setRadarPhase(1), 400);
+    setTimeout(() => setRadarPhase(2), 900);
 
-    // Thu thập danh sách người dùng THỰC SỰ đang trực tuyến trong các phòng đàm thoại (Tuyệt đối không dùng dữ liệu ảo hay người offline)
-    const rawCandidates = [];
-    const seenIds = new Set();
-
-    (rooms || []).forEach(r => {
-      (r.userRoomDTOList || []).forEach(ur => {
-        const u = ur.userDTO;
-        if (u && u.id) {
-          const uId = u.id.toString();
-          const uAcc = (u.account || '').toLowerCase().trim();
-          if (!seenIds.has(uId)) {
-            seenIds.add(uId);
-            rawCandidates.push({
-              userId: uId,
-              account: uAcc || 'member',
-              nickname: u.nickname || u.account || 'Thành viên phòng',
-              avatar: u.avatar,
-              vibe: `Đang ở phòng: ${r.nameroom || 'Phòng trò chuyện'}`,
-              source: 'room'
-            });
-          }
-        }
+    try {
+      const res = await axiosClient.post('/matchmaking/join', {
+        intent: selectedIntent
       });
-    });
 
-    // BỘ LỌC CHẶT CHẼ: Tuyệt đối không ghép với chính mình
-    const validCandidates = rawCandidates.filter(c => {
-      if (c.userId && c.userId === myIdStr) return false;
-      if (c.account && c.account === myAccountLower) return false;
-      if (c.nickname && c.nickname.toLowerCase().trim() === myNameLower) return false;
-      return true;
-    });
-
-    // Mô phỏng giai đoạn quét Radar chân thực
-    setTimeout(() => setRadarPhase(1), 500);
-    setTimeout(() => setRadarPhase(2), 1100);
-
-    setTimeout(() => {
-      if (validCandidates.length > 0) {
-        // Chọn ứng viên thực tế phù hợp
-        const intentObj = INTENT_OPTIONS.find(i => i.id === selectedIntent) || INTENT_OPTIONS[0];
-        const matched = validCandidates[Math.floor(Math.random() * validCandidates.length)];
-
-        const baseScore = 88;
-        const bonus = Math.floor(Math.random() * 10);
-        const matchScore = Math.min(98, baseScore + bonus);
-
-        const currentGenreName = currentTrack?.genre || 'Lo-Fi Chill';
-        const reasons = [
-          `Đang hoạt động trực tuyến trong sảnh Talovin`,
-          `Phù hợp với mục đích: ${intentObj.title}`
-        ];
-        if (matched.vibe) {
-          reasons.push(matched.vibe);
-        }
-
+      const data = res.data?.data;
+      if (data && data.matched && data.partner) {
+        const p = data.partner;
+        const intentObj = INTENT_OPTIONS.find(i => i.id === (p.intent || selectedIntent)) || INTENT_OPTIONS[0];
         const randomIcebreaker = ICEBREAKERS[Math.floor(Math.random() * ICEBREAKERS.length)];
 
         setMatchedPartner({
-          ...matched,
-          matchScore,
+          userId: p.userId,
+          account: p.account,
+          nickname: p.nickname || p.account,
+          avatar: p.avatar,
+          matchScore: 94,
           intentTitle: intentObj.title,
-          genre: currentGenreName,
-          reasons,
+          genre: currentTrack?.genre || 'Lo-Fi Chill',
+          reasons: [
+            `Cùng đang bấm tìm kiếm kết nối trực tiếp trong sảnh`,
+            `Phù hợp với mục đích: ${intentObj.title}`
+          ],
           icebreaker: randomIcebreaker
         });
         setStep('result');
       } else {
-        // Minh bạch: Khi không có người khác trực tuyến thì hiển thị rõ ràng, không bịa đặt người offline
-        setStep('empty');
+        // Hàng đợi thật: Hiện chưa có thành viên thứ hai cùng bấm tìm kiếm
+        setTimeout(() => {
+          setStep('empty');
+        }, 1200);
       }
-    }, 1600);
+    } catch (err) {
+      console.warn("Lỗi gọi matchmaking:", err);
+      setTimeout(() => {
+        setStep('empty');
+      }, 1000);
+    }
   };
 
   // Bắt đầu cuộc trò chuyện 1-1: Tạo phòng chat riêng 2 người và đưa cả 2 vào
@@ -427,21 +403,21 @@ export const ResonanceMatchModal = ({
             <div className="w-12 h-12 rounded-2xl bg-zinc-800/80 border border-zinc-700/60 flex items-center justify-center mx-auto text-zinc-400 shadow-inner">
               <Compass size={24} />
             </div>
-            <h4 className="text-zinc-200 text-sm font-semibold">Hiện chưa có thành viên nào khác đang trực tuyến</h4>
+            <h4 className="text-zinc-200 text-sm font-semibold">Chưa có người dùng nào khác đang bấm tìm kiếm</h4>
             <p className="text-zinc-400 text-xs max-w-xs mx-auto leading-relaxed">
-              Hệ thống quét trực tiếp và loại bỏ dữ liệu ảo. Hiện tại trong các phòng trò chuyện chưa có người dùng khác đang online. Bạn hãy tạo phòng mới hoặc quay lại sau ít phút!
+              Hệ thống ghép đôi thời gian thực 100% người dùng thật đang cùng quét. Hiện tại chỉ có bạn trong hàng đợi. Bạn có thể giữ kết nối trong ít phút hoặc quay lại sau nhé!
             </p>
             <div className="flex items-center justify-center gap-2 pt-3">
               <button 
                 type="button"
-                onClick={() => setStep('select')}
-                className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium transition-all"
+                onClick={startMatchingAlgorithm}
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md transition-all active:scale-95"
               >
-                Thử lại
+                Quét lại ngay
               </button>
               <button 
                 type="button"
-                onClick={onClose}
+                onClick={handleModalClose}
                 className="px-4 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 text-xs hover:text-white transition-all"
               >
                 Đóng

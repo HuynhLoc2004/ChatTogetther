@@ -196,4 +196,57 @@ public class UserService {
              return new ResponseData<Boolean>(ErrorCode.CREATED_SUCCESS.getCode(), ErrorCode.CREATED_SUCCESS.getMessage(), true);
          }
     }
+
+    public ResponseData<List<UserDTO>> searchUsers(JwtAuthenticationToken token, String query) {
+        Long currentUserId = SecurityUtils.extractUserId(token);
+        if (currentUserId == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
+        }
+        String q = (query != null ? query.trim() : "");
+        if (q.isEmpty()) {
+            return new ResponseData<>(200, "Vui lòng nhập từ khóa tìm kiếm", List.of());
+        }
+
+        UserEntity currentUser = this.userRepository.findById(currentUserId).orElse(null);
+        List<UserEntity> results = this.userRepository.searchUsers(q);
+
+        List<UserDTO> dtoList = results.stream()
+                .filter(u -> !u.getId().equals(currentUserId))
+                .limit(25)
+                .map(u -> {
+                    UserDTO dto = new UserDTO();
+                    dto.setId(u.getId());
+                    dto.setAccount(u.getAccount());
+                    dto.setNickname(u.getNickname() != null && !u.getNickname().isEmpty() ? u.getNickname() : u.getAccount());
+                    dto.setAvatar(u.getAvatar());
+                    dto.setLocation(u.getLocation());
+                    dto.setBio(u.getBio());
+
+                    if (currentUser != null) {
+                        Optional<FriendshipEntity> fs = this.friendshipRepository.findFriendshipBetween(currentUser, u);
+                        if (fs.isPresent()) {
+                            FriendshipEntity f = fs.get();
+                            if ("ACCEPTED".equalsIgnoreCase(f.getStatus())) {
+                                dto.setFriendshipStatus("ACCEPTED");
+                            } else if ("PENDING".equalsIgnoreCase(f.getStatus())) {
+                                if (f.getUser().getId().equals(currentUserId)) {
+                                    dto.setFriendshipStatus("PENDING_SENT");
+                                } else {
+                                    dto.setFriendshipStatus("PENDING_RECEIVED");
+                                }
+                            } else {
+                                dto.setFriendshipStatus("NONE");
+                            }
+                        } else {
+                            dto.setFriendshipStatus("NONE");
+                        }
+                    } else {
+                        dto.setFriendshipStatus("NONE");
+                    }
+                    return dto;
+                })
+                .toList();
+
+        return new ResponseData<>(200, "Tìm thấy " + dtoList.size() + " thành viên", dtoList);
+    }
 }

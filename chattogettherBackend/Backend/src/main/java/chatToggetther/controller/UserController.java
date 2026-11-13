@@ -48,6 +48,14 @@ public class UserController {
         return ResponseEntity.ok(this.userService.changePassword(jwtAuthenticationToken, request));
     }
 
+    @GetMapping("/search")
+    public ResponseEntity<ResponseData<java.util.List<UserDTO>>> searchUsers(
+            JwtAuthenticationToken jwtAuthenticationToken,
+            @RequestParam(value = "q", defaultValue = "") String query
+    ) {
+        return ResponseEntity.ok(this.userService.searchUsers(jwtAuthenticationToken, query));
+    }
+
     @PostMapping("/create")
     public ResponseEntity<ResponseData<Boolean>> createUser(@RequestBody @Valid UserRequest userRequest){
         return ResponseEntity.ok(this.userService.create_user(userRequest));

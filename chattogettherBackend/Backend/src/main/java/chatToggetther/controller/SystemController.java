@@ -22,3 +22,4 @@ public class SystemController {
         return ResponseEntity.ok(this.adminService.getSystemConfig());
     }
 }
+

@@ -24,3 +24,4 @@ public class SystemConfigEntity {
     @Builder.Default
     private LocalDateTime updatedAt = LocalDateTime.now();
 }
+

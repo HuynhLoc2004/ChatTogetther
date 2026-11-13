@@ -92,6 +92,7 @@ export const CommunitySection = ({
 
   // Mở không gian cộng đồng chi tiết
   const handleOpenGroup = async (group) => {
+    if (!group) return;
     setSelectedGroup(group);
     setActiveWorkspaceTab('feed');
     try {
@@ -105,7 +106,7 @@ export const CommunitySection = ({
         }
       }
     } catch (err) {
-      toast.error("Không thể lấy dữ liệu chi tiết cộng đồng");
+      console.warn("Lỗi tải chi tiết cộng đồng:", err);
     } finally {
       setLoadingDetail(false);
     }
@@ -357,16 +358,16 @@ export const CommunitySection = ({
   };
 
   // Lọc các bài viết thuộc về cộng đồng đang chọn
+  const safeGroupName = String(selectedGroup?.name || '').toLowerCase().trim();
   const groupPosts = (posts || []).filter(p => {
-    if (!selectedGroup) return false;
-    const v = (p.vibe || '').toLowerCase();
-    const gName = selectedGroup.name.toLowerCase();
-    return v.includes(gName) || v.includes(`cộng đồng: ${gName}`);
+    if (!p || !safeGroupName) return false;
+    const v = String(p.vibe || '').toLowerCase();
+    return v.includes(safeGroupName) || v.includes(`cộng đồng: ${safeGroupName}`);
   });
 
   // Tìm phòng thoại đang mở cho nhóm này
-  const activeGroupRoom = selectedGroup ? (rooms || []).find(r => 
-    (r.nameroom || '').toLowerCase().includes(selectedGroup.name.toLowerCase())
+  const activeGroupRoom = safeGroupName ? (rooms || []).find(r => 
+    r && String(r.nameroom || '').toLowerCase().includes(safeGroupName)
   ) : null;
 
   return (
@@ -1074,9 +1075,10 @@ export const CommunitySection = ({
                 const isPending = group.currentUserRole === 'PENDING';
 
                 // Kiểm tra xem nhóm này có phòng thoại đang mở không
-                const hasVoiceRoom = (rooms || []).some(r => 
-                  (r.nameroom || '').toLowerCase().includes(group.name.toLowerCase())
-                );
+                const gNameStr = String(group?.name || '').toLowerCase().trim();
+                const hasVoiceRoom = gNameStr ? (rooms || []).some(r => 
+                  r && String(r.nameroom || '').toLowerCase().includes(gNameStr)
+                ) : false;
 
                 return (
                   <div 

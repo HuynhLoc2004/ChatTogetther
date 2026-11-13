@@ -75,6 +75,36 @@ export const UserAvatar = ({ avatar, name = '', size = 36, className = "" }) => 
   );
 };
 
+class SectionErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("Section error:", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-8 text-center rounded-2xl bg-zinc-900/60 border border-zinc-800 my-4 text-zinc-300">
+          <p className="text-sm font-semibold mb-2">Đang làm mới dữ liệu khu vực này...</p>
+          <button 
+            type="button" 
+            onClick={() => this.setState({ hasError: false })} 
+            className="px-4 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-xs font-medium border border-zinc-700"
+          >
+            Tải lại
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // Danh sách các biểu tượng cảm xúc (Reactions)
 const REACTION_EMOJIS = [
   { type: 'HEART', emoji: '❤️', label: 'Yêu thích' },
@@ -2499,18 +2529,20 @@ const Home = () => {
           {/* TAB: CỘNG ĐỒNG & NHÓM THẢO LUẬN */}
           {/* ============================================================== */}
           {activeTab === 'groups' && (
-            <CommunitySection 
-              currentUserId={currentUserId}
-              currentUserName={currentUserName}
-              currentUserAvatar={currentUserAvatar}
-              posts={safePosts}
-              setPosts={setPosts}
-              rooms={safeRooms}
-              navigate={navigate}
-              onSelectUser={setSelectedProfileUserId}
-              onStartPrivateCall={handleStartPrivateCall}
-              onNavigateFeed={() => setActiveTab('feed')}
-            />
+            <SectionErrorBoundary>
+              <CommunitySection 
+                currentUserId={currentUserId}
+                currentUserName={currentUserName}
+                currentUserAvatar={currentUserAvatar}
+                posts={safePosts}
+                setPosts={setPosts}
+                rooms={safeRooms}
+                navigate={navigate}
+                onSelectUser={setSelectedProfileUserId}
+                onStartPrivateCall={handleStartPrivateCall}
+                onNavigateFeed={() => setActiveTab('feed')}
+              />
+            </SectionErrorBoundary>
           )}
 
           {/* ============================================================== */}
@@ -2706,6 +2738,7 @@ const Home = () => {
       {/* THANH ĐIỀU HƯỚNG DÀNH CHO MOBILE */}
       <nav className="mobile-bottom-nav">
         <button 
+          type="button"
           className={`b-nav-item ${activeTab === 'feed' ? 'active' : ''}`}
           onClick={() => setActiveTab('feed')}
         >
@@ -2714,6 +2747,7 @@ const Home = () => {
         </button>
 
         <button 
+          type="button"
           className={`b-nav-item ${activeTab === 'groups' ? 'active' : ''}`}
           onClick={() => setActiveTab('groups')}
         >
@@ -2722,6 +2756,7 @@ const Home = () => {
         </button>
 
         <button 
+          type="button"
           className={`b-nav-item ${activeTab === 'rooms' ? 'active' : ''}`}
           onClick={() => setActiveTab('rooms')}
         >
@@ -2729,17 +2764,22 @@ const Home = () => {
           <span>Phòng</span>
         </button>
 
-        <button 
-          className="b-nav-item b-nav-create-center"
-          onClick={() => {
-            setActiveTab('feed');
-            setTimeout(() => newPostInputRef.current?.focus(), 100);
-          }}
-        >
-          <Plus size={20} />
-        </button>
+        <div className="b-nav-cell flex items-center justify-center w-full h-full">
+          <button 
+            type="button"
+            className="b-nav-create-center"
+            onClick={() => {
+              setActiveTab('feed');
+              setTimeout(() => newPostInputRef.current?.focus(), 100);
+            }}
+            title="Đăng bài mới"
+          >
+            <Plus size={20} />
+          </button>
+        </div>
 
         <button 
+          type="button"
           className={`b-nav-item ${activeTab === 'trending' ? 'active' : ''}`}
           onClick={() => setActiveTab('trending')}
         >
@@ -2748,6 +2788,7 @@ const Home = () => {
         </button>
 
         <button 
+          type="button"
           className="b-nav-item"
           onClick={() => setSelectedProfileUserId(currentUserId)}
         >
@@ -4856,34 +4897,70 @@ const Home = () => {
           bottom: 0;
           left: 0;
           right: 0;
-          height: 54px;
-          background: rgba(9, 9, 11, 0.95);
-          backdrop-filter: blur(10px);
-          border-top: 1px solid var(--card-border);
-          justify-content: space-around;
+          height: 60px;
+          background: rgba(9, 9, 11, 0.96);
+          backdrop-filter: blur(16px);
+          border-top: 1px solid rgba(255, 255, 255, 0.08);
+          grid-template-columns: repeat(6, 1fr);
           align-items: center;
+          justify-items: center;
           z-index: 80;
+          padding: 0 4px;
         }
         .b-nav-item {
+          width: 100%;
+          height: 100%;
           background: transparent;
           border: none;
           color: #71717a;
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 2px;
-          font-size: 9.5px;
+          justify-content: center;
+          gap: 3px;
+          font-size: 10px;
+          font-weight: 500;
           cursor: pointer;
+          padding: 4px 0;
+          transition: color 0.15s ease;
+          user-select: none;
         }
-        .b-nav-item.active { color: #f4f4f5; }
+        .b-nav-item.active { 
+          color: #f4f4f5; 
+          font-weight: 600;
+        }
+        .b-nav-item span {
+          display: block;
+          max-width: 100%;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          line-height: 1.1;
+        }
+        .b-nav-cell {
+          width: 100%;
+          height: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
         .b-nav-create-center {
-          width: 36px;
-          height: 36px;
+          width: 38px;
+          height: 38px;
           border-radius: 50%;
           background: #f4f4f5;
           color: #09090b;
+          display: flex;
+          align-items: center;
           justify-content: center;
-          margin-top: -12px;
+          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+          margin: 0 auto;
+          cursor: pointer;
+          transition: transform 0.15s ease;
+          border: none;
+        }
+        .b-nav-create-center:active {
+          transform: scale(0.92);
         }
 
         /* ================= MODALS COMMON ================= */
@@ -5190,7 +5267,10 @@ const Home = () => {
           .nav-sidebar { display: none; }
           .mobile-top-bar { display: flex; }
           .mobile-bottom-nav { 
-            display: flex; 
+            display: grid; 
+            grid-template-columns: repeat(6, 1fr);
+            align-items: center;
+            justify-items: center;
             transition: transform 0.2s ease, opacity 0.2s ease;
           }
           /* Tự động trượt ẩn thanh điều hướng dưới khi bàn phím mở hoặc đang gõ để tránh cấn input */

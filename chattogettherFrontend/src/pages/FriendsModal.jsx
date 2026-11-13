@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Users, User, X, UserCheck, Phone, Clock, UserMinus, 
   MessageSquare, Shield, CheckCircle2, MapPin, Search, 
-  ArrowLeft, PhoneCall, Send, Sparkles, UserPlus, AlertCircle
+  ArrowLeft, PhoneCall, Send, Sparkles, UserPlus, AlertCircle,
+  Compass
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
@@ -12,13 +13,17 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
   const localNavigate = useNavigate();
   const navigate = propNavigate || localNavigate;
 
-  const [activeTab, setActiveTab] = useState('friends'); // 'friends' | 'pending'
+  const [activeTab, setActiveTab] = useState('friends'); // 'friends' | 'pending' | 'search'
   const [friends, setFriends] = useState([]);
   const [pending, setPending] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [actionInProgress, setActionInProgress] = useState({});
   const [confirmUnfriend, setConfirmUnfriend] = useState(null);
+
+  // Global search state
+  const [globalSearchResults, setGlobalSearchResults] = useState([]);
+  const [isSearchingGlobal, setIsSearchingGlobal] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -40,6 +45,52 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
     fetchData();
   }, []);
 
+  // Tìm kiếm toàn bộ thành viên trên server
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (!q || q.length < 1) {
+      setGlobalSearchResults([]);
+      setIsSearchingGlobal(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        setIsSearchingGlobal(true);
+        const res = await axiosClient.get('/users/search', {
+          params: { q }
+        });
+        setGlobalSearchResults(res.data?.data || []);
+      } catch (err) {
+        console.error("Lỗi tìm kiếm người dùng:", err);
+      } finally {
+        setIsSearchingGlobal(false);
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Gửi lời mời kết bạn mới
+  const handleSendFriendRequest = async (targetUserId, nickname) => {
+    if (!targetUserId) return;
+    try {
+      setActionInProgress(prev => ({ ...prev, [targetUserId]: true }));
+      await axiosClient.post('/friends/request', null, {
+        params: { receiver_id: targetUserId }
+      });
+      toast.success(`Đã gửi lời mời kết bạn đến ${nickname || 'thành viên'}!`);
+      // Update local status in search results
+      setGlobalSearchResults(prev => prev.map(u => 
+        u.id === targetUserId ? { ...u, friendshipStatus: 'PENDING_SENT' } : u
+      ));
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Không thể gửi lời mời kết bạn");
+    } finally {
+      setActionInProgress(prev => ({ ...prev, [targetUserId]: false }));
+    }
+  };
+
   // Đồng ý kết bạn
   const handleAccept = async (senderId, nickname) => {
     if (!senderId) return;
@@ -50,6 +101,9 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
       });
       toast.success(`Đã trở thành bạn bè với ${nickname || 'thành viên'}!`, { id: 'friend-act' });
       fetchData();
+      setGlobalSearchResults(prev => prev.map(u => 
+        u.id === senderId ? { ...u, friendshipStatus: 'ACCEPTED' } : u
+      ));
     } catch (err) {
       toast.error(err.response?.data?.message || "Lỗi khi chấp nhận kết bạn!", { id: 'friend-act' });
     } finally {
@@ -83,6 +137,9 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
       });
       toast.success(`Đã hủy kết bạn với ${nickname || 'thành viên'}`, { id: 'friend-act' });
       fetchData();
+      setGlobalSearchResults(prev => prev.map(u => 
+        u.id === friendId ? { ...u, friendshipStatus: 'NONE' } : u
+      ));
     } catch (err) {
       toast.error(err.response?.data?.message || "Lỗi khi hủy kết bạn!", { id: 'friend-act' });
     }
@@ -139,7 +196,7 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
     }
   };
 
-  // Lọc bạn bè theo ô tìm kiếm
+  // Lọc bạn bè hiện có theo ô tìm kiếm
   const filteredFriends = friends.filter(f => {
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase().trim();
@@ -151,10 +208,10 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in" onClick={onClose}>
       <div 
-        className="relative w-full sm:max-w-xl h-[100dvh] sm:h-auto sm:max-h-[88vh] rounded-none sm:rounded-3xl bg-zinc-950 border-0 sm:border border-zinc-800 shadow-2xl flex flex-col overflow-hidden animate-slide-up sm:animate-fade-in"
+        className="relative w-full sm:max-w-xl h-[92dvh] sm:h-auto sm:max-h-[85vh] rounded-t-3xl sm:rounded-3xl bg-zinc-950 border-0 sm:border border-zinc-800 shadow-2xl flex flex-col overflow-hidden animate-slide-up sm:animate-fade-in"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* STICKY TOP HEADER */}
+        {/* TOP HEADER */}
         <div className="sticky top-0 z-30 flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-zinc-800 bg-zinc-900/98 backdrop-blur-md flex-shrink-0">
           <div className="flex items-center gap-2.5">
             <button 
@@ -183,88 +240,124 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
         </div>
 
         {/* SEARCH BOX */}
-        <div className="p-4 border-b border-zinc-800/70 bg-zinc-900/40 flex-shrink-0">
+        <div className="p-3.5 sm:p-4 border-b border-zinc-800/70 bg-zinc-900/40 flex-shrink-0">
           <div className="relative">
             <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
             <input 
               type="text" 
-              placeholder="Tìm kiếm bạn bè theo tên, biệt danh, @account..."
+              placeholder="Tìm kiếm thành viên, biệt danh hoặc @account..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-100 text-xs focus:outline-none focus:border-zinc-500 placeholder-zinc-500 transition-colors"
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                if (e.target.value.trim().length > 0 && activeTab === 'pending') {
+                  setActiveTab('friends');
+                }
+              }}
+              className="w-full pl-9 pr-8 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-100 text-xs focus:outline-none focus:border-zinc-500 placeholder-zinc-500 transition-colors"
             />
+            {searchQuery && (
+              <button 
+                type="button" 
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white text-xs"
+              >
+                ✕
+              </button>
+            )}
           </div>
         </div>
 
-        {/* SEGMENTED TAB SWITCHER */}
-        <div className="px-4 py-2.5 border-b border-zinc-800/50 bg-zinc-900/20 flex-shrink-0">
-          <div className="grid grid-cols-2 gap-1.5 bg-zinc-900 p-1 rounded-xl border border-zinc-800/80">
+        {/* 3-COLUMN TAB SWITCHER */}
+        <div className="px-3.5 sm:px-4 py-2 border-b border-zinc-800/50 bg-zinc-900/20 flex-shrink-0">
+          <div className="grid grid-cols-3 gap-1 bg-zinc-900 p-1 rounded-xl border border-zinc-800/80">
             <button 
               type="button"
               onClick={() => setActiveTab('friends')}
-              className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
+              className={`py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
                 activeTab === 'friends' 
                   ? 'bg-zinc-800 text-zinc-100 shadow-sm font-bold' 
                   : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
-              <Users size={14} />
+              <Users size={13} />
               <span>Bạn bè ({friends.length})</span>
             </button>
 
             <button 
               type="button"
               onClick={() => setActiveTab('pending')}
-              className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all relative ${
+              className={`py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all relative ${
                 activeTab === 'pending' 
                   ? 'bg-zinc-800 text-zinc-100 shadow-sm font-bold' 
                   : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
-              <Clock size={14} />
-              <span>Lời mời kết bạn</span>
+              <Clock size={13} />
+              <span>Lời mời</span>
               {pending.length > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full bg-emerald-500 text-zinc-950 font-mono text-[10px] font-bold">
+                <span className="px-1.5 py-0.2 rounded-full bg-emerald-500 text-zinc-950 font-mono text-[9px] font-bold">
                   {pending.length}
                 </span>
               )}
+            </button>
+
+            <button 
+              type="button"
+              onClick={() => setActiveTab('search')}
+              className={`py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                activeTab === 'search' 
+                  ? 'bg-zinc-800 text-zinc-100 shadow-sm font-bold' 
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <Sparkles size={13} />
+              <span>Khám phá mới</span>
             </button>
           </div>
         </div>
 
         {/* LIST CONTENT AREA */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
+        <div className="flex-1 overflow-y-auto p-3.5 sm:p-4 space-y-2.5 overscroll-contain">
           {loading ? (
             <div className="py-20 flex flex-col items-center justify-center gap-2 text-zinc-500 text-xs font-mono">
               <div className="w-5 h-5 border-2 border-zinc-700 border-t-zinc-300 rounded-full animate-spin"></div>
               <span>Đang tải danh sách kết nối...</span>
             </div>
           ) : activeTab === 'friends' ? (
+            /* TAB: BẠN BÈ HIỆN TẠI */
             filteredFriends.length === 0 ? (
-              <div className="py-16 px-4 flex flex-col items-center justify-center text-center">
-                <div className="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-600 mb-3 shadow-inner">
-                  <Users size={26} />
+              <div className="py-14 px-4 flex flex-col items-center justify-center text-center">
+                <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-600 mb-2.5">
+                  <Users size={22} />
                 </div>
-                <h4 className="text-zinc-200 font-bold text-sm">
-                  {searchQuery ? "Không tìm thấy người bạn nào phù hợp" : "Chưa có người bạn nào"}
+                <h4 className="text-zinc-200 font-bold text-xs sm:text-sm">
+                  {searchQuery ? "Không có bạn bè khớp từ khóa" : "Chưa có người bạn nào"}
                 </h4>
                 <p className="text-zinc-500 text-xs mt-1 max-w-xs leading-relaxed">
                   {searchQuery 
-                    ? "Hãy thử tìm kiếm với tên hoặc ký tự khác."
-                    : "Tham gia các phòng đàm thoại hoặc nhấp vào avatar của thành viên trên Sảnh để gửi lời mời kết bạn nhé!"}
+                    ? "Bạn có thể chuyển sang mục 'Khám phá mới' để tìm người dùng này trên hệ thống."
+                    : "Tham gia các phòng đàm thoại hoặc tìm kiếm thành viên mới để mở rộng kết nối!"}
                 </p>
-                {!searchQuery && (
+                {searchQuery ? (
                   <button 
                     type="button" 
-                    onClick={() => { onClose(); navigate('/'); }}
-                    className="mt-4 px-4 py-2 rounded-xl bg-zinc-100 hover:bg-white text-zinc-950 text-xs font-bold transition-all shadow-md active:scale-95"
+                    onClick={() => setActiveTab('search')}
+                    className="mt-3 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-md active:scale-95"
                   >
-                    Khám phá sảnh trò chuyện
+                    Tìm trên toàn Talovin →
+                  </button>
+                ) : (
+                  <button 
+                    type="button" 
+                    onClick={() => setActiveTab('search')}
+                    className="mt-3 px-4 py-2 rounded-xl bg-zinc-100 hover:bg-white text-zinc-950 text-xs font-bold transition-all shadow-md active:scale-95"
+                  >
+                    Khám phá thành viên mới
                   </button>
                 )}
               </div>
             ) : (
-              <div className="space-y-2.5">
+              <div className="space-y-2">
                 {filteredFriends.map((friend) => {
                   const hasPhotoAvatar = friend.avatar && !friend.avatar.includes('dicebear') && !friend.avatar.includes('bottts');
                   const friendName = friend.nickname || friend.account || 'Thành viên';
@@ -272,63 +365,63 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
                   return (
                     <div 
                       key={friend.id} 
-                      className="p-3.5 rounded-2xl bg-zinc-900/80 border border-zinc-800/80 hover:border-zinc-700/80 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm group"
+                      className="p-3 rounded-2xl bg-zinc-900/90 border border-zinc-800/90 hover:border-zinc-700/80 transition-all flex items-center justify-between gap-2.5 shadow-sm"
                     >
                       {/* Left: Avatar & Info */}
                       <div 
-                        className="flex items-center gap-3 min-w-0 cursor-pointer"
+                        className="flex items-center gap-2.5 min-w-0 cursor-pointer flex-1"
                         onClick={() => {
                           if (onSelectUser) onSelectUser(friend.id);
                         }}
                         title="Xem hồ sơ chi tiết"
                       >
                         <div className="relative flex-shrink-0">
-                          <div className="w-12 h-12 rounded-xl bg-zinc-800 border border-zinc-700 overflow-hidden flex items-center justify-center shadow-md">
+                          <div className="w-10 h-10 rounded-xl bg-zinc-800 border border-zinc-700 overflow-hidden flex items-center justify-center shadow-sm">
                             {hasPhotoAvatar ? (
                               <img src={friend.avatar} alt={friendName} className="w-full h-full object-cover" />
                             ) : (
-                              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-700 to-zinc-900 text-white font-bold text-base">
+                              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-700 to-zinc-900 text-white font-bold text-sm">
                                 {friendName.charAt(0).toUpperCase()}
                               </div>
                             )}
                           </div>
-                          <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-zinc-950"></span>
+                          <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-zinc-950"></span>
                         </div>
 
                         <div className="flex flex-col min-w-0">
                           <div className="flex items-center gap-1.5 truncate">
-                            <span className="text-zinc-100 font-bold text-sm truncate">{friendName}</span>
-                            <span className="px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-300 font-mono text-[9px] font-bold uppercase border border-zinc-700/60">
+                            <span className="text-zinc-100 font-bold text-xs truncate">{friendName}</span>
+                            <span className="px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400 font-mono text-[9px] font-bold uppercase border border-zinc-700/60">
                               PRO
                             </span>
                           </div>
-                          <span className="text-zinc-500 font-mono text-xs truncate">
-                            {friend.location ? friend.location : `@${friend.account}`}
+                          <span className="text-zinc-500 font-mono text-[11px] truncate">
+                            @{friend.account}
                           </span>
                         </div>
                       </div>
 
-                      {/* Right: Actions Row (Nhắn tin, Gọi thoại, Xem hồ sơ, Hủy kết bạn) */}
-                      <div className="flex items-center gap-2 self-end sm:self-center flex-shrink-0 pt-1 sm:pt-0 border-t sm:border-t-0 border-zinc-800/60 w-full sm:w-auto justify-end">
-                        {/* Nút Nhắn tin 1-1 */}
+                      {/* Right: Actions Row */}
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {/* Nút Nhắn tin */}
                         <button
                           type="button"
                           onClick={() => handleOpenDirectChat(friend)}
-                          className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-indigo-900/20 transition-all active:scale-95"
+                          className="px-2.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1 shadow-sm transition-all active:scale-95"
                           title="Nhắn tin 1-1"
                         >
-                          <MessageSquare size={13} />
-                          <span>Nhắn tin</span>
+                          <MessageSquare size={12} />
+                          <span className="hidden sm:inline">Nhắn tin</span>
                         </button>
 
-                        {/* Nút Gọi thoại 1-1 */}
+                        {/* Nút Gọi thoại */}
                         <button
                           type="button"
                           onClick={() => handleStartCall(friend)}
-                          className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-emerald-400 hover:text-emerald-300 transition-all active:scale-95 border border-zinc-700/60"
+                          className="p-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-emerald-400 transition-all border border-zinc-700/60"
                           title="Gọi thoại 1-1"
                         >
-                          <Phone size={14} />
+                          <Phone size={13} />
                         </button>
 
                         {/* Nút Xem Hồ sơ */}
@@ -337,20 +430,20 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
                           onClick={() => {
                             if (onSelectUser) onSelectUser(friend.id);
                           }}
-                          className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-all active:scale-95 border border-zinc-700/60"
-                          title="Xem thông tin cá nhân"
+                          className="p-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-all border border-zinc-700/60"
+                          title="Xem hồ sơ"
                         >
-                          <User size={14} />
+                          <User size={13} />
                         </button>
 
                         {/* Nút Hủy kết bạn */}
                         <button
                           type="button"
                           onClick={() => setConfirmUnfriend(friend)}
-                          className="p-2 rounded-xl bg-zinc-900 hover:bg-red-950/60 text-zinc-500 hover:text-red-400 transition-all active:scale-95 border border-zinc-800"
+                          className="p-1.5 rounded-xl bg-zinc-900 hover:bg-red-950/60 text-zinc-500 hover:text-red-400 transition-all border border-zinc-800"
                           title="Hủy kết bạn"
                         >
-                          <UserMinus size={14} />
+                          <UserMinus size={13} />
                         </button>
                       </div>
                     </div>
@@ -358,18 +451,18 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
                 })}
               </div>
             )
-          ) : (
+          ) : activeTab === 'pending' ? (
             /* TAB: LỜI MỜI KẾT BẠN */
             pending.length === 0 ? (
-              <div className="py-16 px-4 flex flex-col items-center justify-center text-center">
-                <div className="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-600 mb-3 shadow-inner">
-                  <Clock size={26} />
+              <div className="py-14 px-4 flex flex-col items-center justify-center text-center">
+                <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-600 mb-2.5">
+                  <Clock size={22} />
                 </div>
-                <h4 className="text-zinc-200 font-bold text-sm">Không có lời mời nào</h4>
+                <h4 className="text-zinc-200 font-bold text-xs sm:text-sm">Không có lời mời nào</h4>
                 <p className="text-zinc-500 text-xs mt-1">Khi có người gửi lời mời kết nối, yêu cầu sẽ xuất hiện tại đây.</p>
               </div>
             ) : (
-              <div className="space-y-2.5">
+              <div className="space-y-2">
                 {pending.map((req) => {
                   const senderId = req.senderDTO?.id || req.id;
                   const senderName = req.senderDTO?.nickname || req.nickname || req.senderDTO?.account || req.account || 'Thành viên';
@@ -381,30 +474,30 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
                   return (
                     <div 
                       key={senderId} 
-                      className="p-3.5 rounded-2xl bg-zinc-900/90 border border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm"
+                      className="p-3 rounded-2xl bg-zinc-900/90 border border-zinc-800 flex items-center justify-between gap-2.5 shadow-sm"
                     >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-12 h-12 rounded-xl bg-zinc-800 border border-zinc-700 overflow-hidden flex items-center justify-center flex-shrink-0 shadow-md">
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <div className="w-10 h-10 rounded-xl bg-zinc-800 border border-zinc-700 overflow-hidden flex items-center justify-center flex-shrink-0 shadow-sm">
                           {hasPhotoAvatar ? (
                             <img src={senderAvatar} alt={senderName} className="w-full h-full object-cover" />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-700 to-zinc-900 text-white font-bold text-base">
+                            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-700 to-zinc-900 text-white font-bold text-sm">
                               {senderName.charAt(0).toUpperCase()}
                             </div>
                           )}
                         </div>
                         <div className="flex flex-col min-w-0">
-                          <span className="text-zinc-100 font-bold text-sm truncate">{senderName}</span>
-                          <span className="text-zinc-500 font-mono text-xs truncate">@{senderAccount} muốn kết bạn</span>
+                          <span className="text-zinc-100 font-bold text-xs truncate">{senderName}</span>
+                          <span className="text-zinc-500 font-mono text-[11px] truncate">@{senderAccount}</span>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 self-end sm:self-center flex-shrink-0 w-full sm:w-auto justify-end pt-1 sm:pt-0 border-t sm:border-t-0 border-zinc-800/60">
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
                         <button
                           type="button"
                           disabled={isBusy}
                           onClick={() => handleAccept(senderId, senderName)}
-                          className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-md active:scale-95 disabled:opacity-50"
+                          className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-sm active:scale-95 disabled:opacity-50"
                         >
                           Đồng ý
                         </button>
@@ -412,7 +505,7 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
                           type="button"
                           disabled={isBusy}
                           onClick={() => handleDecline(senderId, senderName)}
-                          className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs font-semibold transition-all border border-zinc-700/60 active:scale-95 disabled:opacity-50"
+                          className="px-2.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition-all border border-zinc-700/60 active:scale-95 disabled:opacity-50"
                         >
                           Từ chối
                         </button>
@@ -422,6 +515,94 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
                 })}
               </div>
             )
+          ) : (
+            /* TAB: KHÁM PHÁ / TÌM KIẾM THÀNH VIÊN TOÀN HỆ THỐNG */
+            <div className="space-y-3">
+              <div className="text-zinc-400 text-xs px-1 flex items-center justify-between">
+                <span>Kết quả tìm kiếm thành viên trên Talovin</span>
+                {isSearchingGlobal && <span className="text-emerald-400 animate-pulse text-[11px]">Đang tìm...</span>}
+              </div>
+
+              {globalSearchResults.length === 0 ? (
+                <div className="py-14 px-4 text-center">
+                  <Compass size={24} className="mx-auto mb-2 text-zinc-600 opacity-60" />
+                  <p className="text-zinc-300 text-xs font-semibold mb-1">
+                    {searchQuery ? "Không tìm thấy thành viên nào khớp từ khóa" : "Nhập tên hoặc @account để tìm thành viên"}
+                  </p>
+                  <p className="text-zinc-500 text-[11px] max-w-xs mx-auto">
+                    Bạn có thể tìm bạn bè theo tên hiển thị hoặc tài khoản đã đăng ký trên Talovin.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {globalSearchResults.map((user) => {
+                    const hasPhotoAvatar = user.avatar && !user.avatar.includes('dicebear') && !user.avatar.includes('bottts');
+                    const uName = user.nickname || user.account || 'Thành viên';
+                    const isBusy = actionInProgress[user.id];
+
+                    return (
+                      <div 
+                        key={user.id}
+                        className="p-3 rounded-2xl bg-zinc-900/90 border border-zinc-800 flex items-center justify-between gap-2.5 shadow-sm"
+                      >
+                        <div 
+                          className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
+                          onClick={() => {
+                            if (onSelectUser) onSelectUser(user.id);
+                          }}
+                        >
+                          <div className="w-10 h-10 rounded-xl bg-zinc-800 border border-zinc-700 overflow-hidden flex items-center justify-center flex-shrink-0 shadow-sm">
+                            {hasPhotoAvatar ? (
+                              <img src={user.avatar} alt={uName} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-700 to-zinc-900 text-white font-bold text-sm">
+                                {uName.charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-zinc-100 font-bold text-xs truncate">{uName}</span>
+                            <span className="text-zinc-500 font-mono text-[11px] truncate">@{user.account}</span>
+                          </div>
+                        </div>
+
+                        {/* Action based on friendshipStatus */}
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          {user.friendshipStatus === 'ACCEPTED' ? (
+                            <span className="px-2.5 py-1 rounded-xl bg-zinc-800 text-emerald-400 text-[11px] font-semibold border border-zinc-700 flex items-center gap-1">
+                              <CheckCircle2 size={12} /> Bạn bè
+                            </span>
+                          ) : user.friendshipStatus === 'PENDING_SENT' ? (
+                            <span className="px-2.5 py-1 rounded-xl bg-zinc-900 text-amber-400 text-[11px] font-medium border border-zinc-800">
+                              Đã gửi lời mời
+                            </span>
+                          ) : user.friendshipStatus === 'PENDING_RECEIVED' ? (
+                            <button
+                              type="button"
+                              disabled={isBusy}
+                              onClick={() => handleAccept(user.id, uName)}
+                              className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                            >
+                              Đồng ý
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={isBusy}
+                              onClick={() => handleSendFriendRequest(user.id, uName)}
+                              className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1 shadow-sm transition-all active:scale-95 disabled:opacity-50"
+                            >
+                              <UserPlus size={12} />
+                              <span>Kết bạn</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           )}
         </div>
 
