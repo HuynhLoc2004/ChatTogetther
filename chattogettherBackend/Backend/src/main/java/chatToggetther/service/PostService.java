@@ -23,7 +23,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -71,21 +73,26 @@ public class PostService {
 
             // Đặc quyền / Danh hiệu
             boolean isAdmin = author.getRoles() != null && (author.getRoles().contains("ROLE_AMDIN") || author.getRoles().contains("ROLE_ADMIN"));
-            dto.setAuthorIsVerified(isAdmin || (author.getId() != null && author.getId() <= 5));
-            if (isAdmin) {
-                dto.setAuthorVipTier("FOUNDER");
-                dto.setAuthorBadge("👑 Sáng Lập");
-            } else if (author.getId() != null && author.getId() % 2 == 0) {
-                dto.setAuthorVipTier("VIP_DIAMOND");
-                dto.setAuthorBadge("💎 VIP");
-            } else {
-                dto.setAuthorVipTier("MEMBER");
-                dto.setAuthorBadge(null);
-            }
+            dto.setAuthorIsVerified(isAdmin);
+            dto.setAuthorVipTier(isAdmin ? "ADMIN" : "MEMBER");
+            dto.setAuthorBadge(isAdmin ? "ADMIN" : null);
         }
 
-        dto.setLikesCount(this.postLikeRepository.countByPost(post));
-        dto.setCommentsCount(this.commentRepository.countByPost(post));
+        int likesCount = this.postLikeRepository.countByPost(post);
+        int commentsCount = this.commentRepository.countByPost(post);
+        long hits = post.getSearchHits() != null ? post.getSearchHits() : 0L;
+
+        dto.setLikesCount(likesCount);
+        dto.setCommentsCount(commentsCount);
+        dto.setSearchHits(hits);
+
+        // Thuật toán AI Tính điểm Thịnh hành (Search Frequency Dominance Algorithm):
+        // Ưu tiên cao nhất các bài viết được cộng đồng tìm kiếm nhiều nhất (Search Hits * 10),
+        // kết hợp tần suất tương tác bình luận (Comments * 3) và cảm xúc (Likes * 1),
+        // phân rã thời gian tự nhiên theo giờ để luôn làm mới xu hướng tìm kiếm nóng.
+        long hoursOld = post.getCreatedAt() != null ? Math.max(0, java.time.Duration.between(post.getCreatedAt(), LocalDateTime.now()).toHours()) : 0;
+        double trendingScore = ((hits * 10.0) + (commentsCount * 3.0) + (likesCount * 1.0)) / Math.pow(hoursOld + 2.0, 1.2);
+        dto.setTrendingScore(trendingScore);
 
         if (currentUser != null) {
             Optional<PostLikeEntity> userLike = this.postLikeRepository.findByPostAndUser(post, currentUser);
@@ -205,6 +212,17 @@ public class PostService {
 
         try {
             this.messagingTemplate.convertAndSend("/topic/posts", "POST_REACTION_UPDATED");
+            if (desiredReaction != null && post.getUser() != null && !post.getUser().getId().equals(currentUser.getId())) {
+                String senderName = currentUser.getNickname() != null && !currentUser.getNickname().isEmpty() ? currentUser.getNickname() : currentUser.getAccount();
+                Map<String, Object> notif = new HashMap<>();
+                notif.put("id", System.currentTimeMillis());
+                notif.put("type", "REACTION");
+                notif.put("postId", postId);
+                notif.put("text", senderName + " đã bày tỏ cảm xúc với bài viết của bạn.");
+                notif.put("time", "Vừa xong");
+                notif.put("unread", true);
+                this.messagingTemplate.convertAndSend("/topic/user/" + post.getUser().getId() + "/notifications", notif);
+            }
         } catch (Exception ignored) {}
 
         return new ResponseData<>(200, "Thao tác thả cảm xúc thành công", dto);
@@ -245,21 +263,66 @@ public class PostService {
 
         try {
             this.messagingTemplate.convertAndSend("/topic/posts", "POST_COMMENT_ADDED");
+            if (post.getUser() != null && !post.getUser().getId().equals(currentUser.getId())) {
+                String senderName = currentUser.getNickname() != null && !currentUser.getNickname().isEmpty() ? currentUser.getNickname() : currentUser.getAccount();
+                Map<String, Object> notif = new HashMap<>();
+                notif.put("id", System.currentTimeMillis());
+                notif.put("type", "COMMENT");
+                notif.put("postId", postId);
+                notif.put("text", senderName + " đã bình luận về bài viết của bạn.");
+                notif.put("time", "Vừa xong");
+                notif.put("unread", true);
+                this.messagingTemplate.convertAndSend("/topic/user/" + post.getUser().getId() + "/notifications", notif);
+            }
         } catch (Exception ignored) {}
 
         return new ResponseData<>(200, "Bình luận thành công", mapToCommentDTO(comment));
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public ResponseData<List<PostDTO>> searchPosts(JwtAuthenticationToken token, String keyword) {
         UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
 
-        List<PostEntity> posts = this.postRepository.searchPosts(keyword != null ? keyword.trim() : "");
+        String kw = keyword != null ? keyword.trim() : "";
+        List<PostEntity> posts = this.postRepository.searchPosts(kw);
+        if (kw.length() >= 2 && !posts.isEmpty()) {
+            for (PostEntity p : posts) {
+                p.setSearchHits((p.getSearchHits() != null ? p.getSearchHits() : 0L) + 1);
+            }
+            this.postRepository.saveAll(posts);
+        }
+
         List<PostDTO> dtos = posts.stream()
                 .map(p -> mapToPostDTO(p, currentUser))
                 .collect(Collectors.toList());
 
         return new ResponseData<>(200, "Tìm kiếm bài viết thành công", dtos);
+    }
+
+    @Transactional(readOnly = true)
+    public ResponseData<List<PostDTO>> getTrendingPosts(JwtAuthenticationToken token) {
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        List<PostEntity> posts = this.postRepository.findAllPostsWithDetails();
+        List<PostDTO> dtos = posts.stream()
+                .map(p -> mapToPostDTO(p, currentUser))
+                .sorted((a, b) -> Double.compare(
+                        b.getTrendingScore() != null ? b.getTrendingScore() : 0.0,
+                        a.getTrendingScore() != null ? a.getTrendingScore() : 0.0
+                ))
+                .collect(Collectors.toList());
+        return new ResponseData<>(200, "Lấy danh sách bài viết thịnh hành theo thuật toán tìm kiếm thành công", dtos);
+    }
+
+    @Transactional
+    public void trackSearch(String keyword) {
+        if (keyword == null || keyword.trim().length() < 2) return;
+        List<PostEntity> matched = this.postRepository.searchPosts(keyword.trim());
+        if (!matched.isEmpty()) {
+            for (PostEntity p : matched) {
+                p.setSearchHits((p.getSearchHits() != null ? p.getSearchHits() : 0L) + 1);
+            }
+            this.postRepository.saveAll(matched);
+        }
     }
 
     @Transactional

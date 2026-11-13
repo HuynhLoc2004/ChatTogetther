@@ -19,3 +19,4 @@ public class ChangePasswordRequest {
     @Size(min = 6, message = "Mật khẩu mới phải từ 6 ký tự trở lên")
     private String newPassword;
 }
+

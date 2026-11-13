@@ -10,3 +10,4 @@ import java.util.List;
 public interface TrackRepository extends JpaRepository<TrackEntity, Long> {
     List<TrackEntity> findByActiveTrueOrderByCreatedAtDesc();
 }
+

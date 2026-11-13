@@ -15,7 +15,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -107,6 +109,14 @@ public class FriendService {
         // Báo cho receiver qua WebSocket
         try {
             messagingTemplate.convertAndSend("/topic/user/" + receiverId, "FRIEND_REQUEST_RECEIVED");
+            String senderName = sender.getNickname() != null && !sender.getNickname().isEmpty() ? sender.getNickname() : sender.getAccount();
+            Map<String, Object> notif = new HashMap<>();
+            notif.put("id", System.currentTimeMillis());
+            notif.put("type", "FRIEND_REQUEST");
+            notif.put("text", senderName + " đã gửi cho bạn một lời mời kết bạn.");
+            notif.put("time", "Vừa xong");
+            notif.put("unread", true);
+            messagingTemplate.convertAndSend("/topic/user/" + receiverId + "/notifications", notif);
         } catch (Exception ignored) {}
 
         return new ResponseData<>(200, "Đã gửi lời mời kết bạn thành công", true);
@@ -139,6 +149,15 @@ public class FriendService {
         try {
             messagingTemplate.convertAndSend("/topic/user/" + senderId, "FRIEND_REQUEST_ACCEPTED");
             messagingTemplate.convertAndSend("/topic/user/" + receiverId, "FRIEND_REQUEST_ACCEPTED");
+
+            String receiverName = receiver.getNickname() != null && !receiver.getNickname().isEmpty() ? receiver.getNickname() : receiver.getAccount();
+            Map<String, Object> notif = new HashMap<>();
+            notif.put("id", System.currentTimeMillis());
+            notif.put("type", "FRIEND_ACCEPTED");
+            notif.put("text", receiverName + " đã đồng ý kết bạn với bạn.");
+            notif.put("time", "Vừa xong");
+            notif.put("unread", true);
+            messagingTemplate.convertAndSend("/topic/user/" + senderId + "/notifications", notif);
         } catch (Exception ignored) {}
 
         return new ResponseData<>(200, "Đã chấp nhận kết bạn", true);

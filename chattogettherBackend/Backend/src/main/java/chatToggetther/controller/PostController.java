@@ -103,4 +103,19 @@ public class PostController {
     ) {
         return ResponseEntity.ok(this.postService.searchPosts(token, keyword));
     }
+
+    @GetMapping("/trending")
+    public ResponseEntity<ResponseData<List<PostDTO>>> getTrendingPosts(JwtAuthenticationToken token) {
+        return ResponseEntity.ok(this.postService.getTrendingPosts(token));
+    }
+
+    @PostMapping("/track-search")
+    public ResponseEntity<ResponseData<Void>> trackSearch(
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestBody(required = false) java.util.Map<String, String> body
+    ) {
+        String effectiveKw = (keyword != null && !keyword.trim().isEmpty()) ? keyword : (body != null ? body.get("keyword") : null);
+        this.postService.trackSearch(effectiveKw);
+        return ResponseEntity.ok(new ResponseData<>(200, "Đã ghi nhận dữ liệu tìm kiếm thành công", null));
+    }
 }

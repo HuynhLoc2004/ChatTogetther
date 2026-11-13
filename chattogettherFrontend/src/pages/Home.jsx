@@ -210,7 +210,22 @@ const Home = () => {
   const [isFriendsOpen, setIsFriendsOpen] = useState(false);
   const [sharePost, setSharePost] = useState(null);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
-  const [notifications, setNotifications] = useState([]);
+  const [notifications, setNotifications] = useState(() => {
+    try {
+      const stored = localStorage.getItem(`talovin_notifs_${currentUserId}`);
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    if (currentUserId) {
+      try {
+        localStorage.setItem(`talovin_notifs_${currentUserId}`, JSON.stringify(notifications.slice(0, 30)));
+      } catch {}
+    }
+  }, [notifications, currentUserId]);
 
   // Hộp thoại xác nhận tùy biến (thay thế hoàn toàn window.confirm & window.alert)
   const [confirmDialog, setConfirmDialog] = useState({
@@ -893,6 +908,30 @@ const Home = () => {
         if (!isMounted) return;
         stompClient.subscribe('/topic/rooms', () => fetchRooms(true));
         stompClient.subscribe('/topic/posts', () => fetchPosts(true));
+
+        if (currentUserId) {
+          // Kênh thông báo cá nhân hóa thời gian thực (Cảm xúc, Bình luận, Kết bạn)
+          stompClient.subscribe(`/topic/user/${currentUserId}/notifications`, (message) => {
+            try {
+              const notif = JSON.parse(message.body);
+              setNotifications(prev => [notif, ...prev.filter(n => n.id !== notif.id)]);
+              toast((t) => (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
+                  <Bell size={14} style={{ color: '#38bdf8', flexShrink: 0 }} />
+                  <span>{notif.text}</span>
+                </div>
+              ), { duration: 4000 });
+            } catch (e) {
+              console.warn("Parse notif error:", e);
+            }
+          });
+
+          stompClient.subscribe(`/topic/user/${currentUserId}`, (message) => {
+            if (message.body === 'FRIEND_REQUEST_RECEIVED' || message.body === 'FRIEND_REQUEST_ACCEPTED') {
+              fetchFriends();
+            }
+          });
+        }
       }, (err) => {
         console.warn("WebSocket notice:", err);
       });
@@ -982,29 +1021,54 @@ const Home = () => {
     }
   };
 
-  const displayedPosts = posts.filter(p => {
-    if (activeFilterTag) {
-      const pVibe = (p.vibe || '').toLowerCase();
-      const pContent = (p.content || '').toLowerCase();
-      const tagLower = activeFilterTag.toLowerCase();
-      if (!pVibe.includes(tagLower) && !pContent.includes(tagLower)) return false;
-    }
+  // Ghi nhận truy vấn tìm kiếm cho Thuật toán Thịnh hành AI (Debounced 600ms)
+  useEffect(() => {
+    const kw = searchKeyword.trim();
+    if (kw.length < 2) return;
+    const timer = setTimeout(() => {
+      axiosClient.post(`/posts/track-search?keyword=${encodeURIComponent(kw)}`).catch(() => {});
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [searchKeyword]);
 
-    if (activeTab === 'saved') {
-      return savedPostIds.includes(p.id);
-    }
-    if (activeTab === 'trending') {
-      return (p.likesCount || 0) >= 1 || (p.commentsCount || 0) >= 1;
-    }
-    if (searchKeyword.trim()) {
-      const kw = searchKeyword.toLowerCase();
-      const matchContent = (p.content || '').toLowerCase().includes(kw);
-      const matchAuthor = (p.authorNickname || p.authorAccount || '').toLowerCase().includes(kw);
-      const matchVibe = (p.vibe || '').toLowerCase().includes(kw);
-      return matchContent || matchAuthor || matchVibe;
-    }
-    return true;
-  });
+  const displayedPosts = posts
+    .filter(p => {
+      if (activeFilterTag) {
+        const pVibe = (p.vibe || '').toLowerCase();
+        const pContent = (p.content || '').toLowerCase();
+        const tagLower = activeFilterTag.toLowerCase();
+        if (!pVibe.includes(tagLower) && !pContent.includes(tagLower)) return false;
+      }
+
+      if (activeTab === 'saved') {
+        return savedPostIds.includes(p.id);
+      }
+      if (searchKeyword.trim()) {
+        const kw = searchKeyword.toLowerCase();
+        const matchContent = (p.content || '').toLowerCase().includes(kw);
+        const matchAuthor = (p.authorNickname || p.authorAccount || '').toLowerCase().includes(kw);
+        const matchVibe = (p.vibe || '').toLowerCase().includes(kw);
+        return matchContent || matchAuthor || matchVibe;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      if (activeTab === 'trending') {
+        // Thuật toán AI Tính điểm Thịnh hành (Search Frequency Dominance Algorithm):
+        // Xếp hạng dựa trên: Lượt tìm kiếm bài viết (Search hits * 10) + Thảo luận (Comments * 3) + Cảm xúc (Likes * 1)
+        const scoreA = (typeof a.trendingScore === 'number') 
+          ? a.trendingScore 
+          : (((a.searchHits || 0) * 10.0) + ((a.commentsCount || 0) * 3.0) + ((a.likesCount || 0) * 1.0));
+        const scoreB = (typeof b.trendingScore === 'number') 
+          ? b.trendingScore 
+          : (((b.searchHits || 0) * 10.0) + ((b.commentsCount || 0) * 3.0) + ((b.likesCount || 0) * 1.0));
+        if (scoreB !== scoreA) {
+          return scoreB - scoreA;
+        }
+        return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+      }
+      return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+    });
 
   const allCommunitySparks = Array.from(new Set(
     posts.flatMap(p => {
@@ -1211,24 +1275,51 @@ const Home = () => {
               {notifications.some(n => n.unread) && <span className="notif-dot"></span>}
             </button>
 
-            {/* Dropdown Thông báo */}
+            {/* Dropdown Thông báo Thời gian thực */}
             {isNotifOpen && (
               <div className="notif-dropdown-card">
                 <div className="notif-header">
-                  <h4>Thông báo không gian</h4>
-                  <button onClick={() => setNotifications(prev => prev.map(n => ({ ...n, unread: false })))} className="btn-read-all">
-                    Đã đọc hết
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <h4>Thông báo sảnh</h4>
+                    {notifications.filter(n => n.unread).length > 0 && (
+                      <span className="notif-counter-pill font-mono">
+                        {notifications.filter(n => n.unread).length}
+                      </span>
+                    )}
+                  </div>
+                  {notifications.length > 0 && (
+                    <button onClick={() => setNotifications(prev => prev.map(n => ({ ...n, unread: false })))} className="btn-read-all">
+                      Đã đọc hết
+                    </button>
+                  )}
                 </div>
                 <div className="notif-list">
-                  {notifications.map(n => (
-                    <div key={n.id} className={`notif-item ${n.unread ? 'unread' : ''}`}>
-                      <div className="notif-text-wrap">
-                        <p>{n.text}</p>
-                        <span className="font-mono">{n.time}</span>
-                      </div>
+                  {notifications.length === 0 ? (
+                    <div className="notif-empty-state py-8 px-4 text-center">
+                      <Bell size={20} className="mx-auto mb-2 text-zinc-600 opacity-60" />
+                      <p className="text-xs text-zinc-500 font-sans">Chưa có thông báo nào</p>
                     </div>
-                  ))}
+                  ) : (
+                    notifications.map(n => (
+                      <div 
+                        key={n.id} 
+                        className={`notif-item ${n.unread ? 'unread' : ''}`}
+                        onClick={() => {
+                          setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, unread: false } : item));
+                          if (n.postId) {
+                            const el = document.getElementById(`post-${n.postId}`);
+                            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          }
+                        }}
+                      >
+                        <div className="notif-text-wrap">
+                          <p>{n.text}</p>
+                          <span className="font-mono">{n.time}</span>
+                        </div>
+                        {n.unread && <span className="notif-unread-indicator"></span>}
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             )}
@@ -1553,7 +1644,7 @@ const Home = () => {
                   const parsedMedia = parsePostMedia(post.imageUrl);
 
                   return (
-                    <article key={post.id} className="post-item-card">
+                    <article key={post.id} id={`post-${post.id}`} className="post-item-card">
                       <div className="post-header-row">
                         <div 
                           className="post-avatar-click" 
@@ -1585,6 +1676,12 @@ const Home = () => {
                             <span className="author-handle font-mono">@{post.authorAccount || "user"}</span>
                             <span className="text-zinc-600">·</span>
                             <span className="post-time-meta font-mono">{post.formattedTime || "Vừa xong"}</span>
+
+                            {activeTab === 'trending' && (post.searchHits || 0) > 0 && (
+                              <span className="font-mono text-[10px] text-zinc-300 bg-zinc-800/90 px-1.5 py-0.5 rounded border border-zinc-700/60 flex items-center gap-1" title="Lượt tìm kiếm bài viết theo thuật toán AI">
+                                🔥 {post.searchHits} tìm kiếm
+                              </span>
+                            )}
 
                             {post.vibe && (
                               <div className="post-topics-bar">
@@ -2636,18 +2733,46 @@ const Home = () => {
         }
         .notif-header h4 { margin: 0; font-size: 12px; color: #f4f4f5; }
         .btn-read-all { background: transparent; border: none; color: #a1a1aa; font-size: 10.5px; cursor: pointer; }
-        .notif-list { display: flex; flex-direction: column; gap: 4px; }
+        .notif-counter-pill {
+          font-size: 10px;
+          color: #a1a1aa;
+          background: #27272a;
+          padding: 1px 6px;
+          border-radius: 9999px;
+          border: 1px solid #3f3f46;
+        }
+        .notif-unread-indicator {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: #38bdf8;
+          flex-shrink: 0;
+          margin-top: 5px;
+        }
+        .notif-empty-state {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 24px 12px;
+        }
+        .notif-list { display: flex; flex-direction: column; gap: 4px; max-height: 340px; overflow-y: auto; }
         .notif-item {
           display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
           gap: 8px;
-          padding: 6px;
+          padding: 8px;
           border-radius: 6px;
           font-size: 11.5px;
           background: rgba(255, 255, 255, 0.02);
+          cursor: pointer;
+          transition: background 0.15s;
         }
-        .notif-item.unread { background: #27272a; }
-        .notif-text-wrap p { margin: 0; color: #f4f4f5; }
-        .notif-text-wrap span { font-size: 9.5px; color: #71717a; }
+        .notif-item:hover { background: #27272a; }
+        .notif-item.unread { background: #202024; border-left: 2px solid #38bdf8; }
+        .notif-text-wrap p { margin: 0; color: #f4f4f5; line-height: 1.4; }
+        .notif-text-wrap span { font-size: 9.5px; color: #71717a; margin-top: 2px; display: block; }
 
         /* Filter Banner */
         .active-tag-filter-banner {

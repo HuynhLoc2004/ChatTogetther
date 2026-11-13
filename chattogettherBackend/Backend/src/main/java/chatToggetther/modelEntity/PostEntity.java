@@ -31,6 +31,9 @@ public class PostEntity {
     @Column(name = "vibe", columnDefinition = "TEXT")
     private String vibe;
 
+    @Column(name = "search_hits")
+    private Long searchHits = 0L;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 

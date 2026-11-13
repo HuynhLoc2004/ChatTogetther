@@ -1,10 +1,11 @@
 import React from 'react';
 
 /**
- * TALOVIN BRAND MONOGRAM & VECTOR LOGO
- * Thiết kế biểu tượng kiến trúc hình học:
- * - Chữ 'T' cách điệu kết hợp các dải sóng tần số âm thanh (Audio Wave Resonance)
- * - Tông màu Titanium Silver, Deep Obsidian và điểm nhấn Emerald / Ultraviolet
+ * TALOVIN BRAND LOGO & MONOGRAM
+ * Ngôn ngữ thiết kế: High-End Industrial Minimalist (Tương tự Linear, Vercel, Apple)
+ * - Monogram khối chữ T tỷ lệ vàng cân đối hoàn hảo
+ * - Bảng màu Titanium Silver nguyên bản trên nền Deep Obsidian
+ * - Tuyệt đối không gắn nhãn phụ "LIVE" hay dải màu lòe loẹt
  */
 export const TalovinLogo = ({ size = 28, showText = true, textClassName = "", className = "", style = {} }) => {
   return (
@@ -15,70 +16,62 @@ export const TalovinLogo = ({ size = 28, showText = true, textClassName = "", cl
       <svg
         width={size}
         height={size}
-        viewBox="0 0 64 64"
+        viewBox="0 0 48 48"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         className="talovin-emblem"
-        style={{ flexShrink: 0, transition: 'transform 0.2s ease' }}
+        style={{ flexShrink: 0, transition: 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)' }}
       >
         <defs>
-          {/* Nền Gradient Titanium Deep Obsidian */}
-          <linearGradient id="taloBg" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#27272a" />
-            <stop offset="100%" stopColor="#09090b" />
+          <linearGradient id="taloObsidianPlate" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#1c1c20" />
+            <stop offset="100%" stopColor="#0a0a0c" />
           </linearGradient>
 
-          {/* Dải Gradient Trụ Cột T */}
-          <linearGradient id="taloAccent" x1="0%" y1="0%" x2="100%" y2="100%">
+          <linearGradient id="taloTitaniumT" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="#ffffff" />
-            <stop offset="60%" stopColor="#e4e4e7" />
+            <stop offset="45%" stopColor="#e4e4e7" />
             <stop offset="100%" stopColor="#a1a1aa" />
           </linearGradient>
 
-          {/* Dải Gradient Tần số Sóng Âm (Wave Pulse) */}
-          <linearGradient id="taloWave" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#10b981" />
-            <stop offset="100%" stopColor="#059669" />
+          <linearGradient id="taloBorderGlow" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="#3f3f46" />
+            <stop offset="100%" stopColor="#27272a" />
           </linearGradient>
         </defs>
 
-        {/* Khung viền Squircle tối giản */}
-        <rect width="64" height="64" rx="16" fill="url(#taloBg)" stroke="#3f3f46" strokeWidth="1.5" />
+        {/* Khung Squircle Deep Obsidian */}
+        <rect
+          x="2"
+          y="2"
+          width="44"
+          height="44"
+          rx="12"
+          fill="url(#taloObsidianPlate)"
+          stroke="url(#taloBorderGlow)"
+          strokeWidth="1.2"
+        />
 
-        {/* Thanh ngang của chữ T (Thước đo âm thanh trên cùng) */}
-        <rect x="14" y="16" width="36" height="6.5" rx="3.25" fill="url(#taloAccent)" />
-
-        {/* Trụ đứng của chữ T */}
-        <rect x="29" y="22" width="6" height="26" rx="3" fill="url(#taloAccent)" />
-
-        {/* 2 Cột sóng âm thanh đối xứng (Acoustic Resonance Bars) */}
-        {/* Cột trái */}
-        <rect x="18" y="28" width="4.5" height="14" rx="2.25" fill="url(#taloAccent)" opacity="0.65" />
-        <circle cx="20.25" cy="46.5" r="2.25" fill="url(#taloWave)" />
-
-        {/* Cột phải */}
-        <rect x="41.5" y="26" width="4.5" height="17" rx="2.25" fill="url(#taloAccent)" opacity="0.85" />
-        <circle cx="43.75" cy="47.5" r="2.25" fill="url(#taloWave)" />
+        {/* Monogram T Titanium nguyên khối cân xứng chuẩn mực */}
+        <path
+          d="M13 13.5C13 12.67 13.67 12 14.5 12H33.5C34.33 12 35 12.67 35 13.5V17C35 17.83 34.33 18.5 33.5 18.5H27V33.5C27 34.6 26.1 35.5 25 35.5H23C21.9 35.5 21 34.6 21 33.5V18.5H14.5C13.67 18.5 13 17.83 13 17V13.5Z"
+          fill="url(#taloTitaniumT)"
+        />
       </svg>
 
       {showText && (
         <div className="talovin-brand-text flex flex-col justify-center leading-none">
-          <div className="flex items-center gap-1.5">
-            <span
-              className={`talovin-brand-title font-sans font-semibold tracking-wider text-zinc-100 ${textClassName}`}
-              style={{ fontSize: Math.max(14, size * 0.58), letterSpacing: '0.04em' }}
-            >
-              Talovin
-            </span>
-            <span className="talovin-tag-pro font-mono text-[9px] uppercase px-1 py-0.2 rounded bg-zinc-800 text-emerald-400 border border-zinc-700">
-              LIVE
-            </span>
-          </div>
           <span
-            className="talovin-brand-subtitle font-mono text-zinc-400 tracking-wider uppercase mt-0.5"
-            style={{ fontSize: Math.max(8.5, size * 0.3) }}
+            className={`talovin-brand-title font-sans font-bold tracking-tight text-zinc-100 ${textClassName}`}
+            style={{ fontSize: Math.max(15, size * 0.58), letterSpacing: '-0.025em' }}
           >
-            Social Lounge & Waves
+            Talovin
+          </span>
+          <span
+            className="talovin-brand-subtitle text-zinc-400 font-semibold tracking-widest uppercase"
+            style={{ fontSize: Math.max(8.5, size * 0.3), marginTop: '3px' }}
+          >
+            Social Lounge
           </span>
         </div>
       )}
@@ -87,4 +80,3 @@ export const TalovinLogo = ({ size = 28, showText = true, textClassName = "", cl
 };
 
 export default TalovinLogo;
-

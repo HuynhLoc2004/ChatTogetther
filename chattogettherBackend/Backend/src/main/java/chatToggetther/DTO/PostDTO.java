@@ -31,9 +31,11 @@ public class PostDTO {
     private String authorBadge;
     private Boolean authorIsVerified;
 
-    // Số liệu tương tác & Reactions
+    // Số liệu tương tác & Reactions & Thuật toán Thịnh hành Tìm kiếm
     private Integer likesCount;
     private Integer commentsCount;
+    private Long searchHits;
+    private Double trendingScore;
     private Boolean isLikedByMe;
     private String myReaction; // "HEART", "FIRE", "HAHA", "WOW", "LIKE", "CROWN"
     private String reactionSummary; // e.g. "❤️ 🔥 😂"
