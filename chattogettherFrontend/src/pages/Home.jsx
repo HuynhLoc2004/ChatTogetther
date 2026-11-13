@@ -27,7 +27,8 @@ import ResonanceMatchModal from '../components/ResonanceMatchModal';
 export const UserAvatar = ({ avatar, name = '', size = 36, className = "" }) => {
   const initial = (name || 'U').trim().charAt(0).toUpperCase();
 
-  if (avatar && avatar.trim() && !avatar.includes('dicebear.com/7.x/bottts')) {
+  const isRobot = avatar && (avatar.includes('dicebear') || avatar.includes('bottts') || avatar.includes('avataaars'));
+  if (avatar && avatar.trim() && !isRobot) {
     return (
       <img 
         src={avatar} 

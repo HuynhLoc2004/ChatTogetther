@@ -118,7 +118,7 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall }) => {
                 {friends.map((friend) => (
                   <div key={friend.id} className="friend-item-zinc" onClick={() => onSelectUser && onSelectUser(friend.id)}>
                     <div className="friend-avatar-wrap">
-                      {friend.avatar ? (
+                      {friend.avatar && !friend.avatar.includes('dicebear') && !friend.avatar.includes('bottts') ? (
                         <img 
                           src={friend.avatar} 
                           alt="Avatar" 
@@ -184,7 +184,7 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall }) => {
                   return (
                     <div key={senderId} className="friend-item-zinc">
                       <div className="friend-avatar-wrap">
-                        {senderAvatar ? (
+                        {senderAvatar && !senderAvatar.includes('dicebear') && !senderAvatar.includes('bottts') ? (
                           <img 
                             src={senderAvatar} 
                             alt="Avatar" 

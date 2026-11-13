@@ -35,8 +35,13 @@ export const GroupCollageAvatar = ({
   className = '', 
   style = {} 
 }) => {
-  // If custom avatar is set, render it directly
-  if (avatar && typeof avatar === 'string' && avatar.trim().length > 0) {
+  const isRobot = (url) => {
+    if (!url || typeof url !== 'string') return true;
+    return url.includes('dicebear') || url.includes('bottts') || url.includes('avataaars');
+  };
+
+  // If custom avatar is set and not a robot, render it directly
+  if (avatar && typeof avatar === 'string' && avatar.trim().length > 0 && !isRobot(avatar)) {
     return (
       <div 
         className={`group-single-avatar rounded-2xl overflow-hidden flex-shrink-0 border border-white/10 shadow-sm ${className}`}
@@ -59,7 +64,8 @@ export const GroupCollageAvatar = ({
   const normalized = (rawList || []).map(m => {
     if (!m) return null;
     const user = m.userDTO || m.userEntity || m.user || m;
-    const mAvatar = user.avatar || m.avatar;
+    const rawAv = user.avatar || m.avatar;
+    const mAvatar = rawAv && !isRobot(rawAv) ? rawAv : null;
     const mName = user.nickname || user.account || m.nickname || m.name || 'Member';
     return { avatar: mAvatar, name: mName };
   }).filter(Boolean);
