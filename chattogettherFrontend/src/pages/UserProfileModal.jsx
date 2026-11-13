@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { 
   X, Camera, Upload, Trash2, User, Mail, Phone, 
   MapPin, Calendar, Lock, ShieldCheck, Check, Edit3, 
-  Loader2, UserCheck, Clock, UserPlus, PhoneCall, KeyRound, Sparkles,
+  Loader2, UserCheck, Clock, UserPlus, UserMinus, Undo2, PhoneCall, KeyRound, Sparkles,
   ArrowLeft, ChevronLeft, LogOut
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
@@ -224,6 +224,36 @@ export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentU
     }
   };
 
+  const handleCancelFriendRequest = async () => {
+    try {
+      setSubmitting(true);
+      await axiosClient.post('/friends/remove', null, {
+        params: { friend_id: effectiveUserId }
+      });
+      toast.success("Đã hoàn tác / hủy lời mời kết bạn");
+      setProfile(prev => ({ ...prev, friendshipStatus: 'NONE' }));
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Không thể hủy lời mời lúc này");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleUnfriend = async () => {
+    try {
+      setSubmitting(true);
+      await axiosClient.post('/friends/remove', null, {
+        params: { friend_id: effectiveUserId }
+      });
+      toast.success("Đã hủy kết bạn");
+      setProfile(prev => ({ ...prev, friendshipStatus: 'NONE' }));
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Không thể hủy kết bạn lúc này");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const getInitial = (name) => {
     if (!name) return 'T';
     return name.trim().charAt(0).toUpperCase();
@@ -381,26 +411,61 @@ export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentU
                   ) : (
                     <div className="flex items-center gap-2 flex-wrap">
                       {profile?.friendshipStatus === 'ACCEPTED' ? (
-                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 text-xs font-medium">
-                          <UserCheck size={13} /> Bạn bè
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 text-xs font-medium">
+                            <UserCheck size={13} /> Bạn bè
+                          </span>
+                          <button
+                            type="button"
+                            onClick={handleUnfriend}
+                            disabled={submitting}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-zinc-800/80 hover:bg-rose-500/10 text-zinc-400 hover:text-rose-400 border border-zinc-700/60 hover:border-rose-500/30 text-xs font-medium transition-all"
+                            title="Hủy kết bạn"
+                          >
+                            <UserMinus size={13} /> Hủy kết bạn
+                          </button>
+                        </div>
                       ) : profile?.friendshipStatus === 'PENDING_SENT' ? (
-                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-amber-500/10 text-amber-300 border border-amber-500/20 text-xs font-medium">
-                          <Clock size={13} /> Đã gửi lời mời
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-amber-500/10 text-amber-300 border border-amber-500/20 text-xs font-medium">
+                            <Clock size={13} /> Đã gửi lời mời
+                          </span>
+                          <button
+                            type="button"
+                            onClick={handleCancelFriendRequest}
+                            disabled={submitting}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-zinc-800/90 hover:bg-rose-500/20 text-zinc-200 hover:text-rose-300 border border-zinc-700/60 hover:border-rose-500/30 text-xs font-medium transition-all"
+                            title="Hoàn tác / Hủy lời mời kết bạn"
+                          >
+                            <Undo2 size={13} /> Hủy lời mời
+                          </button>
+                        </div>
                       ) : profile?.friendshipStatus === 'PENDING_RECEIVED' ? (
-                        <button 
-                          onClick={handleAcceptFriendRequest}
-                          disabled={submitting}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium shadow-md transition-all"
-                        >
-                          <UserPlus size={13} /> Đồng ý kết bạn
-                        </button>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <button 
+                            type="button"
+                            onClick={handleAcceptFriendRequest}
+                            disabled={submitting}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium shadow-md transition-all"
+                          >
+                            <UserPlus size={13} /> Đồng ý kết bạn
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleCancelFriendRequest}
+                            disabled={submitting}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-zinc-800/80 hover:bg-rose-500/10 text-zinc-400 hover:text-rose-400 border border-zinc-700/60 hover:border-rose-500/30 text-xs font-medium transition-all"
+                            title="Từ chối lời mời"
+                          >
+                            <X size={13} /> Từ chối
+                          </button>
+                        </div>
                       ) : (
                         <button 
+                          type="button"
                           onClick={handleSendFriendRequest}
                           disabled={submitting}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-white text-zinc-950 text-xs font-medium shadow-md transition-all"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-white text-zinc-950 text-xs font-medium shadow-md transition-all"
                         >
                           <UserPlus size={13} /> Kết bạn
                         </button>
@@ -408,8 +473,9 @@ export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentU
 
                       {onStartPrivateCall && (
                         <button 
+                          type="button"
                           onClick={() => { onClose(); onStartPrivateCall(profile); }}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium shadow-md transition-all"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium shadow-md transition-all"
                         >
                           <PhoneCall size={13} /> Đàm thoại 1-1
                         </button>

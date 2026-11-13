@@ -6,7 +6,7 @@ import {
   CheckCircle, ArrowRight, WifiOff, Heart, MessageCircle, Share2, 
   Search, Sparkles, Send, Copy, Compass, Radio, ChevronRight, CornerDownRight,
   Bell, Bookmark, Flame, Gem, Crown, Volume2, VolumeX, Music, Play, Pause,
-  Shuffle, Image as ImageIcon, CheckCircle2, Zap, Dices,
+  Shuffle, Image as ImageIcon, CheckCircle2, Zap, Dices, Maximize2, Download,
   Edit3, Trash2, MoreVertical, Tag, Filter, Check,
   Mic, Headphones, Moon, Gamepad2, Film, Square
 } from 'lucide-react';
@@ -283,6 +283,19 @@ const Home = () => {
   const [isFriendsOpen, setIsFriendsOpen] = useState(false);
   const [friends, setFriends] = useState([]);
   const [sharePost, setSharePost] = useState(null);
+  const [lightboxMedia, setLightboxMedia] = useState(null); // { url, type, author, title }
+
+  // Lắng nghe phím Esc để đóng Lightbox xem đa phương tiện
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && lightboxMedia) {
+        setLightboxMedia(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [lightboxMedia]);
+
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState(() => {
     try {
@@ -601,7 +614,7 @@ const Home = () => {
       }
 
       const res = await axiosClient.post('/posts', {
-        content: newPostContent.trim() || (voiceBase64 ? "Ghi âm giọng nói" : "Khoảnh khắc hình ảnh"),
+        content: newPostContent.trim() || (voiceBase64 ? "Ghi âm giọng nói" : attachedMedia?.type === 'video' ? "Video ngắn" : "Khoảnh khắc hình ảnh"),
         imageUrl: payloadMedia,
         vibe: combinedVibe || null
       });
@@ -619,7 +632,7 @@ const Home = () => {
         toast.success("Đã đăng bài viết thành công!");
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || "Không thể đăng bài viết lúc này!");
+      toast.error(err.response?.data?.message || err.message || "Không thể đăng bài viết lúc này!");
     } finally {
       setIsPosting(false);
     }
@@ -2060,25 +2073,46 @@ const Home = () => {
                       <div className="post-body-content">
                         <p>{post.content}</p>
 
-                        {/* Hiển thị Media: Ảnh hoặc Video ngắn tự động lặp muted */}
+                        {/* Hiển thị Media: Ảnh hoặc Video ngắn tự động lặp muted + Click để mở toàn màn hình (Lightbox) */}
                         {parsedMedia.mediaUrl && (
-                          <div className="post-media-frame">
+                          <div 
+                            className="post-media-frame cursor-pointer group/media relative"
+                            onClick={() => setLightboxMedia({
+                              url: parsedMedia.mediaUrl,
+                              type: parsedMedia.mediaType,
+                              author: post.authorNickname || post.authorName || post.author,
+                              title: post.content
+                            })}
+                            title="Bấm để xem chi tiết / phóng to toàn màn hình"
+                          >
                             {parsedMedia.mediaType === 'video' ? (
-                              <video 
-                                src={parsedMedia.mediaUrl} 
-                                autoPlay 
-                                loop 
-                                muted 
-                                playsInline 
-                                className="post-media-video" 
-                              />
+                              <div className="relative w-full overflow-hidden rounded-xl">
+                                <video 
+                                  src={parsedMedia.mediaUrl} 
+                                  autoPlay 
+                                  loop 
+                                  muted 
+                                  playsInline 
+                                  className="post-media-video group-hover/media:brightness-95 transition-all" 
+                                />
+                                <div className="absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-lg bg-black/75 backdrop-blur-md text-[11px] font-mono text-white/95 flex items-center gap-1.5 shadow-lg opacity-85 group-hover/media:opacity-100 transition-opacity">
+                                  <Maximize2 size={12} />
+                                  <span>Phóng to</span>
+                                </div>
+                              </div>
                             ) : (
-                              <img 
-                                src={parsedMedia.mediaUrl} 
-                                alt="Khoảnh khắc" 
-                                loading="lazy" 
-                                className="post-media-image" 
-                              />
+                              <div className="relative w-full overflow-hidden rounded-xl">
+                                <img 
+                                  src={parsedMedia.mediaUrl} 
+                                  alt="Khoảnh khắc" 
+                                  loading="lazy" 
+                                  className="post-media-image group-hover/media:scale-[1.01] transition-transform duration-300" 
+                                />
+                                <div className="absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-lg bg-black/75 backdrop-blur-md text-[11px] font-mono text-white/95 flex items-center gap-1.5 shadow-lg opacity-0 group-hover/media:opacity-100 transition-opacity">
+                                  <Maximize2 size={12} />
+                                  <span>Xem lớn</span>
+                                </div>
+                              </div>
                             )}
                           </div>
                         )}
@@ -2634,6 +2668,82 @@ const Home = () => {
           <span>Hồ sơ</span>
         </button>
       </nav>
+
+      {/* MODAL LIGHTBOX XEM ĐA PHƯƠNG TIỆN TOÀN MÀN HÌNH (ẢNH & VIDEO) */}
+      {lightboxMedia && (
+        <div 
+          className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-black/95 backdrop-blur-md p-2 sm:p-6 animate-fade-in select-none"
+          onClick={() => setLightboxMedia(null)}
+        >
+          {/* Top Bar: Title/Author and Actions */}
+          <div 
+            className="w-full max-w-5xl flex items-center justify-between px-3 py-2 sm:py-3 text-white mb-2 z-10"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2.5 truncate">
+              <span className="font-semibold text-sm tracking-tight text-zinc-100 truncate">
+                {lightboxMedia.author ? `Khoảnh khắc của ${lightboxMedia.author}` : "Xem đa phương tiện"}
+              </span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-zinc-800 text-zinc-300 border border-zinc-700">
+                {lightboxMedia.type === 'video' ? 'Video' : 'Hình ảnh'}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <a 
+                href={lightboxMedia.url} 
+                download={lightboxMedia.type === 'video' ? 'video-talovin.mp4' : 'image-talovin.webp'}
+                target="_blank"
+                rel="noreferrer"
+                className="p-2 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-all border border-zinc-700/60"
+                title="Tải về máy / Mở tab mới"
+              >
+                <Download size={16} />
+              </a>
+              <button 
+                type="button"
+                onClick={() => setLightboxMedia(null)}
+                className="p-2 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-all border border-zinc-700/60"
+                title="Đóng (Esc)"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+
+          {/* Media Center Content */}
+          <div 
+            className="relative flex items-center justify-center max-w-5xl max-h-[82vh] w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {lightboxMedia.type === 'video' ? (
+              <video 
+                src={lightboxMedia.url} 
+                controls 
+                autoPlay 
+                playsInline 
+                className="max-w-full max-h-[80vh] rounded-2xl shadow-2xl object-contain bg-black border border-zinc-800"
+              />
+            ) : (
+              <img 
+                src={lightboxMedia.url} 
+                alt="Xem ảnh lớn" 
+                className="max-w-full max-h-[80vh] rounded-2xl shadow-2xl object-contain bg-black/40 border border-zinc-800" 
+              />
+            )}
+          </div>
+
+          {/* Caption if exists */}
+          {lightboxMedia.title && (
+            <div 
+              className="mt-3 max-w-2xl px-4 py-2 rounded-xl bg-zinc-900/80 border border-zinc-800/80 text-zinc-300 text-xs text-center truncate backdrop-blur-sm"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {lightboxMedia.title}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* MODAL BỘ GHÉP ĐÔI ĐỒNG ĐIỆU (RESONANCE MATCHMAKER 1-1) */}
       <ResonanceMatchModal 
@@ -4043,13 +4153,19 @@ const Home = () => {
           margin-top: 10px;
           border-radius: 12px;
           overflow: hidden;
-          max-height: 380px;
+          max-height: 420px;
           border: 1px solid var(--card-border);
           background: #090a10;
+          cursor: pointer;
+          transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .post-media-frame:hover {
+          border-color: #3b4260;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
         }
         .post-media-image, .post-media-video {
           width: 100%;
-          max-height: 380px;
+          max-height: 420px;
           object-fit: cover;
           display: block;
         }

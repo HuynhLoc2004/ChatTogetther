@@ -16,7 +16,7 @@ public class CreatePostRequest {
     @Size(max = 4000, message = "Nội dung bài viết tối đa 4000 ký tự")
     private String content;
 
-    @Size(max = 2000000, message = "Dữ liệu đa phương tiện vượt quá giới hạn")
+    @Size(max = 35000000, message = "Dữ liệu đa phương tiện tối đa 25MB")
     private String imageUrl;
 
     @Size(max = 200, message = "Thẻ chủ đề tối đa 200 ký tự")

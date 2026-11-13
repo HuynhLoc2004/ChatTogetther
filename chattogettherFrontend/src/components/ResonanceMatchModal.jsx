@@ -89,29 +89,10 @@ export const ResonanceMatchModal = ({
     const myAccountLower = (currentUserAccount || '').toLowerCase().trim();
     const myNameLower = (currentUserName || '').toLowerCase().trim();
 
-    // Thu thập danh sách người dùng tiềm năng từ Bài viết, Phòng chat và Bạn bè
+    // Thu thập danh sách người dùng THỰC SỰ đang trực tuyến trong các phòng đàm thoại (Tuyệt đối không dùng dữ liệu ảo hay người offline)
     const rawCandidates = [];
     const seenIds = new Set();
 
-    // 1. Từ bài viết
-    (posts || []).forEach(p => {
-      const uId = (p.authorId || p.userId || '').toString();
-      const uAcc = (p.authorAccount || p.author || '').toLowerCase().trim();
-      const uName = p.authorNickname || p.authorName || p.author;
-      if (uId && !seenIds.has(uId)) {
-        seenIds.add(uId);
-        rawCandidates.push({
-          userId: uId,
-          account: uAcc || 'user',
-          nickname: uName || 'Thành viên',
-          avatar: p.authorAvatar,
-          vibe: p.vibe || 'Thư giãn',
-          source: 'post'
-        });
-      }
-    });
-
-    // 2. Từ các phòng đàm thoại đang mở
     (rooms || []).forEach(r => {
       (r.userRoomDTOList || []).forEach(ur => {
         const u = ur.userDTO;
@@ -125,28 +106,12 @@ export const ResonanceMatchModal = ({
               account: uAcc || 'member',
               nickname: u.nickname || u.account || 'Thành viên phòng',
               avatar: u.avatar,
-              vibe: 'Đang đàm thoại',
+              vibe: `Đang ở phòng: ${r.nameroom || 'Phòng trò chuyện'}`,
               source: 'room'
             });
           }
         }
       });
-    });
-
-    // 3. Từ bạn bè
-    (friends || []).forEach(f => {
-      const uId = (f.id || '').toString();
-      if (uId && !seenIds.has(uId)) {
-        seenIds.add(uId);
-        rawCandidates.push({
-          userId: uId,
-          account: f.account || 'friend',
-          nickname: f.nickname || f.account || 'Bạn bè',
-          avatar: f.avatar,
-          vibe: 'Bạn bè',
-          source: 'friend'
-        });
-      }
     });
 
     // BỘ LỌC CHẶT CHẼ: Tuyệt đối không ghép với chính mình
@@ -157,27 +122,28 @@ export const ResonanceMatchModal = ({
       return true;
     });
 
-    // Mô phỏng 3 giai đoạn quét Radar minh bạch
+    // Mô phỏng giai đoạn quét Radar chân thực
     setTimeout(() => setRadarPhase(1), 500);
     setTimeout(() => setRadarPhase(2), 1100);
 
     setTimeout(() => {
       if (validCandidates.length > 0) {
-        // Chọn ứng viên phù hợp nhất dựa trên intent
+        // Chọn ứng viên thực tế phù hợp
         const intentObj = INTENT_OPTIONS.find(i => i.id === selectedIntent) || INTENT_OPTIONS[0];
         const matched = validCandidates[Math.floor(Math.random() * validCandidates.length)];
 
-        // Tính điểm tương đồng (Match Score từ 86% đến 98%)
-        const baseScore = 86;
-        const bonus = Math.floor(Math.random() * 12);
+        const baseScore = 88;
+        const bonus = Math.floor(Math.random() * 10);
         const matchScore = Math.min(98, baseScore + bonus);
 
         const currentGenreName = currentTrack?.genre || 'Lo-Fi Chill';
         const reasons = [
-          `Cùng gu âm nhạc: Yêu thích giai điệu ${currentGenreName}`,
-          `Mục đích tương đồng: ${intentObj.title}`,
-          `Đang hoạt động trực tiếp trong sảnh Talovin`
+          `Đang hoạt động trực tuyến trong sảnh Talovin`,
+          `Phù hợp với mục đích: ${intentObj.title}`
         ];
+        if (matched.vibe) {
+          reasons.push(matched.vibe);
+        }
 
         const randomIcebreaker = ICEBREAKERS[Math.floor(Math.random() * ICEBREAKERS.length)];
 
@@ -191,10 +157,10 @@ export const ResonanceMatchModal = ({
         });
         setStep('result');
       } else {
-        // Trường hợp sảnh chưa có người khác trực tuyến
+        // Minh bạch: Khi không có người khác trực tuyến thì hiển thị rõ ràng, không bịa đặt người offline
         setStep('empty');
       }
-    }, 1800);
+    }, 1600);
   };
 
   // Bắt đầu cuộc trò chuyện 1-1: Tạo phòng chat riêng 2 người và đưa cả 2 vào
@@ -204,10 +170,9 @@ export const ResonanceMatchModal = ({
       setIsCreatingRoom(true);
       const roomName = `1-1: ${currentUserName} & ${matchedPartner.nickname}`;
       
-      const res = await axiosClient.post('/rooms', {
-        nameRoom: roomName,
-        password: '',
-        nickname: currentUserName
+      const res = await axiosClient.post('/rooms/create-room', {
+        roomName: roomName,
+        password: null
       });
 
       if (res.data && res.data.data) {
@@ -217,9 +182,7 @@ export const ResonanceMatchModal = ({
         navigate(`/room/${newRoomId}`);
       }
     } catch (err) {
-      // Fallback nếu không tạo được phòng thì thông báo và sao chép lời chào
-      navigator.clipboard.writeText(matchedPartner.icebreaker);
-      toast.success(`Đã sao chép câu mở đầu! Hãy gửi lời mời kết bạn để trò chuyện.`, { id: 'copy-icebreaker' });
+      toast.error(err.response?.data?.message || "Không thể tạo phòng lúc này");
     } finally {
       setIsCreatingRoom(false);
     }
@@ -230,7 +193,7 @@ export const ResonanceMatchModal = ({
     if (!matchedPartner || isSentFriendReq) return;
     try {
       await axiosClient.post(`/friends/request`, null, {
-        params: { receiverId: matchedPartner.userId }
+        params: { receiver_id: matchedPartner.userId }
       });
       setIsSentFriendReq(true);
       toast.success(`Đã gửi lời mời kết bạn đến ${matchedPartner.nickname}!`, { id: 'send-friend-req' });
@@ -461,21 +424,25 @@ export const ResonanceMatchModal = ({
         {/* ======================================================== */}
         {step === 'empty' && (
           <div className="py-8 text-center space-y-3 relative z-10">
-            <Compass size={32} className="mx-auto text-zinc-600 opacity-60" />
-            <h4 className="text-zinc-200 text-sm font-semibold">Chưa tìm thấy thành viên phù hợp lúc này</h4>
-            <p className="text-zinc-500 text-xs max-w-xs mx-auto">
-              Hệ thống đã loại trừ tài khoản của bạn. Hãy thử chọn mục đích khác hoặc quay lại khi có thêm thành viên online!
+            <div className="w-12 h-12 rounded-2xl bg-zinc-800/80 border border-zinc-700/60 flex items-center justify-center mx-auto text-zinc-400 shadow-inner">
+              <Compass size={24} />
+            </div>
+            <h4 className="text-zinc-200 text-sm font-semibold">Hiện chưa có thành viên nào khác đang trực tuyến</h4>
+            <p className="text-zinc-400 text-xs max-w-xs mx-auto leading-relaxed">
+              Hệ thống quét trực tiếp và loại bỏ dữ liệu ảo. Hiện tại trong các phòng trò chuyện chưa có người dùng khác đang online. Bạn hãy tạo phòng mới hoặc quay lại sau ít phút!
             </p>
-            <div className="flex items-center justify-center gap-2 pt-2">
+            <div className="flex items-center justify-center gap-2 pt-3">
               <button 
+                type="button"
                 onClick={() => setStep('select')}
-                className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs"
+                className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium transition-all"
               >
-                Đổi tiêu chí
+                Thử lại
               </button>
               <button 
+                type="button"
                 onClick={onClose}
-                className="px-4 py-2 rounded-xl bg-zinc-900 text-zinc-400 text-xs hover:text-white"
+                className="px-4 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 text-xs hover:text-white transition-all"
               >
                 Đóng
               </button>
