@@ -16,3 +16,4 @@ public class ChallengeDTO {
     private Long authorId;
     private Integer usageCount;
 }
+

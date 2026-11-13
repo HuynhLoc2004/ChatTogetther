@@ -16,3 +16,4 @@ public interface CommunityGroupRepository extends JpaRepository<CommunityGroupEn
     @Query("SELECT g FROM CommunityGroupEntity g ORDER BY g.createdAt DESC")
     List<CommunityGroupEntity> findAllOrderByCreatedAtDesc();
 }
+

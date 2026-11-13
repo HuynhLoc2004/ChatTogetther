@@ -21,3 +21,4 @@ public class CommunityMemberDTO {
     private String status; // ACTIVE, PENDING
     private LocalDateTime joinedAt;
 }
+

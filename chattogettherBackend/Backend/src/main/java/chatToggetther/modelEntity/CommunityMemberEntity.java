@@ -33,3 +33,4 @@ public class CommunityMemberEntity {
     @Column(name = "joined_at", nullable = false)
     private LocalDateTime joinedAt = LocalDateTime.now();
 }
+

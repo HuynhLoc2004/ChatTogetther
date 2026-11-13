@@ -1,13 +1,24 @@
-import { useState, useEffect } from 'react';
-import { Users, User, X, UserCheck, Phone, Clock, UserMinus, MessageSquare, Shield, CheckCircle2, MapPin } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { 
+  Users, User, X, UserCheck, Phone, Clock, UserMinus, 
+  MessageSquare, Shield, CheckCircle2, MapPin, Search, 
+  ArrowLeft, PhoneCall, Send, Sparkles, UserPlus, AlertCircle
+} from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
 
-export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall }) => {
+export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, navigate: propNavigate }) => {
+  const localNavigate = useNavigate();
+  const navigate = propNavigate || localNavigate;
+
   const [activeTab, setActiveTab] = useState('friends'); // 'friends' | 'pending'
   const [friends, setFriends] = useState([]);
   const [pending, setPending] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [actionInProgress, setActionInProgress] = useState({});
+  const [confirmUnfriend, setConfirmUnfriend] = useState(null);
 
   const fetchData = async () => {
     try {
@@ -29,189 +40,379 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall }) => {
     fetchData();
   }, []);
 
+  // Đồng ý kết bạn
   const handleAccept = async (senderId, nickname) => {
-    if (!senderId) {
-      toast.error("Không tìm thấy thông tin người gửi lời mời");
-      return;
-    }
+    if (!senderId) return;
     try {
+      setActionInProgress(prev => ({ ...prev, [senderId]: true }));
       await axiosClient.post('/friends/accept', null, {
         params: { sender_id: senderId }
       });
-      toast.success(`Đã đồng ý kết bạn với ${nickname || 'thành viên'}!`);
+      toast.success(`Đã trở thành bạn bè với ${nickname || 'thành viên'}!`, { id: 'friend-act' });
       fetchData();
     } catch (err) {
-      toast.error(err.response?.data?.message || "Lỗi khi chấp nhận kết bạn!");
+      toast.error(err.response?.data?.message || "Lỗi khi chấp nhận kết bạn!", { id: 'friend-act' });
+    } finally {
+      setActionInProgress(prev => ({ ...prev, [senderId]: false }));
     }
   };
 
+  // Từ chối kết bạn
   const handleDecline = async (senderId, nickname) => {
     if (!senderId) return;
     try {
+      setActionInProgress(prev => ({ ...prev, [senderId]: true }));
       await axiosClient.post('/friends/decline', null, {
         params: { sender_id: senderId }
       });
-      toast.success(`Đã từ chối lời mời từ ${nickname || 'thành viên'}`);
+      toast.success(`Đã từ chối lời mời từ ${nickname || 'thành viên'}`, { id: 'friend-act' });
       fetchData();
     } catch (err) {
-      toast.error(err.response?.data?.message || "Lỗi khi từ chối lời mời!");
+      toast.error(err.response?.data?.message || "Lỗi khi từ chối lời mời!", { id: 'friend-act' });
+    } finally {
+      setActionInProgress(prev => ({ ...prev, [senderId]: false }));
     }
   };
 
-  const handleRemove = async (friendId, nickname) => {
+  // Hủy kết bạn
+  const handleRemoveFriend = async (friendId, nickname) => {
+    setConfirmUnfriend(null);
     try {
       await axiosClient.post('/friends/remove', null, {
         params: { friend_id: friendId }
       });
-      toast.success(`Đã hủy kết bạn với ${nickname}`);
+      toast.success(`Đã hủy kết bạn với ${nickname || 'thành viên'}`, { id: 'friend-act' });
       fetchData();
     } catch (err) {
-      toast.error(err.response?.data?.message || "Lỗi khi hủy kết bạn!");
+      toast.error(err.response?.data?.message || "Lỗi khi hủy kết bạn!", { id: 'friend-act' });
     }
   };
 
+  // Mở đoạn chat 1-1 ngay lập tức
+  const handleOpenDirectChat = async (friend) => {
+    try {
+      const myName = localStorage.getItem('nickname') || 'Tôi';
+      const friendName = friend.nickname || friend.account || 'Bạn bè';
+      const roomName = `Chat: ${myName} & ${friendName}`;
+      
+      const res = await axiosClient.post('/rooms/create-room', {
+        roomName: roomName,
+        password: null
+      });
+
+      if (res.data && res.data.data) {
+        toast.success(`Đang mở đoạn chat cùng ${friendName}!`);
+        onClose();
+        navigate(`/room/${res.data.data.id}`);
+      }
+    } catch (err) {
+      if (onSelectUser) {
+        onSelectUser(friend.id);
+      }
+    }
+  };
+
+  // Gọi thoại 1-1
+  const handleStartCall = async (friend) => {
+    if (onStartPrivateCall) {
+      onClose();
+      onStartPrivateCall(friend);
+      return;
+    }
+
+    try {
+      const myName = localStorage.getItem('nickname') || 'Tôi';
+      const friendName = friend.nickname || friend.account || 'Bạn bè';
+      const roomName = `Cuộc gọi: ${myName} & ${friendName}`;
+      
+      const res = await axiosClient.post('/rooms/create-room', {
+        roomName: roomName,
+        password: null
+      });
+
+      if (res.data && res.data.data) {
+        onClose();
+        navigate(`/room/${res.data.data.id}?autoCall=true`);
+      }
+    } catch (err) {
+      toast.error("Không thể kết nối cuộc gọi lúc này!");
+    }
+  };
+
+  // Lọc bạn bè theo ô tìm kiếm
+  const filteredFriends = friends.filter(f => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    const name = (f.nickname || '').toLowerCase();
+    const acc = (f.account || '').toLowerCase();
+    return name.includes(q) || acc.includes(q);
+  });
+
   return (
-    <div className="friends-backdrop" onClick={onClose}>
-      <div className="friends-card-zinc" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
-        <div className="friends-header-zinc">
-          <div className="friends-title-wrap">
-            <Users size={16} className="text-zinc-300" />
-            <h3 className="font-semibold text-zinc-100 text-sm">Bạn Bè & Lời Mời Kết Nối</h3>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in" onClick={onClose}>
+      <div 
+        className="relative w-full sm:max-w-xl h-[100dvh] sm:h-auto sm:max-h-[88vh] rounded-none sm:rounded-3xl bg-zinc-950 border-0 sm:border border-zinc-800 shadow-2xl flex flex-col overflow-hidden animate-slide-up sm:animate-fade-in"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* STICKY TOP HEADER */}
+        <div className="sticky top-0 z-30 flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-zinc-800 bg-zinc-900/98 backdrop-blur-md flex-shrink-0">
+          <div className="flex items-center gap-2.5">
+            <button 
+              type="button"
+              onClick={onClose} 
+              className="px-2.5 py-1.5 rounded-xl bg-zinc-800/90 hover:bg-zinc-700 text-zinc-200 hover:text-white flex items-center gap-1.5 text-xs font-semibold transition-all active:scale-95 border border-zinc-700/60"
+              title="Quay lại"
+            >
+              <ArrowLeft size={16} />
+              <span>Quay lại</span>
+            </button>
+            <div className="h-4 w-[1px] bg-zinc-800"></div>
+            <div className="flex items-center gap-2">
+              <Users size={17} className="text-zinc-300" />
+              <h2 className="text-zinc-100 font-bold text-sm tracking-tight">Bạn Bè & Kết Nối</h2>
+            </div>
           </div>
-          <button onClick={onClose} className="btn-close-zinc" title="Đóng">
-            <X size={15} />
+          <button 
+            type="button"
+            onClick={onClose} 
+            className="w-8 h-8 rounded-xl bg-zinc-800/60 hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center transition-colors"
+            title="Đóng"
+          >
+            <X size={16} />
           </button>
         </div>
 
-        {/* Tabs */}
-        <div className="friends-tabs-zinc font-mono text-xs">
-          <button 
-            className={`tab-btn-zinc ${activeTab === 'friends' ? 'active' : ''}`}
-            onClick={() => setActiveTab('friends')}
-          >
-            Bạn bè ({friends.length})
-          </button>
-          <button 
-            className={`tab-btn-zinc ${activeTab === 'pending' ? 'active' : ''}`}
-            onClick={() => setActiveTab('pending')}
-          >
-            Lời mời {pending.length > 0 && <span className="badge-count-zinc font-mono">{pending.length}</span>}
-          </button>
+        {/* SEARCH BOX */}
+        <div className="p-4 border-b border-zinc-800/70 bg-zinc-900/40 flex-shrink-0">
+          <div className="relative">
+            <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+            <input 
+              type="text" 
+              placeholder="Tìm kiếm bạn bè theo tên, biệt danh, @account..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-100 text-xs focus:outline-none focus:border-zinc-500 placeholder-zinc-500 transition-colors"
+            />
+          </div>
         </div>
 
-        {/* Body */}
-        <div className="friends-content-zinc">
-          {loading ? (
-            <div className="friends-loading-zinc font-mono text-xs">Đang tải danh sách kết nối...</div>
-          ) : activeTab === 'friends' ? (
-            friends.length === 0 ? (
-              <div className="friends-empty-zinc">
-                <Users size={32} className="text-zinc-600 mb-2" />
-                <p className="text-zinc-300 text-xs font-medium">Chưa có người bạn nào trong danh sách.</p>
-                <span className="text-zinc-500 text-[11.5px] mt-1 block">
-                  Nhấp vào avatar của thành viên trong sảnh hoặc phòng đàm thoại để gửi lời mời!
+        {/* SEGMENTED TAB SWITCHER */}
+        <div className="px-4 py-2.5 border-b border-zinc-800/50 bg-zinc-900/20 flex-shrink-0">
+          <div className="grid grid-cols-2 gap-1.5 bg-zinc-900 p-1 rounded-xl border border-zinc-800/80">
+            <button 
+              type="button"
+              onClick={() => setActiveTab('friends')}
+              className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
+                activeTab === 'friends' 
+                  ? 'bg-zinc-800 text-zinc-100 shadow-sm font-bold' 
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <Users size={14} />
+              <span>Bạn bè ({friends.length})</span>
+            </button>
+
+            <button 
+              type="button"
+              onClick={() => setActiveTab('pending')}
+              className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all relative ${
+                activeTab === 'pending' 
+                  ? 'bg-zinc-800 text-zinc-100 shadow-sm font-bold' 
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <Clock size={14} />
+              <span>Lời mời kết bạn</span>
+              {pending.length > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-emerald-500 text-zinc-950 font-mono text-[10px] font-bold">
+                  {pending.length}
                 </span>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* LIST CONTENT AREA */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
+          {loading ? (
+            <div className="py-20 flex flex-col items-center justify-center gap-2 text-zinc-500 text-xs font-mono">
+              <div className="w-5 h-5 border-2 border-zinc-700 border-t-zinc-300 rounded-full animate-spin"></div>
+              <span>Đang tải danh sách kết nối...</span>
+            </div>
+          ) : activeTab === 'friends' ? (
+            filteredFriends.length === 0 ? (
+              <div className="py-16 px-4 flex flex-col items-center justify-center text-center">
+                <div className="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-600 mb-3 shadow-inner">
+                  <Users size={26} />
+                </div>
+                <h4 className="text-zinc-200 font-bold text-sm">
+                  {searchQuery ? "Không tìm thấy người bạn nào phù hợp" : "Chưa có người bạn nào"}
+                </h4>
+                <p className="text-zinc-500 text-xs mt-1 max-w-xs leading-relaxed">
+                  {searchQuery 
+                    ? "Hãy thử tìm kiếm với tên hoặc ký tự khác."
+                    : "Tham gia các phòng đàm thoại hoặc nhấp vào avatar của thành viên trên Sảnh để gửi lời mời kết bạn nhé!"}
+                </p>
+                {!searchQuery && (
+                  <button 
+                    type="button" 
+                    onClick={() => { onClose(); navigate('/'); }}
+                    className="mt-4 px-4 py-2 rounded-xl bg-zinc-100 hover:bg-white text-zinc-950 text-xs font-bold transition-all shadow-md active:scale-95"
+                  >
+                    Khám phá sảnh trò chuyện
+                  </button>
+                )}
               </div>
             ) : (
-              <div className="friends-list-zinc">
-                {friends.map((friend) => (
-                  <div key={friend.id} className="friend-item-zinc" onClick={() => onSelectUser && onSelectUser(friend.id)}>
-                    <div className="friend-avatar-wrap">
-                      {friend.avatar && !friend.avatar.includes('dicebear') && !friend.avatar.includes('bottts') ? (
-                        <img 
-                          src={friend.avatar} 
-                          alt="Avatar" 
-                          className="friend-avatar-img" 
-                        />
-                      ) : (
-                        <div className="friend-avatar-fallback">
-                          {(friend.nickname || friend.account || 'U').charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                      <span className="dot-online-zinc"></span>
-                    </div>
-                    
-                    <div className="friend-meta-zinc">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-medium text-xs text-zinc-100">{friend.nickname || friend.account}</span>
-                        {friend.isVerified && <CheckCircle2 size={12} className="text-zinc-400" />}
-                        <span className="font-mono text-[9px] uppercase px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
-                          PRO
-                        </span>
-                      </div>
-                      <p className="font-mono text-[11px] text-zinc-500 mt-0.5">
-                        {friend.location ? friend.location : `@${friend.account}`}
-                      </p>
-                    </div>
-
-                    <div className="friend-actions-cell" onClick={(e) => e.stopPropagation()}>
-                      {onStartPrivateCall && (
-                        <button 
-                          onClick={() => { onClose(); onStartPrivateCall(friend); }}
-                          className="btn-friend-action call"
-                          title="Đàm thoại 1-1"
-                        >
-                          <Phone size={12} />
-                        </button>
-                      )}
-                      <button 
-                        onClick={() => handleRemove(friend.id, friend.nickname)}
-                        className="btn-friend-action danger"
-                        title="Hủy kết bạn"
+              <div className="space-y-2.5">
+                {filteredFriends.map((friend) => {
+                  const hasPhotoAvatar = friend.avatar && !friend.avatar.includes('dicebear') && !friend.avatar.includes('bottts');
+                  const friendName = friend.nickname || friend.account || 'Thành viên';
+                  
+                  return (
+                    <div 
+                      key={friend.id} 
+                      className="p-3.5 rounded-2xl bg-zinc-900/80 border border-zinc-800/80 hover:border-zinc-700/80 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm group"
+                    >
+                      {/* Left: Avatar & Info */}
+                      <div 
+                        className="flex items-center gap-3 min-w-0 cursor-pointer"
+                        onClick={() => {
+                          if (onSelectUser) onSelectUser(friend.id);
+                        }}
+                        title="Xem hồ sơ chi tiết"
                       >
-                        <UserMinus size={12} />
-                      </button>
+                        <div className="relative flex-shrink-0">
+                          <div className="w-12 h-12 rounded-xl bg-zinc-800 border border-zinc-700 overflow-hidden flex items-center justify-center shadow-md">
+                            {hasPhotoAvatar ? (
+                              <img src={friend.avatar} alt={friendName} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-700 to-zinc-900 text-white font-bold text-base">
+                                {friendName.charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                          </div>
+                          <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-zinc-950"></span>
+                        </div>
+
+                        <div className="flex flex-col min-w-0">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <span className="text-zinc-100 font-bold text-sm truncate">{friendName}</span>
+                            <span className="px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-300 font-mono text-[9px] font-bold uppercase border border-zinc-700/60">
+                              PRO
+                            </span>
+                          </div>
+                          <span className="text-zinc-500 font-mono text-xs truncate">
+                            {friend.location ? friend.location : `@${friend.account}`}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Right: Actions Row (Nhắn tin, Gọi thoại, Xem hồ sơ, Hủy kết bạn) */}
+                      <div className="flex items-center gap-2 self-end sm:self-center flex-shrink-0 pt-1 sm:pt-0 border-t sm:border-t-0 border-zinc-800/60 w-full sm:w-auto justify-end">
+                        {/* Nút Nhắn tin 1-1 */}
+                        <button
+                          type="button"
+                          onClick={() => handleOpenDirectChat(friend)}
+                          className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-indigo-900/20 transition-all active:scale-95"
+                          title="Nhắn tin 1-1"
+                        >
+                          <MessageSquare size={13} />
+                          <span>Nhắn tin</span>
+                        </button>
+
+                        {/* Nút Gọi thoại 1-1 */}
+                        <button
+                          type="button"
+                          onClick={() => handleStartCall(friend)}
+                          className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-emerald-400 hover:text-emerald-300 transition-all active:scale-95 border border-zinc-700/60"
+                          title="Gọi thoại 1-1"
+                        >
+                          <Phone size={14} />
+                        </button>
+
+                        {/* Nút Xem Hồ sơ */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (onSelectUser) onSelectUser(friend.id);
+                          }}
+                          className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-all active:scale-95 border border-zinc-700/60"
+                          title="Xem thông tin cá nhân"
+                        >
+                          <User size={14} />
+                        </button>
+
+                        {/* Nút Hủy kết bạn */}
+                        <button
+                          type="button"
+                          onClick={() => setConfirmUnfriend(friend)}
+                          className="p-2 rounded-xl bg-zinc-900 hover:bg-red-950/60 text-zinc-500 hover:text-red-400 transition-all active:scale-95 border border-zinc-800"
+                          title="Hủy kết bạn"
+                        >
+                          <UserMinus size={14} />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )
           ) : (
+            /* TAB: LỜI MỜI KẾT BẠN */
             pending.length === 0 ? (
-              <div className="friends-empty-zinc">
-                <Clock size={32} className="text-zinc-600 mb-2" />
-                <p className="text-zinc-300 text-xs font-medium">Không có lời mời kết bạn nào đang chờ.</p>
+              <div className="py-16 px-4 flex flex-col items-center justify-center text-center">
+                <div className="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-600 mb-3 shadow-inner">
+                  <Clock size={26} />
+                </div>
+                <h4 className="text-zinc-200 font-bold text-sm">Không có lời mời nào</h4>
+                <p className="text-zinc-500 text-xs mt-1">Khi có người gửi lời mời kết nối, yêu cầu sẽ xuất hiện tại đây.</p>
               </div>
             ) : (
-              <div className="friends-list-zinc">
+              <div className="space-y-2.5">
                 {pending.map((req) => {
                   const senderId = req.senderDTO?.id || req.id;
                   const senderName = req.senderDTO?.nickname || req.nickname || req.senderDTO?.account || req.account || 'Thành viên';
                   const senderAccount = req.senderDTO?.account || req.account || 'user';
                   const senderAvatar = req.senderDTO?.avatar || req.avatar;
+                  const hasPhotoAvatar = senderAvatar && !senderAvatar.includes('dicebear') && !senderAvatar.includes('bottts');
+                  const isBusy = actionInProgress[senderId];
 
                   return (
-                    <div key={senderId} className="friend-item-zinc">
-                      <div className="friend-avatar-wrap">
-                        {senderAvatar && !senderAvatar.includes('dicebear') && !senderAvatar.includes('bottts') ? (
-                          <img 
-                            src={senderAvatar} 
-                            alt="Avatar" 
-                            className="friend-avatar-img" 
-                          />
-                        ) : (
-                          <div className="friend-avatar-fallback">
-                            {senderName.charAt(0).toUpperCase()}
-                          </div>
-                        )}
+                    <div 
+                      key={senderId} 
+                      className="p-3.5 rounded-2xl bg-zinc-900/90 border border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-12 h-12 rounded-xl bg-zinc-800 border border-zinc-700 overflow-hidden flex items-center justify-center flex-shrink-0 shadow-md">
+                          {hasPhotoAvatar ? (
+                            <img src={senderAvatar} alt={senderName} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-700 to-zinc-900 text-white font-bold text-base">
+                              {senderName.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-zinc-100 font-bold text-sm truncate">{senderName}</span>
+                          <span className="text-zinc-500 font-mono text-xs truncate">@{senderAccount} muốn kết bạn</span>
+                        </div>
                       </div>
-                      <div className="friend-meta-zinc">
-                        <span className="font-medium text-xs text-zinc-100">
-                          {senderName}
-                        </span>
-                        <p className="font-mono text-[11px] text-zinc-500">@{senderAccount}</p>
-                      </div>
-                      <div className="friend-actions-cell" style={{ display: 'flex', gap: '6px' }}>
-                        <button 
+
+                      <div className="flex items-center gap-2 self-end sm:self-center flex-shrink-0 w-full sm:w-auto justify-end pt-1 sm:pt-0 border-t sm:border-t-0 border-zinc-800/60">
+                        <button
+                          type="button"
+                          disabled={isBusy}
                           onClick={() => handleAccept(senderId, senderName)}
-                          className="btn-accept-req font-mono"
+                          className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-md active:scale-95 disabled:opacity-50"
                         >
                           Đồng ý
                         </button>
-                        <button 
+                        <button
+                          type="button"
+                          disabled={isBusy}
                           onClick={() => handleDecline(senderId, senderName)}
-                          className="btn-decline-req font-mono"
+                          className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs font-semibold transition-all border border-zinc-700/60 active:scale-95 disabled:opacity-50"
                         >
                           Từ chối
                         </button>
@@ -223,242 +424,38 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall }) => {
             )
           )}
         </div>
+
+        {/* DIALOG XÁC NHẬN HỦY KẾT BẠN */}
+        {confirmUnfriend && (
+          <div className="absolute inset-0 z-40 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in" onClick={() => setConfirmUnfriend(null)}>
+            <div className="w-full max-w-sm rounded-2xl bg-zinc-900 border border-zinc-800 p-5 shadow-2xl text-center space-y-3" onClick={(e) => e.stopPropagation()}>
+              <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-center mx-auto">
+                <AlertCircle size={24} />
+              </div>
+              <h3 className="text-zinc-100 font-bold text-sm">Hủy Kết Bạn</h3>
+              <p className="text-zinc-400 text-xs leading-relaxed">
+                Bạn có chắc chắn muốn hủy kết bạn với <strong>{confirmUnfriend.nickname || confirmUnfriend.account}</strong> không?
+              </p>
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmUnfriend(null)}
+                  className="flex-1 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition-all"
+                >
+                  Giữ lại
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveFriend(confirmUnfriend.id, confirmUnfriend.nickname)}
+                  className="flex-1 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition-all shadow-md active:scale-95"
+                >
+                  Xác nhận Hủy
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-
-      <style>{`
-        .friends-backdrop {
-          position: fixed;
-          inset: 0;
-          background: rgba(0, 0, 0, 0.75);
-          backdrop-filter: blur(8px);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 9999;
-          padding: 16px;
-        }
-
-        .friends-card-zinc {
-          width: 100%;
-          max-width: 420px;
-          background: #0d0e12;
-          border: 1px solid #27272a;
-          border-radius: 12px;
-          box-shadow: 0 25px 50px rgba(0, 0, 0, 0.8);
-          overflow: hidden;
-        }
-
-        .friends-header-zinc {
-          padding: 12px 16px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          border-bottom: 1px solid #1f2026;
-          background: #09090b;
-        }
-
-        .friends-title-wrap {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-
-        .btn-close-zinc {
-          width: 24px;
-          height: 24px;
-          border-radius: 6px;
-          border: 1px solid #27272a;
-          background: #14151a;
-          color: #a1a1aa;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-        }
-        .btn-close-zinc:hover {
-          color: white;
-          background: #27272a;
-        }
-
-        .friends-tabs-zinc {
-          display: flex;
-          background: #09090b;
-          border-bottom: 1px solid #1f2026;
-        }
-
-        .tab-btn-zinc {
-          flex: 1;
-          background: transparent;
-          border: none;
-          color: #71717a;
-          padding: 9px;
-          cursor: pointer;
-          border-bottom: 2px solid transparent;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 6px;
-          transition: all 0.15s;
-        }
-        .tab-btn-zinc:hover {
-          color: #d4d4d8;
-        }
-        .tab-btn-zinc.active {
-          color: #f4f4f5;
-          border-bottom-color: #f4f4f5;
-          background: rgba(255, 255, 255, 0.02);
-        }
-
-        .badge-count-zinc {
-          background: #27272a;
-          border: 1px solid #3f3f46;
-          color: #f4f4f5;
-          font-size: 9.5px;
-          padding: 0.5px 5px;
-          border-radius: 4px;
-        }
-
-        .friends-content-zinc {
-          padding: 12px;
-          min-height: 220px;
-          max-height: 380px;
-          overflow-y: auto;
-        }
-
-        .friends-loading-zinc, .friends-empty-zinc {
-          text-align: center;
-          padding: 36px 16px;
-          color: #71717a;
-        }
-
-        .friends-list-zinc {
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-        }
-
-        .friend-item-zinc {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 8px 10px;
-          background: rgba(24, 24, 27, 0.4);
-          border: 1px solid #1f2026;
-          border-radius: 8px;
-          cursor: pointer;
-          transition: all 0.15s;
-        }
-        .friend-item-zinc:hover {
-          background: rgba(24, 24, 27, 0.8);
-          border-color: #3f3f46;
-        }
-
-        .friend-avatar-wrap {
-          position: relative;
-          width: 36px;
-          height: 36px;
-          border-radius: 8px;
-          background: #18181b;
-          border: 1px solid #27272a;
-          flex-shrink: 0;
-        }
-        .friend-avatar-img {
-          width: 100%;
-          height: 100%;
-          border-radius: 8px;
-          object-fit: cover;
-        }
-
-        .dot-online-zinc {
-          position: absolute;
-          top: -2px;
-          right: -2px;
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-          background: #10b981;
-          border: 1.5px solid #0d0e12;
-        }
-
-        .friend-meta-zinc {
-          flex: 1;
-          min-width: 0;
-        }
-
-        .friend-actions-cell {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-        }
-
-        .btn-friend-action {
-          width: 26px;
-          height: 26px;
-          border-radius: 6px;
-          border: 1px solid #27272a;
-          background: #18181b;
-          color: #a1a1aa;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-        }
-        .btn-friend-action:hover {
-          color: white;
-          background: #27272a;
-        }
-        .btn-friend-action.call {
-          color: #34d399;
-          border-color: rgba(16, 185, 129, 0.3);
-        }
-        .btn-friend-action.danger:hover {
-          color: #f87171;
-          border-color: rgba(239, 68, 68, 0.3);
-        }
-
-        .btn-accept-req {
-          background: #f4f4f5;
-          border: none;
-          color: #09090b;
-          padding: 4px 10px;
-          border-radius: 6px;
-          font-size: 11px;
-          font-weight: 500;
-          cursor: pointer;
-        }
-        .btn-accept-req:hover {
-          background: white;
-        }
-
-        .btn-decline-req {
-          background: transparent;
-          border: 1px solid #3f3f46;
-          color: #a1a1aa;
-          padding: 4px 10px;
-          border-radius: 6px;
-          font-size: 11px;
-          cursor: pointer;
-          transition: all 0.15s;
-        }
-        .btn-decline-req:hover {
-          background: #27272a;
-          color: #f87171;
-          border-color: #ef4444;
-        }
-
-        .friend-avatar-fallback {
-          width: 100%;
-          height: 100%;
-          border-radius: 8px;
-          background: #27272a;
-          color: #f4f4f5;
-          font-weight: 600;
-          font-size: 13px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-      `}</style>
     </div>
   );
 };

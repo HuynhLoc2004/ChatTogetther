@@ -7,3 +7,4 @@ public class CreateChallengeRequest {
     private String question;
     private String category;
 }
+

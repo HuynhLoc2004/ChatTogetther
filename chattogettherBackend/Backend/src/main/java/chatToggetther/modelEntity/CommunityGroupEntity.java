@@ -49,3 +49,4 @@ public class CommunityGroupEntity {
     @OneToMany(mappedBy = "group", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<CommunityMemberEntity> members = new ArrayList<>();
 }
+

@@ -17,3 +17,4 @@ public interface CommunityMemberRepository extends JpaRepository<CommunityMember
     List<CommunityMemberEntity> findByUserAndStatus(UserEntity user, String status);
     void deleteByGroupAndUser(CommunityGroupEntity group, UserEntity user);
 }
+

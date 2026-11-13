@@ -27,3 +27,4 @@ public class CreateGroupRequest {
     private Boolean isPrivate = false;
     private Boolean requiresApproval = false;
 }
+

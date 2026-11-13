@@ -14,3 +14,4 @@ public interface ChallengeRepository extends JpaRepository<ChallengeEntity, Long
 
     long countByActiveTrue();
 }
+

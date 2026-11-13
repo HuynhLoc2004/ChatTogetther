@@ -46,3 +46,4 @@ public class ChallengeEntity {
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
 }
+

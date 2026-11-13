@@ -30,3 +30,4 @@ public class CommunityGroupDTO {
     private LocalDateTime createdAt;
     private List<CommunityMemberDTO> members = new ArrayList<>();
 }
+

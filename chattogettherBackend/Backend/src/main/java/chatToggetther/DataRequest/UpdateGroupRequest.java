@@ -24,3 +24,4 @@ public class UpdateGroupRequest {
     private String avatarUrl;
     private Boolean requiresApproval;
 }
+

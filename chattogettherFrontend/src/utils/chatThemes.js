@@ -90,3 +90,4 @@ export const CHAT_THEMES = [
 export const getThemeById = (themeId) => {
   return CHAT_THEMES.find(t => t.id === themeId) || CHAT_THEMES[0];
 };
+

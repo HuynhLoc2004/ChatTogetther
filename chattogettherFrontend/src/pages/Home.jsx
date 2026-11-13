@@ -2582,6 +2582,11 @@ const Home = () => {
           isOpen={isFriendsOpen}
           onClose={() => setIsFriendsOpen(false)}
           currentUserId={currentUserId}
+          onSelectUser={(uid) => {
+            setIsFriendsOpen(false);
+            setSelectedProfileUserId(uid);
+          }}
+          navigate={navigate}
         />
       )}
 
