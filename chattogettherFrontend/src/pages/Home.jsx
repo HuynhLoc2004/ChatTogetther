@@ -233,17 +233,37 @@ const Home = () => {
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState(() => {
     try {
-      const stored = localStorage.getItem(`talovin_notifs_${currentUserId}`);
+      const stored = localStorage.getItem('talovin_notifs_cache') || (currentUserId ? localStorage.getItem(`talovin_notifs_${currentUserId}`) : null);
       return stored ? JSON.parse(stored) : [];
     } catch {
       return [];
     }
   });
 
+  // Đồng bộ nạp thông báo khi currentUserId sẵn sàng
   useEffect(() => {
     if (currentUserId) {
       try {
-        localStorage.setItem(`talovin_notifs_${currentUserId}`, JSON.stringify(notifications.slice(0, 30)));
+        const stored = localStorage.getItem(`talovin_notifs_${currentUserId}`) || localStorage.getItem('talovin_notifs_cache');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setNotifications(prev => prev.length === 0 ? parsed : prev);
+          }
+        }
+      } catch {}
+    }
+  }, [currentUserId]);
+
+  // Lưu trữ lịch sử thông báo (tránh ghi đè mảng rỗng khi vừa mount)
+  useEffect(() => {
+    if (notifications.length > 0) {
+      try {
+        const serialized = JSON.stringify(notifications.slice(0, 50));
+        localStorage.setItem('talovin_notifs_cache', serialized);
+        if (currentUserId) {
+          localStorage.setItem(`talovin_notifs_${currentUserId}`, serialized);
+        }
       } catch {}
     }
   }, [notifications, currentUserId]);
@@ -998,6 +1018,16 @@ const Home = () => {
             if (message.body === 'FRIEND_REQUEST_RECEIVED' || message.body === 'FRIEND_REQUEST_ACCEPTED') {
               fetchFriends();
               fetchPendingFriendsCount();
+              const notifItem = {
+                id: Date.now(),
+                text: message.body === 'FRIEND_REQUEST_RECEIVED' 
+                  ? 'Bạn có một lời mời kết bạn mới!' 
+                  : 'Lời mời kết bạn của bạn đã được chấp nhận!',
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                unread: true,
+                type: 'FRIEND'
+              };
+              setNotifications(prev => [notifItem, ...prev]);
             }
           });
 
@@ -1410,31 +1440,177 @@ const Home = () => {
               </button>
             </div>
 
-            <button 
-              onClick={() => setIsNotifOpen(!isNotifOpen)} 
-              className="btn-header-notif hidden sm:flex"
-              title="Thông báo sảnh"
-            >
-              <Bell size={15} strokeWidth={1.5} />
-              {notifications.some(n => n.unread) && <span className="notif-dot"></span>}
-            </button>
+            {/* CỤM CHUÔNG THÔNG BÁO SẢNH (Anchored Dropdown trên PC & Slide Sheet trên Mobile) */}
+            <div className="notif-anchor-wrap hidden sm:block" style={{ position: 'relative' }}>
+              <button 
+                onClick={() => setIsNotifOpen(!isNotifOpen)} 
+                className="btn-header-notif"
+                title="Thông báo sảnh"
+              >
+                <Bell size={15} strokeWidth={1.5} />
+                {notifications.some(n => n.unread) && <span className="notif-dot"></span>}
+              </button>
 
-            {/* Modal / Sheet Thông Báo Thời Gian Thực (Responsive chuẩn trên cả Mobile và Desktop) */}
+              {/* Dropdown Card cố định ngay dưới chuông trên Desktop */}
+              {isNotifOpen && (
+                <>
+                  <div 
+                    style={{ position: 'fixed', inset: 0, zIndex: 90 }} 
+                    onClick={() => setIsNotifOpen(false)} 
+                  />
+                  <div 
+                    className="notif-desktop-popover animate-fade-in"
+                    style={{
+                      position: 'absolute',
+                      top: 'calc(100% + 8px)',
+                      right: 0,
+                      width: '320px',
+                      background: '#151824',
+                      border: '1px solid #2c3246',
+                      borderRadius: '16px',
+                      boxShadow: '0 16px 40px -4px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.05)',
+                      zIndex: 100,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      overflow: 'hidden'
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {/* Header Dropdown */}
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '12px 14px',
+                      borderBottom: '1px solid #23283c',
+                      background: '#11131c'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Bell size={14} style={{ color: '#e2e8f0' }} />
+                        <span style={{ fontSize: '13px', fontWeight: 600, color: '#f8fafc' }}>Thông báo sảnh</span>
+                        {notifications.filter(n => n.unread).length > 0 && (
+                          <span style={{
+                            fontSize: '10px',
+                            fontFamily: 'monospace',
+                            padding: '1px 6px',
+                            borderRadius: '9999px',
+                            background: 'rgba(16, 185, 129, 0.2)',
+                            color: '#34d399',
+                            border: '1px solid rgba(16, 185, 129, 0.3)'
+                          }}>
+                            {notifications.filter(n => n.unread).length}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {notifications.length > 0 && (
+                          <button 
+                            onClick={() => setNotifications(prev => prev.map(n => ({ ...n, unread: false })))} 
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: '#94a3b8',
+                              fontSize: '11px',
+                              cursor: 'pointer',
+                              fontWeight: 500
+                            }}
+                          >
+                            Đã đọc hết
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => setIsNotifOpen(false)} 
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#94a3b8',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            padding: '2px'
+                          }}
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Danh sách thông báo */}
+                    <div style={{ maxHeight: '360px', overflowY: 'auto', padding: '6px' }}>
+                      {notifications.length === 0 ? (
+                        <div style={{ padding: '32px 16px', textAlign: 'center', color: '#94a3b8' }}>
+                          <Bell size={24} style={{ margin: '0 auto 8px auto', opacity: 0.4, color: '#64748b' }} />
+                          <p style={{ fontSize: '12.5px', fontWeight: 600, color: '#e2e8f0', margin: '0 0 4px 0' }}>Chưa có thông báo nào</p>
+                          <p style={{ fontSize: '11px', color: '#64748b', margin: 0, lineHeight: 1.4 }}>
+                            Các lượt thả cảm xúc, lời mời kết bạn và phản hồi sẽ hiển thị ở đây.
+                          </p>
+                        </div>
+                      ) : (
+                        notifications.map(n => (
+                          <div 
+                            key={n.id} 
+                            onClick={() => {
+                              setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, unread: false } : item));
+                              setIsNotifOpen(false);
+                              if (n.postId) {
+                                const el = document.getElementById(`post-${n.postId}`);
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                              }
+                            }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              gap: '10px',
+                              padding: '10px 12px',
+                              borderRadius: '10px',
+                              cursor: 'pointer',
+                              background: n.unread ? 'rgba(32, 36, 54, 0.6)' : 'transparent',
+                              border: n.unread ? '1px solid rgba(59, 130, 246, 0.25)' : '1px solid transparent',
+                              marginBottom: '4px',
+                              transition: 'all 0.15s'
+                            }}
+                          >
+                            <div style={{
+                              width: '6px',
+                              height: '6px',
+                              borderRadius: '50%',
+                              background: '#38bdf8',
+                              marginTop: '6px',
+                              flexShrink: 0,
+                              opacity: n.unread ? 1 : 0
+                            }} />
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <p style={{ margin: 0, fontSize: '12px', color: '#f1f5f9', lineHeight: 1.4, wordBreak: 'break-word' }}>
+                                {n.text}
+                              </p>
+                              <span style={{ fontSize: '10px', color: '#64748b', marginTop: '3px', display: 'block', fontFamily: 'monospace' }}>
+                                {n.time}
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Modal Thông Báo trên Mobile (Khi mở từ thanh mobile-top-bar) */}
             {isNotifOpen && (
               <div 
-                className="fixed inset-0 z-50 flex items-end sm:items-start sm:justify-end p-0 sm:p-4 bg-black/60 backdrop-blur-sm sm:bg-transparent sm:backdrop-blur-none"
+                className="sm:hidden fixed inset-0 z-50 flex items-end bg-black/75 backdrop-blur-sm animate-fade-in"
                 onClick={() => setIsNotifOpen(false)}
               >
                 <div 
-                  className="w-full sm:w-80 max-h-[85vh] sm:max-h-[500px] rounded-t-3xl sm:rounded-2xl bg-zinc-900 border border-zinc-800 shadow-2xl flex flex-col overflow-hidden sm:mt-12 sm:mr-4 animate-slide-up sm:animate-fade-in"
+                  className="w-full max-h-[80vh] rounded-t-3xl bg-[#151824] border-t border-[#2c3246] shadow-2xl flex flex-col overflow-hidden animate-slide-up"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <div className="notif-header flex items-center justify-between p-4 border-b border-zinc-800 flex-shrink-0">
+                  <div className="flex items-center justify-between p-4 border-b border-[#23283c]">
                     <div className="flex items-center gap-2">
-                      <Bell size={14} className="text-zinc-300" />
-                      <h4 className="text-zinc-100 font-bold text-xs tracking-tight">Thông báo sảnh</h4>
+                      <Bell size={16} className="text-zinc-200" />
+                      <span className="text-sm font-bold text-white">Thông báo sảnh</span>
                       {notifications.filter(n => n.unread).length > 0 && (
-                        <span className="notif-counter-pill font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] border border-emerald-500/30">
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">
                           {notifications.filter(n => n.unread).length}
                         </span>
                       )}
@@ -1443,32 +1619,29 @@ const Home = () => {
                       {notifications.length > 0 && (
                         <button 
                           onClick={() => setNotifications(prev => prev.map(n => ({ ...n, unread: false })))} 
-                          className="text-zinc-400 hover:text-zinc-200 text-[11px] font-mono"
+                          className="text-zinc-400 text-xs font-mono"
                         >
                           Đã đọc hết
                         </button>
                       )}
-                      <button 
-                        onClick={() => setIsNotifOpen(false)} 
-                        className="text-zinc-400 hover:text-white p-1"
-                      >
-                        <X size={14} />
+                      <button onClick={() => setIsNotifOpen(false)} className="text-zinc-400 p-1">
+                        <X size={18} />
                       </button>
                     </div>
                   </div>
 
-                  <div className="p-2 overflow-y-auto max-h-[60vh] divide-y divide-zinc-800/40">
+                  <div className="p-3 overflow-y-auto max-h-[60vh]">
                     {notifications.length === 0 ? (
-                      <div className="notif-empty-state py-12 px-4 text-center">
-                        <Bell size={24} className="mx-auto mb-2 text-zinc-600 opacity-60" />
-                        <p className="text-xs text-zinc-400 font-medium">Chưa có thông báo nào</p>
-                        <p className="text-[11px] text-zinc-500 mt-1">Các lượt thả cảm xúc, lời mời kết bạn và bình luận sẽ hiển thị ở đây.</p>
+                      <div className="py-12 text-center text-zinc-400">
+                        <Bell size={28} className="mx-auto mb-2 opacity-40 text-zinc-500" />
+                        <p className="text-sm font-semibold text-zinc-300">Chưa có thông báo nào</p>
+                        <p className="text-xs text-zinc-500 mt-1">Các lượt thả cảm xúc, lời mời kết bạn và bình luận sẽ hiển thị ở đây.</p>
                       </div>
                     ) : (
                       notifications.map(n => (
                         <div 
-                          key={n.id} 
-                          className={`p-3 rounded-xl hover:bg-zinc-800/50 cursor-pointer transition-colors flex items-start gap-3 ${n.unread ? 'bg-zinc-800/20' : ''}`}
+                          key={n.id}
+                          className="p-3 rounded-xl mb-2 bg-[#1c2030] text-xs text-zinc-200 border border-[#2c3246]"
                           onClick={() => {
                             setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, unread: false } : item));
                             setIsNotifOpen(false);
@@ -1478,11 +1651,8 @@ const Home = () => {
                             }
                           }}
                         >
-                          <div className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0 bg-emerald-500" style={{ opacity: n.unread ? 1 : 0 }}></div>
-                          <div className="flex-1">
-                            <p className="text-xs text-zinc-200 leading-snug">{n.text}</p>
-                            <span className="font-mono text-[10px] text-zinc-500 mt-1 block">{n.time}</span>
-                          </div>
+                          <p className="font-medium text-zinc-100">{n.text}</p>
+                          <span className="text-[10px] text-zinc-500 font-mono block mt-1">{n.time}</span>
                         </div>
                       ))
                     )}

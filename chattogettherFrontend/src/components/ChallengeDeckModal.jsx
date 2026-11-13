@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  X, Dices, Share2, Sparkles, Plus, Check, Loader2, 
+import {
+  X, Dices, Share2, Sparkles, Plus, Check, Loader2,
   RotateCw, Flame, MessageSquareQuote, User, Send
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
@@ -116,7 +116,7 @@ export const ChallengeDeckModal = ({ isOpen, onClose, onShareToFeed }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in" onClick={onClose}>
-      <div 
+      <div
         className="w-full max-w-lg bg-zinc-950/95 border border-zinc-800/90 rounded-2xl shadow-2xl overflow-hidden flex flex-col transition-all"
         onClick={(e) => e.stopPropagation()}
         style={{ maxHeight: '92vh' }}
@@ -137,8 +137,8 @@ export const ChallengeDeckModal = ({ isOpen, onClose, onShareToFeed }) => {
               <p className="text-[11px] text-zinc-400">Khơi nguồn đối thoại, kết nối cảm xúc chân thật</p>
             </div>
           </div>
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose}
             className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/60 transition-colors"
           >
             <X size={16} />
@@ -154,16 +154,15 @@ export const ChallengeDeckModal = ({ isOpen, onClose, onShareToFeed }) => {
                 key={cat.key}
                 type="button"
                 onClick={() => handleSelectCategory(cat.key)}
-                className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                  isSelected 
-                    ? 'bg-zinc-100 text-zinc-900 shadow-sm font-bold' 
+                className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${isSelected
+                    ? 'bg-zinc-100 text-zinc-900 shadow-sm font-bold'
                     : 'bg-zinc-900/80 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 border border-zinc-800'
-                }`}
+                  }`}
               >
                 {cat.key !== 'ALL' && (
-                  <span 
-                    className="w-1.5 h-1.5 rounded-full" 
-                    style={{ backgroundColor: isSelected ? '#18181b' : cat.color || '#a1a1aa' }} 
+                  <span
+                    className="w-1.5 h-1.5 rounded-full"
+                    style={{ backgroundColor: isSelected ? '#18181b' : cat.color || '#a1a1aa' }}
                   />
                 )}
                 {cat.label}
@@ -177,16 +176,16 @@ export const ChallengeDeckModal = ({ isOpen, onClose, onShareToFeed }) => {
           {/* Card Lá Bài */}
           <div className="relative min-h-[220px] rounded-2xl p-5 border transition-all duration-300 flex flex-col justify-between bg-gradient-to-br from-zinc-900/90 via-zinc-900/40 to-zinc-950 border-zinc-800/90 hover:border-zinc-700 shadow-lg">
             {/* Background Ambient Glow */}
-            <div 
+            <div
               className="absolute -top-12 -right-12 w-36 h-36 rounded-full blur-3xl opacity-15 pointer-events-none"
               style={{ backgroundColor: currentChallenge?.badgeColor || '#6366f1' }}
             />
 
             {/* Top Bar of Card */}
             <div className="flex items-center justify-between relative z-10">
-              <div 
+              <div
                 className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold tracking-wide uppercase"
-                style={{ 
+                style={{
                   backgroundColor: `${currentChallenge?.badgeColor || '#6366f1'}15`,
                   color: currentChallenge?.badgeColor || '#818cf8',
                   border: `1px solid ${currentChallenge?.badgeColor || '#6366f1'}35`
@@ -264,8 +263,8 @@ export const ChallengeDeckModal = ({ isOpen, onClose, onShareToFeed }) => {
                 <span className="text-xs font-bold text-zinc-200 flex items-center gap-1.5">
                   <Sparkles size={13} className="text-amber-400" /> Đóng góp câu hỏi mới
                 </span>
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={() => setShowContributeForm(false)}
                   className="text-zinc-500 hover:text-zinc-300 text-xs"
                 >
