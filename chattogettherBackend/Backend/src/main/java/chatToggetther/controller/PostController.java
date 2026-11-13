@@ -38,9 +38,10 @@ public class PostController {
     @PostMapping("/{id}/like")
     public ResponseEntity<ResponseData<PostDTO>> toggleLike(
             JwtAuthenticationToken token,
-            @PathVariable("id") Long postId
+            @PathVariable("id") Long postId,
+            @RequestParam(value = "type", required = false) String reactionType
     ) {
-        return ResponseEntity.ok(this.postService.toggleLikePost(token, postId));
+        return ResponseEntity.ok(this.postService.toggleLikePost(token, postId, reactionType));
     }
 
     @GetMapping("/{id}/comments")
@@ -65,4 +66,3 @@ public class PostController {
         return ResponseEntity.ok(this.postService.searchPosts(token, keyword));
     }
 }
-

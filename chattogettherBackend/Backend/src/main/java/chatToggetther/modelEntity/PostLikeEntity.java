@@ -26,7 +26,9 @@ public class PostLikeEntity {
     @JoinColumn(name = "user_id", nullable = false)
     private UserEntity user;
 
+    @Column(name = "reaction_type")
+    private String reactionType = "HEART"; // HEART, FIRE, HAHA, WOW, LIKE, CROWN
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 }
-

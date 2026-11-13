@@ -13,5 +13,8 @@ import lombok.Setter;
 public class CreatePostRequest {
     @NotBlank(message = "Nội dung bài viết không được để trống")
     private String content;
-}
 
+    private String imageUrl;
+
+    private String vibe;
+}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Users, X, UserCheck, Phone, Clock, UserMinus, MessageSquare } from 'lucide-react';
+import { Users, X, UserCheck, Phone, Clock, UserMinus, MessageSquare, Crown, Gem, CheckCircle2 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
 
@@ -100,7 +100,15 @@ const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall }) => {
                       <span className="dot-online"></span>
                     </div>
                     <div className="friend-meta">
-                      <h4>{friend.nickname || friend.account}</h4>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <h4>{friend.nickname || friend.account}</h4>
+                        {friend.isVerified && <CheckCircle2 size={13} color="#38bdf8" />}
+                        {friend.vipTier === 'FOUNDER' ? (
+                          <span style={{ fontSize: '10px', background: 'rgba(245, 158, 11, 0.2)', color: '#fbbf24', padding: '1px 5px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}><Crown size={10} /> Sáng Lập</span>
+                        ) : (
+                          <span style={{ fontSize: '10px', background: 'rgba(56, 189, 248, 0.2)', color: '#38bdf8', padding: '1px 5px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}><Gem size={10} /> VIP</span>
+                        )}
+                      </div>
                       <p>{friend.location ? `📍 ${friend.location}` : `@${friend.account}`}</p>
                     </div>
                     <div className="friend-actions-cell" onClick={(e) => e.stopPropagation()}>

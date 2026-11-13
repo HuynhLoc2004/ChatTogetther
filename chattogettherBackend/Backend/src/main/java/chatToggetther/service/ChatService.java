@@ -2,6 +2,7 @@ package chatToggetther.service;
 
 import chatToggetther.Customize.AppException;
 import chatToggetther.Customize.ResponseData;
+import chatToggetther.Customize.SecurityUtils;
 import chatToggetther.DTO.SendMessageDTO;
 import chatToggetther.DataRequest.MessageRequest;
 import chatToggetther.ENUMS.ErrorCode;
@@ -46,7 +47,7 @@ public class ChatService {
                 throw new AppException(400, "Tin nhắn không được để trống", 400);
             }
 
-            Long userId = jwtAuthenticationToken.getToken().getClaim("user_id");
+            Long userId = SecurityUtils.extractUserId(jwtAuthenticationToken);
             UserEntity userEntity = this.userRepository.findById(userId).orElseThrow(()->{
                 throw new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "không tồn tại user" , ErrorCode.USER_NOT_EXISTED.getStatusCode().value());
             });

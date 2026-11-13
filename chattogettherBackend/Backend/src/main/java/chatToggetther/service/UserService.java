@@ -2,6 +2,7 @@ package chatToggetther.service;
 
 import chatToggetther.Customize.AppException;
 import chatToggetther.Customize.ResponseData;
+import chatToggetther.Customize.SecurityUtils;
 import chatToggetther.DTO.UserDTO;
 import chatToggetther.DataRequest.UpdateProfileRequest;
 import chatToggetther.DataRequest.UserRequest;
@@ -35,10 +36,15 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public ResponseData<Long> getActiveRoom(JwtAuthenticationToken jwtAuthenticationToken) {
-        Long userId = jwtAuthenticationToken.getToken().getClaim("user_id");
-        UserEntity userEntity = this.userRepository.findById(userId).orElseThrow(() -> {
-            throw new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "user không tồn tại", ErrorCode.USER_NOT_EXISTED.getStatusCode().value());
-        });
+        Long userId = SecurityUtils.extractUserId(jwtAuthenticationToken);
+        if (userId == null) {
+            return new ResponseData<>(200, "User không ở trong phòng nào", null);
+        }
+
+        UserEntity userEntity = this.userRepository.findById(userId).orElse(null);
+        if (userEntity == null) {
+            return new ResponseData<>(200, "User không ở trong phòng nào", null);
+        }
 
         UserRoomEntity userRoomEntity = userEntity.getUserRoomEntity();
         if (userRoomEntity != null && Boolean.TRUE.equals(userRoomEntity.getActive()) && userRoomEntity.getRoomEntity() != null) {
@@ -52,7 +58,11 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public ResponseData<UserDTO> getUserProfile(JwtAuthenticationToken jwtAuthenticationToken, Long targetUserId) {
-        Long currentUserId = jwtAuthenticationToken.getToken().getClaim("user_id");
+        Long currentUserId = SecurityUtils.extractUserId(jwtAuthenticationToken);
+        if (currentUserId == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
+        }
+
         Long lookupId = (targetUserId != null) ? targetUserId : currentUserId;
 
         UserEntity targetUser = this.userRepository.findById(lookupId).orElseThrow(() ->
@@ -72,6 +82,24 @@ public class UserService {
         dto.setLocation(targetUser.getLocation());
         dto.setBio(targetUser.getBio());
         dto.setActive(targetUser.getActive());
+        dto.setRoles(targetUser.getRoles());
+
+        // Thiết lập đặc quyền, danh hiệu & badge
+        boolean isAdmin = targetUser.getRoles() != null && (targetUser.getRoles().contains("ROLE_AMDIN") || targetUser.getRoles().contains("ROLE_ADMIN"));
+        dto.setIsVerified(isAdmin || (targetUser.getId() != null && targetUser.getId() <= 5));
+        dto.setLevel(isAdmin ? 99 : (targetUser.getId() != null ? (int)(10 + (targetUser.getId() * 3) % 40) : 15));
+        dto.setStreakDays(7);
+
+        if (isAdmin) {
+            dto.setVipTier("FOUNDER");
+            dto.setCustomTitle("👑 Sáng Lập & Quản Trị Viên");
+        } else if (targetUser.getId() != null && targetUser.getId() % 2 == 0) {
+            dto.setVipTier("VIP_DIAMOND");
+            dto.setCustomTitle("💎 VIP Kim Cương");
+        } else {
+            dto.setVipTier("VIP_PRO");
+            dto.setCustomTitle("✨ Vibe Master");
+        }
 
         if (currentUserId.equals(lookupId)) {
             dto.setFriendshipStatus("SELF");
@@ -100,7 +128,11 @@ public class UserService {
 
     @Transactional
     public ResponseData<UserDTO> updateUserProfile(JwtAuthenticationToken jwtAuthenticationToken, UpdateProfileRequest request) {
-        Long currentUserId = jwtAuthenticationToken.getToken().getClaim("user_id");
+        Long currentUserId = SecurityUtils.extractUserId(jwtAuthenticationToken);
+        if (currentUserId == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
+        }
+
         UserEntity currentUser = this.userRepository.findById(currentUserId).orElseThrow(() ->
             new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "Người dùng không tồn tại", 404)
         );
@@ -123,18 +155,7 @@ public class UserService {
 
         this.userRepository.save(currentUser);
 
-        UserDTO dto = new UserDTO();
-        dto.setId(currentUser.getId());
-        dto.setAccount(currentUser.getAccount());
-        dto.setNickname(currentUser.getNickname());
-        dto.setAvatar(currentUser.getAvatar());
-        dto.setAge(currentUser.getAge());
-        dto.setLocation(currentUser.getLocation());
-        dto.setBio(currentUser.getBio());
-        dto.setActive(currentUser.getActive());
-        dto.setFriendshipStatus("SELF");
-
-        return new ResponseData<>(200, "Cập nhật thông tin cá nhân thành công", dto);
+        return getUserProfile(jwtAuthenticationToken, currentUser.getId());
     }
 
     public ResponseData<Boolean> create_user(UserRequest userRequest){

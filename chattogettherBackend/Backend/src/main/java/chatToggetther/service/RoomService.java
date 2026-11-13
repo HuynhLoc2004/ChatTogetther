@@ -2,6 +2,7 @@ package chatToggetther.service;
 
 import chatToggetther.Customize.AppException;
 import chatToggetther.Customize.ResponseData;
+import chatToggetther.Customize.SecurityUtils;
 import chatToggetther.DTO.RoomDTO;
 import chatToggetther.DTO.UserDTO;
 import chatToggetther.DTO.UserRoomDTO;
@@ -45,7 +46,7 @@ public class RoomService {
 
     @Transactional
     public ResponseData<CreateRoomResponseDTO> createRoom(JwtAuthenticationToken jwtAuthenticationToken , RoomRequest roomRequest, HttpServletResponse httpServletResponse){
-        Long userId = jwtAuthenticationToken.getToken().getClaim("user_id");
+        Long userId = SecurityUtils.extractUserId(jwtAuthenticationToken);
         UserEntity userEntity = this.userRepository.findById(userId).orElseThrow(()->{
             throw new AppException(ErrorCode.USER_NOT_EXISTED.getCode(),  "user không tồn tại" , ErrorCode.USER_NOT_EXISTED.getStatusCode().value());
         });
@@ -178,7 +179,7 @@ public class RoomService {
 
     @Transactional
     public ResponseData<Long> joinRoom(JwtAuthenticationToken jwtAuthenticationToken ,Long idRoom, JoinRoomRequest joinRoomRequest){
-          Long userId = jwtAuthenticationToken.getToken().getClaim("user_id");
+          Long userId = SecurityUtils.extractUserId(jwtAuthenticationToken);
           UserEntity userEntity = this.userRepository.findById(userId).orElseThrow(()->{
               throw new AppException(ErrorCode.USER_NOT_EXISTED.getCode(),  "user không tồn tại" , ErrorCode.USER_NOT_EXISTED.getStatusCode().value());
           });
@@ -252,7 +253,7 @@ public class RoomService {
 
     @Transactional
     public ResponseData<Boolean> leaveRoom(JwtAuthenticationToken jwtAuthenticationToken, Long idRoom) {
-        Long userId = jwtAuthenticationToken.getToken().getClaim("user_id");
+        Long userId = SecurityUtils.extractUserId(jwtAuthenticationToken);
         UserEntity userEntity = this.userRepository.findById(userId).orElseThrow(() -> {
             throw new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "user không tồn tại", ErrorCode.USER_NOT_EXISTED.getStatusCode().value());
         });
@@ -301,7 +302,7 @@ public class RoomService {
 
     @Transactional
     public ResponseData<Boolean> removeUserFromRoom(JwtAuthenticationToken jwtAuthenticationToken, Long userIdToRemove, Long roomId) {
-        Long adminId = jwtAuthenticationToken.getToken().getClaim("user_id");
+        Long adminId = SecurityUtils.extractUserId(jwtAuthenticationToken);
         
         UserRoomEntity adminRoom = userRoomRepository.findAll().stream()
                 .filter(ur -> ur.getUserEntity().getId().equals(adminId) && ur.getRoomEntity().getId().equals(roomId))
@@ -343,7 +344,7 @@ public class RoomService {
 
     @Transactional
     public ResponseData<Boolean> disbandRoom(JwtAuthenticationToken jwtAuthenticationToken, Long roomId) {
-        Long adminId = jwtAuthenticationToken.getToken().getClaim("user_id");
+        Long adminId = SecurityUtils.extractUserId(jwtAuthenticationToken);
         RoomEntity roomEntity = roomRepository.findById(roomId).orElseThrow(() -> new AppException(404, "Phòng không tồn tại", 404));
 
         UserRoomEntity adminRoom = roomEntity.getUserRoomEntityList().stream()
@@ -388,7 +389,7 @@ public class RoomService {
 
     @Transactional
     public ResponseData<Boolean> delegateAdmin(JwtAuthenticationToken jwtAuthenticationToken, Long roomId, Long newAdminUserId) {
-        Long currentAdminId = jwtAuthenticationToken.getToken().getClaim("user_id");
+        Long currentAdminId = SecurityUtils.extractUserId(jwtAuthenticationToken);
         RoomEntity roomEntity = roomRepository.findById(roomId).orElseThrow(() -> new AppException(404, "Phòng không tồn tại", 404));
 
         UserRoomEntity currentAdminUR = roomEntity.getUserRoomEntityList().stream()

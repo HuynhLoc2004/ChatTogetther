@@ -2,6 +2,7 @@ package chatToggetther.service;
 
 import chatToggetther.Customize.AppException;
 import chatToggetther.Customize.ResponseData;
+import chatToggetther.Customize.SecurityUtils;
 import chatToggetther.DTO.UserDTO;
 import chatToggetther.ENUMS.ErrorCode;
 import chatToggetther.modelEntity.FriendshipEntity;
@@ -41,12 +42,32 @@ public class FriendService {
         dto.setBio(u.getBio());
         dto.setActive(u.getActive());
         dto.setFriendshipStatus(status);
+        dto.setRoles(u.getRoles());
+
+        boolean isAdmin = u.getRoles() != null && (u.getRoles().contains("ROLE_AMDIN") || u.getRoles().contains("ROLE_ADMIN"));
+        dto.setIsVerified(isAdmin || (u.getId() != null && u.getId() <= 5));
+        dto.setLevel(isAdmin ? 99 : (u.getId() != null ? (int)(10 + (u.getId() * 3) % 40) : 15));
+        dto.setStreakDays(7);
+        if (isAdmin) {
+            dto.setVipTier("FOUNDER");
+            dto.setCustomTitle("👑 Sáng Lập");
+        } else if (u.getId() != null && u.getId() % 2 == 0) {
+            dto.setVipTier("VIP_DIAMOND");
+            dto.setCustomTitle("💎 VIP Kim Cương");
+        } else {
+            dto.setVipTier("VIP_PRO");
+            dto.setCustomTitle("✨ Vibe Master");
+        }
+
         return dto;
     }
 
     @Transactional
     public ResponseData<Boolean> sendFriendRequest(JwtAuthenticationToken token, Long receiverId) {
-        Long senderId = token.getToken().getClaim("user_id");
+        Long senderId = SecurityUtils.extractUserId(token);
+        if (senderId == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
+        }
         if (senderId.equals(receiverId)) {
             throw new AppException(400, "Bạn không thể gửi lời mời kết bạn cho chính mình", 400);
         }
@@ -84,14 +105,20 @@ public class FriendService {
         friendshipRepository.save(friendship);
 
         // Báo cho receiver qua WebSocket
-        messagingTemplate.convertAndSend("/topic/user/" + receiverId, "FRIEND_REQUEST_RECEIVED");
+        try {
+            messagingTemplate.convertAndSend("/topic/user/" + receiverId, "FRIEND_REQUEST_RECEIVED");
+        } catch (Exception ignored) {}
 
         return new ResponseData<>(200, "Đã gửi lời mời kết bạn thành công", true);
     }
 
     @Transactional
     public ResponseData<Boolean> acceptFriendRequest(JwtAuthenticationToken token, Long senderId) {
-        Long receiverId = token.getToken().getClaim("user_id");
+        Long receiverId = SecurityUtils.extractUserId(token);
+        if (receiverId == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
+        }
+
         UserEntity receiver = userRepository.findById(receiverId).orElseThrow(() ->
             new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "User không tồn tại", 404)
         );
@@ -109,15 +136,21 @@ public class FriendService {
         friendshipRepository.save(f);
 
         // Báo cho cả 2 qua WebSocket
-        messagingTemplate.convertAndSend("/topic/user/" + senderId, "FRIEND_REQUEST_ACCEPTED");
-        messagingTemplate.convertAndSend("/topic/user/" + receiverId, "FRIEND_REQUEST_ACCEPTED");
+        try {
+            messagingTemplate.convertAndSend("/topic/user/" + senderId, "FRIEND_REQUEST_ACCEPTED");
+            messagingTemplate.convertAndSend("/topic/user/" + receiverId, "FRIEND_REQUEST_ACCEPTED");
+        } catch (Exception ignored) {}
 
         return new ResponseData<>(200, "Đã chấp nhận kết bạn", true);
     }
 
     @Transactional
     public ResponseData<Boolean> removeFriend(JwtAuthenticationToken token, Long targetId) {
-        Long currentUserId = token.getToken().getClaim("user_id");
+        Long currentUserId = SecurityUtils.extractUserId(token);
+        if (currentUserId == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
+        }
+
         UserEntity u1 = userRepository.findById(currentUserId).orElseThrow(() ->
             new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "User không tồn tại", 404)
         );
@@ -128,7 +161,9 @@ public class FriendService {
         Optional<FriendshipEntity> existing = friendshipRepository.findFriendshipBetween(u1, u2);
         if (existing.isPresent()) {
             friendshipRepository.delete(existing.get());
-            messagingTemplate.convertAndSend("/topic/user/" + targetId, "FRIEND_REMOVED");
+            try {
+                messagingTemplate.convertAndSend("/topic/user/" + targetId, "FRIEND_REMOVED");
+            } catch (Exception ignored) {}
             return new ResponseData<>(200, "Đã hủy kết bạn thành công", true);
         }
 
@@ -137,7 +172,11 @@ public class FriendService {
 
     @Transactional(readOnly = true)
     public ResponseData<List<UserDTO>> getFriendsList(JwtAuthenticationToken token) {
-        Long currentUserId = token.getToken().getClaim("user_id");
+        Long currentUserId = SecurityUtils.extractUserId(token);
+        if (currentUserId == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
+        }
+
         UserEntity user = userRepository.findById(currentUserId).orElseThrow(() ->
             new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "User không tồn tại", 404)
         );
@@ -153,7 +192,11 @@ public class FriendService {
 
     @Transactional(readOnly = true)
     public ResponseData<List<UserDTO>> getPendingRequests(JwtAuthenticationToken token) {
-        Long currentUserId = token.getToken().getClaim("user_id");
+        Long currentUserId = SecurityUtils.extractUserId(token);
+        if (currentUserId == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
+        }
+
         UserEntity user = userRepository.findById(currentUserId).orElseThrow(() ->
             new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "User không tồn tại", 404)
         );
@@ -164,4 +207,3 @@ public class FriendService {
         return new ResponseData<>(200, "Lấy danh sách lời mời kết bạn thành công", dtos);
     }
 }
-

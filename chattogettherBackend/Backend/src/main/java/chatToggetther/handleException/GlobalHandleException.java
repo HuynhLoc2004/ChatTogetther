@@ -51,7 +51,7 @@ public class GlobalHandleException {
         } else {
             responseErr.setMessage("Vi phạm ràng buộc dữ liệu trong hệ thống.");
         }
-        return  ResponseEntity.status(responseErr.getCode()).body(responseErr);
+        return ResponseEntity.status(responseErr.getStatusCode()).body(responseErr);
     }
     @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
     public ResponseEntity<ResponseErr> handleAccessDeniedException(org.springframework.security.access.AccessDeniedException e) {

@@ -6,6 +6,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @AllArgsConstructor
 @NoArgsConstructor
@@ -14,6 +15,8 @@ import java.time.LocalDateTime;
 public class PostDTO {
     private Long id;
     private String content;
+    private String imageUrl;
+    private String vibe;
     private LocalDateTime createdAt;
     private String formattedTime;
     
@@ -23,10 +26,15 @@ public class PostDTO {
     private String authorAccount;
     private String authorAvatar;
     private String authorLocation;
+    private List<String> authorRoles;
+    private String authorVipTier;
+    private String authorBadge;
+    private Boolean authorIsVerified;
 
-    // Số liệu tương tác
+    // Số liệu tương tác & Reactions
     private Integer likesCount;
     private Integer commentsCount;
     private Boolean isLikedByMe;
+    private String myReaction; // "HEART", "FIRE", "HAHA", "WOW", "LIKE", "CROWN"
+    private String reactionSummary; // e.g. "❤️ 🔥 😂"
 }
-

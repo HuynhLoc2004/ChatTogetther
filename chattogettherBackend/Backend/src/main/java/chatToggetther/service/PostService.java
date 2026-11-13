@@ -2,6 +2,7 @@ package chatToggetther.service;
 
 import chatToggetther.Customize.AppException;
 import chatToggetther.Customize.ResponseData;
+import chatToggetther.Customize.SecurityUtils;
 import chatToggetther.DTO.CommentDTO;
 import chatToggetther.DTO.PostDTO;
 import chatToggetther.DataRequest.CreateCommentRequest;
@@ -54,6 +55,8 @@ public class PostService {
         PostDTO dto = new PostDTO();
         dto.setId(post.getId());
         dto.setContent(post.getContent());
+        dto.setImageUrl(post.getImageUrl());
+        dto.setVibe(post.getVibe());
         dto.setCreatedAt(post.getCreatedAt());
         dto.setFormattedTime(post.getCreatedAt() != null ? post.getCreatedAt().format(TIME_FORMATTER) : "");
 
@@ -64,11 +67,39 @@ public class PostService {
             dto.setAuthorAccount(author.getAccount());
             dto.setAuthorAvatar(author.getAvatar());
             dto.setAuthorLocation(author.getLocation());
+            dto.setAuthorRoles(author.getRoles());
+
+            // Đặc quyền / Danh hiệu / VIP Badge
+            boolean isAdmin = author.getRoles() != null && (author.getRoles().contains("ROLE_AMDIN") || author.getRoles().contains("ROLE_ADMIN"));
+            dto.setAuthorIsVerified(isAdmin || (author.getId() != null && author.getId() <= 5));
+            if (isAdmin) {
+                dto.setAuthorVipTier("FOUNDER");
+                dto.setAuthorBadge("👑 Sáng Lập");
+            } else if (author.getId() != null && author.getId() % 2 == 0) {
+                dto.setAuthorVipTier("VIP_DIAMOND");
+                dto.setAuthorBadge("💎 VIP Kim Cương");
+            } else {
+                dto.setAuthorVipTier("VIP_PRO");
+                dto.setAuthorBadge("✨ Vibe Master");
+            }
         }
 
         dto.setLikesCount(this.postLikeRepository.countByPost(post));
         dto.setCommentsCount(this.commentRepository.countByPost(post));
-        dto.setIsLikedByMe(currentUser != null && this.postLikeRepository.existsByPostAndUser(post, currentUser));
+
+        if (currentUser != null) {
+            Optional<PostLikeEntity> userLike = this.postLikeRepository.findByPostAndUser(post, currentUser);
+            if (userLike.isPresent()) {
+                dto.setIsLikedByMe(true);
+                dto.setMyReaction(userLike.get().getReactionType() != null ? userLike.get().getReactionType() : "HEART");
+            } else {
+                dto.setIsLikedByMe(false);
+                dto.setMyReaction(null);
+            }
+        } else {
+            dto.setIsLikedByMe(false);
+            dto.setMyReaction(null);
+        }
 
         return dto;
     }
@@ -93,8 +124,8 @@ public class PostService {
 
     @Transactional(readOnly = true)
     public ResponseData<List<PostDTO>> getAllPosts(JwtAuthenticationToken token) {
-        Long currentUserId = token.getToken().getClaim("user_id");
-        UserEntity currentUser = this.userRepository.findById(currentUserId).orElse(null);
+        Long currentUserId = SecurityUtils.extractUserId(token);
+        UserEntity currentUser = currentUserId != null ? this.userRepository.findById(currentUserId).orElse(null) : null;
 
         List<PostEntity> posts = this.postRepository.findAllPostsWithDetails();
         List<PostDTO> dtos = posts.stream()
@@ -110,7 +141,11 @@ public class PostService {
             throw new AppException(400, "Nội dung bài viết không được để trống", 400);
         }
 
-        Long currentUserId = token.getToken().getClaim("user_id");
+        Long currentUserId = SecurityUtils.extractUserId(token);
+        if (currentUserId == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập để đăng bài", 401);
+        }
+
         UserEntity currentUser = this.userRepository.findById(currentUserId).orElseThrow(() ->
             new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "Người dùng không tồn tại", 404)
         );
@@ -118,20 +153,32 @@ public class PostService {
         PostEntity post = new PostEntity();
         post.setUser(currentUser);
         post.setContent(request.getContent().trim());
+        if (request.getImageUrl() != null && !request.getImageUrl().trim().isEmpty()) {
+            post.setImageUrl(request.getImageUrl().trim());
+        }
+        if (request.getVibe() != null && !request.getVibe().trim().isEmpty()) {
+            post.setVibe(request.getVibe().trim());
+        }
         post.setCreatedAt(LocalDateTime.now());
         this.postRepository.save(post);
 
         PostDTO dto = mapToPostDTO(post, currentUser);
 
         // Thông báo realtime bài đăng mới qua WebSocket
-        this.messagingTemplate.convertAndSend("/topic/posts", "NEW_POST");
+        try {
+            this.messagingTemplate.convertAndSend("/topic/posts", "NEW_POST");
+        } catch (Exception ignored) {}
 
         return new ResponseData<>(200, "Đăng bài viết thành công", dto);
     }
 
     @Transactional
-    public ResponseData<PostDTO> toggleLikePost(JwtAuthenticationToken token, Long postId) {
-        Long currentUserId = token.getToken().getClaim("user_id");
+    public ResponseData<PostDTO> toggleLikePost(JwtAuthenticationToken token, Long postId, String reactionType) {
+        Long currentUserId = SecurityUtils.extractUserId(token);
+        if (currentUserId == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
+        }
+
         UserEntity currentUser = this.userRepository.findById(currentUserId).orElseThrow(() ->
             new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "Người dùng không tồn tại", 404)
         );
@@ -140,18 +187,38 @@ public class PostService {
             new AppException(404, "Bài viết không tồn tại", 404)
         );
 
+        String desiredReaction = (reactionType != null && !reactionType.trim().isEmpty()) 
+                ? reactionType.trim().toUpperCase() 
+                : "HEART";
+
         Optional<PostLikeEntity> existingLike = this.postLikeRepository.findByPostAndUser(post, currentUser);
         if (existingLike.isPresent()) {
-            this.postLikeRepository.delete(existingLike.get());
+            PostLikeEntity like = existingLike.get();
+            // Nếu bấm cùng 1 reaction thì bỏ thích (toggle off)
+            if (desiredReaction.equalsIgnoreCase(like.getReactionType())) {
+                this.postLikeRepository.delete(like);
+            } else {
+                // Nếu bấm reaction khác (VD từ LIKE sang FIRE), cập nhật reaction
+                like.setReactionType(desiredReaction);
+                like.setCreatedAt(LocalDateTime.now());
+                this.postLikeRepository.save(like);
+            }
         } else {
             PostLikeEntity like = new PostLikeEntity();
             like.setPost(post);
             like.setUser(currentUser);
+            like.setReactionType(desiredReaction);
             like.setCreatedAt(LocalDateTime.now());
             this.postLikeRepository.save(like);
         }
 
         PostDTO dto = mapToPostDTO(post, currentUser);
+
+        // Realtime notification
+        try {
+            this.messagingTemplate.convertAndSend("/topic/posts", "POST_REACTION_UPDATED");
+        } catch (Exception ignored) {}
+
         return new ResponseData<>(200, "Thao tác thả cảm xúc thành công", dto);
     }
 
@@ -172,7 +239,11 @@ public class PostService {
             throw new AppException(400, "Nội dung bình luận không được để trống", 400);
         }
 
-        Long currentUserId = token.getToken().getClaim("user_id");
+        Long currentUserId = SecurityUtils.extractUserId(token);
+        if (currentUserId == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
+        }
+
         UserEntity currentUser = this.userRepository.findById(currentUserId).orElseThrow(() ->
             new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "Người dùng không tồn tại", 404)
         );
@@ -188,13 +259,17 @@ public class PostService {
         comment.setCreatedAt(LocalDateTime.now());
         this.commentRepository.save(comment);
 
+        try {
+            this.messagingTemplate.convertAndSend("/topic/posts", "POST_COMMENT_ADDED");
+        } catch (Exception ignored) {}
+
         return new ResponseData<>(200, "Bình luận thành công", mapToCommentDTO(comment));
     }
 
     @Transactional(readOnly = true)
     public ResponseData<List<PostDTO>> searchPosts(JwtAuthenticationToken token, String keyword) {
-        Long currentUserId = token.getToken().getClaim("user_id");
-        UserEntity currentUser = this.userRepository.findById(currentUserId).orElse(null);
+        Long currentUserId = SecurityUtils.extractUserId(token);
+        UserEntity currentUser = currentUserId != null ? this.userRepository.findById(currentUserId).orElse(null) : null;
 
         List<PostEntity> posts = this.postRepository.searchPosts(keyword != null ? keyword.trim() : "");
         List<PostDTO> dtos = posts.stream()
@@ -204,4 +279,3 @@ public class PostService {
         return new ResponseData<>(200, "Tìm kiếm bài viết thành công", dtos);
     }
 }
-
