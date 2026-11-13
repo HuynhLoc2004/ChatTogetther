@@ -115,7 +115,7 @@ const ChatRoom = () => {
     };
     const handleOffline = () => {
       setIsOffline(true);
-      toast("Đang ngoại tuyến. Bạn có thể xem tin nhắn đã lưu.", { icon: '📶' });
+      toast("Đang ngoại tuyến. Bạn có thể xem tin nhắn đã lưu.");
     };
 
     window.addEventListener('online', handleOnline);
@@ -404,7 +404,7 @@ const ChatRoom = () => {
       targetUserId: privateCallTarget?.id
     });
     cleanupCall();
-    toast("Đã kết thúc cuộc gọi", { icon: '📞' });
+    toast("Đã kết thúc cuộc gọi");
   };
 
   const handleCallSignal = useCallback(async (msg) => {
@@ -438,7 +438,7 @@ const ChatRoom = () => {
       }
     } else if (msg.type === 'END') {
       cleanupCall();
-      toast("Cuộc gọi đã kết thúc", { icon: '📞' });
+      toast("Cuộc gọi đã kết thúc");
     }
   }, [currentUserId, cleanupCall]);
 
@@ -501,7 +501,7 @@ const ChatRoom = () => {
                 navigate('/');
                 return;
              }
-             toast(`${receivedMsg.message}`, { icon: '🚪' });
+             toast(`${receivedMsg.message}`);
              fetchRoomDetail(true);
              return;
           }

@@ -39,9 +39,11 @@ public class PostController {
     public ResponseEntity<ResponseData<PostDTO>> toggleLike(
             JwtAuthenticationToken token,
             @PathVariable("id") Long postId,
-            @RequestParam(value = "type", required = false) String reactionType
+            @RequestParam(value = "type", required = false) String reactionType,
+            @RequestParam(value = "reactionType", required = false) String reactionTypeAlt
     ) {
-        return ResponseEntity.ok(this.postService.toggleLikePost(token, postId, reactionType));
+        String effectiveType = (reactionType != null && !reactionType.trim().isEmpty()) ? reactionType : reactionTypeAlt;
+        return ResponseEntity.ok(this.postService.toggleLikePost(token, postId, effectiveType));
     }
 
     @GetMapping("/{id}/comments")
