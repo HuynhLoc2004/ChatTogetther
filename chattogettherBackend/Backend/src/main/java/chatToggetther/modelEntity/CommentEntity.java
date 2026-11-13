@@ -27,6 +27,12 @@ public class CommentEntity {
     @Column(name = "content", nullable = false, columnDefinition = "TEXT")
     private String content;
 
+    @Column(name = "parent_id")
+    private Long parentId;
+
+    @Column(name = "reply_to_user")
+    private String replyToUser;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 }

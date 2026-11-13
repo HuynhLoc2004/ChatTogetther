@@ -19,32 +19,53 @@ import Stomp from 'stompjs';
 import toast from 'react-hot-toast';
 import TalovinLogo from '../components/TalovinLogo';
 
-// Avatar: Ưu tiên ảnh thật từ backend. Nếu chưa có ảnh, dùng DiceBear neutral theo username
+// Avatar: Ưu tiên ảnh thật người dùng tải lên. Nếu chưa có ảnh, dùng Monogram chữ cái tối giản (Tuyệt đối không dùng avatar robot hoạt hình)
 export const UserAvatar = ({ avatar, name = '', size = 36, className = "" }) => {
-  const seed = encodeURIComponent(name || 'user');
-  const fallback = `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=${seed}`;
-  const src = avatar && avatar.trim() ? avatar : fallback;
+  const initial = (name || 'U').trim().charAt(0).toUpperCase();
+
+  if (avatar && avatar.trim() && !avatar.includes('dicebear.com/7.x/bottts')) {
+    return (
+      <img 
+        src={avatar} 
+        alt={name || "Avatar"} 
+        className={`user-avatar-img ${className}`} 
+        style={{ 
+          width: size, 
+          height: size, 
+          borderRadius: '50%', 
+          objectFit: 'cover',
+          border: '1px solid rgba(255, 255, 255, 0.12)',
+          background: '#18181b',
+          flexShrink: 0
+        }} 
+        onError={(e) => {
+          e.target.style.display = 'none';
+        }}
+      />
+    );
+  }
 
   return (
-    <img 
-      src={src} 
-      alt={name || "Avatar"} 
-      className={`user-avatar-img ${className}`} 
+    <div 
+      className={`user-avatar-fallback select-none ${className}`} 
       style={{ 
         width: size, 
         height: size, 
         borderRadius: '50%', 
-        objectFit: 'cover',
-        border: '1px solid rgba(255, 255, 255, 0.1)',
-        background: '#18181b',
+        background: 'linear-gradient(145deg, #27272a, #141417)',
+        border: '1px solid #3f3f46',
+        color: '#f4f4f5',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: Math.max(11, size * 0.4),
+        fontWeight: 600,
         flexShrink: 0
-      }} 
-      onError={(e) => {
-        if (e.target.src !== fallback) {
-          e.target.src = fallback;
-        }
       }}
-    />
+      title={name}
+    >
+      {initial}
+    </div>
   );
 };
 
@@ -113,10 +134,13 @@ const parsePostMedia = (raw) => {
 const Home = () => {
   const navigate = useNavigate();
   const currentUserId = localStorage.getItem('user_id');
-  const currentUserName = localStorage.getItem('nickname') || localStorage.getItem('username') || '';
+  const currentUserName = localStorage.getItem('nickname') || localStorage.getItem('account') || localStorage.getItem('username') || 'Thành viên';
+  const currentUserAccount = localStorage.getItem('account') || localStorage.getItem('username') || 'user';
 
   // Navigation tab chính: 'feed' | 'rooms' | 'trending' | 'saved'
   const [activeTab, setActiveTab] = useState('feed');
+  const [pendingFriendsCount, setPendingFriendsCount] = useState(0);
+  const [replyTargetMap, setReplyTargetMap] = useState({});
 
   // State Phòng Chat
   const [rooms, setRooms] = useState([]);
@@ -678,19 +702,37 @@ const Home = () => {
     }
   };
 
+  const fetchPendingFriendsCount = async () => {
+    if (!currentUserId) return;
+    try {
+      const res = await axiosClient.get('/friends/pending');
+      if (res.data?.data) {
+        setPendingFriendsCount(res.data.data.length);
+      }
+    } catch {}
+  };
+
   const handleAddComment = async (postId) => {
     const text = commentInputs[postId]?.trim();
     if (!text) return;
 
+    const replyTarget = replyTargetMap[postId];
+    const payload = {
+      content: text,
+      parentId: replyTarget?.commentId || null,
+      replyToUser: replyTarget?.authorAccount || null
+    };
+
     try {
       setSubmittingComment(prev => ({ ...prev, [postId]: true }));
-      const res = await axiosClient.post(`/posts/${postId}/comments`, { content: text });
+      const res = await axiosClient.post(`/posts/${postId}/comments`, payload);
       if (res.data && res.data.data) {
         setCommentsMap(prev => ({
           ...prev,
           [postId]: [...(prev[postId] || []), res.data.data]
         }));
         setCommentInputs(prev => ({ ...prev, [postId]: '' }));
+        setReplyTargetMap(prev => ({ ...prev, [postId]: null }));
         setPosts(prev => prev.map(p => p.id === postId ? { ...p, commentsCount: (p.commentsCount || 0) + 1 } : p));
       }
     } catch (err) {
@@ -743,10 +785,10 @@ const Home = () => {
           [postId]: (prev[postId] || []).map(c => c.id === commentId ? res.data.data : c)
         }));
         setEditingCommentId(null);
-        toast.success("Đã sửa bình luận");
+        toast.success("Đã cập nhật bình luận");
       }
     } catch (err) {
-      toast.error("Lỗi cập nhật bình luận!");
+      toast.error(err.response?.data?.message || "Lỗi cập nhật bình luận!");
     } finally {
       setIsSavingComment(false);
     }
@@ -894,6 +936,7 @@ const Home = () => {
       fetchPosts();
       fetchTracks();
       checkActiveRoom();
+      fetchPendingFriendsCount();
     };
 
     init();
@@ -929,6 +972,7 @@ const Home = () => {
           stompClient.subscribe(`/topic/user/${currentUserId}`, (message) => {
             if (message.body === 'FRIEND_REQUEST_RECEIVED' || message.body === 'FRIEND_REQUEST_ACCEPTED') {
               fetchFriends();
+              fetchPendingFriendsCount();
             }
           });
         }
@@ -1187,11 +1231,18 @@ const Home = () => {
             </button>
 
             <button 
-              className="nav-item"
+              className="nav-item flex items-center justify-between"
               onClick={() => setIsFriendsOpen(true)}
             >
-              <Users size={15} strokeWidth={1.5} />
-              <span>Bạn bè</span>
+              <div className="flex items-center gap-2.5">
+                <Users size={15} strokeWidth={1.5} />
+                <span>Bạn bè</span>
+              </div>
+              {pendingFriendsCount > 0 && (
+                <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                  {pendingFriendsCount}
+                </span>
+              )}
             </button>
 
             <button 
@@ -1203,11 +1254,25 @@ const Home = () => {
             </button>
           </div>
 
-          {/* Nút đăng xuất */}
-          <div className="nav-footer">
-            <button onClick={handleLogout} className="btn-logout-nav">
-              <LogOut size={15} strokeWidth={1.5} />
-              <span>Đăng xuất</span>
+          {/* User Profile & Account Dock Card (Chân Sidebar chuẩn phong cách Linear / Discord) */}
+          <div className="nav-user-dock">
+            <div 
+              className="dock-user-profile" 
+              onClick={() => setSelectedProfileUserId(currentUserId)}
+              title="Quản lý tài khoản & tải ảnh đại diện"
+            >
+              <UserAvatar avatar={localStorage.getItem('user_avatar')} name={currentUserName} size={32} />
+              <div className="dock-user-meta">
+                <span className="dock-user-name">{currentUserName}</span>
+                <span className="dock-user-handle font-mono">@{currentUserAccount}</span>
+              </div>
+            </div>
+            <button 
+              onClick={handleLogout} 
+              className="btn-dock-logout" 
+              title="Đăng xuất khỏi Talovin"
+            >
+              <LogOut size={14} strokeWidth={1.5} />
             </button>
           </div>
         </aside>
@@ -1813,13 +1878,20 @@ const Home = () => {
                             onClick={() => handleReactPost(post.id, post.myReaction || 'HEART')}
                             onMouseEnter={() => setActiveReactionPicker(post.id)}
                             className={`action-btn ${post.isLikedByMe ? 'active-liked' : ''}`}
+                            title={currentReaction ? currentReaction.label : "Thả cảm xúc"}
                           >
-                            <Heart 
-                              size={15} 
-                              strokeWidth={1.5} 
-                              fill={post.isLikedByMe ? "#ef4444" : "none"} 
-                              color={post.isLikedByMe ? "#ef4444" : "currentColor"} 
-                            />
+                            {post.isLikedByMe && currentReaction ? (
+                              <span className="reaction-active-emoji text-sm select-none leading-none inline-block transform hover:scale-110 transition-transform">
+                                {currentReaction.emoji}
+                              </span>
+                            ) : (
+                              <Heart 
+                                size={15} 
+                                strokeWidth={1.5} 
+                                fill={post.isLikedByMe ? "#ef4444" : "none"} 
+                                color={post.isLikedByMe ? "#ef4444" : "currentColor"} 
+                              />
+                            )}
                             <span className="font-mono text-xs">{post.likesCount || 0}</span>
                           </button>
 
@@ -1869,23 +1941,65 @@ const Home = () => {
                       {expandedComments[post.id] && (
                         <div className="post-comments-container">
                           <div className="comments-stack">
-                            {commentsMap[post.id]?.length === 0 ? (
+                            {(!commentsMap[post.id] || commentsMap[post.id].length === 0) ? (
                               <p className="empty-cmt-notice">Chưa có phản hồi nào. Hãy là người đầu tiên chia sẻ góc nhìn!</p>
                             ) : (
-                              commentsMap[post.id]?.map((cmt) => {
+                              commentsMap[post.id].map((cmt) => {
                                 const isCmtMe = currentUserId && cmt.authorId?.toString() === currentUserId.toString();
                                 const canDeleteCmt = isCmtMe || (currentUserId && post.authorId?.toString() === currentUserId.toString());
                                 const isEditingThisCmt = editingCommentId === cmt.id;
+                                const isReply = Boolean(cmt.parentId || cmt.replyToUser);
 
                                 return (
-                                  <div key={cmt.id} className="cmt-row">
-                                    <UserAvatar avatar={cmt.authorAvatar} name={cmt.authorNickname || cmt.authorAccount} size={26} />
+                                  <div key={cmt.id} className={`cmt-row ${isReply ? 'cmt-reply-indented' : ''}`}>
+                                    <div 
+                                      className="cursor-pointer flex-shrink-0"
+                                      onClick={() => setSelectedProfileUserId(cmt.authorId)}
+                                      title="Xem hồ sơ cá nhân"
+                                    >
+                                      <UserAvatar 
+                                        avatar={cmt.authorAvatar} 
+                                        name={cmt.authorNickname || cmt.authorAccount} 
+                                        size={isReply ? 24 : 28} 
+                                      />
+                                    </div>
                                     <div className="cmt-bubble-content">
                                       <div className="cmt-name-row">
-                                        <span className="cmt-user-name">{cmt.authorNickname || cmt.authorAccount || 'Thành viên'}</span>
-                                        <span className="cmt-time-label font-mono">{cmt.formattedTime}</span>
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                          <span 
+                                            className="cmt-user-name cursor-pointer hover:underline"
+                                            onClick={() => setSelectedProfileUserId(cmt.authorId)}
+                                          >
+                                            {cmt.authorNickname || cmt.authorAccount || 'Thành viên'}
+                                          </span>
+                                          <span className="font-mono text-[10.5px] text-zinc-500">@{cmt.authorAccount || 'user'}</span>
+                                          <span className="text-zinc-600">·</span>
+                                          <span className="cmt-time-label font-mono">{cmt.formattedTime || 'Vừa xong'}</span>
+                                        </div>
 
                                         <div className="cmt-action-btns">
+                                          {/* Nút Trả lời phản hồi */}
+                                          <button 
+                                            type="button" 
+                                            onClick={() => {
+                                              setReplyTargetMap(prev => ({
+                                                ...prev,
+                                                [post.id]: {
+                                                  commentId: cmt.id,
+                                                  authorAccount: cmt.authorAccount || 'user',
+                                                  authorNickname: cmt.authorNickname || cmt.authorAccount || 'Thành viên'
+                                                }
+                                              }));
+                                              const inputEl = document.getElementById(`comment-input-${post.id}`);
+                                              if (inputEl) inputEl.focus();
+                                            }} 
+                                            className="btn-cmt-act reply"
+                                            title="Trả lời bình luận này"
+                                          >
+                                            <CornerDownRight size={11} />
+                                            <span>Trả lời</span>
+                                          </button>
+
                                           {isCmtMe && !isEditingThisCmt && (
                                             <button 
                                               type="button" 
@@ -1917,6 +2031,10 @@ const Home = () => {
                                             onChange={(e) => setEditingCommentText(e.target.value)}
                                             className="cmt-inline-edit-input"
                                             autoFocus
+                                            onKeyDown={(e) => {
+                                              if (e.key === 'Enter') handleSaveEditComment(post.id, cmt.id);
+                                              if (e.key === 'Escape') setEditingCommentId(null);
+                                            }}
                                           />
                                           <div className="cmt-inline-edit-actions">
                                             <button 
@@ -1932,12 +2050,19 @@ const Home = () => {
                                               disabled={isSavingComment}
                                               className="btn-save-inline-cmt"
                                             >
-                                              Lưu
+                                              {isSavingComment ? 'Đang lưu...' : 'Lưu'}
                                             </button>
                                           </div>
                                         </div>
                                       ) : (
-                                        <p className="cmt-body-text">{cmt.content}</p>
+                                        <p className="cmt-body-text">
+                                          {cmt.replyToUser && (
+                                            <span className="cmt-reply-tag font-mono">
+                                              @{cmt.replyToUser}
+                                            </span>
+                                          )}
+                                          {cmt.content}
+                                        </p>
                                       )}
                                     </div>
                                   </div>
@@ -1946,10 +2071,30 @@ const Home = () => {
                             )}
                           </div>
 
+                          {/* Thanh thông báo mục tiêu đang trả lời */}
+                          {replyTargetMap[post.id] && (
+                            <div className="replying-to-banner">
+                              <div className="flex items-center gap-1.5 text-xs text-zinc-300">
+                                <CornerDownRight size={12} className="text-sky-400" />
+                                <span>Đang trả lời <strong>@{replyTargetMap[post.id].authorAccount}</strong></span>
+                              </div>
+                              <button 
+                                type="button" 
+                                onClick={() => setReplyTargetMap(prev => ({ ...prev, [post.id]: null }))}
+                                className="btn-cancel-reply"
+                                title="Hủy trả lời"
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Khung nhập phản hồi */}
                           <div className="cmt-input-form">
                             <input 
+                              id={`comment-input-${post.id}`}
                               type="text" 
-                              placeholder="Viết phản hồi ngắn..." 
+                              placeholder={replyTargetMap[post.id] ? `Trả lời @${replyTargetMap[post.id].authorAccount}...` : "Viết phản hồi ngắn..."} 
                               value={commentInputs[post.id] || ''}
                               onChange={(e) => setCommentInputs({ ...commentInputs, [post.id]: e.target.value })}
                               onKeyDown={(e) => {
@@ -1964,6 +2109,7 @@ const Home = () => {
                               onClick={() => handleAddComment(post.id)}
                               disabled={submittingComment[post.id] || !commentInputs[post.id]?.trim()}
                               className="btn-submit-cmt"
+                              title="Gửi phản hồi"
                             >
                               <Send size={13} />
                             </button>
@@ -2596,22 +2742,68 @@ const Home = () => {
           font-weight: 600;
         }
 
-        .nav-footer { margin-top: auto; padding-top: 10px; }
-        .btn-logout-nav {
+        /* User Profile & Account Dock Card (Chân Sidebar chuẩn phong cách Linear / Discord) */
+        .nav-user-dock {
+          margin-top: auto;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          background: rgba(24, 24, 27, 0.7);
+          border: 1px solid var(--card-border);
+          border-radius: 8px;
+          padding: 8px 10px;
+          gap: 8px;
+          transition: background 0.15s;
+        }
+        .nav-user-dock:hover {
+          background: rgba(39, 39, 42, 0.6);
+        }
+        .dock-user-profile {
           display: flex;
           align-items: center;
           gap: 8px;
-          width: 100%;
-          padding: 8px 10px;
+          min-width: 0;
+          cursor: pointer;
+          flex: 1;
+        }
+        .dock-user-meta {
+          display: flex;
+          flex-direction: column;
+          min-width: 0;
+          line-height: 1.2;
+        }
+        .dock-user-name {
+          font-size: 12px;
+          font-weight: 600;
+          color: #f4f4f5;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .dock-user-handle {
+          font-size: 10px;
+          color: #71717a;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .btn-dock-logout {
           background: transparent;
           border: none;
-          color: #f87171;
-          font-size: 12.5px;
-          font-weight: 500;
+          color: #71717a;
           cursor: pointer;
+          padding: 6px;
           border-radius: 6px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.15s;
+          flex-shrink: 0;
         }
-        .btn-logout-nav:hover { background: rgba(239, 68, 68, 0.08); }
+        .btn-dock-logout:hover {
+          background: rgba(239, 68, 68, 0.15);
+          color: #f87171;
+        }
 
         /* ================= CỘT 2: STREAM CHÍNH ================= */
         .main-stream {
@@ -3640,93 +3832,216 @@ const Home = () => {
         .post-menu-item.danger { color: #f87171; }
         .post-menu-item.danger:hover { background: rgba(239, 68, 68, 0.15); color: #f87171; }
 
-        /* Comments Container (Chỉ mở khi bấm vào nút) */
+        /* Comments Container */
         .post-comments-container {
-          margin: 10px 0 0 46px;
-          background: #09090b;
-          border: 1px solid var(--card-border);
-          border-radius: 6px;
-          padding: 10px;
+          margin-top: 12px;
+          border-top: 1px solid var(--card-border);
+          padding-top: 12px;
         }
-        .comments-stack { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
-        .empty-cmt-notice { margin: 0; font-size: 11px; color: #71717a; font-style: italic; }
-        .cmt-row { display: flex; gap: 8px; }
+        .comments-stack {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          margin-bottom: 12px;
+        }
+        .empty-cmt-notice {
+          margin: 0;
+          font-size: 12px;
+          color: #71717a;
+          padding: 8px 4px;
+        }
+        .cmt-row {
+          display: flex;
+          align-items: flex-start;
+          gap: 10px;
+        }
+        .cmt-reply-indented {
+          margin-left: 28px;
+          position: relative;
+        }
+        .cmt-reply-indented::before {
+          content: '';
+          position: absolute;
+          left: -16px;
+          top: 10px;
+          width: 12px;
+          height: 12px;
+          border-left: 1.5px solid #3f3f46;
+          border-bottom: 1.5px solid #3f3f46;
+          border-bottom-left-radius: 6px;
+        }
         .cmt-bubble-content {
-          background: #18181b;
+          background: rgba(24, 24, 27, 0.6);
           border: 1px solid var(--card-border);
-          padding: 5px 8px;
-          border-radius: 6px;
+          padding: 8px 12px;
+          border-radius: 8px;
           flex: 1;
+          min-width: 0;
+          transition: border-color 0.15s;
         }
-        .cmt-name-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; }
-        .cmt-user-name { font-size: 11px; font-weight: 600; color: #f4f4f5; }
-        .cmt-time-label { font-size: 9.5px; color: #71717a; }
-        .cmt-body-text { margin: 0; font-size: 11.5px; color: #d4d4d8; }
-        .cmt-action-btns { display: flex; align-items: center; gap: 3px; margin-left: auto; }
+        .cmt-bubble-content:hover {
+          border-color: #3f3f46;
+        }
+        .cmt-name-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 4px;
+          gap: 8px;
+        }
+        .cmt-user-name {
+          font-size: 12px;
+          font-weight: 600;
+          color: #f4f4f5;
+        }
+        .cmt-time-label {
+          font-size: 10px;
+          color: #71717a;
+        }
+        .cmt-body-text {
+          margin: 0;
+          font-size: 12.5px;
+          color: #e4e4e7;
+          line-height: 1.45;
+          word-break: break-word;
+        }
+        .cmt-reply-tag {
+          color: #38bdf8;
+          font-size: 11px;
+          background: rgba(56, 189, 248, 0.1);
+          padding: 1px 5px;
+          border-radius: 4px;
+          border: 1px solid rgba(56, 189, 248, 0.2);
+          margin-right: 6px;
+          user-select: none;
+        }
+        .cmt-action-btns {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          margin-left: auto;
+        }
         .btn-cmt-act {
           background: transparent;
           border: none;
           color: #71717a;
           cursor: pointer;
-          padding: 2px;
+          padding: 2px 5px;
+          border-radius: 4px;
+          display: flex;
+          align-items: center;
+          gap: 3px;
+          font-size: 10.5px;
+          transition: all 0.15s;
+        }
+        .btn-cmt-act:hover { color: #d4d4d8; background: rgba(255, 255, 255, 0.05); }
+        .btn-cmt-act.reply:hover { color: #38bdf8; }
+        .btn-cmt-act.danger:hover { color: #f87171; }
+
+        .replying-to-banner {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          background: rgba(39, 39, 42, 0.5);
+          border: 1px solid #3f3f46;
+          border-radius: 6px;
+          padding: 5px 10px;
+          margin-bottom: 8px;
+          font-size: 11.5px;
+        }
+        .btn-cancel-reply {
+          background: transparent;
+          border: none;
+          color: #a1a1aa;
+          cursor: pointer;
           display: flex;
           align-items: center;
         }
-        .btn-cmt-act:hover { color: #d4d4d8; }
-        .btn-cmt-act.danger:hover { color: #f87171; }
-        .cmt-inline-edit-box { display: flex; flex-direction: column; gap: 5px; margin-top: 4px; }
+        .btn-cancel-reply:hover { color: white; }
+
+        .cmt-inline-edit-box {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          margin-top: 6px;
+        }
         .cmt-inline-edit-input {
           width: 100%;
           background: #09090b;
           border: 1px solid #3f3f46;
-          border-radius: 4px;
-          padding: 4px 6px;
+          border-radius: 6px;
+          padding: 6px 10px;
           color: white;
-          font-size: 11.5px;
+          font-size: 12px;
           outline: none;
+          box-sizing: border-box;
         }
-        .cmt-inline-edit-actions { display: flex; gap: 5px; justify-content: flex-end; }
+        .cmt-inline-edit-input:focus { border-color: #71717a; }
+        .cmt-inline-edit-actions { display: flex; gap: 6px; justify-content: flex-end; }
         .btn-save-inline-cmt {
           background: #f4f4f5;
           color: #09090b;
           border: none;
-          padding: 2px 8px;
-          border-radius: 4px;
-          font-size: 10.5px;
+          padding: 4px 10px;
+          border-radius: 6px;
+          font-size: 11px;
           font-weight: 600;
           cursor: pointer;
         }
+        .btn-save-inline-cmt:hover { background: white; }
         .btn-cancel-inline-cmt {
           background: transparent;
           color: #a1a1aa;
           border: 1px solid var(--card-border);
-          padding: 2px 6px;
-          border-radius: 4px;
-          font-size: 10.5px;
+          padding: 4px 8px;
+          border-radius: 6px;
+          font-size: 11px;
           cursor: pointer;
         }
-        .cmt-input-form { display: flex; gap: 6px; }
+        .btn-cancel-inline-cmt:hover { background: #27272a; color: white; }
+
+        .cmt-input-form {
+          display: flex;
+          gap: 8px;
+          background: rgba(24, 24, 27, 0.4);
+          border: 1px solid var(--card-border);
+          border-radius: 8px;
+          padding: 4px 6px;
+          align-items: center;
+        }
+        .cmt-input-form:focus-within {
+          border-color: #3f3f46;
+        }
         .cmt-input-form input {
           flex: 1;
-          background: #18181b;
-          border: 1px solid var(--card-border);
-          border-radius: 4px;
-          padding: 5px 8px;
+          background: transparent;
+          border: none;
+          padding: 6px 8px;
           color: white;
-          font-size: 11.5px;
+          font-size: 12.5px;
           outline: none;
         }
         .btn-submit-cmt {
           background: #f4f4f5;
           color: #09090b;
           border: none;
-          width: 26px;
-          height: 26px;
-          border-radius: 4px;
+          width: 30px;
+          height: 30px;
+          border-radius: 6px;
           display: flex;
           align-items: center;
           justify-content: center;
           cursor: pointer;
+          transition: all 0.15s;
+          flex-shrink: 0;
+        }
+        .btn-submit-cmt:hover:not(:disabled) {
+          background: white;
+          transform: translateY(-1px);
+        }
+        .btn-submit-cmt:disabled {
+          opacity: 0.4;
+          cursor: not-allowed;
         }
 
         /* ================= CỘT 3: RIGHT DOCK (280px - 300px) ================= */

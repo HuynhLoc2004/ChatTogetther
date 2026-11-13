@@ -118,6 +118,9 @@ public class PostService {
         dto.setCreatedAt(comment.getCreatedAt());
         dto.setFormattedTime(comment.getCreatedAt() != null ? comment.getCreatedAt().format(TIME_FORMATTER) : "");
 
+        dto.setParentId(comment.getParentId());
+        dto.setReplyToUser(comment.getReplyToUser());
+
         UserEntity author = comment.getUser();
         if (author != null) {
             dto.setAuthorId(author.getId());
@@ -258,15 +261,35 @@ public class PostService {
         comment.setPost(post);
         comment.setUser(currentUser);
         comment.setContent(request.getContent().trim());
+        comment.setParentId(request.getParentId());
+        comment.setReplyToUser(request.getReplyToUser() != null && !request.getReplyToUser().trim().isEmpty() ? request.getReplyToUser().trim() : null);
         comment.setCreatedAt(LocalDateTime.now());
         this.commentRepository.save(comment);
 
         try {
             this.messagingTemplate.convertAndSend("/topic/posts", "POST_COMMENT_ADDED");
+            String senderName = currentUser.getNickname() != null && !currentUser.getNickname().isEmpty() ? currentUser.getNickname() : currentUser.getAccount();
+
+            // Nếu trả lời bình luận của ai đó -> Gửi thông báo đến tác giả bình luận cha
+            if (request.getParentId() != null) {
+                this.commentRepository.findById(request.getParentId()).ifPresent(parentCmt -> {
+                    if (parentCmt.getUser() != null && !parentCmt.getUser().getId().equals(currentUser.getId())) {
+                        Map<String, Object> replyNotif = new HashMap<>();
+                        replyNotif.put("id", System.currentTimeMillis());
+                        replyNotif.put("type", "COMMENT_REPLY");
+                        replyNotif.put("postId", postId);
+                        replyNotif.put("text", senderName + " đã trả lời bình luận của bạn.");
+                        replyNotif.put("time", "Vừa xong");
+                        replyNotif.put("unread", true);
+                        this.messagingTemplate.convertAndSend("/topic/user/" + parentCmt.getUser().getId() + "/notifications", replyNotif);
+                    }
+                });
+            }
+
+            // Gửi thông báo cho tác giả bài viết nếu người bình luận khác tác giả bài
             if (post.getUser() != null && !post.getUser().getId().equals(currentUser.getId())) {
-                String senderName = currentUser.getNickname() != null && !currentUser.getNickname().isEmpty() ? currentUser.getNickname() : currentUser.getAccount();
                 Map<String, Object> notif = new HashMap<>();
-                notif.put("id", System.currentTimeMillis());
+                notif.put("id", System.currentTimeMillis() + 1);
                 notif.put("type", "COMMENT");
                 notif.put("postId", postId);
                 notif.put("text", senderName + " đã bình luận về bài viết của bạn.");

@@ -77,7 +77,7 @@ public class PostController {
         return ResponseEntity.ok(this.postService.deletePost(token, postId));
     }
 
-    @PutMapping("/{id}/comments/{commentId}")
+    @RequestMapping(value = {"/{id}/comments/{commentId}", "/{id}/comments/{commentId}/update"}, method = {RequestMethod.PUT, RequestMethod.POST})
     public ResponseEntity<ResponseData<CommentDTO>> updateComment(
             JwtAuthenticationToken token,
             @PathVariable("id") Long postId,
@@ -87,7 +87,7 @@ public class PostController {
         return ResponseEntity.ok(this.postService.updateComment(token, postId, commentId, request));
     }
 
-    @DeleteMapping("/{id}/comments/{commentId}")
+    @RequestMapping(value = {"/{id}/comments/{commentId}", "/{id}/comments/{commentId}/delete"}, method = {RequestMethod.DELETE, RequestMethod.POST})
     public ResponseEntity<ResponseData<Boolean>> deleteComment(
             JwtAuthenticationToken token,
             @PathVariable("id") Long postId,

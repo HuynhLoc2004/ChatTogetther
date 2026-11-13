@@ -274,8 +274,15 @@ export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentU
                   </div>
                 )}
 
-                {isMe && isEditing && (
-                  <div className="mgr-avatar-overlay" onClick={() => fileInputRef.current?.click()} title="Tải ảnh mới từ máy">
+                {isMe && (
+                  <div 
+                    className="mgr-avatar-overlay" 
+                    onClick={() => {
+                      setIsEditing(true);
+                      fileInputRef.current?.click();
+                    }} 
+                    title="Tải ảnh đại diện từ thiết bị"
+                  >
                     <Camera size={18} />
                   </div>
                 )}
@@ -304,14 +311,29 @@ export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentU
                 {/* HÀNH ĐỘNG HỒ SƠ */}
                 <div className="mgr-hero-actions">
                   {isMe ? (
-                    <button 
-                      type="button" 
-                      onClick={() => setIsEditing(!isEditing)}
-                      className={`btn-mgr-action ${isEditing ? 'active' : ''}`}
-                    >
-                      <Edit3 size={14} />
-                      <span>{isEditing ? "Hủy chỉnh sửa" : "Chỉnh sửa thông tin"}</span>
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <button 
+                        type="button" 
+                        onClick={() => setIsEditing(!isEditing)}
+                        className={`btn-mgr-action ${isEditing ? 'active' : ''}`}
+                      >
+                        <Edit3 size={14} />
+                        <span>{isEditing ? "Hủy chỉnh sửa" : "Chỉnh sửa thông tin"}</span>
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          setIsEditing(true);
+                          setActiveTab('profile');
+                          setTimeout(() => fileInputRef.current?.click(), 50);
+                        }}
+                        className="btn-mgr-action"
+                        title="Tải ảnh đại diện từ máy tính hoặc điện thoại"
+                      >
+                        <Upload size={14} />
+                        <span>Tải ảnh đại diện</span>
+                      </button>
+                    </div>
                   ) : (
                     <>
                       {profile?.friendshipStatus === 'ACCEPTED' ? (

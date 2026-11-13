@@ -37,9 +37,21 @@ public class FriendController {
     @PostMapping("/remove")
     public ResponseEntity<ResponseData<Boolean>> removeFriend(
             JwtAuthenticationToken token,
-            @RequestParam("friend_id") Long friendId
+            @RequestParam(value = "friend_id", required = false) Long friendId,
+            @RequestParam(value = "sender_id", required = false) Long senderId
     ) {
-        return ResponseEntity.ok(this.friendService.removeFriend(token, friendId));
+        Long effectiveId = friendId != null ? friendId : senderId;
+        return ResponseEntity.ok(this.friendService.removeFriend(token, effectiveId));
+    }
+
+    @PostMapping("/decline")
+    public ResponseEntity<ResponseData<Boolean>> declineFriendRequest(
+            JwtAuthenticationToken token,
+            @RequestParam(value = "sender_id", required = false) Long senderId,
+            @RequestParam(value = "friend_id", required = false) Long friendId
+    ) {
+        Long effectiveId = senderId != null ? senderId : friendId;
+        return ResponseEntity.ok(this.friendService.removeFriend(token, effectiveId));
     }
 
     @GetMapping("/list")

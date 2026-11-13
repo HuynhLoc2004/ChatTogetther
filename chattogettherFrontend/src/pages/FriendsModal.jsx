@@ -30,14 +30,31 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall }) => {
   }, []);
 
   const handleAccept = async (senderId, nickname) => {
+    if (!senderId) {
+      toast.error("Không tìm thấy thông tin người gửi lời mời");
+      return;
+    }
     try {
       await axiosClient.post('/friends/accept', null, {
         params: { sender_id: senderId }
       });
-      toast.success(`Đã đồng ý kết bạn với ${nickname}!`);
+      toast.success(`Đã đồng ý kết bạn với ${nickname || 'thành viên'}!`);
       fetchData();
     } catch (err) {
       toast.error(err.response?.data?.message || "Lỗi khi chấp nhận kết bạn!");
+    }
+  };
+
+  const handleDecline = async (senderId, nickname) => {
+    if (!senderId) return;
+    try {
+      await axiosClient.post('/friends/decline', null, {
+        params: { sender_id: senderId }
+      });
+      toast.success(`Đã từ chối lời mời từ ${nickname || 'thành viên'}`);
+      fetchData();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Lỗi khi từ chối lời mời!");
     }
   };
 
@@ -99,13 +116,19 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall }) => {
             ) : (
               <div className="friends-list-zinc">
                 {friends.map((friend) => (
-                  <div key={friend.id} className="friend-item-zinc" onClick={() => onSelectUser(friend.id)}>
+                  <div key={friend.id} className="friend-item-zinc" onClick={() => onSelectUser && onSelectUser(friend.id)}>
                     <div className="friend-avatar-wrap">
-                      <img 
-                        src={friend.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${friend.nickname || 'user'}`} 
-                        alt="Avatar" 
-                        className="friend-avatar-img" 
-                      />
+                      {friend.avatar ? (
+                        <img 
+                          src={friend.avatar} 
+                          alt="Avatar" 
+                          className="friend-avatar-img" 
+                        />
+                      ) : (
+                        <div className="friend-avatar-fallback">
+                          {(friend.nickname || friend.account || 'U').charAt(0).toUpperCase()}
+                        </div>
+                      )}
                       <span className="dot-online-zinc"></span>
                     </div>
                     
@@ -152,31 +175,50 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall }) => {
               </div>
             ) : (
               <div className="friends-list-zinc">
-                {pending.map((req) => (
-                  <div key={req.id} className="friend-item-zinc">
-                    <div className="friend-avatar-wrap">
-                      <img 
-                        src={req.senderDTO?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${req.senderDTO?.nickname || 'req'}`} 
-                        alt="Avatar" 
-                        className="friend-avatar-img" 
-                      />
+                {pending.map((req) => {
+                  const senderId = req.senderDTO?.id || req.id;
+                  const senderName = req.senderDTO?.nickname || req.nickname || req.senderDTO?.account || req.account || 'Thành viên';
+                  const senderAccount = req.senderDTO?.account || req.account || 'user';
+                  const senderAvatar = req.senderDTO?.avatar || req.avatar;
+
+                  return (
+                    <div key={senderId} className="friend-item-zinc">
+                      <div className="friend-avatar-wrap">
+                        {senderAvatar ? (
+                          <img 
+                            src={senderAvatar} 
+                            alt="Avatar" 
+                            className="friend-avatar-img" 
+                          />
+                        ) : (
+                          <div className="friend-avatar-fallback">
+                            {senderName.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                      <div className="friend-meta-zinc">
+                        <span className="font-medium text-xs text-zinc-100">
+                          {senderName}
+                        </span>
+                        <p className="font-mono text-[11px] text-zinc-500">@{senderAccount}</p>
+                      </div>
+                      <div className="friend-actions-cell" style={{ display: 'flex', gap: '6px' }}>
+                        <button 
+                          onClick={() => handleAccept(senderId, senderName)}
+                          className="btn-accept-req font-mono"
+                        >
+                          Đồng ý
+                        </button>
+                        <button 
+                          onClick={() => handleDecline(senderId, senderName)}
+                          className="btn-decline-req font-mono"
+                        >
+                          Từ chối
+                        </button>
+                      </div>
                     </div>
-                    <div className="friend-meta-zinc">
-                      <span className="font-medium text-xs text-zinc-100">
-                        {req.senderDTO?.nickname || req.senderDTO?.account}
-                      </span>
-                      <p className="font-mono text-[11px] text-zinc-500">@{req.senderDTO?.account}</p>
-                    </div>
-                    <div className="friend-actions-cell">
-                      <button 
-                        onClick={() => handleAccept(req.senderDTO?.id, req.senderDTO?.nickname)}
-                        className="btn-accept-req font-mono"
-                      >
-                        Đồng ý
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )
           )}
@@ -386,6 +428,35 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall }) => {
         }
         .btn-accept-req:hover {
           background: white;
+        }
+
+        .btn-decline-req {
+          background: transparent;
+          border: 1px solid #3f3f46;
+          color: #a1a1aa;
+          padding: 4px 10px;
+          border-radius: 6px;
+          font-size: 11px;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+        .btn-decline-req:hover {
+          background: #27272a;
+          color: #f87171;
+          border-color: #ef4444;
+        }
+
+        .friend-avatar-fallback {
+          width: 100%;
+          height: 100%;
+          border-radius: 8px;
+          background: #27272a;
+          color: #f4f4f5;
+          font-weight: 600;
+          font-size: 13px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
       `}</style>
     </div>

@@ -21,5 +21,8 @@ public class CommentDTO {
     private String authorNickname;
     private String authorAccount;
     private String authorAvatar;
+
+    private Long parentId;
+    private String replyToUser;
 }
 
