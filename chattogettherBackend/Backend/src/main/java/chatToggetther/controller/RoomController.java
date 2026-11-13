@@ -35,32 +35,64 @@ public class RoomController {
     }
 
     @GetMapping("/detail")
-    public ResponseEntity<ResponseData<RoomDTO>> getRoomDetail(@RequestParam("room_id") Long roomId) {
-        return ResponseEntity.ok(this.roomService.getRoomDetail(roomId));
+    public ResponseEntity<ResponseData<RoomDTO>> getRoomDetail(
+            @RequestParam(value = "room_id", required = false) Long roomId,
+            @RequestParam(value = "idRoom", required = false) Long idRoomAlt
+    ) {
+        Long effectiveId = roomId != null ? roomId : idRoomAlt;
+        return ResponseEntity.ok(this.roomService.getRoomDetail(effectiveId));
     }
 
     @PostMapping("/join-room")
-    public ResponseEntity<ResponseData<Long>> joinRoom(JwtAuthenticationToken jwtAuthenticationToken, @RequestParam("room_id") Long idRoom, @RequestBody JoinRoomRequest joinRoomRequest){
-         return ResponseEntity.ok(this.roomService.joinRoom(jwtAuthenticationToken , idRoom , joinRoomRequest));
+    public ResponseEntity<ResponseData<Long>> joinRoom(
+            JwtAuthenticationToken jwtAuthenticationToken, 
+            @RequestParam(value = "room_id", required = false) Long idRoom,
+            @RequestParam(value = "idRoom", required = false) Long idRoomAlt,
+            @RequestBody JoinRoomRequest joinRoomRequest
+    ){
+        Long effectiveId = idRoom != null ? idRoom : (idRoomAlt != null ? idRoomAlt : (joinRoomRequest != null ? joinRoomRequest.getRoomId() : null));
+        return ResponseEntity.ok(this.roomService.joinRoom(jwtAuthenticationToken, effectiveId, joinRoomRequest));
     }
 
     @PostMapping("/leave-room")
-    public ResponseEntity<ResponseData<Boolean>> leaveRoom(JwtAuthenticationToken jwtAuthenticationToken, @RequestParam("room_id") Long room_id){
-         return ResponseEntity.ok(this.roomService.leaveRoom(jwtAuthenticationToken , room_id));
+    public ResponseEntity<ResponseData<Boolean>> leaveRoom(
+            JwtAuthenticationToken jwtAuthenticationToken, 
+            @RequestParam(value = "room_id", required = false) Long room_id,
+            @RequestParam(value = "idRoom", required = false) Long idRoomAlt
+    ){
+        Long effectiveId = room_id != null ? room_id : idRoomAlt;
+        return ResponseEntity.ok(this.roomService.leaveRoom(jwtAuthenticationToken, effectiveId));
     }
 
     @PostMapping("/remove-user")
-    public ResponseEntity<ResponseData<Boolean>> removeUser(JwtAuthenticationToken jwtAuthenticationToken, @RequestParam("user_id") Long userId, @RequestParam("room_id") Long roomId) {
-        return ResponseEntity.ok(this.roomService.removeUserFromRoom(jwtAuthenticationToken, userId, roomId));
+    public ResponseEntity<ResponseData<Boolean>> removeUser(
+            JwtAuthenticationToken jwtAuthenticationToken, 
+            @RequestParam("user_id") Long userId, 
+            @RequestParam(value = "room_id", required = false) Long roomId,
+            @RequestParam(value = "idRoom", required = false) Long idRoomAlt
+    ) {
+        Long effectiveId = roomId != null ? roomId : idRoomAlt;
+        return ResponseEntity.ok(this.roomService.removeUserFromRoom(jwtAuthenticationToken, userId, effectiveId));
     }
 
     @PostMapping("/disband-room")
-    public ResponseEntity<ResponseData<Boolean>> disbandRoom(JwtAuthenticationToken jwtAuthenticationToken, @RequestParam("room_id") Long roomId) {
-        return ResponseEntity.ok(this.roomService.disbandRoom(jwtAuthenticationToken, roomId));
+    public ResponseEntity<ResponseData<Boolean>> disbandRoom(
+            JwtAuthenticationToken jwtAuthenticationToken, 
+            @RequestParam(value = "room_id", required = false) Long roomId,
+            @RequestParam(value = "idRoom", required = false) Long idRoomAlt
+    ) {
+        Long effectiveId = roomId != null ? roomId : idRoomAlt;
+        return ResponseEntity.ok(this.roomService.disbandRoom(jwtAuthenticationToken, effectiveId));
     }
 
     @PostMapping("/delegate-admin")
-    public ResponseEntity<ResponseData<Boolean>> delegateAdmin(JwtAuthenticationToken jwtAuthenticationToken, @RequestParam("room_id") Long roomId, @RequestParam("new_admin_id") Long newAdminUserId) {
-        return ResponseEntity.ok(this.roomService.delegateAdmin(jwtAuthenticationToken, roomId, newAdminUserId));
+    public ResponseEntity<ResponseData<Boolean>> delegateAdmin(
+            JwtAuthenticationToken jwtAuthenticationToken, 
+            @RequestParam(value = "room_id", required = false) Long roomId,
+            @RequestParam(value = "idRoom", required = false) Long idRoomAlt,
+            @RequestParam("new_admin_id") Long newAdminUserId
+    ) {
+        Long effectiveId = roomId != null ? roomId : idRoomAlt;
+        return ResponseEntity.ok(this.roomService.delegateAdmin(jwtAuthenticationToken, effectiveId, newAdminUserId));
     }
 }

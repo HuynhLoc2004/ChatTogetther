@@ -909,9 +909,10 @@ const Home = () => {
 
     try {
       const response = await axiosClient.post('/rooms/join-room', {
+        roomId: selectedRoom.id,
         password: joinData.password || null
       }, {
-        params: { idRoom: selectedRoom.id }
+        params: { room_id: selectedRoom.id, idRoom: selectedRoom.id }
       });
 
       if (response.data && response.data.data) {
@@ -929,7 +930,7 @@ const Home = () => {
     if (room.hasPassword) {
       setSelectedRoom(room);
     } else {
-      axiosClient.post('/rooms/join-room', { password: null }, { params: { idRoom: room.id } })
+      axiosClient.post('/rooms/join-room', { roomId: room.id, password: null }, { params: { room_id: room.id, idRoom: room.id } })
         .then(() => {
           navigate(`/room/${room.id}`);
         })
@@ -2731,6 +2732,139 @@ const Home = () => {
           text-align: center;
           color: #71717a;
           font-size: 12px;
+        }
+
+        /* ================= TAB TẤT CẢ PHÒNG ĐÀM THOẠI ================= */
+        .rooms-section-wrapper {
+          padding: 18px 20px 40px;
+        }
+        .rooms-header-banner {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          background: rgba(18, 19, 24, 0.7);
+          backdrop-filter: blur(12px);
+          border: 1px solid rgba(39, 39, 42, 0.85);
+          border-radius: 12px;
+          padding: 16px 20px;
+          margin-bottom: 18px;
+          gap: 16px;
+        }
+        .btn-add-room-action {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          background: #f4f4f5;
+          border: 1px solid #f4f4f5;
+          color: #09090b;
+          font-size: 12px;
+          font-weight: 500;
+          padding: 8px 14px;
+          border-radius: 6px;
+          cursor: pointer;
+          transition: all 0.15s;
+          white-space: nowrap;
+        }
+        .btn-add-room-action:hover {
+          background: #ffffff;
+          box-shadow: 0 0 12px rgba(255, 255, 255, 0.25);
+        }
+        .rooms-cards-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+          gap: 14px;
+        }
+        .room-simple-card {
+          background: rgba(18, 19, 24, 0.75);
+          backdrop-filter: blur(12px);
+          border: 1px solid rgba(39, 39, 42, 0.85);
+          border-radius: 12px;
+          padding: 16px;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .room-simple-card:hover {
+          border-color: rgba(63, 63, 70, 0.9);
+          transform: translateY(-2px);
+          box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.5);
+        }
+        .room-top-info {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+        .room-top-info h4 {
+          margin: 0;
+          font-size: 13.5px;
+          font-weight: 600;
+          color: #f4f4f5;
+        }
+        .room-online-tag {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          font-size: 11px;
+          color: #a1a1aa;
+        }
+        .green-circle {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: #10b981;
+          box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+        }
+        .room-chips-list {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          min-height: 22px;
+        }
+        .room-flag {
+          font-size: 10px;
+          padding: 2px 6px;
+          border-radius: 4px;
+          font-family: inherit;
+          display: inline-flex;
+          align-items: center;
+          gap: 3px;
+        }
+        .room-flag.locked {
+          background: rgba(39, 39, 42, 0.6);
+          border: 1px solid #3f3f46;
+          color: #a1a1aa;
+        }
+        .room-flag.joined {
+          background: rgba(16, 185, 129, 0.1);
+          border: 1px solid rgba(16, 185, 129, 0.3);
+          color: #34d399;
+        }
+        .btn-join-room {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: #f4f4f5;
+          border: 1px solid #f4f4f5;
+          color: #09090b;
+          font-size: 12px;
+          font-weight: 500;
+          padding: 8px 12px;
+          border-radius: 6px;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+        .btn-join-room:hover {
+          background: #ffffff;
+        }
+        .btn-join-room.btn-rejoin {
+          background: #18181b;
+          border: 1px solid #3f3f46;
+          color: #f4f4f5;
+        }
+        .btn-join-room.btn-rejoin:hover {
+          background: #27272a;
         }
 
         /* KHU VỰC B: BỘ TẠO TÍN HIỆU ĐA PHƯƠNG TIỆN */

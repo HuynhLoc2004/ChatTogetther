@@ -10,6 +10,7 @@ import lombok.Setter;
 @Getter
 @Setter
 public class JoinRoomRequest {
+    private Long roomId;
     private String nickname;
     private String password;
 }

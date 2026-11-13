@@ -15,12 +15,14 @@ import chatToggetther.repository.RoomRepository;
 import chatToggetther.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -92,8 +94,32 @@ public class ChatService {
     }
 
     @Transactional
-    public ResponseData<List<SendMessageDTO>> getMessageHistory(Long roomId) {
-        List<MessageEntity> messages = this.messageRepository.findByRoomEntity_IdOrderByTimeSendAsc(roomId);
+    public ResponseData<List<SendMessageDTO>> getMessageHistory(JwtAuthenticationToken jwtAuthenticationToken, Long roomId, Long beforeId, Integer size) {
+        if (roomId == null) {
+            throw new AppException(400, "room_id không được để trống", 400);
+        }
+
+        Long userId = SecurityUtils.extractUserId(jwtAuthenticationToken);
+        RoomEntity roomEntity = this.roomRepository.findById(roomId).orElseThrow(() -> {
+            throw new AppException(ErrorCode.ROOM_NOT_FOUND.getCode(), "Phòng không tồn tại", ErrorCode.ROOM_NOT_FOUND.getStatusCode().value());
+        });
+
+        // Bảo mật: Kiểm tra xem user có phải là thành viên active trong phòng hay không
+        boolean isActiveInRoom = roomEntity.getUserRoomEntityList().stream()
+                .anyMatch(ur -> ur.getUserEntity() != null 
+                        && ur.getUserEntity().getId().equals(userId) 
+                        && Boolean.TRUE.equals(ur.getActive()));
+
+        if (!isActiveInRoom) {
+            throw new AppException(ErrorCode.NOT_IN_ROOM.getCode(), "Bạn không có quyền xem tin nhắn phòng này vì chưa tham gia phòng!", 403);
+        }
+
+        int pageSize = (size != null && size > 0 && size <= 100) ? size : 30;
+        List<MessageEntity> messages = this.messageRepository.findMessagesBeforeId(roomId, beforeId, PageRequest.of(0, pageSize));
+        
+        // Sắp xếp lại theo thứ tự thời gian tăng dần để client hiển thị từ trên xuống dưới
+        Collections.reverse(messages);
+
         java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern("HH:mm");
 
         List<SendMessageDTO> history = messages.stream().map(m -> {

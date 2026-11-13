@@ -8,15 +8,15 @@ import React from 'react';
  */
 export const TalovinLogo = ({ size = 28, showText = true, textClassName = "", className = "", style = {} }) => {
   return (
-    <div 
-      className={`talovin-brand-lockup flex items-center gap-2.5 select-none cursor-pointer ${className}`} 
+    <div
+      className={`talovin-brand-lockup flex items-center gap-2.5 select-none cursor-pointer ${className}`}
       style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none', ...style }}
     >
-      <svg 
-        width={size} 
-        height={size} 
-        viewBox="0 0 64 64" 
-        fill="none" 
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 64 64"
+        fill="none"
         xmlns="http://www.w3.org/2000/svg"
         className="talovin-emblem"
         style={{ flexShrink: 0, transition: 'transform 0.2s ease' }}
@@ -64,8 +64,8 @@ export const TalovinLogo = ({ size = 28, showText = true, textClassName = "", cl
       {showText && (
         <div className="talovin-brand-text flex flex-col justify-center leading-none">
           <div className="flex items-center gap-1.5">
-            <span 
-              className={`talovin-brand-title font-sans font-semibold tracking-wider text-zinc-100 ${textClassName}`} 
+            <span
+              className={`talovin-brand-title font-sans font-semibold tracking-wider text-zinc-100 ${textClassName}`}
               style={{ fontSize: Math.max(14, size * 0.58), letterSpacing: '0.04em' }}
             >
               Talovin
@@ -74,8 +74,8 @@ export const TalovinLogo = ({ size = 28, showText = true, textClassName = "", cl
               LIVE
             </span>
           </div>
-          <span 
-            className="talovin-brand-subtitle font-mono text-zinc-400 tracking-wider uppercase mt-0.5" 
+          <span
+            className="talovin-brand-subtitle font-mono text-zinc-400 tracking-wider uppercase mt-0.5"
             style={{ fontSize: Math.max(8.5, size * 0.3) }}
           >
             Social Lounge & Waves
@@ -87,3 +87,4 @@ export const TalovinLogo = ({ size = 28, showText = true, textClassName = "", cl
 };
 
 export default TalovinLogo;
+

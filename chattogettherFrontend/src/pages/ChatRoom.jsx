@@ -63,10 +63,15 @@ const ChatRoom = () => {
 
   const stompClient = useRef(null);
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
   const localStreamRef = useRef(null);
   const peerConnectionRef = useRef(null);
   const remoteAudioRef = useRef(null);
   const callTimerRef = useRef(null);
+
+  // Phân trang lịch sử tin nhắn cuộn lên
+  const [hasMoreHistory, setHasMoreHistory] = useState(true);
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   
   // Hàm lấy user_id an toàn (kết hợp localStorage và giải mã JWT token)
   const getUserId = () => {
@@ -142,21 +147,33 @@ const ChatRoom = () => {
       }
     } catch (err) {
       console.error("Lỗi khi lấy thông tin phòng:", err);
+      if (err?.response?.status === 403) {
+        toast.error("Bạn chưa tham gia phòng này hoặc không có quyền truy cập!");
+        navigate('/');
+        return;
+      }
       const cached = await getRoomsOffline();
       const found = cached?.find(r => r.id?.toString() === roomId?.toString());
       if (found) setRoomInfo(found);
     } finally {
       if (!isSilent) setLoading(false);
     }
-  }, [roomId]);
+  }, [roomId, navigate]);
 
   const fetchHistory = useCallback(async () => {
     try {
       const response = await axiosClient.get('/message/history', {
-        params: { room_id: roomId }
+        params: { room_id: roomId, size: 30 }
       });
       if (response.data && response.data.data) {
-        const history = response.data.data.map(msg => {
+        const rawList = response.data.data;
+        if (rawList.length < 30) {
+          setHasMoreHistory(false);
+        } else {
+          setHasMoreHistory(true);
+        }
+        messageIdsRef.current.clear();
+        const history = rawList.map(msg => {
           messageIdsRef.current.add(msg.id);
           return {
             id: msg.id,
@@ -173,6 +190,11 @@ const ChatRoom = () => {
       }
     } catch (err) {
       console.error("Lỗi khi lấy lịch sử tin nhắn:", err);
+      if (err?.response?.status === 403) {
+        toast.error("Bạn chưa tham gia phòng này hoặc không có quyền truy cập!");
+        navigate('/');
+        return;
+      }
       // Nạp tin nhắn ngoại tuyến từ IndexedDB nếu API thất bại
       const cached = await getMessagesOffline(roomId);
       if (cached && cached.length > 0) {
@@ -180,7 +202,68 @@ const ChatRoom = () => {
         setTimeout(() => scrollToBottom("auto"), 100);
       }
     }
-  }, [roomId]);
+  }, [roomId, navigate]);
+
+  // Cuộn lên đỉnh để tải lịch sử tin nhắn cũ hơn (Cursor pagination mượt mà)
+  const handleScrollMessages = useCallback(async (e) => {
+    const container = e.currentTarget;
+    if (container.scrollTop < 40 && !isLoadingOlder && hasMoreHistory && messages.length > 0) {
+      const validMsgs = messages.filter(m => m.id && typeof m.id === 'number');
+      if (validMsgs.length === 0) return;
+      const oldestId = Math.min(...validMsgs.map(m => m.id));
+
+      setIsLoadingOlder(true);
+      const prevScrollHeight = container.scrollHeight;
+      const prevScrollTop = container.scrollTop;
+
+      try {
+        const response = await axiosClient.get('/message/history', {
+          params: {
+            room_id: roomId,
+            before_id: oldestId,
+            size: 30
+          }
+        });
+
+        if (response.data && response.data.data) {
+          const rawOlder = response.data.data;
+          if (rawOlder.length < 30) {
+            setHasMoreHistory(false);
+          }
+          const older = rawOlder
+            .filter(m => !messageIdsRef.current.has(m.id))
+            .map(msg => {
+              messageIdsRef.current.add(msg.id);
+              return {
+                id: msg.id,
+                text: msg.message,
+                sender: msg.nickname,
+                userId: msg.userId ? msg.userId.toString() : '0',
+                time: msg.formattedTime || formatMsgTime(msg),
+                rawTime: msg.timeSend
+              };
+            });
+
+          if (older.length > 0) {
+            setMessages(prev => [...older, ...prev]);
+            // Giữ nguyên vị trí cuộn mượt mà không bị giật nảy
+            requestAnimationFrame(() => {
+              if (messagesContainerRef.current) {
+                const newScrollHeight = messagesContainerRef.current.scrollHeight;
+                messagesContainerRef.current.scrollTop = newScrollHeight - prevScrollHeight + prevScrollTop;
+              }
+            });
+          }
+        } else {
+          setHasMoreHistory(false);
+        }
+      } catch (err) {
+        console.error("Lỗi khi tải thêm tin nhắn cũ:", err);
+      } finally {
+        setIsLoadingOlder(false);
+      }
+    }
+  }, [roomId, isLoadingOlder, hasMoreHistory, messages]);
 
   // ====================== WEBRTC VOICE CALL LOGIC ======================
   const formatCallDuration = (sec) => {
@@ -882,19 +965,29 @@ const ChatRoom = () => {
            </div>
         </header>
 
-        <div className="messages-area">
+        <div className="messages-area" ref={messagesContainerRef} onScroll={handleScrollMessages}>
           <div className="messages-list">
-            {/* Banner chào mừng đầu phòng chat */}
-            <div className="channel-welcome-banner">
-              <div className="welcome-hash-circle">
-                <Radio size={28} color="#818cf8" />
+            {/* Hiệu ứng loading mượt mà khi cuộn lên nạp tin nhắn cũ */}
+            {isLoadingOlder && (
+              <div className="history-loader-badge">
+                <span className="history-loader-spinner" />
+                <span>Đang tải các tin nhắn cũ hơn...</span>
               </div>
-              <h2 className="welcome-title">Chào mừng đến với không gian {roomInfo?.nameroom || `Phòng ${roomId}`}!</h2>
-              <p className="welcome-subtitle">
-                Đây là điểm khởi đầu của cuộc trò chuyện trong không gian {roomInfo?.nameroom || `phòng ${roomId}`}. Nhấp vào avatar để xem thông tin cá nhân và kết bạn!
-              </p>
-              <div className="welcome-divider" />
-            </div>
+            )}
+
+            {/* Banner chào mừng khởi đầu kênh chỉ hiển thị khi đã cuộn tới đầu lịch sử */}
+            {!hasMoreHistory && (
+              <div className="channel-welcome-banner">
+                <div className="welcome-hash-circle">
+                  <Radio size={28} color="#818cf8" />
+                </div>
+                <h2 className="welcome-title">Chào mừng đến với không gian {roomInfo?.nameroom || `Phòng ${roomId}`}!</h2>
+                <p className="welcome-subtitle">
+                  Đây là điểm khởi đầu của cuộc trò chuyện trong không gian {roomInfo?.nameroom || `phòng ${roomId}`}. Nhấp vào avatar để xem thông tin cá nhân và kết bạn!
+                </p>
+                <div className="welcome-divider" />
+              </div>
+            )}
 
             {messages.map((msg, index) => {
               const isMe = msg.userId?.toString() === currentUserId;
@@ -1621,6 +1714,38 @@ const ChatRoom = () => {
           flex-direction: column;
           gap: 14px;
           width: 100%;
+        }
+
+        /* History Loader */
+        .history-loader-badge {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          padding: 6px 14px;
+          margin: 4px auto 14px auto;
+          background: rgba(24, 24, 27, 0.85);
+          border: 1px solid rgba(63, 63, 70, 0.4);
+          backdrop-filter: blur(8px);
+          border-radius: 9999px;
+          color: #a1a1aa;
+          font-size: 11px;
+          font-weight: 500;
+          letter-spacing: 0.02em;
+          width: fit-content;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+          animation: fadeIn 0.2s ease-in-out;
+        }
+        .history-loader-spinner {
+          width: 12px;
+          height: 12px;
+          border: 2px solid rgba(161, 161, 170, 0.25);
+          border-top-color: #f43f5e;
+          border-radius: 50%;
+          animation: spinHistory 0.7s linear infinite;
+        }
+        @keyframes spinHistory {
+          to { transform: rotate(360deg); }
         }
 
         /* Channel Welcome Banner */
