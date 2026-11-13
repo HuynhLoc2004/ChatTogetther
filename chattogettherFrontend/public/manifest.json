@@ -1,6 +1,6 @@
 {
-  "short_name": "Klyvix",
-  "name": "Klyvix - Không Gian Trò Chuyện & Âm Nhạc",
+  "short_name": "Talovin",
+  "name": "Talovin - Sảnh Không Gian Đồng Hiện & Tín Hiệu Đa Phương Tiện",
   "icons": [
     {
       "src": "/favicon.svg",
@@ -11,6 +11,5 @@
   "start_url": "/",
   "background_color": "#09090b",
   "theme_color": "#09090b",
-  "display": "standalone",
-  "orientation": "portrait"
+  "display": "standalone"
 }

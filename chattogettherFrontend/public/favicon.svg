@@ -1,30 +1,23 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="klyvixBgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#18181b"/>
-      <stop offset="100%" stop-color="#09090b"/>
+    <linearGradient id="taloBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stopColor="#27272a" />
+      <stop offset="100%" stopColor="#09090b" />
     </linearGradient>
-    <linearGradient id="klyvixAccentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#818cf8"/>
-      <stop offset="50%" stop-color="#6366f1"/>
-      <stop offset="100%" stop-color="#38bdf8"/>
+    <linearGradient id="taloAccent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stopColor="#ffffff" />
+      <stop offset="100%" stopColor="#a1a1aa" />
     </linearGradient>
-    <radialGradient id="klyvixNodeGlow" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#38bdf8"/>
-      <stop offset="100%" stop-color="#6366f1"/>
-    </radialGradient>
+    <linearGradient id="taloWave" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stopColor="#10b981" />
+      <stop offset="100%" stopColor="#059669" />
+    </linearGradient>
   </defs>
-
-  <rect width="64" height="64" rx="16" fill="url(#klyvixBgGrad)"/>
-  <rect x="0.75" y="0.75" width="62.5" height="62.5" rx="15.25" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" fill="none"/>
-
-  <g stroke-linecap="round" stroke-linejoin="round">
-    <rect x="18" y="15" width="6" height="34" rx="3" fill="url(#klyvixAccentGrad)"/>
-    <path d="M24 30L38 18" stroke="url(#klyvixAccentGrad)" stroke-width="5.5"/>
-    <circle cx="39.5" cy="16.5" r="3.5" fill="url(#klyvixNodeGlow)"/>
-    <path d="M24 34L39 47" stroke="url(#klyvixAccentGrad)" stroke-width="5.5"/>
-    <circle cx="40.5" cy="48" r="3.5" fill="url(#klyvixNodeGlow)"/>
-    <path d="M45 27C47 29.5 47 34.5 45 37" stroke="#94a3b8" stroke-width="2.5" stroke-opacity="0.8"/>
-    <path d="M49 23C52.5 27 52.5 37 49 41" stroke="#6366f1" stroke-width="2" stroke-opacity="0.5"/>
-  </g>
+  <rect width="64" height="64" rx="16" fill="url(#taloBg)" stroke="#3f3f46" stroke-width="1.5" />
+  <rect x="14" y="16" width="36" height="6.5" rx="3.25" fill="url(#taloAccent)" />
+  <rect x="29" y="22" width="6" height="26" rx="3" fill="url(#taloAccent)" />
+  <rect x="18" y="28" width="4.5" height="14" rx="2.25" fill="url(#taloAccent)" opacity="0.65" />
+  <circle cx="20.25" cy="46.5" r="2.25" fill="url(#taloWave)" />
+  <rect x="41.5" y="26" width="4.5" height="17" rx="2.25" fill="url(#taloAccent)" opacity="0.85" />
+  <circle cx="43.75" cy="47.5" r="2.25" fill="url(#taloWave)" />
 </svg>

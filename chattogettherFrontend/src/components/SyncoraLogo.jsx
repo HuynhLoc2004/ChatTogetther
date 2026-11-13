@@ -1,6 +1,3 @@
-import React from 'react';
-import KlyvixLogo from './KlyvixLogo';
-
-// Backward-compatible alias for KlyvixLogo
-export const SyncoraLogo = (props) => <KlyvixLogo {...props} />;
+import TalovinLogo from './TalovinLogo';
+export const SyncoraLogo = (props) => <TalovinLogo {...props} />;
 export default SyncoraLogo;

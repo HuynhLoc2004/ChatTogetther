@@ -17,7 +17,7 @@ import FriendsModal from './FriendsModal';
 import SockJS from 'sockjs-client';
 import Stomp from 'stompjs';
 import toast from 'react-hot-toast';
-import KlyvixLogo from '../components/KlyvixLogo';
+import TalovinLogo from '../components/TalovinLogo';
 
 // Avatar: Ưu tiên ảnh thật từ backend. Nếu chưa có ảnh, dùng DiceBear neutral theo username
 export const UserAvatar = ({ avatar, name = '', size = 36, className = "" }) => {
@@ -218,7 +218,7 @@ const Home = () => {
   const [notifications, setNotifications] = useState([
     { id: 1, text: 'Thành viên mới vừa kết nối vào Sảnh', time: '5p trước', unread: true },
     { id: 2, text: 'Phòng [XaoXAO] đang có cuộc đàm thoại sôi nổi', time: '15p trước', unread: false },
-    { id: 3, text: 'Chào mừng bạn đến với Klyvix Social Lounge', time: '1 giờ trước', unread: false }
+    { id: 3, text: 'Chào mừng bạn đến với Talovin Social Lounge', time: '1 giờ trước', unread: false }
   ]);
 
   // Kiểm tra phòng đang tham gia
@@ -771,7 +771,7 @@ const Home = () => {
         userId: p.authorId || p.userId,
         nickname: p.authorName || p.authorNickname || p.author,
         avatar: p.authorAvatar,
-        vibe: p.vibe ? `Quan tâm: ${p.vibe}` : 'Đang lắng nghe âm nhạc cùng sảnh Klyvix',
+        vibe: p.vibe ? `Quan tâm: ${p.vibe}` : 'Đang lắng nghe âm nhạc cùng sảnh Talovin',
         icebreaker: ICEBREAKER_PROMPTS[Math.floor(Math.random() * ICEBREAKER_PROMPTS.length)]
       }))
       .filter(u => u.nickname && u.nickname !== myName);
@@ -998,7 +998,7 @@ const Home = () => {
         {/* ============================================================== */}
         <aside className="nav-sidebar">
           <div className="nav-brand" onClick={() => setActiveTab('feed')}>
-            <KlyvixLogo size={30} />
+            <TalovinLogo size={30} />
           </div>
 
           {/* Live Music Deck (Giai điệu Lo-Fi) */}
@@ -1104,7 +1104,7 @@ const Home = () => {
           {/* Header Mobile */}
           <header className="mobile-top-bar">
             <div className="m-brand" onClick={() => setActiveTab('feed')}>
-              <KlyvixLogo size={26} />
+              <TalovinLogo size={26} />
             </div>
             <div className="m-actions">
               <button 
@@ -2591,9 +2591,12 @@ const Home = () => {
 
         /* KHU VỰC A: KHÔNG GIAN ĐANG MỞ (Live Active Rooms) */
         .live-rooms-showcase-section {
-          padding: 14px 16px;
-          border-bottom: 1px solid var(--card-border);
-          background: rgba(18, 18, 20, 0.4);
+          margin: 16px 16px 0;
+          padding: 16px 18px;
+          border: 1px solid rgba(39, 39, 42, 0.85);
+          border-radius: 14px;
+          background: rgba(18, 19, 24, 0.6);
+          backdrop-filter: blur(8px);
         }
         .rooms-section-header {
           display: flex;
@@ -2732,9 +2735,13 @@ const Home = () => {
 
         /* KHU VỰC B: BỘ TẠO TÍN HIỆU ĐA PHƯƠNG TIỆN */
         .post-creator-box {
-          padding: 16px;
-          border-bottom: 1px solid var(--card-border);
-          background: rgba(18, 18, 20, 0.5);
+          margin: 16px 16px 0;
+          padding: 18px;
+          border: 1px solid rgba(39, 39, 42, 0.9);
+          border-radius: 14px;
+          background: rgba(18, 19, 24, 0.85);
+          backdrop-filter: blur(12px);
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
         }
         .creator-input-row {
           display: flex;
@@ -3026,14 +3033,22 @@ const Home = () => {
           cursor: not-allowed;
         }
 
-        /* ================= THẺ TÍN HIỆU (SIGNAL CARD) ================= */
+        /* ================= THẺ TÍN HIỆU KHÔNG GIAN (TALOVIN SPATIAL SIGNAL CARD) ================= */
         .post-item-card {
-          padding: 16px;
-          border-bottom: 1px solid var(--card-border);
+          background: rgba(18, 19, 24, 0.75);
+          backdrop-filter: blur(12px);
+          border: 1px solid rgba(39, 39, 42, 0.85);
+          border-radius: 14px;
+          margin: 14px 16px 16px;
+          padding: 18px 20px;
+          box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.5);
           position: relative;
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
         }
         .post-item-card:hover {
-          background: rgba(255, 255, 255, 0.01);
+          border-color: rgba(63, 63, 70, 0.9);
+          transform: translateY(-1.5px);
+          box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.65);
         }
         .post-header-row {
           display: flex;

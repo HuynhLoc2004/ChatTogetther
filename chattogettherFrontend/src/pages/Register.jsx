@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
-import KlyvixLogo from '../components/KlyvixLogo';
+import TalovinLogo from '../components/TalovinLogo';
 
 const Register = () => {
   const [formData, setFormData] = useState({ account: '', password: '' });
@@ -54,8 +54,8 @@ const Register = () => {
       className="auth-card"
     >
       <div className="auth-header" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <KlyvixLogo size={46} showText={false} style={{ marginBottom: 12 }} />
-        <h1 className="logo-text">Gia Nhập Klyvix</h1>
+        <TalovinLogo size={46} showText={false} style={{ marginBottom: 12 }} />
+        <h1 className="logo-text">Gia Nhập Talovin</h1>
         <p className="auth-subtitle">Tạo tài khoản để tham gia không gian kết nối & âm nhạc</p>
       </div>
 
