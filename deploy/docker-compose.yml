@@ -1,0 +1,40 @@
+services:
+  # Nginx Reverse Proxy & Edge Shield
+  nginx:
+    image: nginx:alpine
+    container_name: klyvix_nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - ../chattogettherFrontend/dist:/usr/share/nginx/html:ro
+    depends_on:
+      - backend
+    networks:
+      - klyvix_network
+
+  # Spring Boot Backend
+  backend:
+    build:
+      context: ../chattogettherBackend/Backend
+      dockerfile: Dockerfile
+    container_name: klyvix_backend
+    restart: always
+    environment:
+      - PORT=8080
+      - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}
+      - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
+      - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - CORS_ORIGINS=https://klyvix.space,https://chat-togetther.vercel.app,http://localhost:5173
+    expose:
+      - "8080"
+    networks:
+      - klyvix_network
+
+networks:
+  klyvix_network:
+    driver: bridge

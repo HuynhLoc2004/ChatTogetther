@@ -21,4 +21,7 @@ public class RevokeTokenEntity {
     private Long id;
     @Column(name = "revoketoken_refresh" , columnDefinition = "TEXT")
     private String refreshToken;
+
+    @Column(name = "created_at")
+    private java.time.LocalDateTime createdAt = java.time.LocalDateTime.now();
 }

@@ -12,4 +12,8 @@ import java.util.Optional;
 public interface RevokeTokenRepository extends JpaRepository<RevokeTokenEntity, Long> {
     @Query("SELECT rv FROM RevokeTokenEntity rv WHERE rv.refreshToken = :token")
     public Optional<RevokeTokenEntity> findRevokeTokenByRefresh(@Param("token") String token);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("DELETE FROM RevokeTokenEntity rv WHERE rv.createdAt < :threshold")
+    public int deleteExpiredRevokeTokens(@Param("threshold") java.time.LocalDateTime threshold);
 }

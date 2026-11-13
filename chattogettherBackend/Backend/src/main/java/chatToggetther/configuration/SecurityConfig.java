@@ -42,6 +42,12 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .headers(headers -> headers
+                        .frameOptions(frame -> frame.deny()) // Chống Clickjacking
+                        .contentTypeOptions(contentType -> {}) // Chống MIME-type sniffing
+                        .xssProtection(xss -> xss.headerValue(org.springframework.security.web.header.writers.XXssProtectionHeaderWriter.HeaderValue.ENABLED_MODE_BLOCK))
+                        .httpStrictTransportSecurity(hsts -> hsts.includeSubDomains(true).maxAgeInSeconds(31536000))
+                )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/api/users/create", "/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/rooms/info-rooms", "/api/auth/refresh_token", "/api/ping", "/api/posts", "/api/posts/**").permitAll()
@@ -64,7 +70,7 @@ public class SecurityConfig {
     public org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         
-        // Hỗ trợ biến môi trường CORS_ORIGINS trên Render (VD: https://chat-togetther.vercel.app,http://localhost:5173)
+        // Hỗ trợ biến môi trường CORS_ORIGINS trên Render
         String envCors = System.getenv("CORS_ORIGINS");
         if (envCors != null && !envCors.trim().isEmpty() && !envCors.trim().equals("*")) {
             java.util.List<String> origins = Arrays.stream(envCors.split(","))
@@ -72,8 +78,14 @@ public class SecurityConfig {
                     .toList();
             configuration.setAllowedOriginPatterns(origins);
         } else {
-            // Mặc định cho phép tất cả các nguồn (bao gồm mọi domain *.vercel.app và localhost)
-            configuration.setAllowedOriginPatterns(Arrays.asList("*"));
+            // Cho phép các domain development và production chính thống (Vercel, Localhost, Klyvix)
+            configuration.setAllowedOriginPatterns(Arrays.asList(
+                    "http://localhost:5173",
+                    "http://localhost:3000",
+                    "https://*.vercel.app",
+                    "https://*.klyvix.space",
+                    "https://chat-togetther.vercel.app"
+            ));
         }
 
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"));

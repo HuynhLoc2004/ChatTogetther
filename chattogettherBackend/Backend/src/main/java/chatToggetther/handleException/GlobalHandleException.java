@@ -64,16 +64,13 @@ public class GlobalHandleException {
     }
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ResponseErr> handleUncaughtException(Exception e) {
-        System.err.println("Dòng lỗi 'Trời ơi đất hỡi': " + e.getMessage());
+        System.err.println(">>> Lỗi hệ thống chưa bắt (Internal Server Error): " + e.getMessage());
         e.printStackTrace();
 
         ResponseErr responseErr = new ResponseErr();
         responseErr.setCode(9999); // Mã lỗi hệ thống chung
-        String errorMsg = e.getMessage();
-        if (errorMsg == null || errorMsg.trim().isEmpty()) {
-            errorMsg = "Lỗi máy chủ: " + e.getClass().getSimpleName();
-        }
-        responseErr.setMessage(errorMsg);
+        // Che giấu chi tiết lỗi nhạy cảm (SQL, Table schema, Driver trace) đối với bên ngoài
+        responseErr.setMessage("Hệ thống đang bận hoặc gặp sự cố xử lý. Vui lòng thử lại sau.");
         responseErr.setStatusCode(500);
         responseErr.setTime(new Date());
 
