@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
+import SyncoraLogo from '../components/SyncoraLogo';
 
 const Register = () => {
   const [formData, setFormData] = useState({ account: '', password: '' });
@@ -52,9 +53,10 @@ const Register = () => {
       exit={{ opacity: 0, x: -20 }}
       className="auth-card"
     >
-      <div className="auth-header">
-        <h1 className="logo-text">Tham Gia Ngay</h1>
-        <p className="auth-subtitle">Tạo tài khoản để bắt đầu Chat</p>
+      <div className="auth-header" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <SyncoraLogo size={44} showText={false} style={{ marginBottom: 12 }} />
+        <h1 className="logo-text">Gia Nhập Syncora</h1>
+        <p className="auth-subtitle">Tạo tài khoản để tham gia không gian kết nối</p>
       </div>
 
       {error && <div className="error-message">{error}</div>}

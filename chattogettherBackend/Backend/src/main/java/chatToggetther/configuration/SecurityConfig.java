@@ -44,7 +44,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/api/users/create", "/api/auth/login").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/rooms/info-rooms", "/api/auth/refresh_token", "/api/ping").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/rooms/info-rooms", "/api/auth/refresh_token", "/api/ping", "/api/posts", "/api/posts/**").permitAll()
                         .requestMatchers("/ws-gs-guide/**").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .anyRequest().authenticated()

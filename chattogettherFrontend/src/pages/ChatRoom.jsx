@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
-  Send, Users, LogOut, MessageCircle, Hash, 
+  Send, Users, LogOut, MessageCircle, Hash, Radio,
   MoreVertical, UserX, ChevronRight, Trash2, Crown, X, Menu, AlertTriangle,
   Phone, PhoneOff, Mic, MicOff, WifiOff, User, UserCheck
 } from 'lucide-react';
@@ -9,6 +9,7 @@ import axiosClient, { BACKEND_URL } from '../api/axiosClient';
 import { saveMessagesOffline, getMessagesOffline, getRoomsOffline } from '../utils/offlineDB';
 import UserProfileModal from './UserProfileModal';
 import FriendsModal from './FriendsModal';
+import SyncoraLogo from '../components/SyncoraLogo';
 import SockJS from 'sockjs-client';
 import Stomp from 'stompjs';
 import toast from 'react-hot-toast';
@@ -707,8 +708,7 @@ const ChatRoom = () => {
       <aside className={`sidebar-left ${isSidebarOpen ? 'sidebar-open' : ''}`}>
         <div className="sidebar-header">
            <div className="brand" onClick={() => navigate('/')}>
-              <div className="brand-icon"><MessageCircle size={20} /></div>
-              <span>Chat Together</span>
+              <SyncoraLogo size={24} />
            </div>
            <div style={{ display: 'flex', gap: '0.25rem' }}>
               <button onClick={() => navigate('/')} className="back-btn" title="Về trang chủ">
@@ -722,11 +722,11 @@ const ChatRoom = () => {
 
         <div className="room-profile">
            <div className="room-avatar">
-              <Hash size={24} />
+              <Radio size={22} color="#818cf8" />
            </div>
            <div className="room-meta">
-              <h3>{roomInfo?.nameroom || `Phòng #${roomId}`}</h3>
-              <p>ID: #{roomId}</p>
+              <h3>{roomInfo?.nameroom || `Phòng ${roomId}`}</h3>
+              <p>Mã phòng: {roomId}</p>
            </div>
            {isAdminOfThisRoom && <div className="admin-badge">Chủ phòng</div>}
         </div>
@@ -844,9 +844,9 @@ const ChatRoom = () => {
                  <Menu size={20} />
               </button>
               <div className="header-info">
-                 <Hash size={20} className="header-hash" />
-                 <h2>{roomInfo?.nameroom || `Phòng #${roomId}`}</h2>
-                 <span className="header-room-id">#{roomId}</span>
+                 <Radio size={18} color="#818cf8" className="header-hash" />
+                 <h2>{roomInfo?.nameroom || `Phòng ${roomId}`}</h2>
+                 <span className="header-room-id">Phòng {roomId}</span>
               </div>
            </div>
            
@@ -887,11 +887,11 @@ const ChatRoom = () => {
             {/* Banner chào mừng đầu phòng chat */}
             <div className="channel-welcome-banner">
               <div className="welcome-hash-circle">
-                <Hash size={32} />
+                <Radio size={28} color="#818cf8" />
               </div>
-              <h2 className="welcome-title">Chào mừng đến với #{roomInfo?.nameroom || `Phòng #${roomId}`}!</h2>
+              <h2 className="welcome-title">Chào mừng đến với không gian {roomInfo?.nameroom || `Phòng ${roomId}`}!</h2>
               <p className="welcome-subtitle">
-                Đây là điểm khởi đầu của cuộc trò chuyện trong phòng #{roomInfo?.nameroom || `phòng #${roomId}`}. Nhấp vào avatar để xem thông tin cá nhân và kết bạn!
+                Đây là điểm khởi đầu của cuộc trò chuyện trong không gian {roomInfo?.nameroom || `phòng ${roomId}`}. Nhấp vào avatar để xem thông tin cá nhân và kết bạn!
               </p>
               <div className="welcome-divider" />
             </div>

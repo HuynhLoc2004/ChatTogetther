@@ -15,6 +15,7 @@ import FriendsModal from './FriendsModal';
 import SockJS from 'sockjs-client';
 import Stomp from 'stompjs';
 import toast from 'react-hot-toast';
+import SyncoraLogo from '../components/SyncoraLogo';
 
 // Component Avatar: Nếu chưa cập nhật ảnh thì dùng Icon Ẩn Danh, KHÔNG dùng chữ cái đầu
 export const UserAvatar = ({ avatar, size = 40, className = "" }) => {
@@ -64,20 +65,20 @@ const REACTION_EMOJIS = [
   { type: 'CROWN', emoji: '👑', label: 'Đỉnh chóp' },
 ];
 
-// Danh sách tâm trạng / Vibe bài viết (Cyber tone tối giản)
+// Danh sách tâm trạng / Chủ đề chia sẻ (Hài hòa, tinh tế)
 const VIBE_TAGS = [
-  { id: 'lofi', label: '🎧 Lo-Fi Chill' },
-  { id: 'energy', label: '🔥 Năng lượng' },
-  { id: 'night', label: '🌙 Chill đêm' },
-  { id: 'gaming', label: '🎮 Lập team' },
-  { id: 'deep', label: '💭 Tâm sự' },
+  { id: 'relax', label: '🎧 Thư giãn' },
+  { id: 'energy', label: '✨ Tích cực' },
+  { id: 'night', label: '🌙 Lắng đọng' },
+  { id: 'gaming', label: '🎮 Tìm bạn' },
+  { id: 'deep', label: '💬 Tâm sự' },
 ];
 
-// Kênh Radio nhạc nền không gian làm việc
+// Kênh âm thanh thư giãn
 const RADIO_CHANNELS = [
-  { name: 'Lo-Fi Chill Cafe', genre: 'Chill Beats', audioSrc: 'https://stream.zeno.fm/f3wvbbqmdg8uv' },
-  { name: 'Synthwave 80s', genre: 'Retro Neon', audioSrc: 'https://stream.zeno.fm/0r0xa792kwzuv' },
-  { name: 'Acoustic Rain', genre: 'Ambient Calm', audioSrc: 'https://stream.zeno.fm/e0r45u72kwzuv' },
+  { name: 'Giai điệu Lo-Fi', genre: 'Chill Beats', audioSrc: 'https://stream.zeno.fm/f3wvbbqmdg8uv' },
+  { name: 'Sóng đêm Neon', genre: 'Retro Synth', audioSrc: 'https://stream.zeno.fm/0r0xa792kwzuv' },
+  { name: 'Mưa acoustic êm dịu', genre: 'Acoustic Rain', audioSrc: 'https://stream.zeno.fm/e0r45u72kwzuv' },
 ];
 
 // Danh sách câu hỏi Thử Thách Party
@@ -152,7 +153,7 @@ const Home = () => {
   const [sharePost, setSharePost] = useState(null);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState([
-    { id: 1, text: 'Thành viên mới vừa tham gia Chat Together', time: '5p trước', unread: true },
+    { id: 1, text: 'Thành viên mới vừa tham gia Syncora', time: '5p trước', unread: true },
     { id: 2, text: 'Phòng chat "Chill Cuối Tuần" đang mở đàm thoại', time: '15p trước', unread: false },
   ]);
 
@@ -402,8 +403,8 @@ const Home = () => {
     setTimeout(() => {
       setMatchingStatus('matched');
       setMatchedPartner({
-        nickname: 'Ẩn Danh #' + Math.floor(100 + Math.random() * 900),
-        vibe: 'Đang lắng nghe giai điệu Lo-Fi & tìm người trò chuyện',
+        nickname: 'Bạn ngẫu nhiên ' + Math.floor(100 + Math.random() * 900),
+        vibe: 'Đang lắng nghe giai điệu Lo-Fi & muốn tìm bạn trò chuyện',
         icebreaker: 'Nếu chỉ được chọn một điều bạn mong muốn nhất lúc này, đó là gì?'
       });
     }, 1500);
@@ -576,13 +577,7 @@ const Home = () => {
         {/* ============================================================== */}
         <aside className="nav-sidebar">
           <div className="nav-brand" onClick={() => setActiveTab('feed')}>
-            <div className="brand-logo-glow">
-              <MessageSquare size={20} color="white" />
-            </div>
-            <div className="brand-meta">
-              <span className="brand-name">Chat Together</span>
-              <span className="brand-sub">Không Gian Kết Nối</span>
-            </div>
+            <SyncoraLogo size={32} />
           </div>
 
           {/* Widget phát nhạc không gian tối giản */}
@@ -647,8 +642,8 @@ const Home = () => {
               className="nav-item"
               onClick={() => setSelectedProfileUserId(currentUserId)}
             >
-              <Crown size={18} color="#eab308" />
-              <span>Hồ sơ & Đặc quyền</span>
+              <Crown size={18} color="#818cf8" />
+              <span>Hồ sơ & Huy hiệu</span>
             </button>
           </nav>
 
@@ -656,19 +651,19 @@ const Home = () => {
             <button 
               className="btn-speed-match-minimal"
               onClick={handleStartSpeedMatch}
-              title="Ghép ngẫu nhiên với 1 người bạn online cùng vibe"
+              title="Kết nối nhanh với 1 người bạn online ngẫu nhiên"
             >
               <Zap size={15} />
-              <span>Ghép Vibe Ẩn Danh</span>
+              <span>Kết nối bạn mới</span>
             </button>
 
             <button 
               className="btn-party-wheel-minimal"
               onClick={() => setIsPartyWheelOpen(true)}
-              title="Vòng quay thử thách"
+              title="Vòng quay câu hỏi chia sẻ"
             >
               <Dices size={15} />
-              <span>Vòng Quay Party</span>
+              <span>Vòng quay câu hỏi</span>
             </button>
 
             <button 
@@ -676,7 +671,7 @@ const Home = () => {
               onClick={() => setIsCreateModalOpen(true)}
             >
               <Plus size={15} />
-              <span>Tạo phòng chat</span>
+              <span>Tạo phòng đàm thoại</span>
             </button>
           </div>
 
@@ -695,10 +690,7 @@ const Home = () => {
           {/* Top Bar cho Mobile */}
           <div className="mobile-top-bar">
             <div className="m-brand" onClick={() => setActiveTab('feed')}>
-              <div className="brand-logo-glow m-logo">
-                <MessageSquare size={16} color="white" />
-              </div>
-              <span className="m-title">Chat Together</span>
+              <SyncoraLogo size={26} />
             </div>
 
             <div className="m-actions">
@@ -797,8 +789,8 @@ const Home = () => {
                     <span>Phòng đàm thoại ({rooms.length} phòng)</span>
                   </div>
                   <div className="signal-pill" onClick={handleStartSpeedMatch}>
-                    <Zap size={12} color="#eab308" />
-                    <span>Ghép ẩn danh</span>
+                    <Zap size={12} color="#818cf8" />
+                    <span>Kết nối ngẫu nhiên</span>
                   </div>
                   <div className="signal-pill" onClick={togglePlayRadio}>
                     <Music size={12} color="#818cf8" />
@@ -1157,25 +1149,25 @@ const Home = () => {
             )}
           </div>
 
-          {/* Tiện ích Ghép Đôi Vibe Tối Giản */}
+          {/* Tiện ích Ghép Đôi Tối Giản */}
           <div className="widget-box-card">
             <div className="widget-card-title">
-              <Zap size={16} color="#eab308" />
-              <span>Ghép Vibe Ẩn Danh</span>
+              <Zap size={16} color="#818cf8" />
+              <span>Kết Nối Ngẫu Nhiên</span>
             </div>
-            <p className="widget-card-desc">Kết nối ngẫu nhiên 1-1 với người dùng đang online cùng chung tâm trạng.</p>
+            <p className="widget-card-desc">Trò chuyện trực tiếp 1-1 với một người bạn ngẫu nhiên có cùng sở thích.</p>
             <button onClick={handleStartSpeedMatch} className="btn-widget-action">
-              Tìm bạn trò chuyện
+              Bắt đầu kết nối
             </button>
           </div>
 
-          {/* Tiện ích Vòng Quay Thử Thách */}
+          {/* Tiện ích Vòng Quay Trò Chơi */}
           <div className="widget-box-card">
             <div className="widget-card-title">
               <Dices size={16} color="#818cf8" />
-              <span>Vòng Quay Party</span>
+              <span>Vòng Quay Trò Chơi</span>
             </div>
-            <p className="widget-card-desc">Bốc thăm câu hỏi thú nhận hoặc thử thách vui cùng bạn bè.</p>
+            <p className="widget-card-desc">Bốc thăm câu hỏi thú vị để câu chuyện giữa bạn bè thêm phần rôm rả.</p>
             <button onClick={() => setIsPartyWheelOpen(true)} className="btn-widget-action secondary">
               Mở vòng quay
             </button>
@@ -1188,11 +1180,11 @@ const Home = () => {
               <span>Phòng Đang Hoạt Động</span>
             </div>
             <div className="widget-rooms-col">
-              {rooms.slice(0, 3).map((r) => (
+              {rooms.slice(0, 4).map((r) => (
                 <div key={r.id} className="widget-room-row" onClick={() => navigate(`/room/${r.id}`)}>
                   <div>
-                    <span className="w-room-title">#{r.nameroom}</span>
-                    <span className="w-room-count">{r.soluong || r.userRoomDTOList?.length || 0} người</span>
+                    <span className="w-room-title">{r.nameroom}</span>
+                    <span className="w-room-count">{r.soluong || r.userRoomDTOList?.length || 0} người đang tham gia</span>
                   </div>
                   <ChevronRight size={14} color="#64748b" />
                 </div>
@@ -1201,7 +1193,7 @@ const Home = () => {
           </div>
 
           <div className="widget-legal-footer">
-            <p>© 2026 Chat Together. Nền tảng kết nối & mạng xã hội tối giản.</p>
+            <p>© 2026 Syncora. Không gian trò chuyện & kết nối thời gian thực.</p>
           </div>
         </aside>
 
@@ -1258,8 +1250,8 @@ const Home = () => {
           <div className="modal-dialog-box" onClick={(e) => e.stopPropagation()}>
             <div className="dialog-header">
               <div className="dialog-title-flex">
-                <Zap size={18} color="#eab308" />
-                <h4>Ghép Vibe Ẩn Danh</h4>
+                <Zap size={18} color="#818cf8" />
+                <h4>Kết Nối Ngẫu Nhiên</h4>
               </div>
               <button onClick={() => setIsSpeedMatchOpen(false)} className="btn-close-dialog"><X size={16} /></button>
             </div>
@@ -1267,9 +1259,9 @@ const Home = () => {
             {matchingStatus === 'searching' ? (
               <div className="dialog-searching-body">
                 <div className="radar-circle">
-                  <Zap size={24} color="#eab308" />
+                  <Zap size={24} color="#818cf8" />
                 </div>
-                <p>Đang tìm người dùng online cùng chung cảm xúc...</p>
+                <p>Đang tìm người bạn ngẫu nhiên cùng chia sẻ cảm xúc...</p>
               </div>
             ) : (
               <div className="dialog-matched-body">
@@ -1282,7 +1274,7 @@ const Home = () => {
                 </div>
 
                 <div className="icebreaker-quote">
-                  <span>💡 Câu hỏi phá băng:</span>
+                  <span>💬 Gợi ý mở đầu:</span>
                   <p>"{matchedPartner?.icebreaker}"</p>
                 </div>
 
@@ -1291,7 +1283,7 @@ const Home = () => {
                   <button 
                     onClick={() => {
                       setIsSpeedMatchOpen(false);
-                      toast.success("Đang kết nối vào phòng trò chuyện...");
+                      toast.success("Đang kết nối vào không gian trò chuyện...");
                     }} 
                     className="btn-dialog-primary"
                   >
@@ -1311,7 +1303,7 @@ const Home = () => {
             <div className="dialog-header">
               <div className="dialog-title-flex">
                 <Dices size={18} color="#818cf8" />
-                <h4>Vòng Quay Thử Thách</h4>
+                <h4>Vòng Quay Trò Chơi</h4>
               </div>
               <button onClick={() => setIsPartyWheelOpen(false)} className="btn-close-dialog"><X size={16} /></button>
             </div>
@@ -1323,7 +1315,7 @@ const Home = () => {
 
               {wheelResult && (
                 <div className="wheel-card-result">
-                  <span>Nhiệm vụ của bạn:</span>
+                  <span>Câu hỏi dành cho bạn:</span>
                   <p>{wheelResult}</p>
                 </div>
               )}
@@ -1333,7 +1325,7 @@ const Home = () => {
                 disabled={wheelSpinning}
                 className="btn-spin-action"
               >
-                {wheelSpinning ? 'Đang quay...' : 'Bốc thăm câu hỏi 🎲'}
+                {wheelSpinning ? 'Đang quay...' : 'Quay câu hỏi ngẫu nhiên 🎲'}
               </button>
             </div>
           </div>
@@ -1417,7 +1409,7 @@ const Home = () => {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="dialog-header">
-                <h4>Tham gia #{selectedRoom.nameroom}</h4>
+                <h4>Tham gia phòng {selectedRoom.nameroom}</h4>
                 <button onClick={() => setSelectedRoom(null)} className="btn-close-dialog"><X size={16} /></button>
               </div>
               <form onSubmit={handleJoinRoom} className="dialog-form">
@@ -2216,19 +2208,28 @@ const Home = () => {
         .widget-card-desc { font-size: 11px; color: #94a3b8; margin: 0 0 10px 0; line-height: 1.4; }
         .btn-widget-action {
           width: 100%;
-          background: #eab308;
-          color: #090d16;
-          border: none;
-          padding: 7px;
+          background: linear-gradient(135deg, #6366f1, #4f46e5);
+          color: #ffffff;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          padding: 8px 12px;
           border-radius: 8px;
-          font-weight: 700;
+          font-weight: 600;
           font-size: 11.5px;
           cursor: pointer;
+          transition: all 0.2s ease;
+        }
+        .btn-widget-action:hover {
+          background: linear-gradient(135deg, #4f46e5, #4338ca);
+          box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
         }
         .btn-widget-action.secondary {
-          background: rgba(99, 102, 241, 0.15);
-          color: #818cf8;
-          border: 1px solid rgba(99, 102, 241, 0.3);
+          background: rgba(30, 41, 59, 0.7);
+          color: #cbd5e1;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .btn-widget-action.secondary:hover {
+          background: rgba(51, 65, 85, 0.8);
+          color: #ffffff;
         }
 
         .widget-rooms-col { display: flex; flex-direction: column; gap: 4px; }
@@ -2351,7 +2352,7 @@ const Home = () => {
           height: 50px;
           margin: 0 auto 12px;
           border-radius: 50%;
-          border: 2px solid #eab308;
+          border: 2px solid #818cf8;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -2370,13 +2371,13 @@ const Home = () => {
         .partner-matched-card strong { display: block; font-size: 13px; }
         .partner-matched-card p { margin: 2px 0 0 0; font-size: 11px; color: #94a3b8; }
         .icebreaker-quote {
-          background: rgba(234, 179, 8, 0.08);
-          border: 1px dashed rgba(234, 179, 8, 0.3);
+          background: rgba(99, 102, 241, 0.08);
+          border: 1px dashed rgba(99, 102, 241, 0.3);
           border-radius: 8px;
           padding: 8px;
           margin-bottom: 12px;
         }
-        .icebreaker-quote span { font-size: 10.5px; font-weight: 700; color: #eab308; }
+        .icebreaker-quote span { font-size: 10.5px; font-weight: 700; color: #818cf8; }
         .icebreaker-quote p { margin: 3px 0 0 0; font-size: 12px; font-weight: 600; color: #f8fafc; }
 
         /* Wheel dialog */

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import axiosClient from '../api/axiosClient';
+import SyncoraLogo from '../components/SyncoraLogo';
 
 const Login = () => {
   const [formData, setFormData] = useState({ account: '', password: '' });
@@ -84,9 +85,10 @@ const Login = () => {
       exit={{ opacity: 0, y: -20 }}
       className="auth-card"
     >
-      <div className="auth-header">
-        <h1 className="logo-text">Chat Togetther</h1>
-        <p className="auth-subtitle">Chào mừng bạn quay trở lại!</p>
+      <div className="auth-header" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <SyncoraLogo size={44} showText={false} style={{ marginBottom: 12 }} />
+        <h1 className="logo-text">Syncora</h1>
+        <p className="auth-subtitle">Không gian trò chuyện & kết nối thời gian thực</p>
       </div>
 
       {error && <div className="error-message">{error}</div>}

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { 
   X, Phone, UserPlus, UserCheck, Clock, MapPin, 
   Calendar, Edit3, Save, Shield, Check, Flame, Crown, 
-  Sparkles, Gem, Award, CheckCircle2, Zap
+  Sparkles, Gem, Award, CheckCircle2, Zap, User
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
@@ -48,7 +48,7 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
             id: effectiveUserId,
             nickname: localStorage.getItem('nickname') || 'Người Dùng',
             account: localStorage.getItem('account') || 'user',
-            bio: 'Thành viên năng động của Chat Together',
+            bio: 'Thành viên năng động của Syncora',
             vipTier: 'VIP_DIAMOND',
             customTitle: '💎 VIP Kim Cương',
             level: 15,
@@ -181,7 +181,7 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
                 className={`subtab-btn subtab-perks ${activeTab === 'perks' ? 'active' : ''}`}
                 onClick={() => { setActiveTab('perks'); setIsEditing(false); }}
               >
-                <Crown size={14} color="#f59e0b" /> Đặc quyền VIP
+                <Crown size={14} color="#818cf8" /> Huy hiệu thành viên
               </button>
             </div>
 
@@ -193,7 +193,7 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
                     {isFounder ? <Crown size={32} color="#fbbf24" /> : <Gem size={32} color="#38bdf8" />}
                   </div>
                   <h4>{profile?.customTitle || (isFounder ? "👑 Sáng Lập Viên" : "💎 VIP Kim Cương")}</h4>
-                  <p className="perk-hero-sub">Hạng đặc quyền cao cấp trên Chat Together Platform</p>
+                  <p className="perk-hero-sub">Huy hiệu thành viên uy tín trên Syncora</p>
                 </div>
 
                 <div className="perks-list">
