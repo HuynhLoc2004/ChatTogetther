@@ -69,7 +69,11 @@ public class GlobalHandleException {
 
         ResponseErr responseErr = new ResponseErr();
         responseErr.setCode(9999); // Mã lỗi hệ thống chung
-        responseErr.setMessage("Hệ thống bận, vui lòng thử lại sau!");
+        String errorMsg = e.getMessage();
+        if (errorMsg == null || errorMsg.trim().isEmpty()) {
+            errorMsg = "Lỗi máy chủ: " + e.getClass().getSimpleName();
+        }
+        responseErr.setMessage(errorMsg);
         responseErr.setStatusCode(500);
         responseErr.setTime(new Date());
 

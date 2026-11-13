@@ -69,7 +69,7 @@ public class PostService {
             dto.setAuthorLocation(author.getLocation());
             dto.setAuthorRoles(author.getRoles());
 
-            // Đặc quyền / Danh hiệu / VIP Badge
+            // Đặc quyền / Danh hiệu
             boolean isAdmin = author.getRoles() != null && (author.getRoles().contains("ROLE_AMDIN") || author.getRoles().contains("ROLE_ADMIN"));
             dto.setAuthorIsVerified(isAdmin || (author.getId() != null && author.getId() <= 5));
             if (isAdmin) {
@@ -77,10 +77,10 @@ public class PostService {
                 dto.setAuthorBadge("👑 Sáng Lập");
             } else if (author.getId() != null && author.getId() % 2 == 0) {
                 dto.setAuthorVipTier("VIP_DIAMOND");
-                dto.setAuthorBadge("💎 VIP Kim Cương");
+                dto.setAuthorBadge("💎 VIP");
             } else {
-                dto.setAuthorVipTier("VIP_PRO");
-                dto.setAuthorBadge("✨ Vibe Master");
+                dto.setAuthorVipTier("MEMBER");
+                dto.setAuthorBadge(null);
             }
         }
 
@@ -124,8 +124,7 @@ public class PostService {
 
     @Transactional(readOnly = true)
     public ResponseData<List<PostDTO>> getAllPosts(JwtAuthenticationToken token) {
-        Long currentUserId = SecurityUtils.extractUserId(token);
-        UserEntity currentUser = currentUserId != null ? this.userRepository.findById(currentUserId).orElse(null) : null;
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
 
         List<PostEntity> posts = this.postRepository.findAllPostsWithDetails();
         List<PostDTO> dtos = posts.stream()
@@ -141,14 +140,10 @@ public class PostService {
             throw new AppException(400, "Nội dung bài viết không được để trống", 400);
         }
 
-        Long currentUserId = SecurityUtils.extractUserId(token);
-        if (currentUserId == null) {
-            throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập để đăng bài", 401);
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        if (currentUser == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Phiên đăng nhập không hợp lệ hoặc đã hết hạn. Vui lòng đăng nhập lại!", 401);
         }
-
-        UserEntity currentUser = this.userRepository.findById(currentUserId).orElseThrow(() ->
-            new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "Người dùng không tồn tại", 404)
-        );
 
         PostEntity post = new PostEntity();
         post.setUser(currentUser);
@@ -174,14 +169,10 @@ public class PostService {
 
     @Transactional
     public ResponseData<PostDTO> toggleLikePost(JwtAuthenticationToken token, Long postId, String reactionType) {
-        Long currentUserId = SecurityUtils.extractUserId(token);
-        if (currentUserId == null) {
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        if (currentUser == null) {
             throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
         }
-
-        UserEntity currentUser = this.userRepository.findById(currentUserId).orElseThrow(() ->
-            new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "Người dùng không tồn tại", 404)
-        );
 
         PostEntity post = this.postRepository.findById(postId).orElseThrow(() ->
             new AppException(404, "Bài viết không tồn tại", 404)
@@ -194,11 +185,9 @@ public class PostService {
         Optional<PostLikeEntity> existingLike = this.postLikeRepository.findByPostAndUser(post, currentUser);
         if (existingLike.isPresent()) {
             PostLikeEntity like = existingLike.get();
-            // Nếu bấm cùng 1 reaction thì bỏ thích (toggle off)
             if (desiredReaction.equalsIgnoreCase(like.getReactionType())) {
                 this.postLikeRepository.delete(like);
             } else {
-                // Nếu bấm reaction khác (VD từ LIKE sang FIRE), cập nhật reaction
                 like.setReactionType(desiredReaction);
                 like.setCreatedAt(LocalDateTime.now());
                 this.postLikeRepository.save(like);
@@ -214,7 +203,6 @@ public class PostService {
 
         PostDTO dto = mapToPostDTO(post, currentUser);
 
-        // Realtime notification
         try {
             this.messagingTemplate.convertAndSend("/topic/posts", "POST_REACTION_UPDATED");
         } catch (Exception ignored) {}
@@ -239,14 +227,10 @@ public class PostService {
             throw new AppException(400, "Nội dung bình luận không được để trống", 400);
         }
 
-        Long currentUserId = SecurityUtils.extractUserId(token);
-        if (currentUserId == null) {
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        if (currentUser == null) {
             throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
         }
-
-        UserEntity currentUser = this.userRepository.findById(currentUserId).orElseThrow(() ->
-            new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "Người dùng không tồn tại", 404)
-        );
 
         PostEntity post = this.postRepository.findById(postId).orElseThrow(() ->
             new AppException(404, "Bài viết không tồn tại", 404)
@@ -268,8 +252,7 @@ public class PostService {
 
     @Transactional(readOnly = true)
     public ResponseData<List<PostDTO>> searchPosts(JwtAuthenticationToken token, String keyword) {
-        Long currentUserId = SecurityUtils.extractUserId(token);
-        UserEntity currentUser = currentUserId != null ? this.userRepository.findById(currentUserId).orElse(null) : null;
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
 
         List<PostEntity> posts = this.postRepository.searchPosts(keyword != null ? keyword.trim() : "");
         List<PostDTO> dtos = posts.stream()

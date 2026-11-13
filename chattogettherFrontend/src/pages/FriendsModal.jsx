@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Users, X, UserCheck, Phone, Clock, UserMinus, MessageSquare, Crown, Gem, CheckCircle2 } from 'lucide-react';
+import { Users, User, X, UserCheck, Phone, Clock, UserMinus, MessageSquare, Crown, Gem, CheckCircle2 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
 
@@ -96,7 +96,11 @@ const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall }) => {
                 {friends.map((friend) => (
                   <div key={friend.id} className="friend-item" onClick={() => onSelectUser(friend.id)}>
                     <div className="friend-avatar">
-                      {friend.nickname?.charAt(0).toUpperCase() || "U"}
+                      {friend.avatar ? (
+                        <img src={friend.avatar} alt="Avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                      ) : (
+                        <User size={18} color="#94a3b8" />
+                      )}
                       <span className="dot-online"></span>
                     </div>
                     <div className="friend-meta">
@@ -145,7 +149,11 @@ const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall }) => {
                 {pending.map((req) => (
                   <div key={req.id} className="friend-item" onClick={() => onSelectUser(req.id)}>
                     <div className="friend-avatar">
-                      {req.nickname?.charAt(0).toUpperCase() || "U"}
+                      {req.avatar ? (
+                        <img src={req.avatar} alt="Avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                      ) : (
+                        <User size={18} color="#94a3b8" />
+                      )}
                     </div>
                     <div className="friend-meta">
                       <h4>{req.nickname || req.account}</h4>

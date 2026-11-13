@@ -153,7 +153,11 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
             </div>
           )}
           <div className={`profile-avatar-circle ${isFounder ? 'founder-avatar-frame' : 'vip-avatar-frame'}`}>
-            {profile?.nickname?.charAt(0).toUpperCase() || "U"}
+            {profile?.avatar ? (
+              <img src={profile.avatar} alt="Avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+            ) : (
+              <User size={38} color="#94a3b8" />
+            )}
             <span className="online-badge-dot"></span>
           </div>
         </div>

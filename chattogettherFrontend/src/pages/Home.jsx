@@ -6,8 +6,7 @@ import {
   CheckCircle, ArrowRight, WifiOff, Heart, MessageCircle, Share2, 
   Search, Sparkles, Send, Copy, Compass, Radio, ChevronRight, CornerDownRight,
   Bell, Bookmark, Flame, Gem, Crown, Volume2, VolumeX, Music, Play, Pause,
-  Shuffle, Wand2, Smile, Image as ImageIcon, Filter, CheckCircle2, Zap,
-  TrendingUp, Dices, Gift, ExternalLink
+  Shuffle, Wand2, Image as ImageIcon, CheckCircle2, Zap, Dices
 } from 'lucide-react';
 import axiosClient, { BACKEND_URL } from '../api/axiosClient';
 import { saveRoomsOffline, getRoomsOffline } from '../utils/offlineDB';
@@ -17,49 +16,77 @@ import SockJS from 'sockjs-client';
 import Stomp from 'stompjs';
 import toast from 'react-hot-toast';
 
-// Danh sách các biểu tượng cảm xúc (Emoji Reactions phong cách mạng xã hội)
+// Component Avatar: Nếu chưa cập nhật ảnh thì dùng Icon Ẩn Danh, KHÔNG dùng chữ cái đầu
+export const UserAvatar = ({ avatar, size = 40, className = "" }) => {
+  if (avatar && avatar.trim()) {
+    return (
+      <img 
+        src={avatar} 
+        alt="Avatar" 
+        className={`user-avatar-img ${className}`} 
+        style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover' }} 
+        onError={(e) => {
+          e.target.style.display = 'none';
+          if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+        }}
+      />
+    );
+  }
+  return (
+    <div 
+      className={`anonymous-avatar-box ${className}`}
+      style={{ 
+        width: size, 
+        height: size, 
+        borderRadius: '50%', 
+        background: 'linear-gradient(135deg, #1e293b, #0f172a)',
+        border: '1px solid rgba(255, 255, 255, 0.12)',
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        color: '#94a3b8',
+        flexShrink: 0
+      }}
+      title="Người dùng ẩn danh"
+    >
+      <User size={Math.round(size * 0.52)} />
+    </div>
+  );
+};
+
+// Danh sách các biểu tượng cảm xúc (Reactions)
 const REACTION_EMOJIS = [
-  { type: 'HEART', emoji: '❤️', label: 'Yêu thích', color: '#ef4444' },
-  { type: 'FIRE', emoji: '🔥', label: 'Siêu cháy', color: '#f97316' },
-  { type: 'HAHA', emoji: '😂', label: 'Haha', color: '#eab308' },
-  { type: 'WOW', emoji: '😮', label: 'Wow', color: '#06b6d4' },
-  { type: 'LIKE', emoji: '👍', label: 'Thích', color: '#3b82f6' },
-  { type: 'CROWN', emoji: '👑', label: 'Đỉnh chóp', color: '#fbbf24' },
+  { type: 'HEART', emoji: '❤️', label: 'Yêu thích' },
+  { type: 'FIRE', emoji: '🔥', label: 'Siêu cháy' },
+  { type: 'HAHA', emoji: '😂', label: 'Haha' },
+  { type: 'WOW', emoji: '😮', label: 'Wow' },
+  { type: 'LIKE', emoji: '👍', label: 'Thích' },
+  { type: 'CROWN', emoji: '👑', label: 'Đỉnh chóp' },
 ];
 
-// Danh sách tâm trạng / Vibe bài viết
+// Danh sách tâm trạng / Vibe bài viết (Cyber tone tối giản)
 const VIBE_TAGS = [
-  { id: 'lofi', label: '🎧 Đang chill Lo-Fi', bg: 'rgba(99, 102, 241, 0.2)', text: '#818cf8' },
-  { id: 'energy', label: '🔥 Hào hứng', bg: 'rgba(249, 115, 22, 0.2)', text: '#fb923c' },
-  { id: 'night', label: '🌙 Chill đêm muộn', bg: 'rgba(168, 85, 247, 0.2)', text: '#c084fc' },
-  { id: 'gaming', label: '🎮 Tìm đồng đội game', bg: 'rgba(16, 185, 129, 0.2)', text: '#34d399' },
-  { id: 'deep', label: '💭 Góc tâm sự', bg: 'rgba(236, 72, 153, 0.2)', text: '#f472b6' },
+  { id: 'lofi', label: '🎧 Lo-Fi Chill' },
+  { id: 'energy', label: '🔥 Năng lượng' },
+  { id: 'night', label: '🌙 Chill đêm' },
+  { id: 'gaming', label: '🎮 Lập team' },
+  { id: 'deep', label: '💭 Tâm sự' },
 ];
 
-// Danh sách kênh Radio Lo-Fi trực tiếp
+// Kênh Radio nhạc nền không gian làm việc
 const RADIO_CHANNELS = [
   { name: 'Lo-Fi Chill Cafe', genre: 'Chill Beats', audioSrc: 'https://stream.zeno.fm/f3wvbbqmdg8uv' },
-  { name: 'Cyber Synthwave 80s', genre: 'Retro Neon', audioSrc: 'https://stream.zeno.fm/0r0xa792kwzuv' },
-  { name: 'Acoustic Rain Study', genre: 'Ambient Calm', audioSrc: 'https://stream.zeno.fm/e0r45u72kwzuv' },
+  { name: 'Synthwave 80s', genre: 'Retro Neon', audioSrc: 'https://stream.zeno.fm/0r0xa792kwzuv' },
+  { name: 'Acoustic Rain', genre: 'Ambient Calm', audioSrc: 'https://stream.zeno.fm/e0r45u72kwzuv' },
 ];
 
-// Danh sách Story mẫu phong cách Instagram / Facebook
-const INITIAL_STORIES = [
-  { id: 'my-story', isSelf: true, author: 'Bạn', avatar: 'T', time: 'Mới xong', seen: false },
-  { id: 1, author: 'Minh Thư ✨', avatar: 'M', time: '15p trước', tag: '☕ Cafe chill', seen: false, content: 'Cuối tuần rồi, có ai muốn làm cốc trà chiều không?', bg: 'linear-gradient(135deg, #ec4899, #8b5cf6)' },
-  { id: 2, author: 'Hoàng Nam 🎮', avatar: 'H', time: '1h trước', tag: '🔥 Valorant', seen: false, content: 'Đang thiếu 1 slot rank Kim Cương, ai vào gánh với!', bg: 'linear-gradient(135deg, #3b82f6, #06b6d4)' },
-  { id: 3, author: 'Admin Vũ 👑', avatar: 'V', time: '3h trước', tag: '💎 Bản cập nhật', seen: false, content: 'Hệ thống đã nâng cấp toàn diện: Đặc quyền VIP, Lo-Fi Radio, Thả emoji!', bg: 'linear-gradient(135deg, #f59e0b, #ef4444)' },
-  { id: 4, author: 'Bảo Ngọc 🌸', avatar: 'B', time: '5h trước', tag: '🎧 Lo-Fi Beats', seen: true, content: 'Nghe list nhạc này làm việc cả đêm không thấy mệt luôn á.', bg: 'linear-gradient(135deg, #10b981, #6366f1)' },
-];
-
-// Danh sách câu hỏi Vòng quay thử thách (Party Wheel)
-const TRUTH_OR_DARE_QUESTIONS = [
+// Danh sách câu hỏi Thử Thách Party
+const PARTY_QUESTIONS = [
   "Thú nhận: Điều ngớ ngẩn nhất bạn từng làm khi thích một ai đó?",
   "Thử thách: Hát 1 câu bất kỳ bằng giọng ngọng trong 10 giây!",
-  "Thú nhận: Bạn có đang crush ai trong danh sách bạn bè này không?",
-  "Thử thách: Đổi biệt danh hiển thị thành 'Siêu Nhân Heo' trong 1 tiếng!",
-  "Thú nhận: Món đồ đắt nhất bạn mua nhưng chưa từng dùng đến?",
-  "Thử thách: Gửi 1 lời nhắn chúc ngủ ngon cho người thứ 3 trong danh sách bạn bè!",
+  "Thú nhận: Bạn có đang crush ai trong danh sách bạn bè không?",
+  "Thử thách: Đổi bio trang cá nhân thành một câu siêu sến trong 1 tiếng!",
+  "Thú nhận: Lời nói dối vô hại gần đây nhất của bạn là gì?",
 ];
 
 const Home = () => {
@@ -69,7 +96,7 @@ const Home = () => {
   // Navigation tab chính: 'feed' | 'rooms' | 'trending' | 'saved'
   const [activeTab, setActiveTab] = useState('feed');
 
-  // State Dữ liệu Phòng Chat
+  // State Phòng Chat
   const [rooms, setRooms] = useState([]);
   const [loadingRooms, setLoadingRooms] = useState(true);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -77,7 +104,7 @@ const Home = () => {
   const [newRoomData, setNewRoomData] = useState({ name: '', password: '', nickname: '' });
   const [joinData, setJoinData] = useState({ nickname: '', password: '' });
 
-  // State Dữ liệu Mạng Xã Hội (Feed & Posts)
+  // State Bảng Tin (Posts)
   const [posts, setPosts] = useState([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
   const [newPostContent, setNewPostContent] = useState('');
@@ -86,8 +113,7 @@ const Home = () => {
   const [showImageInput, setShowImageInput] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState('');
-  const [searching, setSearching] = useState(false);
-  const [activeReactionPicker, setActiveReactionPicker] = useState(null); // ID bài viết đang mở bảng emoji
+  const [activeReactionPicker, setActiveReactionPicker] = useState(null);
 
   // Bình luận
   const [expandedComments, setExpandedComments] = useState({});
@@ -95,7 +121,7 @@ const Home = () => {
   const [commentInputs, setCommentInputs] = useState({});
   const [submittingComment, setSubmittingComment] = useState({});
 
-  // Bài viết đã lưu (Bookmarks)
+  // Bài viết đã lưu
   const [savedPostIds, setSavedPostIds] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('saved_post_ids') || '[]');
@@ -104,22 +130,17 @@ const Home = () => {
     }
   });
 
-  // Stories
-  const [stories, setStories] = useState(INITIAL_STORIES);
-  const [activeStory, setActiveStory] = useState(null);
-
-  // Đột Phá 1: Cyber Vibe Radio (Nghe nhạc chung)
+  // Cyber Lo-Fi Radio
   const [isPlayingRadio, setIsPlayingRadio] = useState(false);
   const [currentRadioIndex, setCurrentRadioIndex] = useState(0);
-  const [radioVolume, setRadioVolume] = useState(0.5);
   const audioRef = useRef(null);
 
-  // Đột Phá 2: Speed Vibe Match (Ghép đôi ngẫu nhiên)
+  // Speed Vibe Match
   const [isSpeedMatchOpen, setIsSpeedMatchOpen] = useState(false);
-  const [matchingStatus, setMatchingStatus] = useState('idle'); // 'idle' | 'searching' | 'matched'
+  const [matchingStatus, setMatchingStatus] = useState('idle');
   const [matchedPartner, setMatchedPartner] = useState(null);
 
-  // Đột Phá 3: Mini Social Party Wheel (Vòng quay thử thách)
+  // Party Wheel
   const [isPartyWheelOpen, setIsPartyWheelOpen] = useState(false);
   const [wheelSpinning, setWheelSpinning] = useState(false);
   const [wheelResult, setWheelResult] = useState(null);
@@ -131,9 +152,8 @@ const Home = () => {
   const [sharePost, setSharePost] = useState(null);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState([
-    { id: 1, text: 'Minh Thư đã thả tim 🔥 bài viết của bạn', time: '5p trước', unread: true },
-    { id: 2, text: 'Hoàng Nam vừa tham gia phòng chat "Lo-Fi Cuối Tuần"', time: '20p trước', unread: true },
-    { id: 3, text: 'Bạn vừa nhận được đặc quyền VIP Kim Cương 💎', time: '1h trước', unread: false },
+    { id: 1, text: 'Thành viên mới vừa tham gia Chat Together', time: '5p trước', unread: true },
+    { id: 2, text: 'Phòng chat "Chill Cuối Tuần" đang mở đàm thoại', time: '15p trước', unread: false },
   ]);
 
   const newPostInputRef = useRef(null);
@@ -196,12 +216,14 @@ const Home = () => {
     if (e) e.preventDefault();
     const content = newPostContent.trim();
     if (!content) {
-      toast.error("Vui lòng viết nội dung bài đăng!");
+      toast.error("Vui lòng nhập nội dung bài viết!");
       return;
     }
 
-    if (!navigator.onLine) {
-      toast.error("Cần kết nối mạng để đăng bài viết!");
+    const token = localStorage.getItem('accesstoken');
+    if (!token) {
+      toast.error("Vui lòng đăng nhập lại để đăng bài!");
+      navigate('/login');
       return;
     }
 
@@ -220,40 +242,32 @@ const Home = () => {
         setSelectedVibe(null);
         setPostImageUrl('');
         setShowImageInput(false);
-        toast.success("Đăng bài viết thành công! ✨", { icon: '🚀' });
+        toast.success("Đăng bài viết thành công!");
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || "Không thể đăng bài viết!");
+      console.error("Lỗi đăng bài:", err);
+      const serverMsg = err.response?.data?.message;
+      toast.error(serverMsg || "Không thể đăng bài viết. Vui lòng kiểm tra lại kết nối!");
     } finally {
       setIsPosting(false);
     }
   };
 
-  // AI Vibe Assistant: Tự động biến đổi phong cách bài viết
+  // Trợ lý gợi ý ý tưởng
   const handleAIEnhancePost = () => {
-    if (!newPostContent.trim()) {
-      const templates = [
-        "Cuối tuần rồi, chúc mọi người có những phút giây thật thảnh thơi và tích cực nhé! ☕✨",
-        "Có những ngày chỉ muốn nghe một bản nhạc quen, ngồi góc cafe yên tĩnh và ngắm phố xá trôi chậm lại... 🎧🌆",
-        "Đồng đội ơi tối nay lập team phá đảo thế giới ảo không nào? Bắn tín hiệu ngay nha! 🎮🔥",
-        "Hôm nay bạn đã tự thưởng cho bản thân một cốc trà sữa hay điều gì ngọt ngào chưa? 🧋🌸"
-      ];
-      const randomText = templates[Math.floor(Math.random() * templates.length)];
-      setNewPostContent(randomText);
-      setSelectedVibe(VIBE_TAGS[0]);
-      toast.success("AI đã gợi ý 1 bài đăng cực cuốn!", { icon: '✨' });
-    } else {
-      const styles = [
-        `"${newPostContent.trim()}" ✨ Chill vibe cùng Chat Together nào cả nhà!`,
-        `Góc tâm sự: ${newPostContent.trim()} 🔥 Mọi người thấy sao về điều này?`,
-        `${newPostContent.trim()} 💫 Cứ bình thản mà sống, việc gì đến sẽ đến!`
-      ];
-      setNewPostContent(styles[Math.floor(Math.random() * styles.length)]);
-      toast.success("AI đã làm bài viết sinh động hơn!", { icon: '🪄' });
-    }
+    const templates = [
+      "Cuối tuần nhẹ nhàng, cùng bật chút Lo-Fi và tận hưởng không gian riêng... 🎧",
+      "Đôi khi sự im lặng cũng là một câu trả lời trọn vẹn nhất. Chúc mọi người buổi tối an yên.",
+      "Có ai đang thức đêm cùng chạy deadline không? Gửi chút năng lượng tích cực đến bạn nhé! ✨",
+      "Tìm cạ đàm thoại voice trao đổi về công nghệ và cuộc sống, ai rảnh thì ới mình nha ☕"
+    ];
+    const pick = templates[Math.floor(Math.random() * templates.length)];
+    setNewPostContent(pick);
+    setSelectedVibe(VIBE_TAGS[0]);
+    toast.success("Đã gợi ý nội dung!");
   };
 
-  // Thả Cảm Xúc / Emoji Reaction (Facebook Style)
+  // Thả cảm xúc
   const handleReactPost = async (postId, reactionType = 'HEART') => {
     setActiveReactionPicker(null);
     try {
@@ -270,7 +284,7 @@ const Home = () => {
         } : p));
       }
     } catch (err) {
-      toast.error("Không thể thao tác thả cảm xúc!");
+      toast.error("Không thể thao tác cảm xúc lúc này!");
     }
   };
 
@@ -309,7 +323,7 @@ const Home = () => {
           ...p,
           commentsCount: (p.commentsCount || 0) + 1
         } : p));
-        toast.success("Đã gửi bình luận!");
+        toast.success("Đã gửi phản hồi!");
       }
     } catch (err) {
       toast.error(err.response?.data?.message || "Không thể gửi bình luận!");
@@ -318,16 +332,16 @@ const Home = () => {
     }
   };
 
-  // Lưu / Bỏ lưu bài viết (Bookmarks)
+  // Lưu bài viết
   const handleToggleSavePost = (postId) => {
     setSavedPostIds(prev => {
       let updated;
       if (prev.includes(postId)) {
         updated = prev.filter(id => id !== postId);
-        toast("Đã bỏ lưu bài viết", { icon: '🗑️' });
+        toast("Đã bỏ lưu bài viết");
       } else {
         updated = [...prev, postId];
-        toast.success("Đã lưu vào danh sách đọc sau!", { icon: '🔖' });
+        toast.success("Đã lưu bài viết!");
       }
       localStorage.setItem('saved_post_ids', JSON.stringify(updated));
       return updated;
@@ -343,7 +357,6 @@ const Home = () => {
     }
 
     try {
-      setSearching(true);
       const res = await axiosClient.get('/posts/search', {
         params: { keyword: kw }
       });
@@ -351,13 +364,11 @@ const Home = () => {
         setPosts(res.data.data);
       }
     } catch (err) {
-      toast.error("Lỗi khi tìm kiếm bài viết!");
-    } finally {
-      setSearching(false);
+      toast.error("Lỗi tìm kiếm!");
     }
   };
 
-  // ====================== ĐỘT PHÁ 1: LO-FI RADIO ======================
+  // Lo-Fi Radio
   const togglePlayRadio = () => {
     if (!audioRef.current) return;
     if (isPlayingRadio) {
@@ -366,10 +377,9 @@ const Home = () => {
     } else {
       audioRef.current.play().then(() => {
         setIsPlayingRadio(true);
-        toast.success(`Đang phát: ${RADIO_CHANNELS[currentRadioIndex].name}`, { icon: '🎧' });
+        toast.success(`Đang phát: ${RADIO_CHANNELS[currentRadioIndex].name}`);
       }).catch(err => {
-        console.warn("Không thể phát radio:", err);
-        toast.error("Không thể phát đài radio lúc này!");
+        console.warn("Lỗi phát audio:", err);
       });
     }
   };
@@ -381,46 +391,43 @@ const Home = () => {
       audioRef.current.src = RADIO_CHANNELS[nextIdx].audioSrc;
       if (isPlayingRadio) {
         audioRef.current.play().catch(() => {});
-        toast.success(`Chuyển kênh: ${RADIO_CHANNELS[nextIdx].name}`, { icon: '📻' });
       }
     }
   };
 
-  // ====================== ĐỘT PHÁ 2: SPEED VIBE MATCH ======================
+  // Speed Match
   const handleStartSpeedMatch = () => {
     setIsSpeedMatchOpen(true);
     setMatchingStatus('searching');
     setTimeout(() => {
       setMatchingStatus('matched');
       setMatchedPartner({
-        nickname: 'VibeSoul_' + Math.floor(100 + Math.random() * 900),
-        vibe: 'Đang nghe Lo-Fi & muốn tìm bạn trò chuyện chill',
-        icebreaker: 'Nếu được chọn 1 siêu năng lực ngay bây giờ, bạn sẽ chọn gì?'
+        nickname: 'Ẩn Danh #' + Math.floor(100 + Math.random() * 900),
+        vibe: 'Đang lắng nghe giai điệu Lo-Fi & tìm người trò chuyện',
+        icebreaker: 'Nếu chỉ được chọn một điều bạn mong muốn nhất lúc này, đó là gì?'
       });
-    }, 2000);
+    }, 1500);
   };
 
-  // ====================== ĐỘT PHÁ 3: PARTY WHEEL ======================
+  // Party Wheel
   const handleSpinPartyWheel = () => {
     if (wheelSpinning) return;
     setWheelSpinning(true);
     setWheelResult(null);
     setTimeout(() => {
-      const q = TRUTH_OR_DARE_QUESTIONS[Math.floor(Math.random() * TRUTH_OR_DARE_QUESTIONS.length)];
+      const q = PARTY_QUESTIONS[Math.floor(Math.random() * PARTY_QUESTIONS.length)];
       setWheelResult(q);
       setWheelSpinning(false);
-    }, 1500);
+    }, 1200);
   };
 
-  // Chia sẻ bài viết
   const handleCopyPostLink = (post) => {
     const url = `${window.location.origin}/#post-${post.id}`;
     navigator.clipboard.writeText(url);
-    toast.success("Đã sao chép liên kết bài viết!");
+    toast.success("Đã sao chép liên kết!");
     setSharePost(null);
   };
 
-  // ====================== EFFECTS ======================
   useEffect(() => {
     const handleOnline = () => {
       setIsOffline(false);
@@ -429,7 +436,7 @@ const Home = () => {
     };
     const handleOffline = () => {
       setIsOffline(true);
-      toast("Đang ngoại tuyến. Đang hiển thị dữ liệu lưu trong máy.", { icon: '📶' });
+      toast("Đang ngoại tuyến. Dữ liệu đọc từ bộ nhớ máy.");
     };
 
     window.addEventListener('online', handleOnline);
@@ -457,7 +464,6 @@ const Home = () => {
 
     init();
 
-    // WebSocket lắng nghe cập nhật realtime
     let stompClient = null;
     try {
       const socketUrl = BACKEND_URL ? `${BACKEND_URL}/ws-gs-guide` : '/ws-gs-guide';
@@ -473,7 +479,7 @@ const Home = () => {
         console.warn("WebSocket notice:", err);
       });
     } catch (wsErr) {
-      console.warn("WebSocket init error:", wsErr);
+      console.warn("WebSocket error:", wsErr);
     }
 
     return () => {
@@ -489,14 +495,14 @@ const Home = () => {
   const handleLogout = () => {
     localStorage.clear();
     sessionStorage.clear();
-    toast.success("Đã đăng xuất tài khoản!");
+    toast.success("Đã đăng xuất!");
     navigate('/login');
   };
 
   const handleCreateRoom = async (e) => {
     e.preventDefault();
     if (!newRoomData.name.trim()) {
-      toast.error("Vui lòng nhập tên phòng chat!");
+      toast.error("Vui lòng nhập tên phòng!");
       return;
     }
 
@@ -548,7 +554,6 @@ const Home = () => {
     }
   };
 
-  // Lọc bài viết theo Tab
   const displayedPosts = posts.filter(p => {
     if (activeTab === 'saved') return savedPostIds.includes(p.id);
     if (activeTab === 'trending') return (p.likesCount || 0) > 0 || (p.commentsCount || 0) > 0;
@@ -557,355 +562,289 @@ const Home = () => {
 
   return (
     <div className="social-app-wrapper">
-      {/* Audio Element cho Lo-Fi Radio */}
       <audio 
         ref={audioRef} 
         src={RADIO_CHANNELS[currentRadioIndex].audioSrc} 
         preload="none"
       />
 
-      {/* ============================================================== */}
-      {/* CỘT 1: THANH ĐIỀU HƯỚNG TRÁI (NAV RAIL DESKTOP) */}
-      {/* ============================================================== */}
-      <aside className="nav-sidebar">
-        <div className="nav-brand" onClick={() => setActiveTab('feed')}>
-          <div className="brand-logo-glow">
-            <MessageSquare size={22} color="white" />
-          </div>
-          <div className="brand-text-block">
-            <span className="brand-name">Chat Together</span>
-            <span className="brand-badge-vip"><Crown size={10} /> Next-Gen Social</span>
-          </div>
-        </div>
+      {/* KHUNG CĂN GIỮA TOÀN BỘ ỨNG DỤNG - KHÔNG BỊ TRỐNG ĐEN LỆCH BÊN PHẢI */}
+      <div className="app-main-layout">
 
-        {/* Cyber Radio Mini-Player trên thanh điều hướng */}
-        <div className="sidebar-radio-card">
-          <div className="radio-header">
-            <div className="radio-title-row">
-              <Music size={14} className={isPlayingRadio ? "icon-spin" : ""} color="#818cf8" />
-              <span className="radio-channel-name">{RADIO_CHANNELS[currentRadioIndex].name}</span>
+        {/* ============================================================== */}
+        {/* CỘT 1: THANH ĐIỀU HƯỚNG TRÁI */}
+        {/* ============================================================== */}
+        <aside className="nav-sidebar">
+          <div className="nav-brand" onClick={() => setActiveTab('feed')}>
+            <div className="brand-logo-glow">
+              <MessageSquare size={20} color="white" />
             </div>
-            {isPlayingRadio && (
-              <div className="sound-wave-bars">
-                <span></span><span></span><span></span><span></span>
-              </div>
-            )}
-          </div>
-          <div className="radio-controls-row">
-            <button onClick={togglePlayRadio} className="btn-radio-play" title={isPlayingRadio ? "Tạm dừng" : "Phát nhạc"}>
-              {isPlayingRadio ? <Pause size={14} /> : <Play size={14} />}
-            </button>
-            <button onClick={handleNextRadioChannel} className="btn-radio-shuffle" title="Đổi kênh khác">
-              <Shuffle size={13} />
-            </button>
-            <span className="radio-genre-tag">{RADIO_CHANNELS[currentRadioIndex].genre}</span>
-          </div>
-        </div>
-
-        <nav className="nav-menu">
-          <button 
-            className={`nav-item ${activeTab === 'feed' ? 'active' : ''}`}
-            onClick={() => setActiveTab('feed')}
-          >
-            <Compass size={19} />
-            <span>Bảng tin</span>
-          </button>
-
-          <button 
-            className={`nav-item ${activeTab === 'rooms' ? 'active' : ''}`}
-            onClick={() => setActiveTab('rooms')}
-          >
-            <Radio size={19} />
-            <span>Phòng chat ({rooms.length})</span>
-          </button>
-
-          <button 
-            className={`nav-item ${activeTab === 'trending' ? 'active' : ''}`}
-            onClick={() => setActiveTab('trending')}
-          >
-            <Flame size={19} color="#f97316" />
-            <span>Thịnh hành 🔥</span>
-          </button>
-
-          <button 
-            className={`nav-item ${activeTab === 'saved' ? 'active' : ''}`}
-            onClick={() => setActiveTab('saved')}
-          >
-            <Bookmark size={19} />
-            <span>Đã lưu ({savedPostIds.length})</span>
-          </button>
-
-          <button 
-            className="nav-item"
-            onClick={() => setIsFriendsOpen(true)}
-          >
-            <Users size={19} />
-            <span>Bạn bè</span>
-          </button>
-
-          <button 
-            className="nav-item nav-item-vip"
-            onClick={() => setSelectedProfileUserId(currentUserId)}
-          >
-            <Crown size={19} color="#fbbf24" />
-            <span>Đặc quyền & Hồ sơ</span>
-          </button>
-        </nav>
-
-        {/* Nút hành động tính năng Đột phá */}
-        <div className="nav-action-box">
-          <button 
-            className="btn-speed-match"
-            onClick={handleStartSpeedMatch}
-            title="Ghép ngẫu nhiên với 1 người bạn online cùng vibe"
-          >
-            <Zap size={16} />
-            <span>⚡ Ghép Vibe Nhanh</span>
-          </button>
-
-          <button 
-            className="btn-party-wheel"
-            onClick={() => setIsPartyWheelOpen(true)}
-            title="Mở vòng quay thử thách giải trí"
-          >
-            <Dices size={16} />
-            <span>🎮 Vòng Quay Party</span>
-          </button>
-
-          <button 
-            className="btn-create-post-nav"
-            onClick={() => {
-              setActiveTab('feed');
-              setTimeout(() => newPostInputRef.current?.focus(), 100);
-            }}
-          >
-            <Sparkles size={16} />
-            <span>Đăng bài mới</span>
-          </button>
-
-          <button 
-            className="btn-create-room-nav"
-            onClick={() => setIsCreateModalOpen(true)}
-          >
-            <Plus size={16} />
-            <span>Tạo phòng</span>
-          </button>
-        </div>
-
-        <div className="nav-footer">
-          <button onClick={handleLogout} className="btn-logout-nav" title="Đăng xuất">
-            <LogOut size={16} />
-            <span>Đăng xuất</span>
-          </button>
-        </div>
-      </aside>
-
-      {/* ============================================================== */}
-      {/* CỘT 2: LUỒNG CHÍNH (MAIN STREAM FEED / ROOMS) */}
-      {/* ============================================================== */}
-      <main className="main-stream">
-        {/* Top App Bar trên Mobile */}
-        <div className="mobile-top-bar">
-          <div className="m-brand" onClick={() => setActiveTab('feed')}>
-            <div className="brand-logo-glow m-logo">
-              <MessageSquare size={18} color="white" />
-            </div>
-            <span className="m-title">Chat Together</span>
-          </div>
-
-          <div className="m-actions">
-            <button onClick={togglePlayRadio} className={`m-radio-pill ${isPlayingRadio ? 'active' : ''}`}>
-              <Music size={14} />
-              <span>{isPlayingRadio ? 'Đang phát' : 'Radio'}</span>
-            </button>
-            <button onClick={() => setIsNotifOpen(!isNotifOpen)} className="m-icon-btn">
-              <Bell size={18} />
-              {notifications.some(n => n.unread) && <span className="m-notif-dot"></span>}
-            </button>
-            <div 
-              className="m-user-avatar"
-              onClick={() => setSelectedProfileUserId(currentUserId)}
-            >
-              {localStorage.getItem('nickname')?.charAt(0).toUpperCase() || 'U'}
+            <div className="brand-meta">
+              <span className="brand-name">Chat Together</span>
+              <span className="brand-sub">Không Gian Kết Nối</span>
             </div>
           </div>
-        </div>
 
-        {isOffline && (
-          <div className="offline-stream-banner">
-            <WifiOff size={16} />
-            <span>Bạn đang ngoại tuyến. Đang hiển thị dữ liệu đã lưu trong máy.</span>
+          {/* Widget phát nhạc không gian tối giản */}
+          <div className="ambient-radio-widget">
+            <div className="radio-top-row">
+              <Music size={13} className={isPlayingRadio ? "icon-spin" : ""} color="#818cf8" />
+              <span className="radio-name-text">{RADIO_CHANNELS[currentRadioIndex].name}</span>
+            </div>
+            <div className="radio-btns-row">
+              <button onClick={togglePlayRadio} className="btn-radio-toggle" title={isPlayingRadio ? "Tạm dừng" : "Phát"}>
+                {isPlayingRadio ? <Pause size={12} /> : <Play size={12} />}
+              </button>
+              <button onClick={handleNextRadioChannel} className="btn-radio-next" title="Đổi bài">
+                <Shuffle size={12} />
+              </button>
+              <span className="radio-genre-label">{RADIO_CHANNELS[currentRadioIndex].genre}</span>
+            </div>
           </div>
-        )}
 
-        {/* Header Tabs Bộ Lọc Bảng Tin */}
-        <header className="stream-header">
-          <div className="stream-tabs">
+          <nav className="nav-menu">
             <button 
-              className={`stream-tab ${activeTab === 'feed' ? 'active' : ''}`}
+              className={`nav-item ${activeTab === 'feed' ? 'active' : ''}`}
               onClick={() => setActiveTab('feed')}
             >
-              Dành cho bạn
+              <Compass size={18} />
+              <span>Bảng tin</span>
             </button>
+
             <button 
-              className={`stream-tab ${activeTab === 'trending' ? 'active' : ''}`}
-              onClick={() => setActiveTab('trending')}
-            >
-              <Flame size={15} color="#f97316" /> Thịnh hành
-            </button>
-            <button 
-              className={`stream-tab ${activeTab === 'saved' ? 'active' : ''}`}
-              onClick={() => setActiveTab('saved')}
-            >
-              <Bookmark size={15} /> Đã lưu
-            </button>
-            <button 
-              className={`stream-tab ${activeTab === 'rooms' ? 'active' : ''}`}
+              className={`nav-item ${activeTab === 'rooms' ? 'active' : ''}`}
               onClick={() => setActiveTab('rooms')}
             >
-              <Radio size={15} /> Phòng chat ({rooms.length})
+              <Radio size={18} />
+              <span>Phòng trò chuyện ({rooms.length})</span>
+            </button>
+
+            <button 
+              className={`nav-item ${activeTab === 'trending' ? 'active' : ''}`}
+              onClick={() => setActiveTab('trending')}
+            >
+              <Flame size={18} />
+              <span>Thịnh hành</span>
+            </button>
+
+            <button 
+              className={`nav-item ${activeTab === 'saved' ? 'active' : ''}`}
+              onClick={() => setActiveTab('saved')}
+            >
+              <Bookmark size={18} />
+              <span>Đã lưu ({savedPostIds.length})</span>
+            </button>
+
+            <button 
+              className="nav-item"
+              onClick={() => setIsFriendsOpen(true)}
+            >
+              <Users size={18} />
+              <span>Bạn bè</span>
+            </button>
+
+            <button 
+              className="nav-item"
+              onClick={() => setSelectedProfileUserId(currentUserId)}
+            >
+              <Crown size={18} color="#eab308" />
+              <span>Hồ sơ & Đặc quyền</span>
+            </button>
+          </nav>
+
+          <div className="nav-action-box">
+            <button 
+              className="btn-speed-match-minimal"
+              onClick={handleStartSpeedMatch}
+              title="Ghép ngẫu nhiên với 1 người bạn online cùng vibe"
+            >
+              <Zap size={15} />
+              <span>Ghép Vibe Ẩn Danh</span>
+            </button>
+
+            <button 
+              className="btn-party-wheel-minimal"
+              onClick={() => setIsPartyWheelOpen(true)}
+              title="Vòng quay thử thách"
+            >
+              <Dices size={15} />
+              <span>Vòng Quay Party</span>
+            </button>
+
+            <button 
+              className="btn-create-room-minimal"
+              onClick={() => setIsCreateModalOpen(true)}
+            >
+              <Plus size={15} />
+              <span>Tạo phòng chat</span>
             </button>
           </div>
 
-          <div className="stream-header-actions">
+          <div className="nav-footer">
+            <button onClick={handleLogout} className="btn-logout-nav">
+              <LogOut size={16} />
+              <span>Đăng xuất</span>
+            </button>
+          </div>
+        </aside>
+
+        {/* ============================================================== */}
+        {/* CỘT 2: LUỒNG CHÍNH (STREAM FEED) */}
+        {/* ============================================================== */}
+        <main className="main-stream">
+          {/* Top Bar cho Mobile */}
+          <div className="mobile-top-bar">
+            <div className="m-brand" onClick={() => setActiveTab('feed')}>
+              <div className="brand-logo-glow m-logo">
+                <MessageSquare size={16} color="white" />
+              </div>
+              <span className="m-title">Chat Together</span>
+            </div>
+
+            <div className="m-actions">
+              <button onClick={togglePlayRadio} className={`m-radio-pill ${isPlayingRadio ? 'active' : ''}`}>
+                <Music size={13} />
+                <span>{isPlayingRadio ? 'Phát' : 'Nhạc'}</span>
+              </button>
+              <div 
+                className="m-user-avatar-wrap"
+                onClick={() => setSelectedProfileUserId(currentUserId)}
+              >
+                <UserAvatar avatar={localStorage.getItem('avatar')} size={30} />
+              </div>
+            </div>
+          </div>
+
+          {isOffline && (
+            <div className="offline-stream-banner">
+              <WifiOff size={15} />
+              <span>Bạn đang ngoại tuyến. Hiển thị nội dung lưu trong máy.</span>
+            </div>
+          )}
+
+          {/* Header Tabs */}
+          <header className="stream-header">
+            <div className="stream-tabs">
+              <button 
+                className={`stream-tab ${activeTab === 'feed' ? 'active' : ''}`}
+                onClick={() => setActiveTab('feed')}
+              >
+                Dành cho bạn
+              </button>
+              <button 
+                className={`stream-tab ${activeTab === 'trending' ? 'active' : ''}`}
+                onClick={() => setActiveTab('trending')}
+              >
+                Thịnh hành
+              </button>
+              <button 
+                className={`stream-tab ${activeTab === 'saved' ? 'active' : ''}`}
+                onClick={() => setActiveTab('saved')}
+              >
+                Đã lưu
+              </button>
+              <button 
+                className={`stream-tab ${activeTab === 'rooms' ? 'active' : ''}`}
+                onClick={() => setActiveTab('rooms')}
+              >
+                Phòng trò chuyện ({rooms.length})
+              </button>
+            </div>
+
             <button 
               onClick={() => setIsNotifOpen(!isNotifOpen)} 
               className="btn-header-notif" 
               title="Thông báo"
             >
-              <Bell size={18} />
-              {notifications.some(n => n.unread) && (
-                <span className="notif-badge-pill">{notifications.filter(n => n.unread).length}</span>
-              )}
+              <Bell size={17} />
+              {notifications.some(n => n.unread) && <span className="notif-dot"></span>}
             </button>
-          </div>
-        </header>
+          </header>
 
-        {/* DROPDOWN TRUNG TÂM THÔNG BÁO */}
-        {isNotifOpen && (
-          <div className="notif-dropdown-card">
-            <div className="notif-header">
-              <h4>Thông báo mới</h4>
-              <button onClick={() => setNotifications(prev => prev.map(n => ({ ...n, unread: false })))} className="btn-read-all">
-                Đánh dấu đã đọc
-              </button>
-            </div>
-            <div className="notif-list">
-              {notifications.map(n => (
-                <div key={n.id} className={`notif-item ${n.unread ? 'unread' : ''}`}>
-                  <div className="notif-icon-circle">
-                    <Sparkles size={14} color="#818cf8" />
-                  </div>
-                  <div className="notif-content">
-                    <p>{n.text}</p>
-                    <span>{n.time}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* NỘI DUNG 1: BẢNG TIN MẠNG XÃ HỘI (FEED) */}
-        {activeTab !== 'rooms' && (
-          <div className="feed-container">
-            {/* ========================================== */}
-            {/* STORIES / KHOẢNG KHẮC 24H BAR */}
-            {/* ========================================== */}
-            <div className="stories-bar-container">
-              <div className="stories-scroll">
-                {/* Story của bạn */}
-                <div 
-                  className="story-item story-create-item"
-                  onClick={() => toast.success("Tính năng đăng khoảnh khắc Story 24h đang chuẩn bị mở!", { icon: '📸' })}
-                >
-                  <div className="story-avatar-wrap add-story-wrap">
-                    <div className="story-avatar-inner">
-                      {localStorage.getItem('nickname')?.charAt(0).toUpperCase() || 'T'}
+          {/* Dropdown Thông Báo */}
+          {isNotifOpen && (
+            <div className="notif-dropdown-card">
+              <div className="notif-header">
+                <h4>Thông báo</h4>
+                <button onClick={() => setNotifications(prev => prev.map(n => ({ ...n, unread: false })))} className="btn-read-all">
+                  Đánh dấu đã đọc
+                </button>
+              </div>
+              <div className="notif-list">
+                {notifications.map(n => (
+                  <div key={n.id} className={`notif-item ${n.unread ? 'unread' : ''}`}>
+                    <Sparkles size={13} color="#818cf8" style={{ marginTop: 2, flexShrink: 0 }} />
+                    <div className="notif-text-wrap">
+                      <p>{n.text}</p>
+                      <span>{n.time}</span>
                     </div>
-                    <span className="add-story-plus"><Plus size={12} /></span>
-                  </div>
-                  <span className="story-author-name">Tạo tin</span>
-                </div>
-
-                {/* Các Story của cộng đồng */}
-                {stories.filter(s => !s.isSelf).map(st => (
-                  <div 
-                    key={st.id} 
-                    className="story-item"
-                    onClick={() => setActiveStory(st)}
-                  >
-                    <div className={`story-avatar-wrap ${st.seen ? 'seen' : 'unseen'}`}>
-                      <div className="story-avatar-inner" style={{ background: st.bg }}>
-                        {st.avatar}
-                      </div>
-                    </div>
-                    <span className="story-author-name">{st.author.slice(0, 8)}</span>
                   </div>
                 ))}
               </div>
             </div>
+          )}
 
-            {/* ========================================== */}
-            {/* HỘP ĐĂNG BÀI VIẾT CAO CẤP */}
-            {/* ========================================== */}
-            <div className="post-creator-card">
-              <div className="creator-header-row">
-                <div className="creator-avatar">
-                  {localStorage.getItem('nickname')?.charAt(0).toUpperCase() || "T"}
+          {/* NỘI DUNG 1: BẢNG TIN */}
+          {activeTab !== 'rooms' && (
+            <div className="feed-container">
+              
+              {/* Dải Tín Hiệu Trực Tiếp (Live Vibe Signals) - THAY THẾ CHO STORY FACEBOOK */}
+              <div className="live-signals-strip">
+                <span className="live-signal-label"><Radio size={13} className="pulse-icon" /> Không gian online:</span>
+                <div className="live-signal-scroll">
+                  <div className="signal-pill active" onClick={() => setActiveTab('rooms')}>
+                    <span className="status-dot green"></span>
+                    <span>Phòng đàm thoại ({rooms.length} phòng)</span>
+                  </div>
+                  <div className="signal-pill" onClick={handleStartSpeedMatch}>
+                    <Zap size={12} color="#eab308" />
+                    <span>Ghép ẩn danh</span>
+                  </div>
+                  <div className="signal-pill" onClick={togglePlayRadio}>
+                    <Music size={12} color="#818cf8" />
+                    <span>{isPlayingRadio ? 'Đang phát Radio' : 'Bật đài Lo-Fi'}</span>
+                  </div>
                 </div>
-                <div className="creator-greeting">
-                  <span className="greeting-name">{localStorage.getItem('nickname') || "Bạn"}</span>
-                  <span className="greeting-sub">Chia sẻ suy nghĩ, âm nhạc hay tìm cạ nói chuyện...</span>
-                </div>
-                {/* Nút AI Wingman */}
-                <button 
-                  type="button" 
-                  onClick={handleAIEnhancePost}
-                  className="btn-ai-magic"
-                  title="Để AI gợi ý ý tưởng hoặc làm bài viết hay hơn"
-                >
-                  <Wand2 size={14} />
-                  <span>AI Gợi ý</span>
-                </button>
               </div>
 
-              <form onSubmit={handleCreatePost} className="creator-form">
-                <textarea 
-                  ref={newPostInputRef}
-                  rows="3"
-                  placeholder="Hôm nay bạn có cảm xúc, câu chuyện hay điều gì thú vị muốn lan tỏa cùng mọi người?..."
-                  value={newPostContent}
-                  onChange={(e) => setNewPostContent(e.target.value)}
-                />
+              {/* HỘP SOẠN BÀI VIẾT TỐI GIẢN */}
+              <div className="post-creator-box">
+                <div className="creator-input-row">
+                  {/* Avatar ẩn danh nếu chưa có ảnh */}
+                  <UserAvatar avatar={localStorage.getItem('avatar')} size={40} />
+                  
+                  <div className="creator-field-wrap">
+                    <textarea 
+                      ref={newPostInputRef}
+                      rows="2"
+                      placeholder="Chia sẻ suy nghĩ hoặc câu chuyện của bạn..."
+                      value={newPostContent}
+                      onChange={(e) => setNewPostContent(e.target.value)}
+                    />
+                  </div>
+                </div>
 
-                {/* Vibe Selector Pills */}
+                {/* Vibe Tags */}
                 <div className="vibe-tags-row">
-                  <span className="vibe-label">Tâm trạng:</span>
                   {VIBE_TAGS.map(v => (
                     <button
                       key={v.id}
                       type="button"
                       onClick={() => setSelectedVibe(selectedVibe?.id === v.id ? null : v)}
                       className={`vibe-tag-pill ${selectedVibe?.id === v.id ? 'active' : ''}`}
-                      style={{
-                        background: selectedVibe?.id === v.id ? v.text : v.bg,
-                        color: selectedVibe?.id === v.id ? '#090d16' : v.text,
-                        borderColor: v.text
-                      }}
                     >
                       {v.label}
                     </button>
                   ))}
                 </div>
 
-                {/* Ô đính kèm ảnh (nếu mở) */}
+                {/* Ô đính kèm ảnh */}
                 {showImageInput && (
-                  <div className="image-input-box">
-                    <ImageIcon size={16} className="img-icon" />
+                  <div className="image-input-row">
+                    <ImageIcon size={15} color="#94a3b8" />
                     <input 
                       type="url"
-                      placeholder="Dán đường dẫn ảnh trực tiếp (VD: https://images.unsplash.com/...)"
+                      placeholder="Dán link ảnh (VD: https://...)"
                       value={postImageUrl}
                       onChange={(e) => setPostImageUrl(e.target.value)}
                     />
@@ -918,404 +857,363 @@ const Home = () => {
                 )}
 
                 {postImageUrl && (
-                  <div className="image-preview-box">
-                    <img src={postImageUrl} alt="Preview" onError={() => toast.error("Đường dẫn ảnh không tải được!")} />
+                  <div className="post-img-preview">
+                    <img src={postImageUrl} alt="Preview" onError={() => toast.error("Link ảnh không hiển thị được!")} />
                   </div>
                 )}
 
-                <div className="creator-footer">
-                  <div className="creator-tools">
+                <div className="creator-bottom-row">
+                  <div className="creator-left-tools">
                     <button 
                       type="button" 
                       onClick={() => setShowImageInput(!showImageInput)} 
-                      className={`btn-tool ${showImageInput ? 'active' : ''}`}
+                      className={`btn-subtool ${showImageInput ? 'active' : ''}`}
                       title="Chèn ảnh"
                     >
-                      <ImageIcon size={17} />
-                      <span>{showImageInput ? 'Đóng ảnh' : 'Đính kèm ảnh'}</span>
+                      <ImageIcon size={15} />
+                      <span>{showImageInput ? 'Đóng link ảnh' : 'Đính ảnh'}</span>
+                    </button>
+
+                    <button 
+                      type="button" 
+                      onClick={handleAIEnhancePost}
+                      className="btn-subtool"
+                      title="Gợi ý câu chữ"
+                    >
+                      <Wand2 size={15} />
+                      <span>Gợi ý ý tưởng</span>
                     </button>
                   </div>
 
                   <button 
-                    type="submit" 
+                    type="button" 
+                    onClick={handleCreatePost}
                     disabled={!newPostContent.trim() || isPosting}
-                    className="btn-publish-post"
+                    className="btn-publish-submit"
                   >
-                    <Send size={15} />
-                    <span>{isPosting ? 'Đang đăng...' : 'Đăng bài'}</span>
+                    <Send size={14} />
+                    <span>{isPosting ? 'Đang gửi...' : 'Đăng bài'}</span>
                   </button>
                 </div>
-              </form>
-            </div>
+              </div>
 
-            {/* ========================================== */}
-            {/* DANH SÁCH BÀI VIẾT (FEED STREAM) */}
-            {/* ========================================== */}
-            <div className="posts-stream">
-              {loadingPosts ? (
-                <div className="stream-loading">
-                  <div className="stream-spinner"></div>
-                  <p>Đang chuẩn bị bảng tin...</p>
-                </div>
-              ) : displayedPosts.length === 0 ? (
-                <div className="stream-empty">
-                  <MessageCircle size={44} className="empty-icon" />
-                  <h3>Chưa có bài viết nào ở mục này</h3>
-                  <p>Hãy là người đầu tiên chia sẻ cảm nghĩ của bạn lên bảng tin!</p>
-                </div>
-              ) : (
-                displayedPosts.map((post) => {
-                  const isSaved = savedPostIds.includes(post.id);
-                  const isPostAuthorFounder = post.authorVipTier === 'FOUNDER' || post.authorRoles?.includes('ROLE_AMDIN') || post.authorRoles?.includes('ROLE_ADMIN');
-                  const currentReactionObj = REACTION_EMOJIS.find(r => r.type === post.myReaction);
+              {/* DANH SÁCH BÀI VIẾT */}
+              <div className="feed-posts-list">
+                {loadingPosts ? (
+                  <div className="feed-status-box">
+                    <div className="feed-spinner"></div>
+                    <p>Đang chuẩn bị bảng tin...</p>
+                  </div>
+                ) : displayedPosts.length === 0 ? (
+                  <div className="feed-status-box">
+                    <MessageCircle size={38} className="empty-icon-muted" />
+                    <h4>Chưa có bài viết nào</h4>
+                    <p>Hãy là người đầu tiên chia sẻ cảm nghĩ của bạn lên bảng tin!</p>
+                  </div>
+                ) : (
+                  displayedPosts.map((post) => {
+                    const isSaved = savedPostIds.includes(post.id);
+                    const isAuthorAdmin = post.authorVipTier === 'FOUNDER' || post.authorRoles?.includes('ROLE_AMDIN') || post.authorRoles?.includes('ROLE_ADMIN');
+                    const currentReaction = REACTION_EMOJIS.find(r => r.type === post.myReaction);
 
-                  return (
-                    <article key={post.id} className="post-card" id={`post-${post.id}`}>
-                      <div className="post-header">
-                        {/* Avatar tác giả với viền hào quang VIP */}
-                        <div 
-                          className={`post-author-avatar ${isPostAuthorFounder ? 'founder-frame' : 'vip-frame'}`}
-                          onClick={() => setSelectedProfileUserId(post.authorId)}
-                          title={`Xem hồ sơ của ${post.authorNickname}`}
-                        >
-                          {post.authorNickname?.charAt(0).toUpperCase() || "U"}
-                        </div>
-
-                        <div className="post-author-meta">
-                          <div className="author-name-row">
-                            <h4 
-                              onClick={() => setSelectedProfileUserId(post.authorId)}
-                              title={`Xem hồ sơ của ${post.authorNickname}`}
-                            >
-                              {post.authorNickname}
-                            </h4>
-
-                            {/* Biểu Tượng Đặc Quyền VIP & Verified */}
-                            {post.authorIsVerified && (
-                              <span className="badge-verified" title="Tài khoản đã xác thực">
-                                <CheckCircle2 size={15} color="#38bdf8" />
-                              </span>
-                            )}
-
-                            {isPostAuthorFounder ? (
-                              <span className="privilege-pill founder-pill">
-                                <Crown size={12} /> Sáng Lập
-                              </span>
-                            ) : (
-                              <span className="privilege-pill diamond-pill">
-                                <Gem size={12} /> VIP
-                              </span>
-                            )}
-
-                            <span className="author-account">@{post.authorAccount}</span>
-                          </div>
-
-                          <div className="post-sub-meta">
-                            <span className="post-time">{post.formattedTime}</span>
-                            {post.authorLocation && (
-                              <span className="post-location">📍 {post.authorLocation}</span>
-                            )}
-                            {post.vibe && (
-                              <span className="post-vibe-tag">{post.vibe}</span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Nút lưu bài viết */}
-                        <button 
-                          onClick={() => handleToggleSavePost(post.id)}
-                          className={`btn-bookmark-post ${isSaved ? 'saved' : ''}`}
-                          title={isSaved ? "Bỏ lưu bài viết" : "Lưu bài viết"}
-                        >
-                          <Bookmark size={17} fill={isSaved ? "#818cf8" : "none"} color={isSaved ? "#818cf8" : "currentColor"} />
-                        </button>
-                      </div>
-
-                      {/* Nội dung bài đăng */}
-                      <div className="post-content">
-                        <p>{post.content}</p>
-                        {post.imageUrl && (
-                          <div className="post-attached-image">
-                            <img src={post.imageUrl} alt="Đính kèm" loading="lazy" />
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Thanh Tương Tác: Reactions, Bình Luận, Chia Sẻ */}
-                      <div className="post-actions-bar">
-                        {/* Hộp Thả Emoji / Like */}
-                        <div className="reaction-wrapper">
-                          <button 
-                            onClick={() => handleReactPost(post.id, post.myReaction ? post.myReaction : 'HEART')}
-                            onMouseEnter={() => setActiveReactionPicker(post.id)}
-                            className={`action-pill ${post.isLikedByMe ? 'liked' : ''}`}
-                            title="Thả cảm xúc"
+                    return (
+                      <article key={post.id} className="post-item-card" id={`post-${post.id}`}>
+                        <div className="post-header-row">
+                          {/* Avatar Ẩn danh nếu chưa cập nhật ảnh */}
+                          <div 
+                            className="post-avatar-click"
+                            onClick={() => setSelectedProfileUserId(post.authorId)}
                           >
-                            {currentReactionObj ? (
-                              <span className="reaction-active-emoji">{currentReactionObj.emoji}</span>
-                            ) : (
-                              <Heart size={18} fill={post.isLikedByMe ? "#ef4444" : "none"} color={post.isLikedByMe ? "#ef4444" : "currentColor"} />
-                            )}
-                            <span>{post.likesCount || 0}</span>
-                          </button>
+                            <UserAvatar avatar={post.authorAvatar} size={38} />
+                          </div>
 
-                          {/* Bảng chọn Emoji Reactions (Hover / Mở) */}
-                          {activeReactionPicker === post.id && (
-                            <div 
-                              className="reactions-popover"
-                              onMouseLeave={() => setActiveReactionPicker(null)}
-                            >
-                              {REACTION_EMOJIS.map(emojiItem => (
-                                <button
-                                  key={emojiItem.type}
-                                  type="button"
-                                  onClick={() => handleReactPost(post.id, emojiItem.type)}
-                                  className="reaction-emoji-btn"
-                                  title={emojiItem.label}
-                                >
-                                  <span>{emojiItem.emoji}</span>
-                                </button>
-                              ))}
+                          <div className="post-header-info">
+                            <div className="post-name-line">
+                              <span 
+                                className="author-display-name"
+                                onClick={() => setSelectedProfileUserId(post.authorId)}
+                              >
+                                {post.authorNickname}
+                              </span>
+
+                              {/* Huy hiệu đặc quyền tinh tế */}
+                              {isAuthorAdmin && (
+                                <span className="privilege-badge founder" title="Quản trị viên / Sáng lập">
+                                  <Crown size={11} /> Sáng Lập
+                                </span>
+                              )}
+                              {post.authorVipTier === 'VIP_DIAMOND' && (
+                                <span className="privilege-badge vip" title="Thành viên VIP">
+                                  <Gem size={11} /> VIP
+                                </span>
+                              )}
+                              {post.authorIsVerified && (
+                                <CheckCircle2 size={14} color="#38bdf8" title="Đã xác thực" />
+                              )}
+
+                              <span className="author-handle">@{post.authorAccount}</span>
+                            </div>
+
+                            <div className="post-meta-sub">
+                              <span>{post.formattedTime}</span>
+                              {post.authorLocation && <span>• 📍 {post.authorLocation}</span>}
+                              {post.vibe && <span className="vibe-tag-badge">• {post.vibe}</span>}
+                            </div>
+                          </div>
+
+                          <button 
+                            onClick={() => handleToggleSavePost(post.id)}
+                            className={`btn-save-post ${isSaved ? 'saved' : ''}`}
+                            title={isSaved ? "Bỏ lưu" : "Lưu bài viết"}
+                          >
+                            <Bookmark size={16} fill={isSaved ? "#818cf8" : "none"} />
+                          </button>
+                        </div>
+
+                        {/* Nội dung bài viết */}
+                        <div className="post-body-content">
+                          <p>{post.content}</p>
+                          {post.imageUrl && (
+                            <div className="post-media-frame">
+                              <img src={post.imageUrl} alt="Đính kèm" loading="lazy" />
                             </div>
                           )}
                         </div>
 
-                        <button 
-                          onClick={() => handleToggleComments(post.id)}
-                          className="action-pill"
-                          title="Bình luận"
-                        >
-                          <MessageCircle size={18} />
-                          <span>{post.commentsCount || 0}</span>
-                        </button>
+                        {/* Thanh tương tác */}
+                        <div className="post-actions-toolbar">
+                          <div className="reaction-drop-wrapper">
+                            <button 
+                              onClick={() => handleReactPost(post.id, post.myReaction || 'HEART')}
+                              onMouseEnter={() => setActiveReactionPicker(post.id)}
+                              className={`action-btn ${post.isLikedByMe ? 'active-liked' : ''}`}
+                            >
+                              {currentReaction ? (
+                                <span className="custom-emoji-view">{currentReaction.emoji}</span>
+                              ) : (
+                                <Heart size={16} fill={post.isLikedByMe ? "#ef4444" : "none"} color={post.isLikedByMe ? "#ef4444" : "currentColor"} />
+                              )}
+                              <span>{post.likesCount || 0}</span>
+                            </button>
 
-                        <button 
-                          onClick={() => setSharePost(post)}
-                          className="action-pill action-share"
-                          title="Chia sẻ bài viết"
-                        >
-                          <Share2 size={18} />
-                          <span>Chia sẻ</span>
-                        </button>
-                      </div>
-
-                      {/* Hộp Bình Luận (Mở rộng khi click) */}
-                      {expandedComments[post.id] && (
-                        <div className="comments-section">
-                          <div className="comments-list">
-                            {commentsMap[post.id]?.length === 0 ? (
-                              <p className="no-comments-msg">Chưa có bình luận nào. Hãy là người đầu tiên bình luận!</p>
-                            ) : (
-                              commentsMap[post.id]?.map((cmt) => (
-                                <div key={cmt.id} className="comment-bubble">
-                                  <div 
-                                    className="cmt-avatar"
-                                    onClick={() => setSelectedProfileUserId(cmt.authorId)}
+                            {/* Bảng chọn Emoji Reactions */}
+                            {activeReactionPicker === post.id && (
+                              <div 
+                                className="reactions-popup-menu"
+                                onMouseLeave={() => setActiveReactionPicker(null)}
+                              >
+                                {REACTION_EMOJIS.map(item => (
+                                  <button
+                                    key={item.type}
+                                    type="button"
+                                    onClick={() => handleReactPost(post.id, item.type)}
+                                    className="reaction-emoji-item"
+                                    title={item.label}
                                   >
-                                    {cmt.authorNickname?.charAt(0).toUpperCase() || "U"}
-                                  </div>
-                                  <div className="cmt-body">
-                                    <div className="cmt-header">
-                                      <span 
-                                        className="cmt-author"
-                                        onClick={() => setSelectedProfileUserId(cmt.authorId)}
-                                      >
-                                        {cmt.authorNickname}
-                                      </span>
-                                      <span className="cmt-time">{cmt.formattedTime}</span>
-                                    </div>
-                                    <p className="cmt-text">{cmt.content}</p>
-                                  </div>
-                                </div>
-                              ))
+                                    {item.emoji}
+                                  </button>
+                                ))}
+                              </div>
                             )}
                           </div>
 
-                          {/* Ô nhập bình luận */}
-                          <form onSubmit={(e) => handleAddComment(e, post.id)} className="comment-form">
-                            <input 
-                              type="text" 
-                              placeholder="Viết câu trả lời của bạn..."
-                              value={commentInputs[post.id] || ''}
-                              onChange={(e) => setCommentInputs({ ...commentInputs, [post.id]: e.target.value })}
-                            />
-                            <button 
-                              type="submit" 
-                              disabled={!commentInputs[post.id]?.trim() || submittingComment[post.id]}
-                              className="btn-send-cmt"
-                            >
-                              <CornerDownRight size={16} />
-                            </button>
-                          </form>
+                          <button 
+                            onClick={() => handleToggleComments(post.id)}
+                            className="action-btn"
+                          >
+                            <MessageCircle size={16} />
+                            <span>{post.commentsCount || 0}</span>
+                          </button>
+
+                          <button 
+                            onClick={() => handleCopyPostLink(post)}
+                            className="action-btn"
+                            title="Sao chép liên kết"
+                          >
+                            <Share2 size={16} />
+                            <span>Chia sẻ</span>
+                          </button>
                         </div>
-                      )}
-                    </article>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        )}
 
-        {/* NỘI DUNG 2: DANH SÁCH PHÒNG CHAT & VOICE CALL (ROOMS) */}
-        {activeTab === 'rooms' && (
-          <div className="rooms-container">
-            <div className="rooms-banner">
-              <div>
-                <h2>Phòng Trò Chuyện & Gọi Thoại WebRTC</h2>
-                <p>Tham gia phòng để trao đổi tin nhắn, đàm thoại âm thanh HD thời gian thực cùng bạn bè.</p>
+                        {/* Khu vực bình luận */}
+                        {expandedComments[post.id] && (
+                          <div className="post-comments-container">
+                            <div className="comments-stack">
+                              {commentsMap[post.id]?.length === 0 ? (
+                                <p className="empty-cmt-notice">Chưa có bình luận nào.</p>
+                              ) : (
+                                commentsMap[post.id]?.map((cmt) => (
+                                  <div key={cmt.id} className="cmt-row">
+                                    <UserAvatar avatar={cmt.authorAvatar} size={26} />
+                                    <div className="cmt-bubble-content">
+                                      <div className="cmt-name-row">
+                                        <span className="cmt-user-name">{cmt.authorNickname}</span>
+                                        <span className="cmt-time-label">{cmt.formattedTime}</span>
+                                      </div>
+                                      <p className="cmt-body-text">{cmt.content}</p>
+                                    </div>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+
+                            <form onSubmit={(e) => handleAddComment(e, post.id)} className="cmt-input-form">
+                              <input 
+                                type="text" 
+                                placeholder="Viết phản hồi..."
+                                value={commentInputs[post.id] || ''}
+                                onChange={(e) => setCommentInputs({ ...commentInputs, [post.id]: e.target.value })}
+                              />
+                              <button 
+                                type="submit" 
+                                disabled={!commentInputs[post.id]?.trim() || submittingComment[post.id]}
+                                className="btn-submit-cmt"
+                              >
+                                <CornerDownRight size={14} />
+                              </button>
+                            </form>
+                          </div>
+                        )}
+                      </article>
+                    );
+                  })
+                )}
               </div>
-              <button onClick={() => setIsCreateModalOpen(true)} className="btn-create-room-header">
-                <Plus size={16} /> Tạo phòng mới
-              </button>
             </div>
+          )}
 
-            <div className="rooms-grid">
-              {rooms.map((room) => {
-                const alreadyIn = isUserInRoom(room);
-                return (
-                  <div key={room.id} className={`room-card-modern ${alreadyIn ? 'is-my-room' : ''}`}>
-                    <div className="card-top">
-                      <h3>{room.nameroom}</h3>
-                      <span className="online-pill">
-                        <span className="pulse-green"></span>
-                        {room.soluong || room.userRoomDTOList?.length || 0} online
-                      </span>
-                    </div>
+          {/* NỘI DUNG 2: PHÒNG CHAT */}
+          {activeTab === 'rooms' && (
+            <div className="rooms-section-wrapper">
+              <div className="rooms-header-banner">
+                <div>
+                  <h3>Phòng Trò Chuyện & Gọi Thoại WebRTC</h3>
+                  <p>Tham gia trao đổi văn bản và kết nối âm thanh thời gian thực với độ trễ thấp.</p>
+                </div>
+                <button onClick={() => setIsCreateModalOpen(true)} className="btn-add-room-action">
+                  <Plus size={15} /> Tạo phòng mới
+                </button>
+              </div>
 
-                    <div className="card-badges">
-                      {room.hasPassword && (
-                        <span className="badge badge-locked">
-                          <Lock size={12} /> Khóa
+              <div className="rooms-cards-grid">
+                {rooms.map((room) => {
+                  const alreadyIn = isUserInRoom(room);
+                  return (
+                    <div key={room.id} className={`room-simple-card ${alreadyIn ? 'active-room' : ''}`}>
+                      <div className="room-top-info">
+                        <h4>{room.nameroom}</h4>
+                        <span className="room-online-tag">
+                          <span className="green-circle"></span>
+                          {room.soluong || room.userRoomDTOList?.length || 0} online
                         </span>
-                      )}
-                      {alreadyIn && (
-                        <span className="badge badge-joined">
-                          <CheckCircle size={12} /> Phòng của bạn
-                        </span>
-                      )}
-                    </div>
+                      </div>
 
-                    <div className="members-chips">
-                      {room.userRoomDTOList?.slice(0, 4).map((ur, idx) => (
-                        <span key={idx} className="chip">
-                          {ur.userDTO?.nickname || "User"}
-                        </span>
-                      ))}
-                      {(room.userRoomDTOList?.length || 0) > 4 && (
-                        <span className="chip chip-more">+{room.userRoomDTOList.length - 4}</span>
-                      )}
-                    </div>
+                      <div className="room-chips-list">
+                        {room.hasPassword && (
+                          <span className="room-flag locked"><Lock size={11} /> Khóa</span>
+                        )}
+                        {alreadyIn && (
+                          <span className="room-flag joined"><CheckCircle size={11} /> Đã vào</span>
+                        )}
+                      </div>
 
-                    <div className="card-action">
-                      {alreadyIn ? (
-                        <button onClick={() => navigate(`/room/${room.id}`)} className="btn-enter-room btn-reenter">
-                          Vào lại phòng <ArrowRight size={16} />
-                        </button>
-                      ) : (
-                        <button onClick={() => setSelectedRoom(room)} className="btn-enter-room">
-                          Tham gia ngay <ArrowRight size={16} />
-                        </button>
-                      )}
+                      <div className="room-card-bottom">
+                        {alreadyIn ? (
+                          <button onClick={() => navigate(`/room/${room.id}`)} className="btn-join-room btn-rejoin">
+                            Vào lại phòng <ArrowRight size={14} />
+                          </button>
+                        ) : (
+                          <button onClick={() => setSelectedRoom(room)} className="btn-join-room">
+                            Tham gia ngay <ArrowRight size={14} />
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        )}
-      </main>
+          )}
+        </main>
 
-      {/* ============================================================== */}
-      {/* CỘT 3: TIỆN ÍCH PHẢI (WIDGETS & DISCOVERY) */}
-      {/* ============================================================== */}
-      <aside className="widgets-sidebar">
-        {/* Hộp Tìm Kiếm Bài Viết */}
-        <div className="search-widget">
-          <form onSubmit={handleSearch} className="search-box">
-            <Search size={18} className="search-icon" />
+        {/* ============================================================== */}
+        {/* CỘT 3: TIỆN ÍCH PHẢI (WIDGETS) */}
+        {/* ============================================================== */}
+        <aside className="widgets-sidebar">
+          {/* Ô Tìm kiếm */}
+          <div className="search-input-wrap">
+            <Search size={16} className="search-icon-muted" />
             <input 
               type="text" 
-              placeholder="Tìm kiếm bài viết, hashtag..."
+              placeholder="Tìm kiếm nội dung..."
               value={searchKeyword}
               onChange={(e) => setSearchKeyword(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch(e)}
             />
             {searchKeyword && (
-              <button type="button" onClick={() => { setSearchKeyword(''); fetchPosts(); }} className="btn-clear-search">
-                <X size={14} />
+              <button type="button" onClick={() => { setSearchKeyword(''); fetchPosts(); }} className="btn-clear-kw">
+                <X size={13} />
               </button>
             )}
-          </form>
-        </div>
+          </div>
 
-        {/* Tiện Ích Đột Phá: Ghép Đôi Vibe Nhanh */}
-        <div className="widget-card widget-speed-match">
-          <div className="widget-header">
-            <Zap size={18} className="widget-icon zap-glow" />
-            <h4>⚡ Speed Vibe Match</h4>
+          {/* Tiện ích Ghép Đôi Vibe Tối Giản */}
+          <div className="widget-box-card">
+            <div className="widget-card-title">
+              <Zap size={16} color="#eab308" />
+              <span>Ghép Vibe Ẩn Danh</span>
+            </div>
+            <p className="widget-card-desc">Kết nối ngẫu nhiên 1-1 với người dùng đang online cùng chung tâm trạng.</p>
+            <button onClick={handleStartSpeedMatch} className="btn-widget-action">
+              Tìm bạn trò chuyện
+            </button>
           </div>
-          <p className="speed-match-desc">Ghép đôi ẩn danh 1-click với người dùng online cùng gu âm nhạc & sở thích.</p>
-          <button onClick={handleStartSpeedMatch} className="btn-widget-match">
-            Tìm người cùng Vibe ngay
-          </button>
-        </div>
 
-        {/* Tiện Ích Xu Hướng & Hashtags Nổi Bật */}
-        <div className="widget-card">
-          <div className="widget-header">
-            <TrendingUp size={18} className="widget-icon" />
-            <h4>Chủ Đề Nóng Hôm Nay</h4>
+          {/* Tiện ích Vòng Quay Thử Thách */}
+          <div className="widget-box-card">
+            <div className="widget-card-title">
+              <Dices size={16} color="#818cf8" />
+              <span>Vòng Quay Party</span>
+            </div>
+            <p className="widget-card-desc">Bốc thăm câu hỏi thú nhận hoặc thử thách vui cùng bạn bè.</p>
+            <button onClick={() => setIsPartyWheelOpen(true)} className="btn-widget-action secondary">
+              Mở vòng quay
+            </button>
           </div>
-          <div className="trending-tags-list">
-            <div className="trending-item" onClick={() => { setSearchKeyword('LoFi'); fetchPosts(); }}>
-              <span className="tag-name">#LoFiCafe</span>
-              <span className="tag-count">1.4k thảo luận</span>
-            </div>
-            <div className="trending-item" onClick={() => { setSearchKeyword('ChatTogether'); fetchPosts(); }}>
-              <span className="tag-name">#ChatTogetherPlatform</span>
-              <span className="tag-count">3.2k bài viết</span>
-            </div>
-            <div className="trending-item" onClick={() => { setSearchKeyword('GócChill'); fetchPosts(); }}>
-              <span className="tag-name">#GócChillĐêm</span>
-              <span className="tag-count">890 lượt thả tim</span>
-            </div>
-          </div>
-        </div>
 
-        {/* Tiện Ích Phòng Sôi Nổi */}
-        <div className="widget-card">
-          <div className="widget-header">
-            <Radio size={18} className="widget-icon" />
-            <h4>Phòng Trò Chuyện Trực Tiếp</h4>
-          </div>
-          <div className="widget-rooms-list">
-            {rooms.slice(0, 3).map((r) => (
-              <div key={r.id} className="widget-room-item" onClick={() => navigate(`/room/${r.id}`)}>
-                <div className="w-room-info">
-                  <span className="w-name">#{r.nameroom}</span>
-                  <span className="w-online">{r.soluong || r.userRoomDTOList?.length || 0} người online</span>
+          {/* Phòng Chat Đang Hoạt Động */}
+          <div className="widget-box-card">
+            <div className="widget-card-title">
+              <Radio size={16} color="#34d399" />
+              <span>Phòng Đang Hoạt Động</span>
+            </div>
+            <div className="widget-rooms-col">
+              {rooms.slice(0, 3).map((r) => (
+                <div key={r.id} className="widget-room-row" onClick={() => navigate(`/room/${r.id}`)}>
+                  <div>
+                    <span className="w-room-title">#{r.nameroom}</span>
+                    <span className="w-room-count">{r.soluong || r.userRoomDTOList?.length || 0} người</span>
+                  </div>
+                  <ChevronRight size={14} color="#64748b" />
                 </div>
-                <ChevronRight size={16} className="w-arrow" />
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
 
-        {/* Giới Thiệu & Bản Quyền */}
-        <div className="widget-footer-info">
-          <p>© 2026 Chat Together Platform. Mạng xã hội thế hệ mới & liên lạc thời gian thực.</p>
-        </div>
-      </aside>
+          <div className="widget-legal-footer">
+            <p>© 2026 Chat Together. Nền tảng kết nối & mạng xã hội tối giản.</p>
+          </div>
+        </aside>
 
-      {/* ============================================================== */}
-      {/* THANH ĐIỀU HƯỚNG DƯỚI ĐÁY DÀNH CHO MOBILE (BOTTOM NAV BAR) */}
-      {/* ============================================================== */}
+      </div>
+
+      {/* THANH ĐIỀU HƯỚNG DÀNH CHO MOBILE */}
       <nav className="mobile-bottom-nav">
         <button 
           className={`b-nav-item ${activeTab === 'feed' ? 'active' : ''}`}
           onClick={() => setActiveTab('feed')}
         >
-          <Compass size={22} />
+          <Compass size={20} />
           <span>Bảng tin</span>
         </button>
 
@@ -1323,26 +1221,25 @@ const Home = () => {
           className={`b-nav-item ${activeTab === 'trending' ? 'active' : ''}`}
           onClick={() => setActiveTab('trending')}
         >
-          <Flame size={22} color={activeTab === 'trending' ? '#f97316' : 'currentColor'} />
+          <Flame size={20} />
           <span>Hot</span>
         </button>
 
         <button 
-          className="b-nav-item b-nav-create"
+          className="b-nav-item b-nav-create-center"
           onClick={() => {
             setActiveTab('feed');
-            setTimeout(() => newPostInputRef.current?.focus(), 150);
+            setTimeout(() => newPostInputRef.current?.focus(), 100);
           }}
-          title="Đăng bài viết mới"
         >
-          <Plus size={26} />
+          <Plus size={24} />
         </button>
 
         <button 
           className={`b-nav-item ${activeTab === 'rooms' ? 'active' : ''}`}
           onClick={() => setActiveTab('rooms')}
         >
-          <Radio size={22} />
+          <Radio size={20} />
           <span>Phòng</span>
         </button>
 
@@ -1350,97 +1247,55 @@ const Home = () => {
           className="b-nav-item"
           onClick={() => setSelectedProfileUserId(currentUserId)}
         >
-          <Crown size={22} color="#fbbf24" />
-          <span>VIP</span>
+          <User size={20} />
+          <span>Hồ sơ</span>
         </button>
       </nav>
 
-      {/* ============================================================== */}
-      {/* MODAL STORY VIEWER (XEM KHOẢNG KHẮC 24H) */}
-      {/* ============================================================== */}
-      {activeStory && (
-        <div className="story-viewer-modal" onClick={() => setActiveStory(null)}>
-          <div className="story-card-view" onClick={(e) => e.stopPropagation()} style={{ background: activeStory.bg }}>
-            <div className="story-progress-bar">
-              <div className="story-progress-fill"></div>
-            </div>
-            <div className="story-top-info">
-              <div className="story-author-tag">
-                <div className="st-mini-avatar">{activeStory.avatar}</div>
-                <div>
-                  <strong>{activeStory.author}</strong>
-                  <span>{activeStory.time}</span>
-                </div>
-              </div>
-              <button onClick={() => setActiveStory(null)} className="btn-close-story"><X size={18} /></button>
-            </div>
-
-            <div className="story-body-content">
-              <span className="story-vibe-pill">{activeStory.tag}</span>
-              <p className="story-text-center">{activeStory.content}</p>
-            </div>
-
-            <div className="story-reply-row">
-              <input type="text" placeholder={`Gửi phản hồi cho ${activeStory.author}...`} />
-              <button onClick={() => { toast.success("Đã gửi phản hồi story!"); setActiveStory(null); }} className="btn-send-story">
-                <Send size={16} />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ============================================================== */}
-      {/* MODAL SPEED VIBE MATCH (GHÉP ĐÔI ẨN DANH) */}
-      {/* ============================================================== */}
+      {/* MODAL SPEED MATCH */}
       {isSpeedMatchOpen && (
-        <div className="modal-backdrop-blur" onClick={() => setIsSpeedMatchOpen(false)}>
-          <div className="speed-match-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div className="header-title-row">
-                <Zap size={20} color="#eab308" />
-                <h3>Speed Vibe Match</h3>
+        <div className="modal-veil" onClick={() => setIsSpeedMatchOpen(false)}>
+          <div className="modal-dialog-box" onClick={(e) => e.stopPropagation()}>
+            <div className="dialog-header">
+              <div className="dialog-title-flex">
+                <Zap size={18} color="#eab308" />
+                <h4>Ghép Vibe Ẩn Danh</h4>
               </div>
-              <button onClick={() => setIsSpeedMatchOpen(false)} className="btn-close-modal"><X size={18} /></button>
+              <button onClick={() => setIsSpeedMatchOpen(false)} className="btn-close-dialog"><X size={16} /></button>
             </div>
 
             {matchingStatus === 'searching' ? (
-              <div className="speed-searching-body">
-                <div className="sonar-emitter">
-                  <div className="sonar-wave"></div>
-                  <div className="sonar-wave wave2"></div>
-                  <div className="sonar-core"><Zap size={32} color="#eab308" /></div>
+              <div className="dialog-searching-body">
+                <div className="radar-circle">
+                  <Zap size={24} color="#eab308" />
                 </div>
-                <h4>Đang quét tìm người có cùng tần số Vibe...</h4>
-                <p>Hệ thống tự động lọc theo gu âm nhạc & câu chuyện hôm nay</p>
+                <p>Đang tìm người dùng online cùng chung cảm xúc...</p>
               </div>
             ) : (
-              <div className="speed-matched-body">
-                <div className="matched-banner">
-                  <Sparkles size={24} color="#38bdf8" />
-                  <h4>TÌM THẤY ĐỒNG ĐIỆU!</h4>
-                </div>
-                <div className="partner-card">
-                  <div className="partner-avatar">✨</div>
-                  <div className="partner-info">
+              <div className="dialog-matched-body">
+                <div className="partner-matched-card">
+                  <UserAvatar size={42} />
+                  <div>
                     <strong>{matchedPartner?.nickname}</strong>
                     <p>{matchedPartner?.vibe}</p>
                   </div>
                 </div>
-                <div className="icebreaker-box">
-                  <span className="icebreaker-tag">💡 Câu hỏi phá băng:</span>
+
+                <div className="icebreaker-quote">
+                  <span>💡 Câu hỏi phá băng:</span>
                   <p>"{matchedPartner?.icebreaker}"</p>
                 </div>
-                <div className="modal-actions-row">
-                  <button onClick={() => setMatchingStatus('searching')} className="btn-cancel">Tìm người khác</button>
+
+                <div className="dialog-actions-row">
+                  <button onClick={() => setMatchingStatus('searching')} className="btn-dialog-back">Tìm người khác</button>
                   <button 
                     onClick={() => {
                       setIsSpeedMatchOpen(false);
-                      toast.success("Đang kết nối vào phòng trò chuyện ẩn danh 1-1...", { icon: '🚀' });
+                      toast.success("Đang kết nối vào phòng trò chuyện...");
                     }} 
-                    className="btn-confirm"
+                    className="btn-dialog-primary"
                   >
-                    Bắt đầu trò chuyện ngay
+                    Bắt đầu trò chuyện
                   </button>
                 </div>
               </div>
@@ -1449,32 +1304,26 @@ const Home = () => {
         </div>
       )}
 
-      {/* ============================================================== */}
-      {/* MODAL VÒNG QUAY PARTY (TRUTH OR DARE) */}
-      {/* ============================================================== */}
+      {/* MODAL PARTY WHEEL */}
       {isPartyWheelOpen && (
-        <div className="modal-backdrop-blur" onClick={() => setIsPartyWheelOpen(false)}>
-          <div className="party-wheel-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div className="header-title-row">
-                <Dices size={20} color="#ec4899" />
-                <h3>Vòng Quay Sự Thật Hay Thử Thách</h3>
+        <div className="modal-veil" onClick={() => setIsPartyWheelOpen(false)}>
+          <div className="modal-dialog-box" onClick={(e) => e.stopPropagation()}>
+            <div className="dialog-header">
+              <div className="dialog-title-flex">
+                <Dices size={18} color="#818cf8" />
+                <h4>Vòng Quay Thử Thách</h4>
               </div>
-              <button onClick={() => setIsPartyWheelOpen(false)} className="btn-close-modal"><X size={18} /></button>
+              <button onClick={() => setIsPartyWheelOpen(false)} className="btn-close-dialog"><X size={16} /></button>
             </div>
 
-            <div className="party-wheel-body">
-              <p className="wheel-sub">Quay vòng quay để nhận ngay 1 câu hỏi thú nhận hoặc thử thách táo bạo cùng bạn bè!</p>
-              <div className={`wheel-circle ${wheelSpinning ? 'spinning' : ''}`}>
-                <div className="wheel-needle"></div>
-                <div className="wheel-center-label">
-                  <Flame size={24} color="#f97316" />
-                </div>
+            <div className="wheel-dialog-body">
+              <div className={`clean-wheel-dial ${wheelSpinning ? 'spinning' : ''}`}>
+                <Dices size={28} color="#818cf8" />
               </div>
 
               {wheelResult && (
-                <div className="wheel-result-card">
-                  <span className="result-badge">Nhiệm vụ của bạn:</span>
+                <div className="wheel-card-result">
+                  <span>Nhiệm vụ của bạn:</span>
                   <p>{wheelResult}</p>
                 </div>
               )}
@@ -1482,34 +1331,16 @@ const Home = () => {
               <button 
                 onClick={handleSpinPartyWheel} 
                 disabled={wheelSpinning}
-                className="btn-spin-wheel"
+                className="btn-spin-action"
               >
-                {wheelSpinning ? 'Vòng quay đang quay...' : 'QUAY NGAY 🎲'}
+                {wheelSpinning ? 'Đang quay...' : 'Bốc thăm câu hỏi 🎲'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL CHIA SẺ BÀI VIẾT */}
-      {sharePost && (
-        <div className="modal-backdrop-blur" onClick={() => setSharePost(null)}>
-          <div className="share-card" onClick={(e) => e.stopPropagation()}>
-            <div className="share-header">
-              <h3>Chia sẻ bài viết</h3>
-              <button onClick={() => setSharePost(null)} className="btn-close-share"><X size={18} /></button>
-            </div>
-            <p className="share-preview">"{sharePost.content?.slice(0, 80)}..."</p>
-            <div className="share-options">
-              <button onClick={() => handleCopyPostLink(sharePost)} className="share-opt-btn btn-copy">
-                <Copy size={18} /> Sao chép liên kết
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL HỒ SƠ NGƯỜI DÙNG */}
+      {/* MODAL HỒ SƠ */}
       {selectedProfileUserId && (
         <UserProfileModal 
           userId={selectedProfileUserId}
@@ -1529,24 +1360,24 @@ const Home = () => {
         />
       )}
 
-      {/* MODAL TẠO PHÒNG CHAT */}
+      {/* MODAL TẠO PHÒNG */}
       <AnimatePresence>
         {isCreateModalOpen && (
-          <div className="modal-backdrop-blur" onClick={() => setIsCreateModalOpen(false)}>
+          <div className="modal-veil" onClick={() => setIsCreateModalOpen(false)}>
             <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
+              initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="modal-box"
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="modal-dialog-box"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="modal-header">
-                <h3>Tạo Phòng Chat Mới</h3>
-                <button onClick={() => setIsCreateModalOpen(false)} className="btn-close-modal"><X size={18} /></button>
+              <div className="dialog-header">
+                <h4>Tạo Phòng Trò Chuyện</h4>
+                <button onClick={() => setIsCreateModalOpen(false)} className="btn-close-dialog"><X size={16} /></button>
               </div>
-              <form onSubmit={handleCreateRoom} className="modal-form">
-                <div className="form-item">
-                  <label>Tên phòng chat</label>
+              <form onSubmit={handleCreateRoom} className="dialog-form">
+                <div className="dialog-field">
+                  <label>Tên phòng</label>
                   <input 
                     type="text" 
                     placeholder="VD: Không gian trò chuyện cuối tuần"
@@ -1555,8 +1386,8 @@ const Home = () => {
                     required
                   />
                 </div>
-                <div className="form-item">
-                  <label>Mật khẩu (Không bắt buộc)</label>
+                <div className="dialog-field">
+                  <label>Mật khẩu (Tùy chọn)</label>
                   <input 
                     type="password" 
                     placeholder="Để trống nếu là phòng công khai"
@@ -1564,9 +1395,9 @@ const Home = () => {
                     onChange={(e) => setNewRoomData({ ...newRoomData, password: e.target.value })}
                   />
                 </div>
-                <div className="modal-actions-row">
-                  <button type="button" onClick={() => setIsCreateModalOpen(false)} className="btn-cancel">Hủy</button>
-                  <button type="submit" className="btn-confirm">Tạo ngay</button>
+                <div className="dialog-actions-row">
+                  <button type="button" onClick={() => setIsCreateModalOpen(false)} className="btn-dialog-back">Hủy</button>
+                  <button type="submit" className="btn-dialog-primary">Tạo phòng</button>
                 </div>
               </form>
             </motion.div>
@@ -1574,25 +1405,25 @@ const Home = () => {
         )}
       </AnimatePresence>
 
-      {/* MODAL THAM GIA PHÒNG CÓ MẬT KHẨU */}
+      {/* MODAL VÀO PHÒNG CÓ KHÓA */}
       <AnimatePresence>
         {selectedRoom && (
-          <div className="modal-backdrop-blur" onClick={() => setSelectedRoom(null)}>
+          <div className="modal-veil" onClick={() => setSelectedRoom(null)}>
             <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
+              initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="modal-box"
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="modal-dialog-box"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="modal-header">
-                <h3>Tham gia #{selectedRoom.nameroom}</h3>
-                <button onClick={() => setSelectedRoom(null)} className="btn-close-modal"><X size={18} /></button>
+              <div className="dialog-header">
+                <h4>Tham gia #{selectedRoom.nameroom}</h4>
+                <button onClick={() => setSelectedRoom(null)} className="btn-close-dialog"><X size={16} /></button>
               </div>
-              <form onSubmit={handleJoinRoom} className="modal-form">
+              <form onSubmit={handleJoinRoom} className="dialog-form">
                 {selectedRoom.hasPassword ? (
-                  <div className="form-item">
-                    <label>Mật khẩu phòng (Bắt buộc)</label>
+                  <div className="dialog-field">
+                    <label>Mật khẩu phòng</label>
                     <input 
                       type="password" 
                       placeholder="Nhập mật khẩu phòng..."
@@ -1602,11 +1433,11 @@ const Home = () => {
                     />
                   </div>
                 ) : (
-                  <p className="public-notice">Phòng này công khai, bạn có thể tham gia trò chuyện ngay!</p>
+                  <p className="clean-hint">Phòng này công khai, bạn có thể tham gia ngay.</p>
                 )}
-                <div className="modal-actions-row">
-                  <button type="button" onClick={() => setSelectedRoom(null)} className="btn-cancel">Hủy</button>
-                  <button type="submit" className="btn-confirm">Vào phòng</button>
+                <div className="dialog-actions-row">
+                  <button type="button" onClick={() => setSelectedRoom(null)} className="btn-dialog-back">Hủy</button>
+                  <button type="submit" className="btn-dialog-primary">Vào phòng</button>
                 </div>
               </form>
             </motion.div>
@@ -1614,12 +1445,13 @@ const Home = () => {
         )}
       </AnimatePresence>
 
+      {/* CSS TỐI GIẢN - CÂN ĐỐI - KHÔNG MÀU MÈ - KHÔNG BỊ TRỐNG ĐEN */}
       <style dangerouslySetInnerHTML={{ __html: `
         :root {
           --social-bg: #090d16;
-          --sidebar-bg: #060911;
-          --card-bg: #0f172a;
-          --card-border: rgba(255, 255, 255, 0.08);
+          --sidebar-bg: #0b1120;
+          --card-bg: #111827;
+          --card-border: rgba(255, 255, 255, 0.07);
           --text-main: #f8fafc;
           --text-muted: #94a3b8;
           --brand: #6366f1;
@@ -1627,16 +1459,25 @@ const Home = () => {
         }
 
         .social-app-wrapper {
-          display: flex;
           min-height: 100vh;
           background: var(--social-bg);
           color: var(--text-main);
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+          display: flex;
+          justify-content: center;
         }
 
-        /* CỘT 1: NAV RAIL */
+        /* KHUNG CHÍNH CĂN GIỮA - CO GIÃN HỢP LÝ */
+        .app-main-layout {
+          display: flex;
+          width: 100%;
+          max-width: 1320px;
+          margin: 0 auto;
+        }
+
+        /* CỘT 1: THANH ĐIỀU HƯỚNG TRÁI */
         .nav-sidebar {
-          width: 270px;
+          width: 250px;
           height: 100vh;
           position: sticky;
           top: 0;
@@ -1644,246 +1485,140 @@ const Home = () => {
           border-right: 1px solid var(--card-border);
           display: flex;
           flex-direction: column;
-          padding: 20px 16px;
+          padding: 18px 14px;
           box-sizing: border-box;
-          z-index: 50;
+          flex-shrink: 0;
         }
 
         .nav-brand {
           display: flex;
           align-items: center;
-          gap: 12px;
+          gap: 10px;
           cursor: pointer;
           margin-bottom: 16px;
           padding: 0 4px;
         }
         .brand-logo-glow {
-          width: 40px;
-          height: 40px;
-          border-radius: 12px;
-          background: linear-gradient(135deg, #6366f1, #a855f7);
+          width: 36px;
+          height: 36px;
+          border-radius: 10px;
+          background: #6366f1;
           display: flex;
           align-items: center;
           justify-content: center;
-          box-shadow: 0 0 20px rgba(99, 102, 241, 0.45);
         }
-        .brand-text-block {
-          display: flex;
-          flex-direction: column;
-        }
-        .brand-name {
-          font-size: 17px;
-          font-weight: 800;
-          letter-spacing: -0.3px;
-          background: linear-gradient(to right, #ffffff, #cbd5e1);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-        }
-        .brand-badge-vip {
-          font-size: 10px;
-          font-weight: 700;
-          color: #fbbf24;
-          display: flex;
-          align-items: center;
-          gap: 4px;
-        }
+        .brand-meta { display: flex; flex-direction: column; }
+        .brand-name { font-size: 16px; font-weight: 700; color: #f8fafc; }
+        .brand-sub { font-size: 10px; color: #64748b; font-weight: 500; }
 
-        /* Sidebar Radio Card */
-        .sidebar-radio-card {
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          border-radius: 14px;
-          padding: 10px 12px;
-          margin-bottom: 16px;
+        /* Widget Radio tối giản */
+        .ambient-radio-widget {
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid var(--card-border);
+          border-radius: 10px;
+          padding: 8px 10px;
+          margin-bottom: 14px;
         }
-        .radio-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-bottom: 8px;
-        }
-        .radio-title-row {
+        .radio-top-row {
           display: flex;
           align-items: center;
           gap: 6px;
-          overflow: hidden;
+          margin-bottom: 6px;
         }
-        .radio-channel-name {
-          font-size: 11.5px;
-          font-weight: 700;
-          color: #f1f5f9;
+        .radio-name-text {
+          font-size: 11px;
+          font-weight: 600;
+          color: #cbd5e1;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
-        .radio-controls-row {
+        .radio-btns-row {
           display: flex;
           align-items: center;
-          gap: 8px;
+          gap: 6px;
         }
-        .btn-radio-play {
-          background: #6366f1;
-          color: white;
-          border: none;
-          width: 28px;
-          height: 28px;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          transition: transform 0.15s;
-        }
-        .btn-radio-play:hover { transform: scale(1.08); }
-        .btn-radio-shuffle {
+        .btn-radio-toggle, .btn-radio-next {
           background: rgba(255, 255, 255, 0.08);
-          color: #cbd5e1;
           border: none;
-          width: 26px;
-          height: 26px;
+          color: #cbd5e1;
+          width: 24px;
+          height: 24px;
           border-radius: 50%;
           display: flex;
           align-items: center;
           justify-content: center;
           cursor: pointer;
         }
-        .radio-genre-tag {
-          font-size: 10px;
-          color: #94a3b8;
-          background: rgba(0, 0, 0, 0.3);
-          padding: 2px 8px;
-          border-radius: 8px;
+        .btn-radio-toggle:hover { background: #6366f1; color: white; }
+        .radio-genre-label {
+          font-size: 9.5px;
+          color: #64748b;
           margin-left: auto;
-        }
-        .sound-wave-bars {
-          display: flex;
-          align-items: flex-end;
-          gap: 2px;
-          height: 12px;
-        }
-        .sound-wave-bars span {
-          width: 2px;
-          background: #38bdf8;
-          border-radius: 1px;
-          animation: soundWave 0.8s ease-in-out infinite alternate;
-        }
-        .sound-wave-bars span:nth-child(2) { animation-delay: 0.2s; }
-        .sound-wave-bars span:nth-child(3) { animation-delay: 0.4s; }
-        .sound-wave-bars span:nth-child(4) { animation-delay: 0.6s; }
-        @keyframes soundWave {
-          0% { height: 2px; }
-          100% { height: 12px; }
         }
 
         .nav-menu {
           display: flex;
           flex-direction: column;
-          gap: 4px;
+          gap: 3px;
         }
         .nav-item {
           display: flex;
           align-items: center;
-          gap: 12px;
-          padding: 10px 14px;
-          border-radius: 12px;
+          gap: 10px;
+          padding: 9px 12px;
+          border-radius: 10px;
           background: transparent;
           border: none;
           color: var(--text-muted);
-          font-size: 14px;
+          font-size: 13.5px;
           font-weight: 600;
           cursor: pointer;
-          transition: all 0.2s;
+          transition: all 0.15s;
           text-align: left;
         }
         .nav-item:hover {
-          background: rgba(255, 255, 255, 0.05);
+          background: rgba(255, 255, 255, 0.04);
           color: var(--text-main);
         }
         .nav-item.active {
-          background: rgba(99, 102, 241, 0.15);
+          background: rgba(99, 102, 241, 0.12);
           color: #818cf8;
           font-weight: 700;
-        }
-        .nav-item-vip {
-          color: #f1f5f9;
         }
 
         .nav-action-box {
           margin-top: 14px;
           display: flex;
           flex-direction: column;
-          gap: 8px;
+          gap: 6px;
         }
-        .btn-speed-match {
-          background: linear-gradient(135deg, #eab308, #ca8a04);
-          color: #090d16;
-          border: none;
-          padding: 10px;
-          border-radius: 12px;
-          font-weight: 800;
-          font-size: 13px;
-          cursor: pointer;
+        .btn-speed-match-minimal, .btn-party-wheel-minimal, .btn-create-room-minimal {
           display: flex;
           align-items: center;
           justify-content: center;
           gap: 6px;
-          box-shadow: 0 4px 15px rgba(234, 179, 8, 0.3);
-          transition: transform 0.15s;
-        }
-        .btn-speed-match:hover { transform: scale(1.02); }
-        .btn-party-wheel {
-          background: rgba(236, 72, 153, 0.15);
-          border: 1px solid rgba(236, 72, 153, 0.4);
-          color: #f472b6;
-          padding: 8px;
-          border-radius: 12px;
-          font-weight: 700;
-          font-size: 12.5px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 6px;
-        }
-        .btn-create-post-nav {
-          background: linear-gradient(135deg, var(--brand), #8b5cf6);
-          color: white;
-          border: none;
-          padding: 10px;
-          border-radius: 12px;
-          font-weight: 700;
-          font-size: 13px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 6px;
-        }
-        .btn-create-room-nav {
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          color: white;
-          padding: 8px;
-          border-radius: 12px;
+          padding: 8px 10px;
+          border-radius: 8px;
+          font-size: 12px;
           font-weight: 600;
-          font-size: 13px;
           cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 6px;
+          border: 1px solid var(--card-border);
+          background: rgba(255, 255, 255, 0.03);
+          color: #cbd5e1;
+          transition: all 0.15s;
         }
+        .btn-speed-match-minimal:hover { background: rgba(234, 179, 8, 0.1); border-color: rgba(234, 179, 8, 0.3); color: #eab308; }
+        .btn-party-wheel-minimal:hover { background: rgba(129, 140, 248, 0.1); border-color: rgba(129, 140, 248, 0.3); color: #818cf8; }
+        .btn-create-room-minimal:hover { background: rgba(255, 255, 255, 0.08); color: white; }
 
-        .nav-footer {
-          margin-top: auto;
-          padding-top: 10px;
-        }
+        .nav-footer { margin-top: auto; padding-top: 10px; }
         .btn-logout-nav {
           display: flex;
           align-items: center;
           gap: 8px;
           width: 100%;
-          padding: 9px 12px;
+          padding: 8px 10px;
           background: transparent;
           border: none;
           color: #ef4444;
@@ -1892,12 +1627,12 @@ const Home = () => {
           cursor: pointer;
           border-radius: 8px;
         }
-        .btn-logout-nav:hover { background: rgba(239, 68, 68, 0.1); }
+        .btn-logout-nav:hover { background: rgba(239, 68, 68, 0.08); }
 
-        /* CỘT 2: MAIN STREAM */
+        /* CỘT 2: STREAM CHÍNH */
         .main-stream {
           flex: 1;
-          max-width: 680px;
+          min-width: 0;
           border-right: 1px solid var(--card-border);
           min-height: 100vh;
           display: flex;
@@ -1906,87 +1641,48 @@ const Home = () => {
 
         .mobile-top-bar {
           display: none;
-          padding: 12px 16px;
+          padding: 10px 14px;
           align-items: center;
           justify-content: space-between;
           border-bottom: 1px solid var(--card-border);
           background: var(--sidebar-bg);
           position: sticky;
           top: 0;
-          z-index: 60;
+          z-index: 50;
         }
-        .m-brand {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          cursor: pointer;
-        }
-        .m-logo { width: 32px; height: 32px; border-radius: 8px; }
-        .m-title { font-size: 15px; font-weight: 800; }
+        .m-brand { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+        .m-logo { width: 28px; height: 28px; border-radius: 8px; }
+        .m-title { font-size: 14.5px; font-weight: 700; }
         .m-actions { display: flex; align-items: center; gap: 8px; }
         .m-radio-pill {
-          background: rgba(99, 102, 241, 0.15);
-          border: 1px solid rgba(99, 102, 241, 0.35);
-          color: #818cf8;
-          border-radius: 20px;
-          padding: 4px 10px;
+          background: rgba(255, 255, 255, 0.06);
+          border: 1px solid var(--card-border);
+          color: #cbd5e1;
+          border-radius: 14px;
+          padding: 3px 8px;
           font-size: 11px;
-          font-weight: 700;
           display: flex;
           align-items: center;
           gap: 4px;
-        }
-        .m-radio-pill.active {
-          background: #6366f1;
-          color: white;
-        }
-        .m-icon-btn {
-          background: transparent;
-          border: none;
-          color: #cbd5e1;
-          position: relative;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-        }
-        .m-notif-dot {
-          width: 8px;
-          height: 8px;
-          background: #ef4444;
-          border-radius: 50%;
-          position: absolute;
-          top: -2px;
-          right: -2px;
-        }
-        .m-user-avatar {
-          width: 32px;
-          height: 32px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, #6366f1, #a855f7);
-          color: white;
-          font-weight: 700;
-          font-size: 13px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
           cursor: pointer;
         }
+        .m-radio-pill.active { background: #6366f1; color: white; }
 
         .stream-header {
           position: sticky;
           top: 0;
-          background: rgba(9, 13, 22, 0.85);
-          backdrop-filter: blur(12px);
+          background: rgba(9, 13, 22, 0.9);
+          backdrop-filter: blur(10px);
           border-bottom: 1px solid var(--card-border);
           display: flex;
           align-items: center;
           justify-content: space-between;
           padding: 8px 16px;
-          z-index: 40;
+          z-index: 30;
         }
         .stream-tabs {
           display: flex;
-          gap: 6px;
+          gap: 4px;
           overflow-x: auto;
           scrollbar-width: none;
         }
@@ -1995,554 +1691,22 @@ const Home = () => {
           background: transparent;
           border: none;
           color: var(--text-muted);
-          font-size: 13.5px;
+          font-size: 13px;
           font-weight: 600;
-          padding: 8px 12px;
-          border-radius: 20px;
+          padding: 6px 12px;
+          border-radius: 16px;
           cursor: pointer;
-          display: flex;
-          align-items: center;
-          gap: 6px;
           white-space: nowrap;
-          transition: all 0.2s;
+          transition: all 0.15s;
         }
         .stream-tab.active {
           background: rgba(255, 255, 255, 0.08);
           color: var(--text-main);
-          font-weight: 700;
         }
         .btn-header-notif {
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          color: #cbd5e1;
-          width: 36px;
-          height: 36px;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          position: relative;
-        }
-        .notif-badge-pill {
-          position: absolute;
-          top: -2px;
-          right: -2px;
-          background: #ef4444;
-          color: white;
-          font-size: 10px;
-          font-weight: 800;
-          padding: 1px 5px;
-          border-radius: 10px;
-        }
-
-        /* Notif Dropdown */
-        .notif-dropdown-card {
-          position: absolute;
-          top: 55px;
-          right: 20px;
-          width: 320px;
-          background: #0f172a;
-          border: 1px solid rgba(255, 255, 255, 0.15);
-          box-shadow: 0 15px 40px rgba(0, 0, 0, 0.6);
-          border-radius: 16px;
-          padding: 12px;
-          z-index: 100;
-          animation: scaleCard 0.2s ease-out;
-        }
-        .notif-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-          padding-bottom: 8px;
-          margin-bottom: 8px;
-        }
-        .notif-header h4 { margin: 0; font-size: 13.5px; font-weight: 700; }
-        .btn-read-all {
-          background: transparent;
-          border: none;
-          color: #818cf8;
-          font-size: 11px;
-          cursor: pointer;
-        }
-        .notif-list { display: flex; flex-direction: column; gap: 6px; }
-        .notif-item {
-          display: flex;
-          align-items: flex-start;
-          gap: 10px;
-          padding: 8px;
-          border-radius: 10px;
-          background: rgba(255, 255, 255, 0.02);
-        }
-        .notif-item.unread { background: rgba(99, 102, 241, 0.12); }
-        .notif-icon-circle {
-          width: 28px;
-          height: 28px;
-          border-radius: 50%;
-          background: rgba(99, 102, 241, 0.2);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-        }
-        .notif-content p { margin: 0; font-size: 12px; color: #f1f5f9; line-height: 1.4; }
-        .notif-content span { font-size: 10.5px; color: #94a3b8; display: block; margin-top: 2px; }
-
-        /* STORIES BAR */
-        .stories-bar-container {
-          padding: 14px 16px 8px;
-          border-bottom: 1px solid var(--card-border);
-          overflow: hidden;
-        }
-        .stories-scroll {
-          display: flex;
-          gap: 14px;
-          overflow-x: auto;
-          scrollbar-width: none;
-          padding-bottom: 4px;
-        }
-        .stories-scroll::-webkit-scrollbar { display: none; }
-        .story-item {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 6px;
-          cursor: pointer;
-          flex-shrink: 0;
-        }
-        .story-avatar-wrap {
-          width: 58px;
-          height: 58px;
-          border-radius: 50%;
-          padding: 2.5px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          position: relative;
-        }
-        .story-avatar-wrap.unseen {
-          background: linear-gradient(135deg, #ec4899, #8b5cf6, #f59e0b);
-        }
-        .story-avatar-wrap.seen {
-          background: rgba(255, 255, 255, 0.2);
-        }
-        .story-avatar-inner {
-          width: 100%;
-          height: 100%;
-          border-radius: 50%;
-          background: #1e293b;
-          border: 2px solid #090d16;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-          font-weight: 800;
-          font-size: 18px;
-        }
-        .add-story-wrap {
-          border: 2px dashed rgba(255, 255, 255, 0.3);
-          padding: 0;
-        }
-        .add-story-plus {
-          position: absolute;
-          bottom: 0;
-          right: 0;
-          background: #6366f1;
-          color: white;
-          width: 18px;
-          height: 18px;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border: 2px solid #090d16;
-        }
-        .story-author-name {
-          font-size: 11.5px;
-          color: #cbd5e1;
-          font-weight: 600;
-        }
-
-        /* POST CREATOR CARD */
-        .post-creator-card {
-          padding: 16px;
-          border-bottom: 1px solid var(--card-border);
-          background: rgba(15, 23, 42, 0.4);
-        }
-        .creator-header-row {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          margin-bottom: 10px;
-        }
-        .creator-avatar {
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, #6366f1, #a855f7);
-          color: white;
-          font-weight: 700;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-        }
-        .creator-greeting {
-          display: flex;
-          flex-direction: column;
-          flex: 1;
-        }
-        .greeting-name { font-size: 13.5px; font-weight: 700; color: #f8fafc; }
-        .greeting-sub { font-size: 11.5px; color: #94a3b8; }
-        .btn-ai-magic {
-          background: rgba(99, 102, 241, 0.15);
-          border: 1px solid rgba(99, 102, 241, 0.4);
-          color: #818cf8;
-          font-size: 11.5px;
-          font-weight: 700;
-          padding: 5px 10px;
-          border-radius: 12px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          gap: 5px;
-          transition: all 0.2s;
-        }
-        .btn-ai-magic:hover { background: #6366f1; color: white; }
-
-        .creator-form textarea {
-          width: 100%;
-          background: transparent;
-          border: none;
-          color: #f8fafc;
-          font-size: 14.5px;
-          font-family: inherit;
-          resize: none;
-          outline: none;
-          box-sizing: border-box;
-          line-height: 1.5;
-        }
-        .creator-form textarea::placeholder { color: #64748b; }
-
-        .vibe-tags-row {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          overflow-x: auto;
-          scrollbar-width: none;
-          margin: 10px 0;
-        }
-        .vibe-tags-row::-webkit-scrollbar { display: none; }
-        .vibe-label { font-size: 11px; color: #94a3b8; font-weight: 600; white-space: nowrap; }
-        .vibe-tag-pill {
-          font-size: 11px;
-          font-weight: 700;
-          padding: 3px 8px;
-          border-radius: 10px;
-          border: 1px solid;
-          cursor: pointer;
-          white-space: nowrap;
-          transition: transform 0.1s;
-        }
-        .vibe-tag-pill:hover { transform: scale(1.05); }
-
-        .image-input-box {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          background: rgba(0, 0, 0, 0.3);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 10px;
-          padding: 6px 10px;
-          margin: 8px 0;
-        }
-        .img-icon { color: #818cf8; }
-        .image-input-box input {
-          flex: 1;
-          background: transparent;
-          border: none;
-          color: white;
-          font-size: 12.5px;
-          outline: none;
-        }
-        .btn-clear-img { background: transparent; border: none; color: #ef4444; cursor: pointer; }
-        .image-preview-box {
-          border-radius: 12px;
-          overflow: hidden;
-          max-height: 220px;
-          margin: 8px 0;
-          border: 1px solid var(--card-border);
-        }
-        .image-preview-box img { width: 100%; height: 100%; object-fit: cover; }
-
-        .creator-footer {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          border-top: 1px solid rgba(255, 255, 255, 0.06);
-          padding-top: 10px;
-        }
-        .creator-tools { display: flex; gap: 8px; }
-        .btn-tool {
-          background: transparent;
-          border: none;
-          color: #94a3b8;
-          font-size: 12.5px;
-          font-weight: 600;
-          display: flex;
-          align-items: center;
-          gap: 5px;
-          cursor: pointer;
-          padding: 4px 8px;
-          border-radius: 8px;
-        }
-        .btn-tool:hover { background: rgba(255, 255, 255, 0.05); color: #f8fafc; }
-        .btn-tool.active { color: #818cf8; background: rgba(99, 102, 241, 0.1); }
-        .btn-publish-post {
-          background: var(--brand);
-          color: white;
-          border: none;
-          padding: 7px 16px;
-          border-radius: 20px;
-          font-size: 13px;
-          font-weight: 700;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          transition: background 0.15s;
-        }
-        .btn-publish-post:hover:not(:disabled) { background: var(--brand-hover); }
-        .btn-publish-post:disabled { opacity: 0.5; cursor: not-allowed; }
-
-        /* POST CARDS */
-        .post-card {
-          padding: 16px;
-          border-bottom: 1px solid var(--card-border);
-          transition: background 0.15s;
-        }
-        .post-card:hover { background: rgba(255, 255, 255, 0.015); }
-        .post-header {
-          display: flex;
-          align-items: flex-start;
-          gap: 12px;
-          position: relative;
-        }
-        .post-author-avatar {
-          width: 44px;
-          height: 44px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, #6366f1, #a855f7);
-          color: white;
-          font-weight: 800;
-          font-size: 16px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          flex-shrink: 0;
-          border: 2px solid transparent;
-        }
-        .founder-frame {
-          border-color: #fbbf24;
-          box-shadow: 0 0 10px rgba(251, 191, 36, 0.4);
-        }
-        .vip-frame {
-          border-color: #38bdf8;
-          box-shadow: 0 0 8px rgba(56, 189, 248, 0.3);
-        }
-
-        .post-author-meta { flex: 1; }
-        .author-name-row {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          flex-wrap: wrap;
-        }
-        .author-name-row h4 {
-          margin: 0;
-          font-size: 14.5px;
-          font-weight: 700;
-          color: #f8fafc;
-          cursor: pointer;
-        }
-        .badge-verified { display: flex; align-items: center; }
-        .privilege-pill {
-          font-size: 10px;
-          font-weight: 700;
-          padding: 1px 6px;
-          border-radius: 8px;
-          display: inline-flex;
-          align-items: center;
-          gap: 3px;
-        }
-        .founder-pill {
-          background: rgba(245, 158, 11, 0.2);
-          border: 1px solid rgba(245, 158, 11, 0.4);
-          color: #fbbf24;
-        }
-        .diamond-pill {
-          background: rgba(56, 189, 248, 0.2);
-          border: 1px solid rgba(56, 189, 248, 0.4);
-          color: #38bdf8;
-        }
-        .author-account { font-size: 12px; color: #64748b; }
-        .post-sub-meta {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          margin-top: 2px;
-          font-size: 11.5px;
-          color: #94a3b8;
-        }
-        .post-vibe-tag {
-          background: rgba(99, 102, 241, 0.15);
-          color: #818cf8;
-          padding: 1px 6px;
-          border-radius: 6px;
-          font-weight: 600;
-        }
-        .btn-bookmark-post {
-          background: transparent;
-          border: none;
-          color: #64748b;
-          cursor: pointer;
-          padding: 6px;
-          border-radius: 50%;
-          transition: all 0.15s;
-        }
-        .btn-bookmark-post:hover { background: rgba(255, 255, 255, 0.05); color: #f8fafc; }
-        .btn-bookmark-post.saved { color: #818cf8; }
-
-        .post-content {
-          margin: 10px 0 12px 56px;
-          font-size: 14px;
-          line-height: 1.5;
-          color: #f1f5f9;
-        }
-        .post-content p { margin: 0; white-space: pre-wrap; word-break: break-word; }
-        .post-attached-image {
-          margin-top: 10px;
-          border-radius: 14px;
-          overflow: hidden;
-          max-height: 360px;
-          border: 1px solid var(--card-border);
-        }
-        .post-attached-image img { width: 100%; height: 100%; object-fit: cover; }
-
-        /* Actions Bar & Reactions Popover */
-        .post-actions-bar {
-          margin-left: 56px;
-          display: flex;
-          gap: 12px;
-          position: relative;
-        }
-        .reaction-wrapper { position: relative; }
-        .action-pill {
           background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.06);
-          color: #94a3b8;
-          font-size: 12.5px;
-          font-weight: 600;
-          padding: 6px 12px;
-          border-radius: 16px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          transition: all 0.15s;
-        }
-        .action-pill:hover { background: rgba(255, 255, 255, 0.08); color: #f8fafc; }
-        .action-pill.liked {
-          background: rgba(239, 68, 68, 0.12);
-          border-color: rgba(239, 68, 68, 0.3);
-          color: #ef4444;
-        }
-        .reaction-active-emoji { font-size: 16px; line-height: 1; }
-
-        /* Emoji Reactions Popover */
-        .reactions-popover {
-          position: absolute;
-          bottom: 38px;
-          left: 0;
-          background: #1e293b;
-          border: 1px solid rgba(255, 255, 255, 0.15);
-          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
-          border-radius: 30px;
-          padding: 4px 8px;
-          display: flex;
-          gap: 6px;
-          z-index: 50;
-          animation: popReaction 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        }
-        @keyframes popReaction {
-          from { transform: scale(0.7) translateY(10px); opacity: 0; }
-          to { transform: scale(1) translateY(0); opacity: 1; }
-        }
-        .reaction-emoji-btn {
-          background: transparent;
-          border: none;
-          font-size: 20px;
-          cursor: pointer;
-          padding: 4px;
-          transition: transform 0.15s;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .reaction-emoji-btn:hover { transform: scale(1.35) translateY(-4px); }
-
-        /* Comments */
-        .comments-section {
-          margin: 12px 0 0 56px;
-          background: rgba(0, 0, 0, 0.25);
-          border: 1px solid rgba(255, 255, 255, 0.05);
-          border-radius: 14px;
-          padding: 12px;
-        }
-        .comments-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
-        .no-comments-msg { margin: 0; font-size: 12px; color: #64748b; font-style: italic; }
-        .comment-bubble { display: flex; gap: 8px; }
-        .cmt-avatar {
-          width: 28px;
-          height: 28px;
-          border-radius: 50%;
-          background: #475569;
-          color: white;
-          font-size: 11px;
-          font-weight: 700;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-          cursor: pointer;
-        }
-        .cmt-body {
-          background: rgba(255, 255, 255, 0.05);
-          padding: 6px 10px;
-          border-radius: 10px;
-          flex: 1;
-        }
-        .cmt-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; }
-        .cmt-author { font-size: 12px; font-weight: 700; color: #f8fafc; cursor: pointer; }
-        .cmt-time { font-size: 10px; color: #64748b; }
-        .cmt-text { margin: 0; font-size: 12.5px; color: #cbd5e1; }
-        .comment-form { display: flex; gap: 6px; }
-        .comment-form input {
-          flex: 1;
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          border-radius: 16px;
-          padding: 6px 12px;
-          color: white;
-          font-size: 12.5px;
-          outline: none;
-        }
-        .btn-send-cmt {
-          background: var(--brand);
-          color: white;
-          border: none;
+          border: 1px solid var(--card-border);
+          color: #cbd5e1;
           width: 32px;
           height: 32px;
           border-radius: 50%;
@@ -2550,208 +1714,553 @@ const Home = () => {
           align-items: center;
           justify-content: center;
           cursor: pointer;
+          position: relative;
+        }
+        .notif-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: #ef4444;
+          position: absolute;
+          top: 6px;
+          right: 6px;
         }
 
-        /* ROOMS CONTAINER */
-        .rooms-container { padding: 16px; }
-        .rooms-banner {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.15));
-          border: 1px solid rgba(99, 102, 241, 0.3);
-          border-radius: 16px;
-          padding: 16px;
-          margin-bottom: 16px;
-        }
-        .rooms-banner h2 { margin: 0 0 4px 0; font-size: 16px; }
-        .rooms-banner p { margin: 0; font-size: 12px; color: #94a3b8; }
-        .btn-create-room-header {
-          background: #6366f1;
-          color: white;
-          border: none;
-          padding: 8px 14px;
-          border-radius: 12px;
-          font-size: 12.5px;
-          font-weight: 700;
-          cursor: pointer;
-          white-space: nowrap;
-          display: flex;
-          align-items: center;
-          gap: 6px;
-        }
-        .rooms-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-          gap: 12px;
-        }
-        .room-card-modern {
-          background: #0f172a;
+        .notif-dropdown-card {
+          position: absolute;
+          top: 52px;
+          right: 16px;
+          width: 300px;
+          background: #111827;
           border: 1px solid var(--card-border);
-          border-radius: 14px;
-          padding: 14px;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+          border-radius: 12px;
+          padding: 10px;
+          z-index: 100;
+        }
+        .notif-header {
           display: flex;
-          flex-direction: column;
+          justify-content: space-between;
+          align-items: center;
+          border-bottom: 1px solid var(--card-border);
+          padding-bottom: 6px;
+          margin-bottom: 6px;
+        }
+        .notif-header h4 { margin: 0; font-size: 12.5px; }
+        .btn-read-all { background: transparent; border: none; color: #818cf8; font-size: 10.5px; cursor: pointer; }
+        .notif-list { display: flex; flex-direction: column; gap: 4px; }
+        .notif-item {
+          display: flex;
           gap: 8px;
+          padding: 6px;
+          border-radius: 8px;
+          font-size: 11.5px;
+          background: rgba(255, 255, 255, 0.02);
         }
-        .room-card-modern.is-my-room {
-          border-color: rgba(99, 102, 241, 0.5);
-          box-shadow: 0 0 16px rgba(99, 102, 241, 0.2);
+        .notif-item.unread { background: rgba(99, 102, 241, 0.08); }
+        .notif-text-wrap p { margin: 0; color: #f1f5f9; }
+        .notif-text-wrap span { font-size: 9.5px; color: #64748b; }
+
+        /* DẢI TÍN HIỆU TRỰC TIẾP (THAY THẾ STORY) */
+        .live-signals-strip {
+          padding: 10px 16px;
+          border-bottom: 1px solid var(--card-border);
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          overflow: hidden;
         }
-        .card-top { display: flex; justify-content: space-between; align-items: center; }
-        .card-top h3 { margin: 0; font-size: 14.5px; }
-        .online-pill {
+        .live-signal-label {
           font-size: 11px;
-          color: #34d399;
-          background: rgba(16, 185, 129, 0.15);
-          padding: 2px 8px;
-          border-radius: 10px;
+          color: #94a3b8;
+          font-weight: 600;
+          white-space: nowrap;
           display: flex;
           align-items: center;
           gap: 4px;
         }
-        .pulse-green {
+        .live-signal-scroll {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          overflow-x: auto;
+          scrollbar-width: none;
+        }
+        .live-signal-scroll::-webkit-scrollbar { display: none; }
+        .signal-pill {
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid var(--card-border);
+          border-radius: 14px;
+          padding: 4px 10px;
+          font-size: 11px;
+          font-weight: 600;
+          color: #cbd5e1;
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          cursor: pointer;
+          white-space: nowrap;
+        }
+        .signal-pill:hover { background: rgba(255, 255, 255, 0.08); color: white; }
+        .signal-pill.active { border-color: rgba(99, 102, 241, 0.4); color: #818cf8; }
+        .status-dot.green {
           width: 6px;
           height: 6px;
           border-radius: 50%;
           background: #10b981;
-          animation: pulseGreen 1.5s infinite;
         }
-        @keyframes pulseGreen { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
-        .card-badges { display: flex; gap: 6px; }
-        .badge { font-size: 10.5px; padding: 2px 6px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px; }
-        .badge-locked { background: rgba(239, 68, 68, 0.15); color: #f87171; }
-        .badge-joined { background: rgba(16, 185, 129, 0.15); color: #34d399; }
-        .members-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
-        .chip { font-size: 10.5px; background: rgba(255, 255, 255, 0.05); padding: 2px 6px; border-radius: 4px; color: #cbd5e1; }
-        .chip-more { background: rgba(99, 102, 241, 0.2); color: #818cf8; }
-        .btn-enter-room {
+
+        /* HỘP SOẠN BÀI VIẾT */
+        .post-creator-box {
+          padding: 16px;
+          border-bottom: 1px solid var(--card-border);
+          background: rgba(17, 24, 39, 0.3);
+        }
+        .creator-input-row {
+          display: flex;
+          gap: 12px;
+          align-items: flex-start;
+        }
+        .creator-field-wrap {
+          flex: 1;
+        }
+        .creator-field-wrap textarea {
           width: 100%;
-          background: #334155;
+          background: transparent;
+          border: none;
+          color: #f8fafc;
+          font-size: 14px;
+          font-family: inherit;
+          resize: none;
+          outline: none;
+          line-height: 1.5;
+        }
+        .creator-field-wrap textarea::placeholder { color: #64748b; }
+
+        .vibe-tags-row {
+          display: flex;
+          gap: 6px;
+          margin: 10px 0 10px 52px;
+          overflow-x: auto;
+          scrollbar-width: none;
+        }
+        .vibe-tags-row::-webkit-scrollbar { display: none; }
+        .vibe-tag-pill {
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid var(--card-border);
+          color: #94a3b8;
+          font-size: 10.5px;
+          font-weight: 600;
+          padding: 3px 8px;
+          border-radius: 8px;
+          cursor: pointer;
+          white-space: nowrap;
+        }
+        .vibe-tag-pill.active {
+          background: rgba(99, 102, 241, 0.15);
+          border-color: #6366f1;
+          color: #818cf8;
+        }
+
+        .image-input-row {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          background: rgba(0, 0, 0, 0.25);
+          border: 1px solid var(--card-border);
+          border-radius: 8px;
+          padding: 5px 10px;
+          margin: 6px 0 10px 52px;
+        }
+        .image-input-row input {
+          flex: 1;
+          background: transparent;
+          border: none;
+          color: white;
+          font-size: 12px;
+          outline: none;
+        }
+        .btn-clear-img { background: transparent; border: none; color: #ef4444; cursor: pointer; }
+        .post-img-preview {
+          margin: 0 0 10px 52px;
+          max-height: 200px;
+          border-radius: 8px;
+          overflow: hidden;
+          border: 1px solid var(--card-border);
+        }
+        .post-img-preview img { width: 100%; height: 100%; object-fit: cover; }
+
+        .creator-bottom-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding-left: 52px;
+        }
+        .creator-left-tools { display: flex; gap: 8px; }
+        .btn-subtool {
+          background: transparent;
+          border: none;
+          color: #94a3b8;
+          font-size: 11.5px;
+          font-weight: 600;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          cursor: pointer;
+          padding: 4px 6px;
+          border-radius: 6px;
+        }
+        .btn-subtool:hover { color: #f8fafc; }
+        .btn-subtool.active { color: #818cf8; }
+        .btn-publish-submit {
+          background: var(--brand);
           color: white;
           border: none;
-          padding: 8px;
-          border-radius: 8px;
+          padding: 6px 14px;
+          border-radius: 16px;
           font-size: 12.5px;
           font-weight: 600;
           cursor: pointer;
           display: flex;
           align-items: center;
-          justify-content: center;
-          gap: 6px;
-          margin-top: 6px;
+          gap: 5px;
         }
-        .btn-enter-room:hover { background: #475569; }
-        .btn-reenter { background: #4f46e5; }
-        .btn-reenter:hover { background: #4338ca; }
+        .btn-publish-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-publish-submit:hover:not(:disabled) { background: var(--brand-hover); }
 
-        /* CỘT 3: WIDGETS SIDEBAR */
+        /* POST CARDS */
+        .post-item-card {
+          padding: 16px;
+          border-bottom: 1px solid var(--card-border);
+        }
+        .post-item-card:hover { background: rgba(255, 255, 255, 0.01); }
+        .post-header-row {
+          display: flex;
+          align-items: flex-start;
+          gap: 10px;
+        }
+        .post-avatar-click { cursor: pointer; flex-shrink: 0; }
+        .post-header-info { flex: 1; }
+        .post-name-line {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          flex-wrap: wrap;
+        }
+        .author-display-name {
+          font-size: 14px;
+          font-weight: 700;
+          color: #f8fafc;
+          cursor: pointer;
+        }
+        .privilege-badge {
+          font-size: 9.5px;
+          font-weight: 700;
+          padding: 1px 5px;
+          border-radius: 6px;
+          display: inline-flex;
+          align-items: center;
+          gap: 3px;
+        }
+        .privilege-badge.founder {
+          background: rgba(245, 158, 11, 0.15);
+          color: #fbbf24;
+          border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+        .privilege-badge.vip {
+          background: rgba(56, 189, 248, 0.15);
+          color: #38bdf8;
+          border: 1px solid rgba(56, 189, 248, 0.3);
+        }
+        .author-handle { font-size: 11.5px; color: #64748b; }
+        .post-meta-sub {
+          font-size: 11px;
+          color: #64748b;
+          margin-top: 2px;
+          display: flex;
+          gap: 4px;
+        }
+        .vibe-tag-badge { color: #818cf8; }
+        .btn-save-post {
+          background: transparent;
+          border: none;
+          color: #64748b;
+          cursor: pointer;
+          padding: 4px;
+        }
+        .btn-save-post.saved { color: #818cf8; }
+
+        .post-body-content {
+          margin: 8px 0 10px 48px;
+          font-size: 13.5px;
+          line-height: 1.5;
+          color: #e2e8f0;
+        }
+        .post-body-content p { margin: 0; white-space: pre-wrap; word-break: break-word; }
+        .post-media-frame {
+          margin-top: 8px;
+          border-radius: 10px;
+          overflow: hidden;
+          max-height: 320px;
+          border: 1px solid var(--card-border);
+        }
+        .post-media-frame img { width: 100%; height: 100%; object-fit: cover; }
+
+        .post-actions-toolbar {
+          margin-left: 48px;
+          display: flex;
+          gap: 10px;
+          position: relative;
+        }
+        .reaction-drop-wrapper { position: relative; }
+        .action-btn {
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid var(--card-border);
+          color: #94a3b8;
+          font-size: 12px;
+          font-weight: 600;
+          padding: 5px 10px;
+          border-radius: 14px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 5px;
+        }
+        .action-btn:hover { background: rgba(255, 255, 255, 0.06); color: white; }
+        .action-btn.active-liked { color: #ef4444; border-color: rgba(239, 68, 68, 0.3); }
+        .custom-emoji-view { font-size: 14px; }
+
+        .reactions-popup-menu {
+          position: absolute;
+          bottom: 34px;
+          left: 0;
+          background: #1f2937;
+          border: 1px solid var(--card-border);
+          box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+          border-radius: 20px;
+          padding: 3px 6px;
+          display: flex;
+          gap: 4px;
+          z-index: 40;
+        }
+        .reaction-emoji-item {
+          background: transparent;
+          border: none;
+          font-size: 18px;
+          cursor: pointer;
+          padding: 3px;
+        }
+        .reaction-emoji-item:hover { transform: scale(1.3); }
+
+        /* Comments */
+        .post-comments-container {
+          margin: 10px 0 0 48px;
+          background: rgba(0, 0, 0, 0.2);
+          border: 1px solid var(--card-border);
+          border-radius: 10px;
+          padding: 10px;
+        }
+        .comments-stack { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+        .empty-cmt-notice { margin: 0; font-size: 11.5px; color: #64748b; font-style: italic; }
+        .cmt-row { display: flex; gap: 8px; }
+        .cmt-bubble-content {
+          background: rgba(255, 255, 255, 0.03);
+          padding: 5px 8px;
+          border-radius: 8px;
+          flex: 1;
+        }
+        .cmt-name-row { display: flex; justify-content: space-between; margin-bottom: 2px; }
+        .cmt-user-name { font-size: 11.5px; font-weight: 700; color: #f8fafc; }
+        .cmt-time-label { font-size: 9.5px; color: #64748b; }
+        .cmt-body-text { margin: 0; font-size: 12px; color: #cbd5e1; }
+        .cmt-input-form { display: flex; gap: 6px; }
+        .cmt-input-form input {
+          flex: 1;
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid var(--card-border);
+          border-radius: 14px;
+          padding: 5px 10px;
+          color: white;
+          font-size: 12px;
+          outline: none;
+        }
+        .btn-submit-cmt {
+          background: var(--brand);
+          color: white;
+          border: none;
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+        }
+
+        /* ROOMS SECTION */
+        .rooms-section-wrapper { padding: 16px; }
+        .rooms-header-banner {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          background: rgba(99, 102, 241, 0.08);
+          border: 1px solid rgba(99, 102, 241, 0.2);
+          border-radius: 12px;
+          padding: 14px;
+          margin-bottom: 14px;
+        }
+        .rooms-header-banner h3 { margin: 0 0 3px 0; font-size: 15px; }
+        .rooms-header-banner p { margin: 0; font-size: 11.5px; color: #94a3b8; }
+        .btn-add-room-action {
+          background: #6366f1;
+          color: white;
+          border: none;
+          padding: 7px 12px;
+          border-radius: 8px;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          white-space: nowrap;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+        .rooms-cards-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+          gap: 10px;
+        }
+        .room-simple-card {
+          background: #111827;
+          border: 1px solid var(--card-border);
+          border-radius: 10px;
+          padding: 12px;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+        .room-simple-card.active-room { border-color: rgba(99, 102, 241, 0.4); }
+        .room-top-info { display: flex; justify-content: space-between; align-items: center; }
+        .room-top-info h4 { margin: 0; font-size: 13.5px; }
+        .room-online-tag { font-size: 10px; color: #34d399; display: flex; align-items: center; gap: 4px; }
+        .green-circle { width: 5px; height: 5px; border-radius: 50%; background: #10b981; }
+        .room-chips-list { display: flex; gap: 4px; }
+        .room-flag { font-size: 9.5px; padding: 1px 5px; border-radius: 4px; display: inline-flex; align-items: center; gap: 3px; }
+        .room-flag.locked { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+        .room-flag.joined { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+        .btn-join-room {
+          width: 100%;
+          background: #1f2937;
+          color: white;
+          border: none;
+          padding: 7px;
+          border-radius: 6px;
+          font-size: 11.5px;
+          font-weight: 600;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 4px;
+          margin-top: 4px;
+        }
+        .btn-join-room:hover { background: #374151; }
+        .btn-rejoin { background: #4f46e5; }
+        .btn-rejoin:hover { background: #4338ca; }
+
+        /* CỘT 3: WIDGETS PHẢI */
         .widgets-sidebar {
-          width: 320px;
-          padding: 20px 16px;
+          width: 300px;
+          padding: 18px 14px;
           box-sizing: border-box;
           display: flex;
           flex-direction: column;
-          gap: 16px;
+          gap: 12px;
+          flex-shrink: 0;
         }
-        .search-box {
-          background: rgba(255, 255, 255, 0.05);
+        .search-input-wrap {
+          background: rgba(255, 255, 255, 0.03);
           border: 1px solid var(--card-border);
-          border-radius: 20px;
+          border-radius: 16px;
           display: flex;
           align-items: center;
-          padding: 8px 12px;
-          gap: 8px;
+          padding: 7px 10px;
+          gap: 6px;
         }
-        .search-icon { color: #64748b; }
-        .search-box input {
+        .search-icon-muted { color: #64748b; }
+        .search-input-wrap input {
           flex: 1;
           background: transparent;
           border: none;
           color: white;
-          font-size: 13px;
+          font-size: 12.5px;
           outline: none;
         }
-        .btn-clear-search { background: transparent; border: none; color: #64748b; cursor: pointer; }
+        .btn-clear-kw { background: transparent; border: none; color: #64748b; cursor: pointer; }
 
-        .widget-card {
-          background: #0f172a;
+        .widget-box-card {
+          background: #111827;
           border: 1px solid var(--card-border);
-          border-radius: 16px;
-          padding: 14px;
+          border-radius: 12px;
+          padding: 12px;
         }
-        .widget-header {
+        .widget-card-title {
           display: flex;
           align-items: center;
-          gap: 8px;
-          margin-bottom: 10px;
+          gap: 6px;
+          font-size: 12.5px;
+          font-weight: 700;
+          color: #f8fafc;
+          margin-bottom: 6px;
         }
-        .widget-header h4 { margin: 0; font-size: 13.5px; font-weight: 700; color: #f8fafc; }
-        .widget-icon { color: #818cf8; }
-
-        /* Speed Match Widget */
-        .widget-speed-match {
-          background: linear-gradient(135deg, rgba(234, 179, 8, 0.1), rgba(99, 102, 241, 0.1));
-          border-color: rgba(234, 179, 8, 0.3);
-        }
-        .zap-glow { color: #eab308; }
-        .speed-match-desc { font-size: 11.5px; color: #94a3b8; margin: 0 0 10px 0; line-height: 1.4; }
-        .btn-widget-match {
+        .widget-card-desc { font-size: 11px; color: #94a3b8; margin: 0 0 10px 0; line-height: 1.4; }
+        .btn-widget-action {
           width: 100%;
           background: #eab308;
           color: #090d16;
           border: none;
-          padding: 8px;
-          border-radius: 10px;
-          font-weight: 700;
-          font-size: 12px;
-          cursor: pointer;
-        }
-
-        .trending-tags-list { display: flex; flex-direction: column; gap: 8px; }
-        .trending-item {
-          display: flex;
-          justify-content: space-between;
-          padding: 6px 8px;
+          padding: 7px;
           border-radius: 8px;
+          font-weight: 700;
+          font-size: 11.5px;
           cursor: pointer;
-          background: rgba(255, 255, 255, 0.02);
         }
-        .trending-item:hover { background: rgba(255, 255, 255, 0.05); }
-        .tag-name { font-size: 12.5px; font-weight: 700; color: #38bdf8; }
-        .tag-count { font-size: 11px; color: #64748b; }
+        .btn-widget-action.secondary {
+          background: rgba(99, 102, 241, 0.15);
+          color: #818cf8;
+          border: 1px solid rgba(99, 102, 241, 0.3);
+        }
 
-        .widget-rooms-list { display: flex; flex-direction: column; gap: 6px; }
-        .widget-room-item {
+        .widget-rooms-col { display: flex; flex-direction: column; gap: 4px; }
+        .widget-room-row {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding: 8px 10px;
-          border-radius: 10px;
-          background: rgba(255, 255, 255, 0.03);
+          padding: 6px 8px;
+          border-radius: 6px;
+          background: rgba(255, 255, 255, 0.02);
           cursor: pointer;
         }
-        .widget-room-item:hover { background: rgba(99, 102, 241, 0.15); }
-        .w-room-info { display: flex; flex-direction: column; }
-        .w-name { font-size: 12.5px; font-weight: 700; }
-        .w-online { font-size: 10.5px; color: #10b981; }
-        .w-arrow { color: #64748b; }
-        .widget-footer-info p { font-size: 11px; color: #64748b; margin: 0; }
+        .widget-room-row:hover { background: rgba(255, 255, 255, 0.05); }
+        .w-room-title { font-size: 12px; font-weight: 600; display: block; }
+        .w-room-count { font-size: 10px; color: #10b981; }
 
-        /* MOBILE BOTTOM NAV */
+        .widget-legal-footer p { font-size: 10.5px; color: #64748b; margin: 0; }
+
+        /* MOBILE NAV */
         .mobile-bottom-nav {
           display: none;
           position: fixed;
           bottom: 0;
           left: 0;
           right: 0;
-          height: 60px;
-          background: rgba(6, 9, 17, 0.95);
-          backdrop-filter: blur(12px);
+          height: 56px;
+          background: rgba(11, 17, 32, 0.95);
+          backdrop-filter: blur(10px);
           border-top: 1px solid var(--card-border);
           justify-content: space-around;
           align-items: center;
-          z-index: 90;
+          z-index: 80;
         }
         .b-nav-item {
           background: transparent;
@@ -2761,313 +2270,163 @@ const Home = () => {
           flex-direction: column;
           align-items: center;
           gap: 2px;
-          font-size: 10px;
-          font-weight: 600;
+          font-size: 9.5px;
           cursor: pointer;
         }
         .b-nav-item.active { color: #818cf8; }
-        .b-nav-create {
-          width: 44px;
-          height: 44px;
+        .b-nav-create-center {
+          width: 40px;
+          height: 40px;
           border-radius: 50%;
-          background: linear-gradient(135deg, #6366f1, #a855f7);
+          background: #6366f1;
           color: white;
           justify-content: center;
-          margin-top: -16px;
-          box-shadow: 0 4px 15px rgba(99, 102, 241, 0.5);
+          margin-top: -14px;
         }
 
-        /* MODALS */
-        .modal-backdrop-blur {
+        /* MODAL COMMON */
+        .modal-veil {
           position: fixed;
           inset: 0;
-          background: rgba(0, 0, 0, 0.75);
-          backdrop-filter: blur(8px);
+          background: rgba(0, 0, 0, 0.7);
+          backdrop-filter: blur(6px);
           display: flex;
           align-items: center;
           justify-content: center;
           z-index: 1000;
           padding: 1rem;
         }
-        .modal-box, .share-card, .speed-match-modal, .party-wheel-modal {
-          background: #0f172a;
-          border: 1px solid rgba(255, 255, 255, 0.15);
-          box-shadow: 0 25px 70px rgba(0, 0, 0, 0.8);
-          border-radius: 20px;
+        .modal-dialog-box {
+          background: #111827;
+          border: 1px solid var(--card-border);
+          box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+          border-radius: 14px;
           width: 100%;
-          max-width: 420px;
-          padding: 18px;
-          position: relative;
+          max-width: 380px;
+          padding: 16px;
         }
-        .modal-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 14px;
-        }
-        .header-title-row { display: flex; align-items: center; gap: 8px; }
-        .modal-header h3 { margin: 0; font-size: 16px; font-weight: 700; }
-        .btn-close-modal, .btn-close-share {
-          background: transparent;
-          border: none;
-          color: #94a3b8;
-          cursor: pointer;
-        }
-        .btn-close-modal:hover, .btn-close-share:hover { color: white; }
-        .modal-form { display: flex; flex-direction: column; gap: 12px; }
-        .form-item { display: flex; flex-direction: column; gap: 6px; }
-        .form-item label { font-size: 11.5px; font-weight: 600; color: #94a3b8; }
-        .form-item input {
-          background: rgba(0, 0, 0, 0.35);
-          border: 1px solid #334155;
-          border-radius: 8px;
-          padding: 9px 12px;
+        .dialog-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .dialog-title-flex { display: flex; align-items: center; gap: 6px; }
+        .dialog-header h4 { margin: 0; font-size: 14.5px; }
+        .btn-close-dialog { background: transparent; border: none; color: #94a3b8; cursor: pointer; }
+        .dialog-form { display: flex; flex-direction: column; gap: 10px; }
+        .dialog-field { display: flex; flex-direction: column; gap: 4px; }
+        .dialog-field label { font-size: 11px; font-weight: 600; color: #94a3b8; }
+        .dialog-field input {
+          background: rgba(0, 0, 0, 0.3);
+          border: 1px solid #374151;
+          border-radius: 6px;
+          padding: 7px 10px;
           color: white;
-          font-size: 13.5px;
+          font-size: 12.5px;
           outline: none;
         }
-        .form-item input:focus { border-color: #6366f1; }
-        .modal-actions-row { display: flex; gap: 10px; margin-top: 10px; }
-        .btn-cancel {
+        .dialog-actions-row { display: flex; gap: 8px; margin-top: 8px; }
+        .btn-dialog-back {
           flex: 1;
-          background: #334155;
+          background: #1f2937;
           color: #cbd5e1;
           border: none;
-          padding: 9px;
-          border-radius: 8px;
+          padding: 8px;
+          border-radius: 6px;
+          font-size: 12px;
+          cursor: pointer;
+        }
+        .btn-dialog-primary {
+          flex: 1;
+          background: #6366f1;
+          color: white;
+          border: none;
+          padding: 8px;
+          border-radius: 6px;
+          font-size: 12px;
           font-weight: 600;
           cursor: pointer;
         }
-        .btn-confirm {
-          flex: 1;
+
+        /* Speed match dialog */
+        .dialog-searching-body { text-align: center; padding: 20px 10px; }
+        .radar-circle {
+          width: 50px;
+          height: 50px;
+          margin: 0 auto 12px;
+          border-radius: 50%;
+          border: 2px solid #eab308;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          animation: pulseGreen 1.2s infinite;
+        }
+        .partner-matched-card {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid var(--card-border);
+          border-radius: 8px;
+          padding: 8px;
+          margin-bottom: 10px;
+        }
+        .partner-matched-card strong { display: block; font-size: 13px; }
+        .partner-matched-card p { margin: 2px 0 0 0; font-size: 11px; color: #94a3b8; }
+        .icebreaker-quote {
+          background: rgba(234, 179, 8, 0.08);
+          border: 1px dashed rgba(234, 179, 8, 0.3);
+          border-radius: 8px;
+          padding: 8px;
+          margin-bottom: 12px;
+        }
+        .icebreaker-quote span { font-size: 10.5px; font-weight: 700; color: #eab308; }
+        .icebreaker-quote p { margin: 3px 0 0 0; font-size: 12px; font-weight: 600; color: #f8fafc; }
+
+        /* Wheel dialog */
+        .wheel-dialog-body { text-align: center; }
+        .clean-wheel-dial {
+          width: 80px;
+          height: 80px;
+          margin: 10px auto 16px;
+          border-radius: 50%;
+          border: 2px solid #818cf8;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .clean-wheel-dial.spinning { animation: spinWheel 1.2s cubic-bezier(0.15, 0.9, 0.3, 1.2) forwards; }
+        .wheel-card-result {
+          background: rgba(129, 140, 248, 0.1);
+          border: 1px solid rgba(129, 140, 248, 0.3);
+          border-radius: 8px;
+          padding: 10px;
+          margin-bottom: 12px;
+          text-align: left;
+        }
+        .wheel-card-result span { font-size: 10px; font-weight: 700; color: #818cf8; }
+        .wheel-card-result p { margin: 4px 0 0 0; font-size: 12.5px; color: white; }
+        .btn-spin-action {
+          width: 100%;
           background: #6366f1;
           color: white;
           border: none;
           padding: 9px;
           border-radius: 8px;
-          font-weight: 600;
-          cursor: pointer;
-        }
-
-        /* Story Viewer */
-        .story-viewer-modal {
-          position: fixed;
-          inset: 0;
-          background: rgba(0, 0, 0, 0.9);
-          backdrop-filter: blur(12px);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 1100;
-          padding: 1rem;
-        }
-        .story-card-view {
-          width: 100%;
-          max-width: 360px;
-          height: 560px;
-          border-radius: 20px;
-          padding: 16px;
-          display: flex;
-          flex-direction: column;
-          position: relative;
-          box-shadow: 0 20px 60px rgba(0,0,0,0.8);
-        }
-        .story-progress-bar {
-          width: 100%;
-          height: 3px;
-          background: rgba(255, 255, 255, 0.3);
-          border-radius: 2px;
-          margin-bottom: 12px;
-          overflow: hidden;
-        }
-        .story-progress-fill {
-          height: 100%;
-          background: white;
-          animation: storyProgress 5s linear forwards;
-        }
-        @keyframes storyProgress { from { width: 0%; } to { width: 100%; } }
-        .story-top-info { display: flex; justify-content: space-between; align-items: center; }
-        .story-author-tag { display: flex; align-items: center; gap: 8px; }
-        .st-mini-avatar { width: 32px; height: 32px; border-radius: 50%; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; font-weight: 700; }
-        .story-author-tag strong { display: block; font-size: 13px; color: white; }
-        .story-author-tag span { font-size: 10.5px; color: rgba(255,255,255,0.7); }
-        .btn-close-story { background: transparent; border: none; color: white; cursor: pointer; }
-        .story-body-content {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: 20px;
-          text-align: center;
-        }
-        .story-vibe-pill {
-          background: rgba(0, 0, 0, 0.35);
-          color: white;
-          padding: 4px 12px;
-          border-radius: 20px;
-          font-size: 12px;
           font-weight: 700;
-          margin-bottom: 16px;
-        }
-        .story-text-center { font-size: 18px; font-weight: 700; color: white; line-height: 1.5; }
-        .story-reply-row { display: flex; gap: 8px; }
-        .story-reply-row input {
-          flex: 1;
-          background: rgba(0, 0, 0, 0.4);
-          border: 1px solid rgba(255, 255, 255, 0.3);
-          border-radius: 20px;
-          padding: 8px 14px;
-          color: white;
           font-size: 12.5px;
-          outline: none;
-        }
-        .btn-send-story {
-          background: white;
-          color: #090d16;
-          border: none;
-          width: 34px;
-          height: 34px;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
           cursor: pointer;
         }
 
-        /* Speed Match Sonar Animation */
-        .speed-searching-body {
-          text-align: center;
-          padding: 20px;
-        }
-        .sonar-emitter {
-          width: 80px;
-          height: 80px;
-          margin: 0 auto 20px;
-          position: relative;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .sonar-core {
-          width: 56px;
-          height: 56px;
-          background: rgba(234, 179, 8, 0.2);
-          border: 2px solid #eab308;
+        .feed-status-box { padding: 40px 20px; text-align: center; color: #64748b; }
+        .feed-spinner {
+          width: 24px;
+          height: 24px;
+          border: 2px solid rgba(255,255,255,0.1);
+          border-bottom-color: #818cf8;
           border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 2;
+          margin: 0 auto 10px;
+          animation: spin 0.8s linear infinite;
         }
-        .sonar-wave {
-          position: absolute;
-          inset: 0;
-          border-radius: 50%;
-          border: 2px solid #eab308;
-          animation: sonar 1.8s cubic-bezier(0, 0.2, 0.8, 1) infinite;
-        }
-        .wave2 { animation-delay: 0.6s; }
-        @keyframes sonar {
-          0% { transform: scale(0.6); opacity: 1; }
-          100% { transform: scale(2.2); opacity: 0; }
-        }
-        .speed-searching-body h4 { margin: 0 0 6px 0; font-size: 15px; }
-        .speed-searching-body p { margin: 0; font-size: 12px; color: #94a3b8; }
-        .speed-matched-body { text-align: center; }
-        .matched-banner {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          margin-bottom: 12px;
-        }
-        .matched-banner h4 { margin: 0; font-size: 16px; color: #38bdf8; font-weight: 800; }
-        .partner-card {
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          border-radius: 12px;
-          padding: 10px;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          margin-bottom: 12px;
-          text-align: left;
-        }
-        .partner-avatar {
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, #06b6d4, #3b82f6);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 18px;
-        }
-        .partner-info strong { display: block; font-size: 13.5px; }
-        .partner-info p { margin: 2px 0 0 0; font-size: 11.5px; color: #94a3b8; }
-        .icebreaker-box {
-          background: rgba(234, 179, 8, 0.1);
-          border: 1px dashed rgba(234, 179, 8, 0.4);
-          border-radius: 10px;
-          padding: 10px;
-          margin-bottom: 14px;
-        }
-        .icebreaker-tag { font-size: 11px; font-weight: 700; color: #eab308; }
-        .icebreaker-box p { margin: 4px 0 0 0; font-size: 13px; font-weight: 600; color: #f8fafc; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
 
-        /* Party Wheel */
-        .party-wheel-body { text-align: center; }
-        .wheel-sub { font-size: 12px; color: #94a3b8; margin: 0 0 16px 0; }
-        .wheel-circle {
-          width: 140px;
-          height: 140px;
-          border-radius: 50%;
-          border: 4px solid #ec4899;
-          margin: 0 auto 16px;
-          position: relative;
-          background: conic-gradient(#ec4899 0deg 60deg, #8b5cf6 60deg 120deg, #3b82f6 120deg 180deg, #10b981 180deg 240deg, #f59e0b 240deg 300deg, #ef4444 300deg 360deg);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .wheel-circle.spinning { animation: spinWheel 1.5s cubic-bezier(0.15, 0.9, 0.3, 1.2) forwards; }
-        @keyframes spinWheel {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(1440deg); }
-        }
-        .wheel-center-label {
-          width: 44px;
-          height: 44px;
-          background: #0f172a;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          box-shadow: 0 0 10px rgba(0,0,0,0.5);
-        }
-        .wheel-result-card {
-          background: rgba(236, 72, 153, 0.15);
-          border: 1px solid rgba(236, 72, 153, 0.4);
-          border-radius: 12px;
-          padding: 12px;
-          margin-bottom: 14px;
-        }
-        .result-badge { font-size: 11px; font-weight: 700; color: #f472b6; }
-        .wheel-result-card p { margin: 6px 0 0 0; font-size: 13.5px; font-weight: 700; color: white; }
-        .btn-spin-wheel {
-          width: 100%;
-          background: linear-gradient(135deg, #ec4899, #d946ef);
-          color: white;
-          border: none;
-          padding: 11px;
-          border-radius: 12px;
-          font-weight: 800;
-          font-size: 14px;
-          cursor: pointer;
-        }
-
-        /* RESPONSIVE DESIGN MEDIA QUERIES */
+        /* RESPONSIVE */
         @media (max-width: 1024px) {
           .widgets-sidebar { display: none; }
         }
@@ -3076,10 +2435,14 @@ const Home = () => {
           .nav-sidebar { display: none; }
           .mobile-top-bar { display: flex; }
           .mobile-bottom-nav { display: flex; }
-          .main-stream { max-width: 100%; padding-bottom: 70px; }
-          .post-content { margin-left: 0; }
-          .post-actions-bar { margin-left: 0; }
-          .comments-section { margin-left: 0; }
+          .main-stream { max-width: 100%; padding-bottom: 60px; }
+          .vibe-tags-row { margin-left: 0; }
+          .image-input-row { margin-left: 0; }
+          .post-img-preview { margin-left: 0; }
+          .creator-bottom-row { padding-left: 0; }
+          .post-body-content { margin-left: 0; }
+          .post-actions-toolbar { margin-left: 0; }
+          .post-comments-container { margin-left: 0; }
         }
       `}} />
     </div>
