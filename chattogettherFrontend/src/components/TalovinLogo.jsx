@@ -7,7 +7,7 @@ import React from 'react';
  * - Bảng màu Titanium Silver nguyên bản trên nền Deep Obsidian
  * - Tuyệt đối không gắn nhãn phụ "LIVE" hay dải màu lòe loẹt
  */
-export const TalovinLogo = ({ size = 28, showText = true, textClassName = "", className = "", style = {} }) => {
+export const TalovinLogo = ({ size = 28, showText = true, brandName = 'Talovin', textClassName = "", className = "", style = {} }) => {
   return (
     <div
       className={`talovin-brand-lockup flex items-center gap-2.5 select-none cursor-pointer ${className}`}
@@ -64,7 +64,7 @@ export const TalovinLogo = ({ size = 28, showText = true, textClassName = "", cl
           className={`talovin-brand-title font-sans font-bold tracking-tight text-zinc-100 ${textClassName}`}
           style={{ fontSize: Math.max(16, size * 0.65), letterSpacing: '-0.025em' }}
         >
-          Talovin
+          {brandName || 'Talovin'}
         </span>
       )}
     </div>

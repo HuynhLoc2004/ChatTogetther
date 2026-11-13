@@ -6,8 +6,10 @@ import chatToggetther.Customize.SecurityUtils;
 import chatToggetther.DTO.PostDTO;
 import chatToggetther.DTO.UserDTO;
 import chatToggetther.ENUMS.ErrorCode;
+import chatToggetther.modelEntity.ChallengeEntity;
 import chatToggetther.modelEntity.PostEntity;
 import chatToggetther.modelEntity.RoomEntity;
+import chatToggetther.modelEntity.SystemConfigEntity;
 import chatToggetther.modelEntity.TrackEntity;
 import chatToggetther.modelEntity.UserEntity;
 import chatToggetther.repository.*;
@@ -19,6 +21,7 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -28,19 +31,25 @@ public class AdminService {
     private final RoomRepository roomRepository;
     private final MessageRepository messageRepository;
     private final TrackRepository trackRepository;
+    private final ChallengeRepository challengeRepository;
+    private final SystemConfigRepository systemConfigRepository;
 
     public AdminService(
             UserRepository userRepository,
             PostRepository postRepository,
             RoomRepository roomRepository,
             MessageRepository messageRepository,
-            TrackRepository trackRepository
+            TrackRepository trackRepository,
+            ChallengeRepository challengeRepository,
+            SystemConfigRepository systemConfigRepository
     ) {
         this.userRepository = userRepository;
         this.postRepository = postRepository;
         this.roomRepository = roomRepository;
         this.messageRepository = messageRepository;
         this.trackRepository = trackRepository;
+        this.challengeRepository = challengeRepository;
+        this.systemConfigRepository = systemConfigRepository;
     }
 
     private void verifyAdmin(JwtAuthenticationToken token) {
@@ -177,6 +186,130 @@ public class AdminService {
         trackRepository.delete(track);
 
         return new ResponseData<>(200, "Đã xóa bản nhạc", true);
+    }
+
+    @Transactional(readOnly = true)
+    public ResponseData<List<TrackEntity>> getAllTracks(JwtAuthenticationToken token) {
+        verifyAdmin(token);
+        return new ResponseData<>(200, "Lấy danh sách bản nhạc thành công", trackRepository.findAll());
+    }
+
+    // ==========================================
+    // QUẢN LÝ CẤU HÌNH HỆ THỐNG (SYSTEM CONFIG)
+    // ==========================================
+
+    @Transactional(readOnly = true)
+    public ResponseData<Map<String, String>> getSystemConfig() {
+        List<SystemConfigEntity> all = systemConfigRepository.findAll();
+        Map<String, String> map = new HashMap<>();
+
+        // Nạp các giá trị đã lưu trong DB
+        for (SystemConfigEntity cfg : all) {
+            map.put(cfg.getConfigKey(), cfg.getConfigValue());
+        }
+
+        // Giá trị mặc định chuẩn nếu chưa cấu hình
+        if (!map.containsKey("brand_name")) map.put("brand_name", "Talovin");
+        if (!map.containsKey("brand_slogan")) map.put("brand_slogan", "Social Lounge");
+        if (!map.containsKey("vibe_options")) {
+            map.put("vibe_options", "[\"Thư giãn\",\"Tích cực\",\"Lắng đọng\",\"Tìm bạn\",\"Tâm sự\"]");
+        }
+        if (!map.containsKey("menu_items")) {
+            map.put("menu_items", "[{\"id\":\"lobby\",\"label\":\"Sảnh trực tuyến\",\"visible\":true,\"order\":1},{\"id\":\"groups\",\"label\":\"Cộng đồng\",\"visible\":true,\"order\":2},{\"id\":\"rooms\",\"label\":\"Phòng đàm thoại\",\"visible\":true,\"order\":3},{\"id\":\"trending\",\"label\":\"Thịnh hành\",\"visible\":true,\"order\":4},{\"id\":\"saved\",\"label\":\"Đã lưu\",\"visible\":true,\"order\":5},{\"id\":\"friends\",\"label\":\"Bạn bè\",\"visible\":true,\"order\":6},{\"id\":\"profile\",\"label\":\"Hồ sơ & Huy hiệu\",\"visible\":true,\"order\":7}]");
+        }
+        if (!map.containsKey("feature_toggles")) {
+            map.put("feature_toggles", "{\"enableRadio\":true,\"enableSpeedMatch\":true,\"enableChallengeDeck\":true,\"enableCommunity\":true}");
+        }
+
+        return new ResponseData<>(200, "Lấy cấu hình hệ thống thành công", map);
+    }
+
+    @Transactional
+    public ResponseData<Boolean> updateSystemConfig(JwtAuthenticationToken token, Map<String, String> configs) {
+        verifyAdmin(token);
+
+        if (configs != null) {
+            for (Map.Entry<String, String> entry : configs.entrySet()) {
+                if (entry.getKey() != null && entry.getValue() != null) {
+                    SystemConfigEntity entity = systemConfigRepository.findById(entry.getKey())
+                            .orElse(SystemConfigEntity.builder()
+                                    .configKey(entry.getKey())
+                                    .build());
+                    entity.setConfigValue(entry.getValue());
+                    entity.setUpdatedAt(LocalDateTime.now());
+                    systemConfigRepository.save(entity);
+                }
+            }
+        }
+
+        return new ResponseData<>(200, "Cập nhật cấu hình hệ thống thành công", true);
+    }
+
+    // ==========================================
+    // QUẢN LÝ THẺ BÀI THỬ THÁCH (CHALLENGES)
+    // ==========================================
+
+    @Transactional(readOnly = true)
+    public ResponseData<List<ChallengeEntity>> getAllChallenges(JwtAuthenticationToken token) {
+        verifyAdmin(token);
+        return new ResponseData<>(200, "Lấy danh sách câu hỏi thử thách thành công", challengeRepository.findAll());
+    }
+
+    @Transactional
+    public ResponseData<ChallengeEntity> addChallenge(JwtAuthenticationToken token, ChallengeEntity challenge) {
+        verifyAdmin(token);
+
+        if (challenge.getQuestion() == null || challenge.getQuestion().trim().isEmpty()) {
+            throw new AppException(400, "Nội dung câu hỏi không được để trống", 400);
+        }
+
+        challenge.setQuestion(challenge.getQuestion().trim());
+        if (challenge.getCategory() == null || challenge.getCategory().trim().isEmpty()) {
+            challenge.setCategory("DEEP_TALK");
+        }
+        if (challenge.getCategoryName() == null || challenge.getCategoryName().trim().isEmpty()) {
+            challenge.setCategoryName("Tâm sự sâu lắng");
+        }
+        if (challenge.getBadgeColor() == null) challenge.setBadgeColor("#818cf8");
+        challenge.setAuthor("Quản trị viên");
+        challenge.setActive(true);
+        challenge.setUsageCount(0);
+        challenge.setCreatedAt(LocalDateTime.now());
+
+        ChallengeEntity saved = challengeRepository.save(challenge);
+        return new ResponseData<>(200, "Thêm câu hỏi thử thách thành công", saved);
+    }
+
+    @Transactional
+    public ResponseData<ChallengeEntity> updateChallenge(JwtAuthenticationToken token, Long id, ChallengeEntity updated) {
+        verifyAdmin(token);
+
+        ChallengeEntity existing = challengeRepository.findById(id).orElseThrow(() ->
+                new AppException(404, "Câu hỏi không tồn tại", 404)
+        );
+
+        if (updated.getQuestion() != null && !updated.getQuestion().trim().isEmpty()) {
+            existing.setQuestion(updated.getQuestion().trim());
+        }
+        if (updated.getCategory() != null) existing.setCategory(updated.getCategory());
+        if (updated.getCategoryName() != null) existing.setCategoryName(updated.getCategoryName());
+        if (updated.getBadgeColor() != null) existing.setBadgeColor(updated.getBadgeColor());
+        if (updated.getActive() != null) existing.setActive(updated.getActive());
+
+        ChallengeEntity saved = challengeRepository.save(existing);
+        return new ResponseData<>(200, "Cập nhật câu hỏi thành công", saved);
+    }
+
+    @Transactional
+    public ResponseData<Boolean> deleteChallenge(JwtAuthenticationToken token, Long id) {
+        verifyAdmin(token);
+
+        ChallengeEntity existing = challengeRepository.findById(id).orElseThrow(() ->
+                new AppException(404, "Câu hỏi không tồn tại", 404)
+        );
+        challengeRepository.delete(existing);
+
+        return new ResponseData<>(200, "Đã xóa câu hỏi thử thách", true);
     }
 }
 

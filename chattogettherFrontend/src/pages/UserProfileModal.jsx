@@ -388,7 +388,7 @@ export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentU
                   <span className="text-zinc-500 font-mono text-xs block mb-2">@{profile?.account}</span>
 
                   {isMe ? (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <button 
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
@@ -405,6 +405,20 @@ export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentU
                           title="Gỡ ảnh về chữ cái"
                         >
                           <Trash2 size={13} />
+                        </button>
+                      )}
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onClose();
+                            window.location.href = '/admin';
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 text-xs font-semibold border border-emerald-500/30 transition-all active:scale-95"
+                          title="Mở Bảng Quản Trị Hệ Thống"
+                        >
+                          <Shield size={13} />
+                          <span>Bảng Quản Trị</span>
                         </button>
                       )}
                     </div>

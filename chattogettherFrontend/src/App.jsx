@@ -5,6 +5,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Home from './pages/Home';
 import ChatRoom from './pages/ChatRoom';
+import AdminDashboard from './pages/AdminDashboard';
 import './App.css';
 
 // Error Boundary để ngăn chặn hoàn toàn màn hình đen (Blank Screen)
@@ -203,6 +204,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <ChatRoom />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/admin" 
+              element={
+                <ProtectedRoute>
+                  <AdminDashboard />
                 </ProtectedRoute>
               } 
             />

@@ -296,6 +296,59 @@ const Home = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [lightboxMedia]);
 
+  const [systemConfig, setSystemConfig] = useState({
+    brand_name: 'Talovin',
+    brand_slogan: 'Social Lounge'
+  });
+  const [dynamicVibes, setDynamicVibes] = useState(VIBE_TAGS);
+  const [dynamicMenu, setDynamicMenu] = useState({});
+  const [isAdminUser, setIsAdminUser] = useState(() => {
+    try {
+      const token = localStorage.getItem('accesstoken');
+      if (!token) return false;
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const scope = (payload.scope || '') + ' ' + (payload.roles || '');
+      return scope.includes('ADMIN');
+    } catch {
+      return false;
+    }
+  });
+
+  // Đồng bộ cấu hình động từ Admin Dashboard
+  useEffect(() => {
+    const fetchSystemConfig = async () => {
+      try {
+        const res = await axiosClient.get('/system/config');
+        if (res.data && res.data.data) {
+          const cfg = res.data.data;
+          setSystemConfig(cfg);
+          if (cfg.vibe_options) {
+            try {
+              const parsed = JSON.parse(cfg.vibe_options);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                const mapped = parsed.map(v => ({ id: v, label: v, icon: Sparkles }));
+                setDynamicVibes(mapped);
+              }
+            } catch {}
+          }
+          if (cfg.menu_items) {
+            try {
+              const parsed = JSON.parse(cfg.menu_items);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                const menuMap = {};
+                parsed.forEach(m => { menuMap[m.id] = m; });
+                setDynamicMenu(menuMap);
+              }
+            } catch {}
+          }
+        }
+      } catch (err) {
+        // Fallback to defaults
+      }
+    };
+    fetchSystemConfig();
+  }, []);
+
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState(() => {
     try {
@@ -1318,7 +1371,7 @@ const Home = () => {
         {/* ============================================================== */}
         <aside className="nav-sidebar">
           <div className="nav-brand" onClick={() => setActiveTab('feed')}>
-            <TalovinLogo size={30} />
+            <TalovinLogo size={30} brandName={systemConfig.brand_name || 'Talovin'} />
           </div>
 
           {/* Live Music Deck */}
@@ -1364,70 +1417,97 @@ const Home = () => {
             )}
           </div>
 
-          {/* Menu Điều Hướng (Clean Active State - Bỏ nền tím) */}
+          {/* Menu Điều Hướng (Động từ Admin Dashboard) */}
           <div className="nav-menu">
-            <button 
-              className={`nav-item ${activeTab === 'feed' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('feed'); setActiveFilterTag(null); }}
-            >
-              <Compass size={15} strokeWidth={1.5} />
-              <span>Sảnh trực tuyến</span>
-            </button>
+            {dynamicMenu.lobby?.visible !== false && (
+              <button 
+                className={`nav-item ${activeTab === 'feed' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('feed'); setActiveFilterTag(null); }}
+              >
+                <Compass size={15} strokeWidth={1.5} />
+                <span>{dynamicMenu.lobby?.label || "Sảnh trực tuyến"}</span>
+              </button>
+            )}
 
-            <button 
-              className={`nav-item ${activeTab === 'groups' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('groups'); setActiveFilterTag(null); }}
-            >
-              <Users size={15} strokeWidth={1.5} />
-              <span>Cộng đồng</span>
-            </button>
-
-            <button 
-              className={`nav-item ${activeTab === 'rooms' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('rooms'); setActiveFilterTag(null); }}
-            >
-              <Radio size={15} strokeWidth={1.5} />
-              <span>Phòng đàm thoại</span>
-            </button>
-
-            <button 
-              className={`nav-item ${activeTab === 'trending' ? 'active' : ''}`}
-              onClick={() => setActiveTab('trending')}
-            >
-              <Flame size={15} strokeWidth={1.5} />
-              <span>Thịnh hành</span>
-            </button>
-
-            <button 
-              className={`nav-item ${activeTab === 'saved' ? 'active' : ''}`}
-              onClick={() => setActiveTab('saved')}
-            >
-              <Bookmark size={15} strokeWidth={1.5} />
-              <span>Đã lưu ({savedPostIds.length})</span>
-            </button>
-
-            <button 
-              className="nav-item flex items-center justify-between"
-              onClick={() => setIsFriendsOpen(true)}
-            >
-              <div className="flex items-center gap-2.5">
+            {dynamicMenu.groups?.visible !== false && (
+              <button 
+                className={`nav-item ${activeTab === 'groups' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('groups'); setActiveFilterTag(null); }}
+              >
                 <Users size={15} strokeWidth={1.5} />
-                <span>Bạn bè</span>
-              </div>
-              {pendingFriendsCount > 0 && (
-                <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                  {pendingFriendsCount}
-                </span>
-              )}
-            </button>
+                <span>{dynamicMenu.groups?.label || "Cộng đồng"}</span>
+              </button>
+            )}
 
-            <button 
-              className="nav-item"
-              onClick={() => setSelectedProfileUserId(currentUserId)}
-            >
-              <User size={15} strokeWidth={1.5} />
-              <span>Hồ sơ & Huy hiệu</span>
-            </button>
+            {dynamicMenu.rooms?.visible !== false && (
+              <button 
+                className={`nav-item ${activeTab === 'rooms' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('rooms'); setActiveFilterTag(null); }}
+              >
+                <Radio size={15} strokeWidth={1.5} />
+                <span>{dynamicMenu.rooms?.label || "Phòng đàm thoại"}</span>
+              </button>
+            )}
+
+            {dynamicMenu.trending?.visible !== false && (
+              <button 
+                className={`nav-item ${activeTab === 'trending' ? 'active' : ''}`}
+                onClick={() => setActiveTab('trending')}
+              >
+                <Flame size={15} strokeWidth={1.5} />
+                <span>{dynamicMenu.trending?.label || "Thịnh hành"}</span>
+              </button>
+            )}
+
+            {dynamicMenu.saved?.visible !== false && (
+              <button 
+                className={`nav-item ${activeTab === 'saved' ? 'active' : ''}`}
+                onClick={() => setActiveTab('saved')}
+              >
+                <Bookmark size={15} strokeWidth={1.5} />
+                <span>{dynamicMenu.saved?.label || "Đã lưu"} ({savedPostIds.length})</span>
+              </button>
+            )}
+
+            {dynamicMenu.friends?.visible !== false && (
+              <button 
+                className="nav-item flex items-center justify-between"
+                onClick={() => setIsFriendsOpen(true)}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Users size={15} strokeWidth={1.5} />
+                  <span>{dynamicMenu.friends?.label || "Bạn bè"}</span>
+                </div>
+                {pendingFriendsCount > 0 && (
+                  <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                    {pendingFriendsCount}
+                  </span>
+                )}
+              </button>
+            )}
+
+            {dynamicMenu.profile?.visible !== false && (
+              <button 
+                className="nav-item"
+                onClick={() => setSelectedProfileUserId(currentUserId)}
+              >
+                <User size={15} strokeWidth={1.5} />
+                <span>{dynamicMenu.profile?.label || "Hồ sơ & Huy hiệu"}</span>
+              </button>
+            )}
+
+            {/* Nút vào Bảng Quản Trị Hệ Thống (Dành riêng cho Quản trị viên) */}
+            {isAdminUser && (
+              <button 
+                type="button"
+                className="nav-item border border-emerald-500/30 text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 transition-all font-semibold"
+                onClick={() => navigate('/admin')}
+                title="Mở Bảng Quản Trị Hệ Thống"
+              >
+                <Shield size={15} strokeWidth={2} />
+                <span>Bảng Quản Trị</span>
+              </button>
+            )}
           </div>
 
           {/* User Profile & Account Dock Card (Chân Sidebar chuẩn phong cách Linear / Discord) */}
@@ -1832,10 +1912,10 @@ const Home = () => {
                 </div>
               ) : null}
 
-              {/* Chọn Vibe Tags (Anti-AI: Lucide icon mảnh, NO emoji) */}
+              {/* Chọn Vibe Tags (Động từ Admin Dashboard) */}
               <div className="vibe-tags-row">
-                {VIBE_TAGS.map(v => {
-                  const IconComponent = v.icon;
+                {dynamicVibes.map(v => {
+                  const IconComponent = v.icon || Sparkles;
                   const isSelected = selectedVibe === v.id;
                   return (
                     <button

@@ -56,6 +56,11 @@ public class AdminController {
         return ResponseEntity.ok(this.adminService.deletePostByAdmin(token, postId));
     }
 
+    @GetMapping("/tracks")
+    public ResponseEntity<ResponseData<List<TrackEntity>>> getAllTracks(JwtAuthenticationToken token) {
+        return ResponseEntity.ok(this.adminService.getAllTracks(token));
+    }
+
     @PostMapping("/tracks")
     public ResponseEntity<ResponseData<TrackEntity>> addTrack(
             JwtAuthenticationToken token,
@@ -70,6 +75,57 @@ public class AdminController {
             @PathVariable("id") Long trackId
     ) {
         return ResponseEntity.ok(this.adminService.deleteTrack(token, trackId));
+    }
+
+    // ==========================================
+    // CẤU HÌNH HỆ THỐNG (SYSTEM CONFIG)
+    // ==========================================
+
+    @GetMapping("/config")
+    public ResponseEntity<ResponseData<Map<String, String>>> getSystemConfig() {
+        return ResponseEntity.ok(this.adminService.getSystemConfig());
+    }
+
+    @PutMapping("/config")
+    public ResponseEntity<ResponseData<Boolean>> updateSystemConfig(
+            JwtAuthenticationToken token,
+            @RequestBody Map<String, String> configs
+    ) {
+        return ResponseEntity.ok(this.adminService.updateSystemConfig(token, configs));
+    }
+
+    // ==========================================
+    // QUẢN LÝ CÂU HỎI THỬ THÁCH (CHALLENGES)
+    // ==========================================
+
+    @GetMapping("/challenges")
+    public ResponseEntity<ResponseData<List<chatToggetther.modelEntity.ChallengeEntity>>> getAllChallenges(JwtAuthenticationToken token) {
+        return ResponseEntity.ok(this.adminService.getAllChallenges(token));
+    }
+
+    @PostMapping("/challenges")
+    public ResponseEntity<ResponseData<chatToggetther.modelEntity.ChallengeEntity>> addChallenge(
+            JwtAuthenticationToken token,
+            @RequestBody chatToggetther.modelEntity.ChallengeEntity challenge
+    ) {
+        return ResponseEntity.ok(this.adminService.addChallenge(token, challenge));
+    }
+
+    @PutMapping("/challenges/{id}")
+    public ResponseEntity<ResponseData<chatToggetther.modelEntity.ChallengeEntity>> updateChallenge(
+            JwtAuthenticationToken token,
+            @PathVariable("id") Long id,
+            @RequestBody chatToggetther.modelEntity.ChallengeEntity challenge
+    ) {
+        return ResponseEntity.ok(this.adminService.updateChallenge(token, id, challenge));
+    }
+
+    @DeleteMapping("/challenges/{id}")
+    public ResponseEntity<ResponseData<Boolean>> deleteChallenge(
+            JwtAuthenticationToken token,
+            @PathVariable("id") Long id
+    ) {
+        return ResponseEntity.ok(this.adminService.deleteChallenge(token, id));
     }
 }
 
