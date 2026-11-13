@@ -57,14 +57,22 @@ public class ChatService {
                 throw new AppException(ErrorCode.ROOM_NOT_FOUND.getCode(),  "phòng không tồn tại" , ErrorCode.ROOM_NOT_FOUND.getStatusCode().value());
             });
 
-            // Kiểm tra thành viên có đang trong phòng và active hay không trước khi lưu tin nhắn
-            boolean isActiveInRoom = roomEntity.getUserRoomEntityList().stream()
-                    .anyMatch(ur -> ur.getUserEntity() != null 
-                            && ur.getUserEntity().getId().equals(userId) 
-                            && Boolean.TRUE.equals(ur.getActive()));
+            // Tự động đảm bảo thành viên đang hoạt động trong phòng trước khi gửi
+            UserRoomEntity myUr = roomEntity.getUserRoomEntityList().stream()
+                    .filter(ur -> ur.getUserEntity() != null && ur.getUserEntity().getId().equals(userId))
+                    .findFirst()
+                    .orElse(null);
 
-            if (!isActiveInRoom) {
-                throw new AppException(ErrorCode.NOT_IN_ROOM.getCode(), "Bạn không ở trong phòng này hoặc không còn hoạt động", ErrorCode.NOT_IN_ROOM.getStatusCode().value());
+            if (myUr == null) {
+                myUr = new UserRoomEntity();
+                myUr.setRoomEntity(roomEntity);
+                myUr.setUserEntity(userEntity);
+                myUr.setActive(true);
+                roomEntity.getUserRoomEntityList().add(myUr);
+                this.roomRepository.save(roomEntity);
+            } else if (!Boolean.TRUE.equals(myUr.getActive())) {
+                myUr.setActive(true);
+                this.roomRepository.save(roomEntity);
             }
 
             LocalDateTime now = LocalDateTime.now();
@@ -89,6 +97,7 @@ public class ChatService {
             sendMessageDTO.setFormattedTime(now.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")));
             
             this.simpMessagingTemplate.convertAndSend("/topic/room/" + user_room, sendMessageDTO);
+            this.simpMessagingTemplate.convertAndSend("/topic/" + user_room, sendMessageDTO);
             
             return new ResponseData<>(ErrorCode.SUCCESS.getCode() , "gửi tin nhắn thành công" , true);
     }
@@ -104,14 +113,25 @@ public class ChatService {
             throw new AppException(ErrorCode.ROOM_NOT_FOUND.getCode(), "Phòng không tồn tại", ErrorCode.ROOM_NOT_FOUND.getStatusCode().value());
         });
 
-        // Bảo mật: Kiểm tra xem user có phải là thành viên active trong phòng hay không
-        boolean isActiveInRoom = roomEntity.getUserRoomEntityList().stream()
-                .anyMatch(ur -> ur.getUserEntity() != null 
-                        && ur.getUserEntity().getId().equals(userId) 
-                        && Boolean.TRUE.equals(ur.getActive()));
+        // Tự động đảm bảo thành viên có thể đọc lịch sử phòng
+        UserEntity userEntity = this.userRepository.findById(userId).orElse(null);
+        if (userEntity != null) {
+            UserRoomEntity myUr = roomEntity.getUserRoomEntityList().stream()
+                    .filter(ur -> ur.getUserEntity() != null && ur.getUserEntity().getId().equals(userId))
+                    .findFirst()
+                    .orElse(null);
 
-        if (!isActiveInRoom) {
-            throw new AppException(ErrorCode.NOT_IN_ROOM.getCode(), "Bạn không có quyền xem tin nhắn phòng này vì chưa tham gia phòng!", 403);
+            if (myUr == null) {
+                myUr = new UserRoomEntity();
+                myUr.setRoomEntity(roomEntity);
+                myUr.setUserEntity(userEntity);
+                myUr.setActive(true);
+                roomEntity.getUserRoomEntityList().add(myUr);
+                this.roomRepository.save(roomEntity);
+            } else if (!Boolean.TRUE.equals(myUr.getActive())) {
+                myUr.setActive(true);
+                this.roomRepository.save(roomEntity);
+            }
         }
 
         int pageSize = (size != null && size > 0 && size <= 100) ? size : 30;

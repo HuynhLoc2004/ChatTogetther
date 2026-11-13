@@ -36,4 +36,12 @@ public class ChatController {
         Long targetRoomId = (roomId != null) ? roomId : idRoom;
         return ResponseEntity.ok(this.chatService.getMessageHistory(jwtAuthenticationToken, targetRoomId, beforeId, size));
     }
+
+    @GetMapping("/{roomId}")
+    public ResponseEntity<ResponseData<List<SendMessageDTO>>> getHistoryByPath(
+            JwtAuthenticationToken jwtAuthenticationToken,
+            @PathVariable("roomId") Long roomId
+    ) {
+        return ResponseEntity.ok(this.chatService.getMessageHistory(jwtAuthenticationToken, roomId, null, 50));
+    }
 }

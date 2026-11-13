@@ -1,1 +1,10 @@
 @import "tailwindcss";
+
+/* Responsive Toaster Positioning - Không đè lên header phòng hay nút bấm */
+@media (max-width: 768px) {
+  div[data-toaster-container],
+  div:has(> [role="status"]) {
+    top: 58px !important;
+    bottom: auto !important;
+  }
+}

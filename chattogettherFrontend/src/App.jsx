@@ -154,19 +154,27 @@ function App() {
       <Router>
         <div className="app-root">
           <Toaster 
-            position="top-right" 
+            position="top-center" 
             reverseOrder={false}
+            containerStyle={{
+              top: 58,
+              left: 12,
+              right: 12,
+              zIndex: 99999
+            }}
             toastOptions={{
-              duration: 3000,
+              duration: 2500,
               style: {
-                background: '#18181b',
+                background: 'rgba(24, 24, 27, 0.95)',
                 color: '#f4f4f5',
-                border: '1px solid #27272a',
-                borderRadius: '10px',
-                fontSize: '13px',
+                border: '1px solid #3f3f46',
+                borderRadius: '12px',
+                fontSize: '12px',
                 fontWeight: '500',
-                padding: '10px 14px',
-                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)'
+                padding: '8px 14px',
+                backdropFilter: 'blur(10px)',
+                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.6)',
+                maxWidth: '92vw'
               },
               success: {
                 iconTheme: {

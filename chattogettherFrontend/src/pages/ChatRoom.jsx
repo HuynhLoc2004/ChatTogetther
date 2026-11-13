@@ -109,8 +109,8 @@ const ChatRoom = () => {
   const recordingTimerRef = useRef(null);
   const currentAudioElemRef = useRef(null);
 
-  // Phân trang lịch sử tin nhắn cuộn lên
-  const [hasMoreHistory, setHasMoreHistory] = useState(true);
+  // Phân trang lịch sử tin nhắn cuộn lên (mặc định false để không bị loop giật lag)
+  const [hasMoreHistory, setHasMoreHistory] = useState(false);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   
   // Hàm lấy user_id an toàn (kết hợp localStorage và giải mã JWT token)
@@ -150,20 +150,20 @@ const ChatRoom = () => {
 
   // Cuộn lên tải thêm lịch sử tin nhắn
   const handleScrollMessages = (e) => {
-    if (e.target.scrollTop === 0 && hasMoreHistory && !isLoadingOlder) {
+    if (hasMoreHistory && !isLoadingOlder && e.target.scrollTop < 5) {
       const container = e.target;
       const previousScrollHeight = container.scrollHeight;
 
       setIsLoadingOlder(true);
-      setTimeout(() => {
-        fetchHistory(true).then(() => {
-          setTimeout(() => {
-            const newScrollHeight = container.scrollHeight;
-            container.scrollTop = newScrollHeight - previousScrollHeight;
-            setIsLoadingOlder(false);
-          }, 60);
-        });
-      }, 350);
+      fetchHistory(true).then(() => {
+        setTimeout(() => {
+          const newScrollHeight = container.scrollHeight;
+          container.scrollTop = newScrollHeight - previousScrollHeight;
+          setIsLoadingOlder(false);
+        }, 50);
+      }).catch(() => {
+        setIsLoadingOlder(false);
+      });
     }
   };
 
@@ -638,67 +638,78 @@ const ChatRoom = () => {
           });
         }
 
-        // Sub kênh tin nhắn phòng
-        client.subscribe(`/topic/${roomId}`, (message) => {
-          const receivedMsg = JSON.parse(message.body);
+        // Handler chung cho tin nhắn phòng từ WebSocket
+        const handleRoomIncomingMessage = (message) => {
+          try {
+            const receivedMsg = JSON.parse(message.body);
 
-          // Logic KICK
-          if (receivedMsg.id === -1) {
-             if (receivedMsg.userId?.toString() === currentUserId) {
-                toast.error("Bạn đã bị quản trị viên mời ra khỏi phòng!", { duration: 5000 });
-                navigate('/');
-                return;
-             }
-             toast(`${receivedMsg.message}`);
-             fetchRoomDetail(true);
-             return;
-          }
+            // Logic KICK
+            if (receivedMsg.id === -1) {
+               if (receivedMsg.userId?.toString() === currentUserId) {
+                  toast.error("Bạn đã bị quản trị viên mời ra khỏi phòng!", { duration: 5000 });
+                  navigate('/');
+                  return;
+               }
+               toast(`${receivedMsg.message}`);
+               fetchRoomDetail(true);
+               return;
+            }
 
-          // Logic DISBAND
-          if (receivedMsg.id === -2) {
-             toast.error("Phòng chat này đã được giải tán!", { duration: 6000 });
-             navigate('/');
-             return;
-          }
+            // Logic DISBAND
+            if (receivedMsg.id === -2) {
+               toast.error("Phòng chat này đã được giải tán!", { duration: 6000 });
+               navigate('/');
+               return;
+            }
 
-          if (receivedMsg.userId === 0 || receivedMsg.userId === '0') {
-            fetchRoomDetail(true);
-            const sysId = receivedMsg.id || Date.now() + Math.random();
-            setMessages(prev => {
-              if (prev.find(m => m.text === receivedMsg.message && Math.abs(new Date() - new Date(m.rawTime)) < 1000)) return prev;
-              const nextMsgs = [...prev, {
-                id: sysId,
-                text: receivedMsg.message,
-                sender: 'Hệ thống',
-                userId: '0',
-                isSystem: true,
-                time: receivedMsg.formattedTime || formatMsgTime(receivedMsg) || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false }),
-                rawTime: new Date().toISOString()
-              }];
-              saveMessagesOffline(roomId, nextMsgs);
-              return nextMsgs;
-            });
-            setTimeout(() => scrollToBottom(), 50);
-          } else {
-            setMessages((prev) => {
-              const msgId = receivedMsg.id || Date.now() + Math.random();
-              if (prev.find(m => m.id === msgId)) return prev;
-              
-              const newMsg = {
-                id: msgId,
-                text: receivedMsg.message,
-                sender: receivedMsg.nickname,
-                userId: receivedMsg.userId ? receivedMsg.userId.toString() : '',
-                time: receivedMsg.formattedTime || formatMsgTime(receivedMsg),
-                rawTime: receivedMsg.timeSend
-              };
-              const next = [...prev, newMsg].sort((a, b) => new Date(a.rawTime) - new Date(b.rawTime));
-              saveMessagesOffline(roomId, next);
-              return next;
-            });
-            setTimeout(() => scrollToBottom(), 50);
+            if (receivedMsg.userId === 0 || receivedMsg.userId === '0') {
+              fetchRoomDetail(true);
+              const sysId = receivedMsg.id || Date.now() + Math.random();
+              setMessages(prev => {
+                if (prev.find(m => m.text === receivedMsg.message && Math.abs(new Date() - new Date(m.rawTime)) < 1000)) return prev;
+                const nextMsgs = [...prev, {
+                  id: sysId,
+                  text: receivedMsg.message,
+                  sender: 'Hệ thống',
+                  userId: '0',
+                  isSystem: true,
+                  time: receivedMsg.formattedTime || formatMsgTime(receivedMsg) || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false }),
+                  rawTime: new Date().toISOString()
+                }];
+                saveMessagesOffline(roomId, nextMsgs);
+                return nextMsgs;
+              });
+              setTimeout(() => scrollToBottom(), 50);
+            } else {
+              setMessages((prev) => {
+                const msgId = receivedMsg.id || Date.now() + Math.random();
+                if (prev.find(m => m.id === msgId)) return prev;
+                
+                // Lọc bỏ tin nhắn tạm thời (optimistic) nếu có
+                const filtered = prev.filter(m => !(typeof m.id === 'string' && m.id.startsWith('temp-') && m.text === receivedMsg.message));
+
+                const newMsg = {
+                  id: msgId,
+                  text: receivedMsg.message,
+                  sender: receivedMsg.nickname,
+                  userId: receivedMsg.userId ? receivedMsg.userId.toString() : '',
+                  time: receivedMsg.formattedTime || formatMsgTime(receivedMsg),
+                  rawTime: receivedMsg.timeSend || new Date().toISOString()
+                };
+                const next = [...filtered, newMsg].sort((a, b) => new Date(a.rawTime) - new Date(b.rawTime));
+                saveMessagesOffline(roomId, next);
+                return next;
+              });
+              setTimeout(() => scrollToBottom(), 50);
+            }
+          } catch (e) {
+            console.error("Lỗi xử lý tin nhắn socket:", e);
           }
-        });
+        };
+
+        // Sub cả 2 topic /topic/room/${roomId} và /topic/${roomId} để đảm bảo 100% không sót tin
+        client.subscribe(`/topic/room/${roomId}`, handleRoomIncomingMessage);
+        client.subscribe(`/topic/${roomId}`, handleRoomIncomingMessage);
       }, (error) => {
         console.error('Lỗi kết nối WebSocket:', error);
       });
@@ -726,17 +737,30 @@ const ChatRoom = () => {
       toast.error("Bạn đang ngoại tuyến. Vui lòng kết nối Internet để gửi tin nhắn!");
       return;
     }
+
+    const myNickname = localStorage.getItem('nickname') || 'Tôi';
+    const tempId = 'temp-' + Date.now();
+    const optimisticMsg = {
+      id: tempId,
+      text: trimmed,
+      sender: myNickname,
+      userId: (currentUserId || '').toString(),
+      time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false }),
+      rawTime: new Date().toISOString()
+    };
     
     try {
       setNewMessage('');
       setShowEmojiPicker(false);
+      setMessages(prev => [...prev, optimisticMsg]);
+      setTimeout(() => scrollToBottom("smooth"), 50);
+
       await axiosClient.post(`/message/send`, {
         message: trimmed,
         timeSend: new Date().toISOString()
       }, {
         params: { user_room: roomId }
       });
-      setTimeout(() => scrollToBottom("smooth"), 50);
     } catch (err) {
       toast.error(err.response?.data?.message || "Không thể gửi tin nhắn!");
     }
@@ -783,12 +807,25 @@ const ChatRoom = () => {
           caption: newMessage.trim() || undefined
         });
 
+        const myNickname = localStorage.getItem('nickname') || 'Tôi';
+        const tempId = 'temp-' + Date.now();
+        const optimisticMsg = {
+          id: tempId,
+          text: payload,
+          sender: myNickname,
+          userId: (currentUserId || '').toString(),
+          time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false }),
+          rawTime: new Date().toISOString()
+        };
+        setMessages(prev => [...prev, optimisticMsg]);
+        setNewMessage('');
+        setTimeout(() => scrollToBottom("smooth"), 60);
+
         axiosClient.post('/message/send', {
           message: payload,
           timeSend: new Date().toISOString()
         }, { params: { user_room: roomId } })
         .then(() => {
-          setNewMessage('');
           toast.success("Đã gửi hình ảnh!");
           setTimeout(() => scrollToBottom("smooth"), 60);
         })
