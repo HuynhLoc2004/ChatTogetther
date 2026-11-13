@@ -28,6 +28,12 @@ class ErrorBoundary extends Component {
     window.location.href = '/';
   };
 
+  handleResetCache = () => {
+    localStorage.clear();
+    sessionStorage.clear();
+    window.location.href = '/';
+  };
+
   render() {
     if (this.state.hasError) {
       return (
@@ -51,27 +57,43 @@ class ErrorBoundary extends Component {
             maxWidth: '480px',
             boxShadow: '0 20px 40px rgba(0,0,0,0.5)'
           }}>
-            <h2 style={{ fontSize: '20px', fontWeight: 600, marginBottom: '12px', color: '#ef4444' }}>
-              Đã xảy ra sự cố hiển thị
+            <h2 style={{ fontSize: '20px', fontWeight: 600, marginBottom: '12px', color: '#818cf8' }}>
+              Đã khôi phục dữ liệu hiển thị
             </h2>
-            <p style={{ fontSize: '14px', color: '#94a3b8', marginBottom: '20px', lineHeight: 1.6 }}>
-              Ứng dụng vừa gặp lỗi nhẹ khi nạp dữ liệu. Bạn hãy bấm nút bên dưới để tải lại và tiếp tục trải nghiệm nhé.
+            <p style={{ fontSize: '13.5px', color: '#94a3b8', marginBottom: '20px', lineHeight: 1.6 }}>
+              Ứng dụng vừa cập nhật các tính năng mới (chủ đề cộng đồng & phản hồi bình luận). Bạn hãy bấm nút bên dưới để tải lại nhé.
             </p>
-            <button 
-              onClick={this.handleReload}
-              style={{
-                background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
-                color: '#fff',
-                border: 'none',
-                padding: '10px 24px',
-                borderRadius: '10px',
-                fontSize: '14px',
-                fontWeight: 600,
-                cursor: 'pointer'
-              }}
-            >
-              Tải lại trang ngay
-            </button>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+              <button 
+                onClick={this.handleReload}
+                style={{
+                  background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '10px 20px',
+                  borderRadius: '10px',
+                  fontSize: '13.5px',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                Tải lại trang ngay
+              </button>
+              <button 
+                onClick={this.handleResetCache}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  color: '#cbd5e1',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  padding: '10px 16px',
+                  borderRadius: '10px',
+                  fontSize: '13.5px',
+                  cursor: 'pointer'
+                }}
+              >
+                Làm mới phiên
+              </button>
+            </div>
           </div>
         </div>
       );

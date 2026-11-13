@@ -19,6 +19,7 @@ public interface PostRepository extends JpaRepository<PostEntity, Long> {
     @Query("SELECT DISTINCT p FROM PostEntity p " +
            "JOIN FETCH p.user u " +
            "WHERE LOWER(p.content) LIKE LOWER(CONCAT('%', :kw, '%')) " +
+           "OR LOWER(COALESCE(p.vibe, '')) LIKE LOWER(CONCAT('%', :kw, '%')) " +
            "ORDER BY p.createdAt DESC")
     List<PostEntity> searchPosts(@Param("kw") String keyword);
 }

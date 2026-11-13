@@ -58,6 +58,42 @@ public class PostController {
         return ResponseEntity.ok(this.postService.addComment(token, postId, request));
     }
 
+    @PutMapping("/{id}")
+    public ResponseEntity<ResponseData<PostDTO>> updatePost(
+            JwtAuthenticationToken token,
+            @PathVariable("id") Long postId,
+            @RequestBody @Valid CreatePostRequest request
+    ) {
+        return ResponseEntity.ok(this.postService.updatePost(token, postId, request));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ResponseData<Boolean>> deletePost(
+            JwtAuthenticationToken token,
+            @PathVariable("id") Long postId
+    ) {
+        return ResponseEntity.ok(this.postService.deletePost(token, postId));
+    }
+
+    @PutMapping("/{id}/comments/{commentId}")
+    public ResponseEntity<ResponseData<CommentDTO>> updateComment(
+            JwtAuthenticationToken token,
+            @PathVariable("id") Long postId,
+            @PathVariable("commentId") Long commentId,
+            @RequestBody @Valid CreateCommentRequest request
+    ) {
+        return ResponseEntity.ok(this.postService.updateComment(token, postId, commentId, request));
+    }
+
+    @DeleteMapping("/{id}/comments/{commentId}")
+    public ResponseEntity<ResponseData<Boolean>> deleteComment(
+            JwtAuthenticationToken token,
+            @PathVariable("id") Long postId,
+            @PathVariable("commentId") Long commentId
+    ) {
+        return ResponseEntity.ok(this.postService.deleteComment(token, postId, commentId));
+    }
+
     @GetMapping("/search")
     public ResponseEntity<ResponseData<List<PostDTO>>> searchPosts(
             JwtAuthenticationToken token,

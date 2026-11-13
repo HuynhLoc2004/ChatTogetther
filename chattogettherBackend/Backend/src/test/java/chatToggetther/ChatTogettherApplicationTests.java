@@ -19,6 +19,12 @@ class ChatTogettherApplicationTests {
 	@Autowired
 	private UserRepository userRepository;
 
+	@Autowired
+	private chatToggetther.repository.PostLikeRepository postLikeRepository;
+
+	@Autowired
+	private chatToggetther.repository.CommentRepository commentRepository;
+
 	@Test
 	void contextLoads() {
 		System.out.println(">>> Checking users and posts in database...");
@@ -32,10 +38,38 @@ class ChatTogettherApplicationTests {
 				p.setCreatedAt(LocalDateTime.now());
 				postRepository.save(p);
 				System.out.println(">>> Successfully saved test post id=" + p.getId());
+
+				// Test like
+				chatToggetther.modelEntity.PostLikeEntity like = new chatToggetther.modelEntity.PostLikeEntity();
+				like.setPost(p);
+				like.setUser(user);
+				like.setReactionType("HEART");
+				like.setCreatedAt(LocalDateTime.now());
+				postLikeRepository.save(like);
+				System.out.println(">>> Successfully saved test like id=" + like.getId());
+
+				int count = postLikeRepository.countByPost(p);
+				System.out.println(">>> Likes count: " + count);
+
+				postLikeRepository.delete(like);
+				System.out.println(">>> Successfully deleted test like");
+
+				// Test comment
+				chatToggetther.modelEntity.CommentEntity c = new chatToggetther.modelEntity.CommentEntity();
+				c.setPost(p);
+				c.setUser(user);
+				c.setContent("Test comment");
+				c.setCreatedAt(LocalDateTime.now());
+				commentRepository.save(c);
+				System.out.println(">>> Successfully saved test comment id=" + c.getId());
+
+				commentRepository.delete(c);
+				System.out.println(">>> Successfully deleted test comment");
+
 				postRepository.delete(p);
 				System.out.println(">>> Successfully cleaned up test post");
 			} catch (Exception e) {
-				System.err.println(">>> FAILED TO SAVE POST: " + e.getMessage());
+				System.err.println(">>> FAILED TO SAVE POST/LIKE: " + e.getMessage());
 				e.printStackTrace();
 			}
 		}

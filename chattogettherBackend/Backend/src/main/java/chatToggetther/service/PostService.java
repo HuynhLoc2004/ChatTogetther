@@ -261,4 +261,120 @@ public class PostService {
 
         return new ResponseData<>(200, "Tìm kiếm bài viết thành công", dtos);
     }
+
+    @Transactional
+    public ResponseData<Boolean> deletePost(JwtAuthenticationToken token, Long postId) {
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        if (currentUser == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
+        }
+
+        PostEntity post = this.postRepository.findById(postId).orElseThrow(() ->
+            new AppException(404, "Bài viết không tồn tại", 404)
+        );
+
+        boolean isAdmin = currentUser.getRoles() != null && 
+                (currentUser.getRoles().contains("ROLE_AMDIN") || currentUser.getRoles().contains("ROLE_ADMIN"));
+
+        if (!post.getUser().getId().equals(currentUser.getId()) && !isAdmin) {
+            throw new AppException(403, "Bạn không có quyền xóa bài viết này!", 403);
+        }
+
+        this.postRepository.delete(post);
+
+        try {
+            this.messagingTemplate.convertAndSend("/topic/posts", "POST_DELETED");
+        } catch (Exception ignored) {}
+
+        return new ResponseData<>(200, "Xóa bài viết thành công", true);
+    }
+
+    @Transactional
+    public ResponseData<PostDTO> updatePost(JwtAuthenticationToken token, Long postId, CreatePostRequest request) {
+        if (request.getContent() == null || request.getContent().trim().isEmpty()) {
+            throw new AppException(400, "Nội dung bài viết không được để trống", 400);
+        }
+
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        if (currentUser == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
+        }
+
+        PostEntity post = this.postRepository.findById(postId).orElseThrow(() ->
+            new AppException(404, "Bài viết không tồn tại", 404)
+        );
+
+        if (!post.getUser().getId().equals(currentUser.getId())) {
+            throw new AppException(403, "Bạn không có quyền chỉnh sửa bài viết này!", 403);
+        }
+
+        post.setContent(request.getContent().trim());
+        post.setImageUrl(request.getImageUrl() != null && !request.getImageUrl().trim().isEmpty() ? request.getImageUrl().trim() : null);
+        post.setVibe(request.getVibe() != null && !request.getVibe().trim().isEmpty() ? request.getVibe().trim() : null);
+        this.postRepository.save(post);
+
+        try {
+            this.messagingTemplate.convertAndSend("/topic/posts", "POST_UPDATED");
+        } catch (Exception ignored) {}
+
+        return new ResponseData<>(200, "Cập nhật bài viết thành công", mapToPostDTO(post, currentUser));
+    }
+
+    @Transactional
+    public ResponseData<Boolean> deleteComment(JwtAuthenticationToken token, Long postId, Long commentId) {
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        if (currentUser == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
+        }
+
+        CommentEntity comment = this.commentRepository.findById(commentId).orElseThrow(() ->
+            new AppException(404, "Bình luận không tồn tại", 404)
+        );
+
+        boolean isCommentAuthor = comment.getUser().getId().equals(currentUser.getId());
+        boolean isPostAuthor = comment.getPost().getUser().getId().equals(currentUser.getId());
+        boolean isAdmin = currentUser.getRoles() != null && 
+                (currentUser.getRoles().contains("ROLE_AMDIN") || currentUser.getRoles().contains("ROLE_ADMIN"));
+
+        if (!isCommentAuthor && !isPostAuthor && !isAdmin) {
+            throw new AppException(403, "Bạn không có quyền xóa bình luận này!", 403);
+        }
+
+        this.commentRepository.delete(comment);
+
+        try {
+            this.messagingTemplate.convertAndSend("/topic/posts", "POST_COMMENT_DELETED");
+        } catch (Exception ignored) {}
+
+        return new ResponseData<>(200, "Xóa bình luận thành công", true);
+    }
+
+    @Transactional
+    public ResponseData<CommentDTO> updateComment(JwtAuthenticationToken token, Long postId, Long commentId, CreateCommentRequest request) {
+        if (request.getContent() == null || request.getContent().trim().isEmpty()) {
+            throw new AppException(400, "Nội dung bình luận không được để trống", 400);
+        }
+
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        if (currentUser == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
+        }
+
+        CommentEntity comment = this.commentRepository.findById(commentId).orElseThrow(() ->
+            new AppException(404, "Bình luận không tồn tại", 404)
+        );
+
+        if (!comment.getUser().getId().equals(currentUser.getId())) {
+            throw new AppException(403, "Bạn chỉ có thể chỉnh sửa bình luận của chính mình!", 403);
+        }
+
+        comment.setContent(request.getContent().trim());
+        this.commentRepository.save(comment);
+
+        try {
+            this.messagingTemplate.convertAndSend("/topic/posts", "POST_COMMENT_UPDATED");
+        } catch (Exception ignored) {}
+
+        return new ResponseData<>(200, "Cập nhật bình luận thành công", mapToCommentDTO(comment));
+    }
 }

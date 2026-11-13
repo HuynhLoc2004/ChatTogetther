@@ -6,7 +6,8 @@ import {
   CheckCircle, ArrowRight, WifiOff, Heart, MessageCircle, Share2, 
   Search, Sparkles, Send, Copy, Compass, Radio, ChevronRight, CornerDownRight,
   Bell, Bookmark, Flame, Gem, Crown, Volume2, VolumeX, Music, Play, Pause,
-  Shuffle, Wand2, Image as ImageIcon, CheckCircle2, Zap, Dices
+  Shuffle, Wand2, Image as ImageIcon, CheckCircle2, Zap, Dices,
+  Edit3, Trash2, MoreVertical, Tag, Filter, Check
 } from 'lucide-react';
 import axiosClient, { BACKEND_URL } from '../api/axiosClient';
 import { saveRoomsOffline, getRoomsOffline } from '../utils/offlineDB';
@@ -121,6 +122,22 @@ const Home = () => {
   const [commentsMap, setCommentsMap] = useState({});
   const [commentInputs, setCommentInputs] = useState({});
   const [submittingComment, setSubmittingComment] = useState({});
+  const [editingCommentId, setEditingCommentId] = useState(null);
+  const [editingCommentText, setEditingCommentText] = useState('');
+  const [isSavingComment, setIsSavingComment] = useState(false);
+
+  // Thẻ chủ đề / Dấu ấn cộng đồng riêng (Sparks)
+  const [selectedTags, setSelectedTags] = useState([]);
+  const [customTagInput, setCustomTagInput] = useState('');
+  const [activeFilterTag, setActiveFilterTag] = useState(null);
+
+  // Menu quản trị bài viết (Chỉnh sửa / Xóa)
+  const [postMenuOpenId, setPostMenuOpenId] = useState(null);
+  const [editingPost, setEditingPost] = useState(null);
+  const [editPostContent, setEditPostContent] = useState('');
+  const [editPostImageUrl, setEditPostImageUrl] = useState('');
+  const [editPostTags, setEditPostTags] = useState([]);
+  const [isSavingEditPost, setIsSavingEditPost] = useState(false);
 
   // Bài viết đã lưu
   const [savedPostIds, setSavedPostIds] = useState(() => {
@@ -230,10 +247,11 @@ const Home = () => {
 
     try {
       setIsPosting(true);
+      const combinedVibe = selectedTags.length > 0 ? selectedTags.join(', ') : (selectedVibe?.label || null);
       const payload = {
         content,
         imageUrl: postImageUrl.trim() || null,
-        vibe: selectedVibe?.label || null,
+        vibe: combinedVibe,
       };
 
       const res = await axiosClient.post('/posts', payload);
@@ -241,6 +259,8 @@ const Home = () => {
         setPosts(prev => [res.data.data, ...prev]);
         setNewPostContent('');
         setSelectedVibe(null);
+        setSelectedTags([]);
+        setCustomTagInput('');
         setPostImageUrl('');
         setShowImageInput(false);
         toast.success("Đăng bài viết thành công!");
@@ -254,23 +274,143 @@ const Home = () => {
     }
   };
 
+  // Thêm thẻ chủ đề tự do (Dấu ấn cộng đồng riêng, không dùng #)
+  const handleAddCustomTag = (e) => {
+    if (e) e.preventDefault();
+    const tag = customTagInput.trim();
+    if (!tag) return;
+    
+    // Tự động gắn tiền tố biểu tượng riêng biệt (✦ cho chủ đề, ◈ cho hội nhóm)
+    let formattedTag = tag;
+    if (!formattedTag.startsWith('✦') && !formattedTag.startsWith('◈') && !formattedTag.startsWith('@')) {
+      formattedTag = `✦ ${formattedTag}`;
+    }
+    
+    if (!selectedTags.includes(formattedTag)) {
+      if (selectedTags.length >= 5) {
+        toast.error("Tối đa 5 thẻ chủ đề cho một bài viết!");
+        return;
+      }
+      setSelectedTags(prev => [...prev, formattedTag]);
+    }
+    setCustomTagInput('');
+  };
+
+  const handleRemoveTag = (tagToRemove) => {
+    setSelectedTags(prev => prev.filter(t => t !== tagToRemove));
+  };
+
+  const handleTogglePopularTag = (tagLabel) => {
+    if (selectedTags.includes(tagLabel)) {
+      setSelectedTags(prev => prev.filter(t => t !== tagLabel));
+    } else {
+      if (selectedTags.length >= 5) {
+        toast.error("Tối đa 5 thẻ chủ đề cho một bài viết!");
+        return;
+      }
+      setSelectedTags(prev => [...prev, tagLabel]);
+    }
+  };
+
+  // Xóa bài viết
+  const handleDeletePost = async (postId) => {
+    setPostMenuOpenId(null);
+    if (!window.confirm("Bạn có chắc chắn muốn xóa bài viết này không?")) return;
+
+    try {
+      await axiosClient.delete(`/posts/${postId}`);
+      setPosts(prev => prev.filter(p => p.id !== postId));
+      toast.success("Đã xóa bài viết thành công!");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Không thể xóa bài viết!");
+    }
+  };
+
+  // Mở modal sửa bài viết
+  const handleOpenEditPost = (post) => {
+    setPostMenuOpenId(null);
+    setEditingPost(post);
+    setEditPostContent(post.content || '');
+    setEditPostImageUrl(post.imageUrl || '');
+    const currentTags = post.vibe ? post.vibe.split(',').map(s => s.trim()).filter(Boolean) : [];
+    setEditPostTags(currentTags);
+  };
+
+  // Lưu chỉnh sửa bài viết
+  const handleSaveEditPost = async (e) => {
+    if (e) e.preventDefault();
+    if (!editingPost) return;
+    const content = editPostContent.trim();
+    if (!content) {
+      toast.error("Nội dung bài viết không được để trống!");
+      return;
+    }
+
+    try {
+      setIsSavingEditPost(true);
+      const res = await axiosClient.put(`/posts/${editingPost.id}`, {
+        content,
+        imageUrl: editPostImageUrl.trim() || null,
+        vibe: editPostTags.join(', ') || null,
+      });
+
+      if (res.data?.data) {
+        const updated = res.data.data;
+        setPosts(prev => prev.map(p => p.id === editingPost.id ? {
+          ...p,
+          content: updated.content,
+          imageUrl: updated.imageUrl,
+          vibe: updated.vibe,
+        } : p));
+        setEditingPost(null);
+        toast.success("Đã cập nhật bài viết!");
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Không thể cập nhật bài viết!");
+    } finally {
+      setIsSavingEditPost(false);
+    }
+  };
+
   // Trợ lý gợi ý ý tưởng
   const handleAIEnhancePost = () => {
     const templates = [
-      "Cuối tuần nhẹ nhàng, cùng bật chút Lo-Fi và tận hưởng không gian riêng... 🎧",
-      "Đôi khi sự im lặng cũng là một câu trả lời trọn vẹn nhất. Chúc mọi người buổi tối an yên.",
-      "Có ai đang thức đêm cùng chạy deadline không? Gửi chút năng lượng tích cực đến bạn nhé! ✨",
-      "Tìm cạ đàm thoại voice trao đổi về công nghệ và cuộc sống, ai rảnh thì ới mình nha ☕"
+      "Cuối tuần nhẹ nhàng, cùng bật chút giai điệu êm dịu và tận hưởng không gian riêng... 🎧",
+      "Đôi khi sự im lặng cũng là một câu trả lời trọn vẹn nhất. Chúc mọi người buổi tối an yên. ✨",
+      "Có ai đang thức đêm cùng chạy deadline không? Gửi chút năng lượng tích cực đến bạn nhé!",
+      "Tìm bạn đàm thoại voice trao đổi về sở thích và cuộc sống, bạn nào rảnh thì kết nối nhé ☕"
     ];
     const pick = templates[Math.floor(Math.random() * templates.length)];
     setNewPostContent(pick);
-    setSelectedVibe(VIBE_TAGS[0]);
+    if (!selectedTags.includes('✦ Thư giãn')) {
+      setSelectedTags(prev => [...prev, '✦ Thư giãn']);
+    }
     toast.success("Đã gợi ý nội dung!");
   };
 
-  // Thả cảm xúc
+  // Thao tác cảm xúc với Optimistic Update (phản hồi siêu mượt 60fps)
   const handleReactPost = async (postId, reactionType = 'HEART') => {
     setActiveReactionPicker(null);
+    const targetPost = posts.find(p => p.id === postId);
+    if (!targetPost) return;
+
+    const prevLiked = targetPost.isLikedByMe;
+    const prevCount = targetPost.likesCount || 0;
+    const prevReaction = targetPost.myReaction;
+
+    const isTogglingOff = prevLiked && prevReaction === reactionType;
+    const nextLiked = !isTogglingOff;
+    const nextReaction = isTogglingOff ? null : reactionType;
+    const nextCount = isTogglingOff ? Math.max(0, prevCount - 1) : (prevLiked ? prevCount : prevCount + 1);
+
+    // Cập nhật giao diện tức thì
+    setPosts(prev => prev.map(p => p.id === postId ? {
+      ...p,
+      isLikedByMe: nextLiked,
+      likesCount: nextCount,
+      myReaction: nextReaction
+    } : p));
+
     try {
       const res = await axiosClient.post(`/posts/${postId}/like`, null, {
         params: { type: reactionType }
@@ -285,7 +425,15 @@ const Home = () => {
         } : p));
       }
     } catch (err) {
-      toast.error("Không thể thao tác cảm xúc lúc này!");
+      // Rollback nếu server trả lỗi
+      setPosts(prev => prev.map(p => p.id === postId ? {
+        ...p,
+        isLikedByMe: prevLiked,
+        likesCount: prevCount,
+        myReaction: prevReaction
+      } : p));
+      const msg = err.response?.data?.message || "Không thể thao tác cảm xúc lúc này!";
+      toast.error(msg);
     }
   };
 
@@ -330,6 +478,64 @@ const Home = () => {
       toast.error(err.response?.data?.message || "Không thể gửi bình luận!");
     } finally {
       setSubmittingComment(prev => ({ ...prev, [postId]: false }));
+    }
+  };
+
+  // Xóa bình luận
+  const handleDeleteComment = async (postId, commentId) => {
+    if (!window.confirm("Bạn có chắc chắn muốn xóa bình luận này không?")) return;
+
+    try {
+      await axiosClient.delete(`/posts/${postId}/comments/${commentId}`);
+      setCommentsMap(prev => ({
+        ...prev,
+        [postId]: (prev[postId] || []).filter(c => c.id !== commentId)
+      }));
+      setPosts(prev => prev.map(p => p.id === postId ? {
+        ...p,
+        commentsCount: Math.max(0, (p.commentsCount || 1) - 1)
+      } : p));
+      toast.success("Đã xóa bình luận!");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Không thể xóa bình luận!");
+    }
+  };
+
+  // Bắt đầu chỉnh sửa bình luận
+  const handleStartEditComment = (cmt) => {
+    setEditingCommentId(cmt.id);
+    setEditingCommentText(cmt.content || '');
+  };
+
+  // Lưu chỉnh sửa bình luận
+  const handleSaveEditComment = async (postId, commentId) => {
+    const text = editingCommentText.trim();
+    if (!text) {
+      toast.error("Nội dung bình luận không được để trống!");
+      return;
+    }
+
+    try {
+      setIsSavingComment(true);
+      const res = await axiosClient.put(`/posts/${postId}/comments/${commentId}`, { content: text });
+      if (res.data?.data) {
+        const updated = res.data.data;
+        setCommentsMap(prev => ({
+          ...prev,
+          [postId]: (prev[postId] || []).map(c => c.id === commentId ? {
+            ...c,
+            content: updated.content,
+            formattedTime: updated.formattedTime || c.formattedTime
+          } : c)
+        }));
+        setEditingCommentId(null);
+        setEditingCommentText('');
+        toast.success("Đã cập nhật bình luận!");
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Không thể sửa bình luận!");
+    } finally {
+      setIsSavingComment(false);
     }
   };
 
@@ -556,10 +762,22 @@ const Home = () => {
   };
 
   const displayedPosts = posts.filter(p => {
-    if (activeTab === 'saved') return savedPostIds.includes(p.id);
+    if (activeFilterTag) {
+      const pVibe = (p.vibe || '').toLowerCase();
+      const pContent = (p.content || '').toLowerCase();
+      const target = activeFilterTag.replace(/^[✦◈@]\s*/, '').toLowerCase();
+      if (!pVibe.includes(target) && !pContent.includes(target)) return false;
+    }
+    if (activeTab === 'saved') return Array.isArray(savedPostIds) && savedPostIds.includes(p.id);
     if (activeTab === 'trending') return (p.likesCount || 0) > 0 || (p.commentsCount || 0) > 0;
     return true;
   });
+
+  // Gom các chủ đề cộng đồng sôi nổi từ các bài viết hiện tại
+  const communityTags = Array.from(new Set([
+    '✦ Thư giãn', '✦ Tích cực', '✦ Đêm muộn', '✦ Bạn mới', '✦ Tâm sự',
+    ...posts.flatMap(p => (p.vibe || '').split(',').map(s => s.trim()).filter(Boolean))
+  ])).slice(0, 10);
 
   return (
     <div className="social-app-wrapper">
@@ -816,18 +1034,61 @@ const Home = () => {
                   </div>
                 </div>
 
-                {/* Vibe Tags */}
-                <div className="vibe-tags-row">
-                  {VIBE_TAGS.map(v => (
-                    <button
-                      key={v.id}
-                      type="button"
-                      onClick={() => setSelectedVibe(selectedVibe?.id === v.id ? null : v)}
-                      className={`vibe-tag-pill ${selectedVibe?.id === v.id ? 'active' : ''}`}
+                {/* Thẻ chủ đề / Dấu ấn cộng đồng riêng (Sparks) */}
+                <div className="community-sparks-section">
+                  {/* Danh sách thẻ đã chọn */}
+                  {selectedTags.length > 0 && (
+                    <div className="selected-sparks-wrap">
+                      {selectedTags.map(tag => (
+                        <span key={tag} className="active-spark-chip">
+                          {tag}
+                          <button type="button" onClick={() => handleRemoveTag(tag)} className="btn-remove-spark">
+                            <X size={12} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Ô nhập chủ đề / hội nhóm tự tạo của cộng đồng */}
+                  <div className="custom-spark-input-row">
+                    <Tag size={13} className="spark-input-icon" />
+                    <input 
+                      type="text"
+                      placeholder="Tự tạo chủ đề hoặc hội nhóm (VD: Dân IT, Hội Yêu Mèo, Đêm Sài Gòn)..."
+                      value={customTagInput}
+                      onChange={(e) => setCustomTagInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddCustomTag(e);
+                        }
+                      }}
+                    />
+                    <button 
+                      type="button" 
+                      onClick={handleAddCustomTag}
+                      disabled={!customTagInput.trim()}
+                      className="btn-add-spark-action"
                     >
-                      {v.label}
+                      <Plus size={13} />
+                      <span>Gắn thẻ</span>
                     </button>
-                  ))}
+                  </div>
+
+                  {/* Các chủ đề phổ biến gợi ý nhanh */}
+                  <div className="vibe-tags-row">
+                    {VIBE_TAGS.map(v => (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onClick={() => handleTogglePopularTag(v.label)}
+                        className={`vibe-tag-pill ${selectedTags.includes(v.label) ? 'active' : ''}`}
+                      >
+                        {v.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Ô đính kèm ảnh */}
@@ -891,6 +1152,19 @@ const Home = () => {
 
               {/* DANH SÁCH BÀI VIẾT */}
               <div className="feed-posts-list">
+                {/* Banner khi đang lọc theo chủ đề cộng đồng */}
+                {activeFilterTag && (
+                  <div className="active-tag-filter-banner">
+                    <div className="filter-badge-left">
+                      <Filter size={14} color="#818cf8" />
+                      <span>Đang xem chủ đề: <strong>{activeFilterTag}</strong></span>
+                    </div>
+                    <button onClick={() => setActiveFilterTag(null)} className="btn-clear-tag-filter">
+                      <X size={13} /> Xem tất cả
+                    </button>
+                  </div>
+                )}
+
                 {loadingPosts ? (
                   <div className="feed-status-box">
                     <div className="feed-spinner"></div>
@@ -900,13 +1174,21 @@ const Home = () => {
                   <div className="feed-status-box">
                     <MessageCircle size={38} className="empty-icon-muted" />
                     <h4>Chưa có bài viết nào</h4>
-                    <p>Hãy là người đầu tiên chia sẻ cảm nghĩ của bạn lên bảng tin!</p>
+                    <p>{activeFilterTag ? `Chưa có bài viết nào thuộc chủ đề "${activeFilterTag}". Hãy là người đầu tiên tạo bài viết!` : "Hãy là người đầu tiên chia sẻ cảm nghĩ của bạn lên bảng tin!"}</p>
+                    {activeFilterTag && (
+                      <button onClick={() => setActiveFilterTag(null)} className="btn-return-feed">
+                        Quay lại tất cả bài viết
+                      </button>
+                    )}
                   </div>
                 ) : (
                   displayedPosts.map((post) => {
-                    const isSaved = savedPostIds.includes(post.id);
-                    const isAuthorAdmin = post.authorVipTier === 'FOUNDER' || post.authorRoles?.includes('ROLE_AMDIN') || post.authorRoles?.includes('ROLE_ADMIN');
+                    const isSaved = Array.isArray(savedPostIds) && savedPostIds.includes(post.id);
+                    const isAuthorAdmin = post.authorVipTier === 'FOUNDER' || 
+                      (Array.isArray(post.authorRoles) && (post.authorRoles.includes('ROLE_AMDIN') || post.authorRoles.includes('ROLE_ADMIN')));
+                    const isAuthorMe = currentUserId && post.authorId?.toString() === currentUserId.toString();
                     const currentReaction = REACTION_EMOJIS.find(r => r.type === post.myReaction);
+                    const postSparks = post.vibe ? post.vibe.split(',').map(s => s.trim()).filter(Boolean) : [];
 
                     return (
                       <article key={post.id} className="post-item-card" id={`post-${post.id}`}>
@@ -925,7 +1207,7 @@ const Home = () => {
                                 className="author-display-name"
                                 onClick={() => setSelectedProfileUserId(post.authorId)}
                               >
-                                {post.authorNickname}
+                                {post.authorNickname || post.authorAccount || 'Người dùng'}
                               </span>
 
                               {/* Huy hiệu đặc quyền tinh tế */}
@@ -949,18 +1231,67 @@ const Home = () => {
                             <div className="post-meta-sub">
                               <span>{post.formattedTime}</span>
                               {post.authorLocation && <span>• 📍 {post.authorLocation}</span>}
-                              {post.vibe && <span className="vibe-tag-badge">• {post.vibe}</span>}
                             </div>
                           </div>
 
-                          <button 
-                            onClick={() => handleToggleSavePost(post.id)}
-                            className={`btn-save-post ${isSaved ? 'saved' : ''}`}
-                            title={isSaved ? "Bỏ lưu" : "Lưu bài viết"}
-                          >
-                            <Bookmark size={16} fill={isSaved ? "#818cf8" : "none"} />
-                          </button>
+                          <div className="post-header-actions-group">
+                            <button 
+                              onClick={() => handleToggleSavePost(post.id)}
+                              className={`btn-save-post ${isSaved ? 'saved' : ''}`}
+                              title={isSaved ? "Bỏ lưu" : "Lưu bài viết"}
+                            >
+                              <Bookmark size={16} fill={isSaved ? "#818cf8" : "none"} />
+                            </button>
+
+                            {/* Menu tùy chọn sửa / xóa cho chính chủ bài viết */}
+                            {isAuthorMe && (
+                              <div className="post-owner-menu-anchor">
+                                <button 
+                                  type="button"
+                                  onClick={() => setPostMenuOpenId(postMenuOpenId === post.id ? null : post.id)} 
+                                  className="btn-post-menu"
+                                  title="Tùy chọn bài viết"
+                                >
+                                  <MoreVertical size={16} />
+                                </button>
+                                {postMenuOpenId === post.id && (
+                                  <div className="post-owner-dropdown">
+                                    <button 
+                                      type="button"
+                                      onClick={() => handleOpenEditPost(post)} 
+                                      className="post-menu-item"
+                                    >
+                                      <Edit3 size={13} /> Chỉnh sửa bài viết
+                                    </button>
+                                    <button 
+                                      type="button"
+                                      onClick={() => handleDeletePost(post.id)} 
+                                      className="post-menu-item danger"
+                                    >
+                                      <Trash2 size={13} /> Xóa bài viết
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
+
+                        {/* Thẻ không gian / chủ đề bài viết */}
+                        {postSparks.length > 0 && (
+                          <div className="post-sparks-row">
+                            {postSparks.map(tag => (
+                              <span 
+                                key={tag} 
+                                className={`post-spark-badge ${activeFilterTag === tag ? 'active' : ''}`}
+                                onClick={() => setActiveFilterTag(activeFilterTag === tag ? null : tag)}
+                                title={`Lọc bài viết theo chủ đề: ${tag}`}
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
 
                         {/* Nội dung bài viết */}
                         <div className="post-body-content">
@@ -1034,18 +1365,84 @@ const Home = () => {
                               {commentsMap[post.id]?.length === 0 ? (
                                 <p className="empty-cmt-notice">Chưa có bình luận nào.</p>
                               ) : (
-                                commentsMap[post.id]?.map((cmt) => (
-                                  <div key={cmt.id} className="cmt-row">
-                                    <UserAvatar avatar={cmt.authorAvatar} size={26} />
-                                    <div className="cmt-bubble-content">
-                                      <div className="cmt-name-row">
-                                        <span className="cmt-user-name">{cmt.authorNickname}</span>
-                                        <span className="cmt-time-label">{cmt.formattedTime}</span>
+                                commentsMap[post.id]?.map((cmt) => {
+                                  const isCmtMe = currentUserId && cmt.authorId?.toString() === currentUserId.toString();
+                                  const canDeleteCmt = isCmtMe || (currentUserId && post.authorId?.toString() === currentUserId.toString());
+                                  const isEditingThisCmt = editingCommentId === cmt.id;
+
+                                  return (
+                                    <div key={cmt.id} className="cmt-row">
+                                      <UserAvatar avatar={cmt.authorAvatar} size={26} />
+                                      <div className="cmt-bubble-content">
+                                        <div className="cmt-name-row">
+                                          <span className="cmt-user-name">{cmt.authorNickname || cmt.authorAccount || 'Thành viên'}</span>
+                                          <span className="cmt-time-label">{cmt.formattedTime}</span>
+
+                                          {/* Nút Sửa / Xóa bình luận */}
+                                          <div className="cmt-action-btns">
+                                            {isCmtMe && !isEditingThisCmt && (
+                                              <button 
+                                                type="button"
+                                                onClick={() => handleStartEditComment(cmt)}
+                                                className="btn-cmt-act"
+                                                title="Sửa bình luận"
+                                              >
+                                                <Edit3 size={11} />
+                                              </button>
+                                            )}
+                                            {canDeleteCmt && (
+                                              <button 
+                                                type="button"
+                                                onClick={() => handleDeleteComment(post.id, cmt.id)}
+                                                className="btn-cmt-act danger"
+                                                title="Xóa bình luận"
+                                              >
+                                                <Trash2 size={11} />
+                                              </button>
+                                            )}
+                                          </div>
+                                        </div>
+
+                                        {isEditingThisCmt ? (
+                                          <div className="cmt-inline-edit-box">
+                                            <input 
+                                              type="text" 
+                                              value={editingCommentText} 
+                                              onChange={(e) => setEditingCommentText(e.target.value)}
+                                              onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                  e.preventDefault();
+                                                  handleSaveEditComment(post.id, cmt.id);
+                                                }
+                                              }}
+                                              className="cmt-inline-edit-input"
+                                              autoFocus
+                                            />
+                                            <div className="cmt-inline-edit-actions">
+                                              <button 
+                                                type="button" 
+                                                onClick={() => handleSaveEditComment(post.id, cmt.id)}
+                                                disabled={isSavingComment || !editingCommentText.trim()}
+                                                className="btn-save-inline-cmt"
+                                              >
+                                                Lưu
+                                              </button>
+                                              <button 
+                                                type="button" 
+                                                onClick={() => setEditingCommentId(null)}
+                                                className="btn-cancel-inline-cmt"
+                                              >
+                                                Hủy
+                                              </button>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <p className="cmt-body-text">{cmt.content}</p>
+                                        )}
                                       </div>
-                                      <p className="cmt-body-text">{cmt.content}</p>
                                     </div>
-                                  </div>
-                                ))
+                                  );
+                                })
                               )}
                             </div>
 
@@ -1079,8 +1476,8 @@ const Home = () => {
             <div className="rooms-section-wrapper">
               <div className="rooms-header-banner">
                 <div>
-                  <h3>Phòng Trò Chuyện & Gọi Thoại WebRTC</h3>
-                  <p>Tham gia trao đổi văn bản và kết nối âm thanh thời gian thực với độ trễ thấp.</p>
+                  <h3>Không Gian Trò Chuyện & Gọi Thoại</h3>
+                  <p>Tham gia nhắn tin và đàm thoại âm thanh trực tiếp cùng bạn bè.</p>
                 </div>
                 <button onClick={() => setIsCreateModalOpen(true)} className="btn-add-room-action">
                   <Plus size={15} /> Tạo phòng mới
@@ -1147,6 +1544,31 @@ const Home = () => {
                 <X size={13} />
               </button>
             )}
+          </div>
+
+          {/* Tiện ích Chủ Đề & Hội Nhóm Cộng Đồng Riêng */}
+          <div className="widget-box-card">
+            <div className="widget-card-title">
+              <Tag size={16} color="#818cf8" />
+              <span>Chủ Đề & Không Gian Sôi Nổi</span>
+            </div>
+            <p className="widget-card-desc">Khám phá các chủ đề hoặc hội nhóm do cộng đồng cùng tạo:</p>
+            <div className="widget-sparks-cloud">
+              {communityTags.map(tag => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => {
+                    setActiveFilterTag(activeFilterTag === tag ? null : tag);
+                    setActiveTab('feed');
+                  }}
+                  className={`widget-spark-pill ${activeFilterTag === tag ? 'active' : ''}`}
+                  title={`Xem bài viết: ${tag}`}
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Tiện ích Ghép Đôi Tối Giản */}
@@ -1350,6 +1772,72 @@ const Home = () => {
             setSelectedProfileUserId(uid);
           }}
         />
+      )}
+
+      {/* MODAL CHỈNH SỬA BÀI VIẾT */}
+      {editingPost && (
+        <div className="modal-veil" onClick={() => setEditingPost(null)}>
+          <div className="modal-dialog-box" onClick={(e) => e.stopPropagation()}>
+            <div className="dialog-header">
+              <div className="dialog-title-flex">
+                <Edit3 size={18} color="#818cf8" />
+                <h4>Chỉnh sửa bài viết</h4>
+              </div>
+              <button onClick={() => setEditingPost(null)} className="btn-close-dialog"><X size={16} /></button>
+            </div>
+
+            <form onSubmit={handleSaveEditPost} className="dialog-form">
+              <div className="dialog-field">
+                <label>Nội dung bài viết</label>
+                <textarea 
+                  rows="4" 
+                  value={editPostContent} 
+                  onChange={(e) => setEditPostContent(e.target.value)}
+                  placeholder="Nhập nội dung mới..."
+                  required
+                />
+              </div>
+
+              <div className="dialog-field">
+                <label>Đường dẫn hình ảnh (tùy chọn)</label>
+                <input 
+                  type="url" 
+                  placeholder="https://..." 
+                  value={editPostImageUrl} 
+                  onChange={(e) => setEditPostImageUrl(e.target.value)}
+                />
+              </div>
+
+              {/* Thẻ chủ đề bài viết khi sửa */}
+              {editPostTags.length > 0 && (
+                <div className="dialog-field">
+                  <label>Thẻ chủ đề / Hội nhóm</label>
+                  <div className="edit-tags-cloud">
+                    {editPostTags.map(tag => (
+                      <span key={tag} className="active-spark-chip">
+                        {tag}
+                        <button 
+                          type="button" 
+                          onClick={() => setEditPostTags(editPostTags.filter(t => t !== tag))} 
+                          className="btn-remove-spark"
+                        >
+                          <X size={11} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="dialog-actions-row">
+                <button type="button" onClick={() => setEditingPost(null)} className="btn-dialog-back">Hủy</button>
+                <button type="submit" disabled={isSavingEditPost || !editPostContent.trim()} className="btn-dialog-primary">
+                  {isSavingEditPost ? 'Đang lưu...' : 'Lưu thay đổi'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* MODAL TẠO PHÒNG */}
@@ -1828,6 +2316,285 @@ const Home = () => {
           line-height: 1.5;
         }
         .creator-field-wrap textarea::placeholder { color: #64748b; }
+
+        /* Sparks & Community Tags */
+        .community-sparks-section {
+          margin: 8px 0 10px 52px;
+        }
+        .selected-sparks-wrap {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          margin-bottom: 8px;
+        }
+        .active-spark-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          background: rgba(99, 102, 241, 0.18);
+          border: 1px solid rgba(99, 102, 241, 0.4);
+          color: #a5b4fc;
+          font-size: 11px;
+          font-weight: 600;
+          padding: 3px 8px;
+          border-radius: 12px;
+        }
+        .btn-remove-spark {
+          background: transparent;
+          border: none;
+          color: #cbd5e1;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          padding: 0;
+        }
+        .btn-remove-spark:hover { color: #f87171; }
+        .custom-spark-input-row {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          background: rgba(0, 0, 0, 0.25);
+          border: 1px solid var(--card-border);
+          border-radius: 10px;
+          padding: 4px 8px;
+          margin-bottom: 8px;
+        }
+        .spark-input-icon { color: #818cf8; flex-shrink: 0; }
+        .custom-spark-input-row input {
+          flex: 1;
+          background: transparent;
+          border: none;
+          color: white;
+          font-size: 11.5px;
+          outline: none;
+        }
+        .btn-add-spark-action {
+          background: rgba(99, 102, 241, 0.2);
+          border: 1px solid rgba(99, 102, 241, 0.35);
+          color: #818cf8;
+          font-size: 11px;
+          font-weight: 600;
+          padding: 3px 8px;
+          border-radius: 6px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 3px;
+        }
+        .btn-add-spark-action:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Filter Banner */
+        .active-tag-filter-banner {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          background: rgba(99, 102, 241, 0.1);
+          border: 1px solid rgba(99, 102, 241, 0.3);
+          border-radius: 10px;
+          padding: 8px 14px;
+          margin: 12px 16px;
+        }
+        .filter-badge-left {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 12.5px;
+          color: #cbd5e1;
+        }
+        .filter-badge-left strong { color: #818cf8; }
+        .btn-clear-tag-filter {
+          background: transparent;
+          border: none;
+          color: #94a3b8;
+          font-size: 11.5px;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          cursor: pointer;
+        }
+        .btn-clear-tag-filter:hover { color: white; }
+        .btn-return-feed {
+          margin-top: 10px;
+          background: rgba(99, 102, 241, 0.2);
+          border: 1px solid rgba(99, 102, 241, 0.4);
+          color: #818cf8;
+          padding: 6px 14px;
+          border-radius: 8px;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+        }
+
+        /* Post Sparks & Actions */
+        .post-sparks-row {
+          margin: 4px 0 6px 48px;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 5px;
+        }
+        .post-spark-badge {
+          background: rgba(99, 102, 241, 0.1);
+          border: 1px solid rgba(99, 102, 241, 0.25);
+          color: #818cf8;
+          font-size: 10.5px;
+          font-weight: 600;
+          padding: 2px 7px;
+          border-radius: 10px;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+        .post-spark-badge:hover {
+          background: rgba(99, 102, 241, 0.25);
+          color: white;
+        }
+        .post-spark-badge.active {
+          background: #6366f1;
+          color: white;
+        }
+        .post-header-actions-group {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+        .post-owner-menu-anchor {
+          position: relative;
+        }
+        .btn-post-menu {
+          background: transparent;
+          border: none;
+          color: #64748b;
+          cursor: pointer;
+          padding: 4px;
+          border-radius: 4px;
+        }
+        .btn-post-menu:hover { color: #f8fafc; background: rgba(255, 255, 255, 0.05); }
+        .post-owner-dropdown {
+          position: absolute;
+          top: 26px;
+          right: 0;
+          background: #1e293b;
+          border: 1px solid var(--card-border);
+          border-radius: 8px;
+          box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+          padding: 4px;
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          z-index: 50;
+          min-width: 150px;
+        }
+        .post-menu-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          background: transparent;
+          border: none;
+          color: #cbd5e1;
+          font-size: 12px;
+          padding: 6px 10px;
+          border-radius: 6px;
+          cursor: pointer;
+          text-align: left;
+        }
+        .post-menu-item:hover { background: rgba(255, 255, 255, 0.08); color: white; }
+        .post-menu-item.danger { color: #f87171; }
+        .post-menu-item.danger:hover { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+
+        /* Comment Action Buttons & Inline Edit */
+        .cmt-action-btns {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          margin-left: auto;
+        }
+        .btn-cmt-act {
+          background: transparent;
+          border: none;
+          color: #64748b;
+          cursor: pointer;
+          padding: 2px 4px;
+          border-radius: 4px;
+          display: flex;
+          align-items: center;
+        }
+        .btn-cmt-act:hover { color: #cbd5e1; }
+        .btn-cmt-act.danger:hover { color: #f87171; }
+
+        .cmt-inline-edit-box {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          margin-top: 4px;
+        }
+        .cmt-inline-edit-input {
+          width: 100%;
+          background: rgba(0, 0, 0, 0.3);
+          border: 1px solid #4f46e5;
+          border-radius: 6px;
+          padding: 5px 8px;
+          color: white;
+          font-size: 12px;
+          outline: none;
+        }
+        .cmt-inline-edit-actions {
+          display: flex;
+          gap: 6px;
+          justify-content: flex-end;
+        }
+        .btn-save-inline-cmt {
+          background: #6366f1;
+          color: white;
+          border: none;
+          padding: 3px 10px;
+          border-radius: 6px;
+          font-size: 11px;
+          font-weight: 600;
+          cursor: pointer;
+        }
+        .btn-cancel-inline-cmt {
+          background: transparent;
+          color: #94a3b8;
+          border: 1px solid var(--card-border);
+          padding: 3px 8px;
+          border-radius: 6px;
+          font-size: 11px;
+          cursor: pointer;
+        }
+
+        /* Widget Sparks Cloud */
+        .widget-sparks-cloud {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          margin-top: 6px;
+        }
+        .widget-spark-pill {
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid var(--card-border);
+          color: #cbd5e1;
+          font-size: 11px;
+          font-weight: 500;
+          padding: 4px 9px;
+          border-radius: 12px;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+        .widget-spark-pill:hover {
+          background: rgba(99, 102, 241, 0.15);
+          border-color: rgba(99, 102, 241, 0.35);
+          color: #818cf8;
+        }
+        .widget-spark-pill.active {
+          background: #6366f1;
+          border-color: #6366f1;
+          color: white;
+        }
+        .edit-tags-cloud {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          margin-top: 4px;
+        }
 
         .vibe-tags-row {
           display: flex;
@@ -2437,7 +3204,286 @@ const Home = () => {
           .mobile-top-bar { display: flex; }
           .mobile-bottom-nav { display: flex; }
           .main-stream { max-width: 100%; padding-bottom: 60px; }
-          .vibe-tags-row { margin-left: 0; }
+          /* Sparks & Community Tags */
+        .community-sparks-section {
+          margin: 8px 0 10px 52px;
+        }
+        .selected-sparks-wrap {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          margin-bottom: 8px;
+        }
+        .active-spark-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          background: rgba(99, 102, 241, 0.18);
+          border: 1px solid rgba(99, 102, 241, 0.4);
+          color: #a5b4fc;
+          font-size: 11px;
+          font-weight: 600;
+          padding: 3px 8px;
+          border-radius: 12px;
+        }
+        .btn-remove-spark {
+          background: transparent;
+          border: none;
+          color: #cbd5e1;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          padding: 0;
+        }
+        .btn-remove-spark:hover { color: #f87171; }
+        .custom-spark-input-row {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          background: rgba(0, 0, 0, 0.25);
+          border: 1px solid var(--card-border);
+          border-radius: 10px;
+          padding: 4px 8px;
+          margin-bottom: 8px;
+        }
+        .spark-input-icon { color: #818cf8; flex-shrink: 0; }
+        .custom-spark-input-row input {
+          flex: 1;
+          background: transparent;
+          border: none;
+          color: white;
+          font-size: 11.5px;
+          outline: none;
+        }
+        .btn-add-spark-action {
+          background: rgba(99, 102, 241, 0.2);
+          border: 1px solid rgba(99, 102, 241, 0.35);
+          color: #818cf8;
+          font-size: 11px;
+          font-weight: 600;
+          padding: 3px 8px;
+          border-radius: 6px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 3px;
+        }
+        .btn-add-spark-action:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Filter Banner */
+        .active-tag-filter-banner {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          background: rgba(99, 102, 241, 0.1);
+          border: 1px solid rgba(99, 102, 241, 0.3);
+          border-radius: 10px;
+          padding: 8px 14px;
+          margin: 12px 16px;
+        }
+        .filter-badge-left {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 12.5px;
+          color: #cbd5e1;
+        }
+        .filter-badge-left strong { color: #818cf8; }
+        .btn-clear-tag-filter {
+          background: transparent;
+          border: none;
+          color: #94a3b8;
+          font-size: 11.5px;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          cursor: pointer;
+        }
+        .btn-clear-tag-filter:hover { color: white; }
+        .btn-return-feed {
+          margin-top: 10px;
+          background: rgba(99, 102, 241, 0.2);
+          border: 1px solid rgba(99, 102, 241, 0.4);
+          color: #818cf8;
+          padding: 6px 14px;
+          border-radius: 8px;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+        }
+
+        /* Post Sparks & Actions */
+        .post-sparks-row {
+          margin: 4px 0 6px 48px;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 5px;
+        }
+        .post-spark-badge {
+          background: rgba(99, 102, 241, 0.1);
+          border: 1px solid rgba(99, 102, 241, 0.25);
+          color: #818cf8;
+          font-size: 10.5px;
+          font-weight: 600;
+          padding: 2px 7px;
+          border-radius: 10px;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+        .post-spark-badge:hover {
+          background: rgba(99, 102, 241, 0.25);
+          color: white;
+        }
+        .post-spark-badge.active {
+          background: #6366f1;
+          color: white;
+        }
+        .post-header-actions-group {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+        .post-owner-menu-anchor {
+          position: relative;
+        }
+        .btn-post-menu {
+          background: transparent;
+          border: none;
+          color: #64748b;
+          cursor: pointer;
+          padding: 4px;
+          border-radius: 4px;
+        }
+        .btn-post-menu:hover { color: #f8fafc; background: rgba(255, 255, 255, 0.05); }
+        .post-owner-dropdown {
+          position: absolute;
+          top: 26px;
+          right: 0;
+          background: #1e293b;
+          border: 1px solid var(--card-border);
+          border-radius: 8px;
+          box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+          padding: 4px;
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          z-index: 50;
+          min-width: 150px;
+        }
+        .post-menu-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          background: transparent;
+          border: none;
+          color: #cbd5e1;
+          font-size: 12px;
+          padding: 6px 10px;
+          border-radius: 6px;
+          cursor: pointer;
+          text-align: left;
+        }
+        .post-menu-item:hover { background: rgba(255, 255, 255, 0.08); color: white; }
+        .post-menu-item.danger { color: #f87171; }
+        .post-menu-item.danger:hover { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+
+        /* Comment Action Buttons & Inline Edit */
+        .cmt-action-btns {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          margin-left: auto;
+        }
+        .btn-cmt-act {
+          background: transparent;
+          border: none;
+          color: #64748b;
+          cursor: pointer;
+          padding: 2px 4px;
+          border-radius: 4px;
+          display: flex;
+          align-items: center;
+        }
+        .btn-cmt-act:hover { color: #cbd5e1; }
+        .btn-cmt-act.danger:hover { color: #f87171; }
+
+        .cmt-inline-edit-box {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          margin-top: 4px;
+        }
+        .cmt-inline-edit-input {
+          width: 100%;
+          background: rgba(0, 0, 0, 0.3);
+          border: 1px solid #4f46e5;
+          border-radius: 6px;
+          padding: 5px 8px;
+          color: white;
+          font-size: 12px;
+          outline: none;
+        }
+        .cmt-inline-edit-actions {
+          display: flex;
+          gap: 6px;
+          justify-content: flex-end;
+        }
+        .btn-save-inline-cmt {
+          background: #6366f1;
+          color: white;
+          border: none;
+          padding: 3px 10px;
+          border-radius: 6px;
+          font-size: 11px;
+          font-weight: 600;
+          cursor: pointer;
+        }
+        .btn-cancel-inline-cmt {
+          background: transparent;
+          color: #94a3b8;
+          border: 1px solid var(--card-border);
+          padding: 3px 8px;
+          border-radius: 6px;
+          font-size: 11px;
+          cursor: pointer;
+        }
+
+        /* Widget Sparks Cloud */
+        .widget-sparks-cloud {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          margin-top: 6px;
+        }
+        .widget-spark-pill {
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid var(--card-border);
+          color: #cbd5e1;
+          font-size: 11px;
+          font-weight: 500;
+          padding: 4px 9px;
+          border-radius: 12px;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+        .widget-spark-pill:hover {
+          background: rgba(99, 102, 241, 0.15);
+          border-color: rgba(99, 102, 241, 0.35);
+          color: #818cf8;
+        }
+        .widget-spark-pill.active {
+          background: #6366f1;
+          border-color: #6366f1;
+          color: white;
+        }
+        .edit-tags-cloud {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          margin-top: 4px;
+        }
+
+        .vibe-tags-row { margin-left: 0; }
           .image-input-row { margin-left: 0; }
           .post-img-preview { margin-left: 0; }
           .creator-bottom-row { padding-left: 0; }
