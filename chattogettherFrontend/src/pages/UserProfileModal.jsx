@@ -2,10 +2,18 @@ import { useState, useEffect } from 'react';
 import { 
   X, Phone, UserPlus, UserCheck, Clock, MapPin, 
   Calendar, Edit3, Save, Shield, Check, Flame, Crown, 
-  Sparkles, Gem, Award, CheckCircle2, Zap, User
+  Sparkles, Gem, Award, CheckCircle2, Zap, User, Camera, RefreshCw
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
+
+const PRESET_AVATARS = [
+  'https://api.dicebear.com/7.x/bottts/svg?seed=Klyvix-Alpha',
+  'https://api.dicebear.com/7.x/bottts/svg?seed=VibeWave',
+  'https://api.dicebear.com/7.x/bottts/svg?seed=NeonCyber',
+  'https://api.dicebear.com/7.x/bottts/svg?seed=AuraSpace',
+  'https://api.dicebear.com/7.x/bottts/svg?seed=PulseCraft'
+];
 
 const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }) => {
   const [profile, setProfile] = useState(null);
@@ -16,9 +24,22 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
     nickname: '',
     age: '',
     location: '',
-    bio: ''
+    bio: '',
+    avatar: ''
   });
   const [submitting, setSubmitting] = useState(false);
+
+  // Toggle hiển thị huy hiệu VIP cạnh tên
+  const [showBadge, setShowBadge] = useState(() => {
+    return localStorage.getItem('show_vip_badge') !== 'false';
+  });
+
+  const toggleBadgeDisplay = () => {
+    const next = !showBadge;
+    setShowBadge(next);
+    localStorage.setItem('show_vip_badge', next ? 'true' : 'false');
+    toast.success(next ? "Đã bật hiển thị huy hiệu cạnh tên!" : "Đã ẩn huy hiệu cạnh tên!", { icon: '✨' });
+  };
 
   const effectiveUserId = userId || currentUserId || localStorage.getItem('user_id');
   const isMe = currentUserId?.toString() === effectiveUserId?.toString() || (!userId && currentUserId);
@@ -37,24 +58,31 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
             nickname: data.nickname || '',
             age: data.age || '',
             location: data.location || '',
-            bio: data.bio || ''
+            bio: data.bio || '',
+            avatar: data.avatar || ''
           });
         }
       } catch (err) {
         console.error("Lỗi lấy thông tin cá nhân:", err);
         // Fallback local info if backend network fails
         if (isMounted) {
+          const fallbackAvatar = localStorage.getItem('user_avatar') || `https://api.dicebear.com/7.x/bottts/svg?seed=${localStorage.getItem('nickname') || 'Klyvix'}`;
           setProfile({
             id: effectiveUserId,
-            nickname: localStorage.getItem('nickname') || 'Người Dùng',
+            nickname: localStorage.getItem('nickname') || 'Thành Viên',
             account: localStorage.getItem('account') || 'user',
-            bio: 'Thành viên năng động của Syncora',
+            bio: 'Thành viên kết nối của Klyvix',
+            avatar: fallbackAvatar,
             vipTier: 'VIP_DIAMOND',
-            customTitle: '💎 VIP Kim Cương',
+            customTitle: 'Huy Hiệu Bạc Thành Viên',
             level: 15,
             streakDays: 7,
             isVerified: true
           });
+          setEditData(prev => ({
+            ...prev,
+            avatar: fallbackAvatar
+          }));
         }
       } finally {
         if (isMounted) setLoading(false);
@@ -110,6 +138,13 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
     }
   };
 
+  const handleGenerateRandomAvatar = () => {
+    const seed = 'klyvix-' + Math.random().toString(36).substring(2, 8);
+    const newAvatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${seed}`;
+    setEditData(prev => ({ ...prev, avatar: newAvatar }));
+    toast.success("Đã tạo mẫu avatar mới!", { icon: '🎨' });
+  };
+
   const handleSaveProfile = async (e) => {
     e.preventDefault();
     try {
@@ -118,12 +153,16 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
         nickname: editData.nickname.trim(),
         age: editData.age ? parseInt(editData.age, 10) : null,
         location: editData.location.trim(),
-        bio: editData.bio.trim()
+        bio: editData.bio.trim(),
+        avatar: editData.avatar?.trim() || null
       });
       if (res.data?.data) {
         setProfile(res.data.data);
         if (editData.nickname) {
           localStorage.setItem('nickname', editData.nickname.trim());
+        }
+        if (editData.avatar) {
+          localStorage.setItem('user_avatar', editData.avatar.trim());
         }
         toast.success("Cập nhật thông tin cá nhân thành công!");
         setIsEditing(false);
@@ -137,6 +176,9 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
 
   const isFounder = profile?.vipTier === 'FOUNDER' || profile?.roles?.includes('ROLE_AMDIN') || profile?.roles?.includes('ROLE_ADMIN');
 
+  // Avatar hiển thị: Ưu tiên avatar thật, nếu chưa có thì dùng DiceBear ẩn danh thay vì icon rỗng
+  const displayAvatar = profile?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${profile?.nickname || 'klyvix-user'}`;
+
   return (
     <div className="profile-backdrop" onClick={onClose}>
       <div className="profile-card" onClick={(e) => e.stopPropagation()}>
@@ -145,20 +187,33 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
           <X size={18} />
         </button>
 
-        {/* Banner Header Gradient */}
-        <div className={`profile-header-gradient ${isFounder ? 'founder-gradient' : ''}`}>
+        {/* Header tối giản nền Dark Zinc với họa tiết lưới mờ sang trọng */}
+        <div className="profile-header-minimal">
           {isFounder && (
-            <div className="founder-glow-tag">
-              <Crown size={13} className="crown-shimmer" /> Quản Trị Tối Cao
+            <div className="founder-tag-minimal">
+              <Shield size={12} /> Quản Trị Hệ Thống
             </div>
           )}
-          <div className={`profile-avatar-circle ${isFounder ? 'founder-avatar-frame' : 'vip-avatar-frame'}`}>
-            {profile?.avatar ? (
-              <img src={profile.avatar} alt="Avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
-            ) : (
-              <User size={38} color="#94a3b8" />
+          
+          <div className="profile-avatar-frame-wrap">
+            <div className="profile-avatar-circle">
+              <img 
+                src={isEditing ? (editData.avatar || displayAvatar) : displayAvatar} 
+                alt="Avatar" 
+                style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} 
+              />
+              <span className="online-badge-dot"></span>
+            </div>
+
+            {isMe && !isEditing && (
+              <button 
+                className="btn-quick-avatar-trigger"
+                onClick={() => setIsEditing(true)}
+                title="Thay đổi ảnh đại diện"
+              >
+                <Camera size={13} />
+              </button>
             )}
-            <span className="online-badge-dot"></span>
           </div>
         </div>
 
@@ -181,54 +236,48 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
                 className={`subtab-btn subtab-perks ${activeTab === 'perks' ? 'active' : ''}`}
                 onClick={() => { setActiveTab('perks'); setIsEditing(false); }}
               >
-                <Crown size={14} color="#818cf8" /> Huy hiệu thành viên
+                <Award size={14} /> Huy hiệu thành viên
               </button>
             </div>
 
             {activeTab === 'perks' ? (
-              /* TAB ĐẶC QUYỀN VIP & DANH HIỆU */
+              /* TAB HUY HIỆU THÀNH VIÊN - TÔNG MÀU BẠC/ZINC TỐI GIẢN */
               <div className="perks-view">
-                <div className="perk-badge-hero">
-                  <div className="perk-hero-icon">
-                    {isFounder ? <Crown size={32} color="#fbbf24" /> : <Gem size={32} color="#38bdf8" />}
+                <div className="perk-badge-hero-zinc">
+                  <div className="perk-hero-icon-silver">
+                    <Shield size={28} />
                   </div>
-                  <h4>{profile?.customTitle || (isFounder ? "👑 Sáng Lập Viên" : "💎 VIP Kim Cương")}</h4>
-                  <p className="perk-hero-sub">Huy hiệu thành viên uy tín trên Syncora</p>
+                  <h4>{profile?.customTitle || (isFounder ? "Huy Hiệu Sáng Lập" : "Huy Hiệu Thành Viên Klyvix")}</h4>
+                  <p className="perk-hero-sub-zinc">Huy hiệu xác thực danh tính trên nền tảng Klyvix</p>
                 </div>
 
                 <div className="perks-list">
-                  <div className="perk-item active">
-                    <CheckCircle2 size={16} className="perk-check" />
+                  <div className="perk-item-zinc">
+                    <CheckCircle2 size={15} className="perk-check-silver" />
                     <div>
-                      <strong>Huy hiệu danh giá cạnh tên</strong>
-                      <p>Khẳng định vị thế nổi bật trên mọi bài viết & bình luận</p>
+                      <strong>Huy hiệu biểu tượng cạnh tên người dùng</strong>
+                      <p>Khẳng định hồ sơ đã kích hoạt danh tính trong các bài viết và bình luận</p>
                     </div>
                   </div>
-                  <div className="perk-item active">
-                    <CheckCircle2 size={16} className="perk-check" />
+                  <div className="perk-item-zinc">
+                    <CheckCircle2 size={15} className="perk-check-silver" />
                     <div>
-                      <strong>Viền Avatar Hào Quang Neon</strong>
-                      <p>Hiệu ứng phát sáng độc quyền riêng cho tài khoản của bạn</p>
+                      <strong>Tạo phòng đàm thoại & chia sẻ kênh âm thanh</strong>
+                      <p>Băng thông trực tiếp WebRTC không giới hạn thời lượng trò chuyện</p>
                     </div>
                   </div>
-                  <div className="perk-item active">
-                    <CheckCircle2 size={16} className="perk-check" />
+                  <div className="perk-item-zinc">
+                    <CheckCircle2 size={15} className="perk-check-silver" />
                     <div>
-                      <strong>Tạo phòng Voice HD & Lo-Fi Radio không giới hạn</strong>
-                      <p>Băng thông WebRTC đàm thoại ưu tiên tốc độ cao</p>
-                    </div>
-                  </div>
-                  <div className="perk-item active">
-                    <CheckCircle2 size={16} className="perk-check" />
-                    <div>
-                      <strong>Gói biểu tượng cảm xúc độc quyền 🔥 👑 💎</strong>
-                      <p>Thả reaction với hiệu ứng hoạt hình sinh động</p>
+                      <strong>Tùy biến nhãn chủ đề & cộng đồng</strong>
+                      <p>Gắn thẻ chủ đề độc lập và phân loại bài viết theo cảm xúc riêng</p>
                     </div>
                   </div>
                 </div>
 
-                <button onClick={() => toast.success("Đặc quyền của bạn đang hoạt động bình thường!", { icon: '✨' })} className="btn-claim-perk">
-                  <Sparkles size={16} /> Kiểm tra hiệu lực đặc quyền
+                {/* Nút hành động thực tế: Bật/tắt hiển thị huy hiệu */}
+                <button onClick={toggleBadgeDisplay} className="btn-toggle-badge-zinc">
+                  {showBadge ? '✓ Đang hiển thị huy hiệu cạnh tên (Bấm để ẩn)' : '○ Đang ẩn huy hiệu cạnh tên (Bấm để bật)'}
                 </button>
               </div>
             ) : !isEditing ? (
@@ -236,19 +285,15 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
               <>
                 <div className="profile-names">
                   <div className="name-and-badge">
-                    <h3 className="profile-nickname">{profile?.nickname || "Người dùng"}</h3>
+                    <h3 className="profile-nickname">{profile?.nickname || "Thành viên"}</h3>
                     {profile?.isVerified && (
                       <span className="verified-badge-icon" title="Tài khoản đã xác thực">
-                        <CheckCircle2 size={16} color="#38bdf8" />
+                        <CheckCircle2 size={15} color="#cbd5e1" />
                       </span>
                     )}
-                    {isFounder ? (
-                      <span className="privilege-pill founder-pill">
-                        <Crown size={12} /> Sáng Lập
-                      </span>
-                    ) : (
-                      <span className="privilege-pill diamond-pill">
-                        <Gem size={12} /> VIP
+                    {showBadge && (
+                      <span className="privilege-pill-silver">
+                        <Shield size={11} /> {isFounder ? "Quản trị" : "Thành viên"}
                       </span>
                     )}
                   </div>
@@ -257,13 +302,13 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
 
                 {/* Level & Streak Indicators */}
                 <div className="profile-stats-bar">
-                  <div className="stat-badge level-badge">
-                    <Zap size={14} className="stat-icon zap" />
+                  <div className="stat-badge">
+                    <Zap size={13} className="stat-icon-silver" />
                     <span>Cấp độ <strong>{profile?.level || 15}</strong></span>
                   </div>
-                  <div className="stat-badge streak-badge">
-                    <Flame size={14} className="stat-icon flame" />
-                    <span>Chuỗi <strong>{profile?.streakDays || 7} ngày 🔥</strong></span>
+                  <div className="stat-badge">
+                    <Flame size={13} className="stat-icon-silver" />
+                    <span>Chuỗi <strong>{profile?.streakDays || 7} ngày</strong></span>
                   </div>
                 </div>
 
@@ -275,7 +320,7 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
 
                 <div className="profile-details-grid">
                   <div className="detail-item">
-                    <Calendar size={16} className="detail-icon" />
+                    <Calendar size={15} className="detail-icon" />
                     <div>
                       <span className="detail-label">Tuổi</span>
                       <p className="detail-val">{profile?.age ? `${profile.age} tuổi` : "Chưa cập nhật"}</p>
@@ -283,7 +328,7 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
                   </div>
 
                   <div className="detail-item">
-                    <MapPin size={16} className="detail-icon" />
+                    <MapPin size={15} className="detail-icon" />
                     <div>
                       <span className="detail-label">Nơi sinh sống</span>
                       <p className="detail-val">{profile?.location || "Chưa cập nhật"}</p>
@@ -298,7 +343,7 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
                       onClick={() => setIsEditing(true)} 
                       className="btn-action btn-edit-profile"
                     >
-                      <Edit3 size={16} /> Chỉnh sửa hồ sơ
+                      <Edit3 size={15} /> Chỉnh sửa hồ sơ & Avatar
                     </button>
                   ) : (
                     <>
@@ -311,7 +356,7 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
                         className="btn-action btn-private-call"
                         title={`Gọi riêng 1-1 cho ${profile?.nickname}`}
                       >
-                        <Phone size={16} /> Gọi thoại
+                        <Phone size={15} /> Gọi thoại
                       </button>
 
                       {/* Nút Trạng Thái Bạn Bè */}
@@ -321,13 +366,13 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
                           disabled={submitting}
                           className="btn-action btn-friend-action"
                         >
-                          <UserPlus size={16} /> Kết bạn
+                          <UserPlus size={15} /> Kết bạn
                         </button>
                       )}
 
                       {profile?.friendshipStatus === 'PENDING_SENT' && (
                         <button disabled className="btn-action btn-friend-pending">
-                          <Clock size={16} /> Đã gửi lời mời
+                          <Clock size={15} /> Đã gửi lời mời
                         </button>
                       )}
 
@@ -337,7 +382,7 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
                           disabled={submitting}
                           className="btn-action btn-friend-accept"
                         >
-                          <UserCheck size={16} /> Đồng ý
+                          <UserCheck size={15} /> Đồng ý
                         </button>
                       )}
 
@@ -348,7 +393,7 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
                           className="btn-action btn-friend-done"
                           title="Nhấp để hủy kết bạn"
                         >
-                          <Check size={16} /> Bạn bè
+                          <Check size={15} /> Bạn bè
                         </button>
                       )}
                     </>
@@ -356,9 +401,46 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
                 </div>
               </>
             ) : (
-              /* Chế độ Chỉnh Sửa Hồ Sơ */
+              /* Chế độ Chỉnh Sửa Hồ Sơ & Đổi Avatar */
               <form onSubmit={handleSaveProfile} className="edit-profile-form">
-                <h4 className="form-heading">Chỉnh sửa hồ sơ của bạn</h4>
+                <h4 className="form-heading">Chỉnh sửa thông tin</h4>
+
+                {/* CHỌN / ĐỔI AVATAR TRỰC TIẾP */}
+                <div className="edit-field">
+                  <div className="avatar-edit-label-row">
+                    <label>Ảnh đại diện (Avatar)</label>
+                    <button 
+                      type="button" 
+                      onClick={handleGenerateRandomAvatar} 
+                      className="btn-dicebear-random"
+                      title="Tạo hình đại diện DiceBear ngẫu nhiên"
+                    >
+                      <RefreshCw size={12} /> Đổi mẫu ngẫu nhiên
+                    </button>
+                  </div>
+
+                  <input 
+                    type="url" 
+                    value={editData.avatar || ''}
+                    onChange={(e) => setEditData({ ...editData, avatar: e.target.value })}
+                    placeholder="Dán link ảnh hoặc dùng nút ngẫu nhiên phía trên..."
+                  />
+
+                  {/* Preset Avatar Thao Tác 1-Click */}
+                  <div className="avatar-presets-strip">
+                    <span className="preset-hint">Gợi ý mẫu:</span>
+                    {PRESET_AVATARS.map((url, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        className={`preset-thumb-btn ${editData.avatar === url ? 'active' : ''}`}
+                        onClick={() => setEditData({ ...editData, avatar: url })}
+                      >
+                        <img src={url} alt={`Preset ${i}`} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
                 <div className="edit-field">
                   <label>Biệt danh hiển thị</label>
@@ -417,7 +499,7 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
                     disabled={submitting} 
                     className="btn-edit-save"
                   >
-                    <Save size={16} /> {submitting ? 'Đang lưu...' : 'Lưu thay đổi'}
+                    <Save size={15} /> {submitting ? 'Đang lưu...' : 'Lưu thay đổi'}
                   </button>
                 </div>
               </form>
@@ -430,7 +512,7 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
         .profile-backdrop {
           position: fixed;
           inset: 0;
-          background: rgba(0, 0, 0, 0.78);
+          background: rgba(0, 0, 0, 0.75);
           backdrop-filter: blur(8px);
           display: flex;
           align-items: center;
@@ -438,7 +520,7 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
           z-index: 1000;
           padding: 1rem;
           box-sizing: border-box;
-          animation: fadeInBackdrop 0.2s ease-out;
+          animation: fadeInBackdrop 0.18s ease-out;
         }
         @keyframes fadeInBackdrop {
           from { opacity: 0; }
@@ -446,21 +528,21 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
         }
 
         .profile-card {
-          background: #0f172a;
-          border: 1px solid rgba(255, 255, 255, 0.15);
-          box-shadow: 0 25px 70px rgba(0, 0, 0, 0.8), 0 0 30px rgba(99, 102, 241, 0.15);
-          border-radius: 24px;
+          background: #18181b; /* Dark Zinc 900 */
+          border: 1px solid #27272a; /* Zinc 800 */
+          box-shadow: 0 25px 60px rgba(0, 0, 0, 0.85);
+          border-radius: 18px;
           width: 100%;
-          max-width: 420px;
+          max-width: 440px;
           overflow: hidden;
           position: relative;
-          animation: scaleCard 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+          animation: scaleCard 0.2s cubic-bezier(0.16, 1, 0.3, 1);
           max-height: 90vh;
           display: flex;
           flex-direction: column;
         }
         @keyframes scaleCard {
-          from { transform: scale(0.92); opacity: 0; }
+          from { transform: scale(0.95); opacity: 0; }
           to { transform: scale(1); opacity: 1; }
         }
 
@@ -469,10 +551,10 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
           top: 12px;
           right: 12px;
           background: rgba(0, 0, 0, 0.5);
-          border: 1px solid rgba(255, 255, 255, 0.15);
-          color: #f8fafc;
-          width: 32px;
-          height: 32px;
+          border: 1px solid #3f3f46;
+          color: #d4d4d8;
+          width: 30px;
+          height: 30px;
           border-radius: 50%;
           display: flex;
           align-items: center;
@@ -482,67 +564,83 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
           backdrop-filter: blur(4px);
           transition: all 0.15s;
         }
-        .btn-close-profile:hover { background: rgba(239, 68, 68, 0.85); transform: scale(1.05); }
+        .btn-close-profile:hover { background: #27272a; color: #ffffff; }
 
-        .profile-header-gradient {
-          height: 100px;
-          background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #ec4899 100%);
+        /* Minimalist Dark Zinc Header with Subtle Grid */
+        .profile-header-minimal {
+          height: 85px;
+          background: #09090b; /* Zinc 950 */
+          border-bottom: 1px solid #27272a; /* Zinc 800 */
           position: relative;
           display: flex;
           justify-content: center;
           flex-shrink: 0;
+          background-image: linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                            linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+          background-size: 16px 16px;
         }
-        .founder-gradient {
-          background: linear-gradient(135deg, #b45309 0%, #f59e0b 50%, #d97706 100%);
-        }
-        .founder-glow-tag {
+        .founder-tag-minimal {
           position: absolute;
           top: 12px;
           left: 14px;
-          background: rgba(0, 0, 0, 0.6);
-          border: 1px solid rgba(251, 191, 36, 0.5);
-          color: #fbbf24;
-          font-size: 11px;
-          font-weight: 700;
+          background: #18181b;
+          border: 1px solid #3f3f46;
+          color: #e4e4e7;
+          font-size: 10.5px;
+          font-weight: 600;
           padding: 3px 8px;
-          border-radius: 12px;
+          border-radius: 6px;
           display: flex;
           align-items: center;
           gap: 5px;
-          backdrop-filter: blur(4px);
-          letter-spacing: 0.5px;
+          letter-spacing: 0.3px;
         }
 
-        .profile-avatar-circle {
+        .profile-avatar-frame-wrap {
           position: absolute;
-          bottom: -38px;
-          width: 80px;
-          height: 80px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, #6366f1, #a855f7);
-          border: 4px solid #0f172a;
-          color: white;
-          font-weight: 800;
-          font-size: 30px;
+          bottom: -36px;
           display: flex;
           align-items: center;
           justify-content: center;
-          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
         }
-        .founder-avatar-frame {
-          border-color: #fbbf24;
-          box-shadow: 0 0 20px rgba(251, 191, 36, 0.6);
+
+        .profile-avatar-circle {
+          width: 76px;
+          height: 76px;
+          border-radius: 50%;
+          background: #27272a;
+          border: 3px solid #18181b;
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+          position: relative;
+          overflow: visible;
         }
-        .vip-avatar-frame {
-          border-color: #38bdf8;
-          box-shadow: 0 0 16px rgba(56, 189, 248, 0.4);
+
+        .btn-quick-avatar-trigger {
+          position: absolute;
+          bottom: 0;
+          right: -4px;
+          background: #27272a;
+          border: 1px solid #3f3f46;
+          color: #f4f4f5;
+          width: 24px;
+          height: 24px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+          transition: background 0.15s;
+        }
+        .btn-quick-avatar-trigger:hover {
+          background: #3f3f46;
         }
 
         .online-badge-dot {
-          width: 14px;
-          height: 14px;
+          width: 13px;
+          height: 13px;
           background: #10b981;
-          border: 3px solid #0f172a;
+          border: 2px solid #18181b;
           border-radius: 50%;
           position: absolute;
           bottom: 2px;
@@ -552,14 +650,14 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
         .profile-loading {
           padding: 60px 20px 40px;
           text-align: center;
-          color: #94a3b8;
-          font-size: 13.5px;
+          color: #a1a1aa;
+          font-size: 13px;
         }
         .mini-loader {
-          width: 28px;
-          height: 28px;
-          border: 3px solid rgba(255, 255, 255, 0.1);
-          border-bottom-color: #818cf8;
+          width: 26px;
+          height: 26px;
+          border: 2px solid rgba(255, 255, 255, 0.1);
+          border-bottom-color: #a1a1aa;
           border-radius: 50%;
           margin: 0 auto 12px auto;
           animation: spin 0.8s linear infinite;
@@ -567,16 +665,16 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
         @keyframes spin { 100% { transform: rotate(360deg); } }
 
         .profile-body {
-          padding: 46px 20px 20px;
+          padding: 44px 20px 20px;
           text-align: center;
           overflow-y: auto;
         }
 
         .profile-subtabs {
           display: flex;
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          border-radius: 12px;
+          background: #09090b;
+          border: 1px solid #27272a;
+          border-radius: 10px;
           padding: 3px;
           gap: 4px;
           margin-bottom: 14px;
@@ -585,30 +683,24 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
           flex: 1;
           background: transparent;
           border: none;
-          color: #94a3b8;
+          color: #a1a1aa;
           font-size: 12px;
           font-weight: 600;
           padding: 7px 10px;
-          border-radius: 9px;
+          border-radius: 7px;
           cursor: pointer;
           display: flex;
           align-items: center;
           justify-content: center;
           gap: 6px;
-          transition: all 0.2s;
+          transition: all 0.15s;
         }
         .subtab-btn.active {
-          background: #334155;
-          color: #f8fafc;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-        }
-        .subtab-perks.active {
-          background: rgba(245, 158, 11, 0.2);
-          color: #fbbf24;
-          border: 1px solid rgba(245, 158, 11, 0.4);
+          background: #27272a;
+          color: #f4f4f5;
         }
 
-        .profile-names { margin-bottom: 10px; }
+        .profile-names { margin-bottom: 8px; }
         .name-and-badge {
           display: flex;
           align-items: center;
@@ -617,36 +709,29 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
         }
         .profile-nickname {
           margin: 0;
-          font-size: 19px;
+          font-size: 18px;
           font-weight: 700;
-          color: #f8fafc;
+          color: #f4f4f5;
         }
         .verified-badge-icon {
           display: inline-flex;
           align-items: center;
         }
-        .privilege-pill {
-          font-size: 11px;
-          font-weight: 700;
-          padding: 2px 7px;
-          border-radius: 10px;
+        .privilege-pill-silver {
+          font-size: 10.5px;
+          font-weight: 600;
+          padding: 1px 6px;
+          border-radius: 6px;
           display: inline-flex;
           align-items: center;
-          gap: 4px;
-        }
-        .founder-pill {
-          background: rgba(245, 158, 11, 0.2);
-          border: 1px solid rgba(245, 158, 11, 0.5);
-          color: #fbbf24;
-        }
-        .diamond-pill {
-          background: rgba(56, 189, 248, 0.2);
-          border: 1px solid rgba(56, 189, 248, 0.5);
-          color: #38bdf8;
+          gap: 3px;
+          background: #27272a;
+          border: 1px solid #3f3f46;
+          color: #e4e4e7;
         }
         .profile-account {
-          font-size: 12.5px;
-          color: #818cf8;
+          font-size: 12px;
+          color: #71717a;
           font-weight: 500;
           display: block;
           margin-top: 2px;
@@ -655,64 +740,63 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
         .profile-stats-bar {
           display: flex;
           justify-content: center;
-          gap: 10px;
+          gap: 8px;
           margin-bottom: 12px;
         }
         .stat-badge {
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          border-radius: 20px;
-          padding: 4px 12px;
-          font-size: 12px;
-          color: #cbd5e1;
+          background: #09090b;
+          border: 1px solid #27272a;
+          border-radius: 16px;
+          padding: 3px 10px;
+          font-size: 11.5px;
+          color: #d4d4d8;
           display: flex;
           align-items: center;
-          gap: 5px;
+          gap: 4px;
         }
-        .stat-icon.zap { color: #eab308; }
-        .stat-icon.flame { color: #f97316; }
+        .stat-icon-silver { color: #a1a1aa; }
 
         .profile-bio {
-          font-size: 13.5px;
-          color: #cbd5e1;
+          font-size: 13px;
+          color: #d4d4d8;
           line-height: 1.5;
-          margin: 8px 0 14px;
-          background: rgba(255, 255, 255, 0.03);
-          border: 1px solid rgba(255, 255, 255, 0.06);
+          margin: 6px 0 12px;
+          background: #09090b;
+          border: 1px solid #27272a;
           padding: 8px 12px;
-          border-radius: 10px;
+          border-radius: 8px;
           word-break: break-word;
         }
         .profile-bio-empty {
-          font-size: 12px;
-          color: #64748b;
+          font-size: 11.5px;
+          color: #71717a;
           font-style: italic;
-          margin: 6px 0 14px;
+          margin: 6px 0 12px;
         }
 
         .profile-details-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 10px;
-          margin-bottom: 18px;
+          gap: 8px;
+          margin-bottom: 16px;
           text-align: left;
         }
         .detail-item {
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.06);
-          border-radius: 10px;
+          background: #09090b;
+          border: 1px solid #27272a;
+          border-radius: 8px;
           padding: 8px 10px;
           display: flex;
           align-items: center;
           gap: 8px;
         }
-        .detail-icon { color: #818cf8; flex-shrink: 0; }
-        .detail-label { font-size: 10px; color: #94a3b8; display: block; text-transform: uppercase; font-weight: 600; }
-        .detail-val { margin: 2px 0 0 0; font-size: 12.5px; font-weight: 600; color: #f1f5f9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .detail-icon { color: #a1a1aa; flex-shrink: 0; }
+        .detail-label { font-size: 9.5px; color: #71717a; display: block; text-transform: uppercase; font-weight: 600; }
+        .detail-val { margin: 2px 0 0 0; font-size: 12px; font-weight: 600; color: #f4f4f5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
         .profile-actions-row {
           display: flex;
-          gap: 10px;
+          gap: 8px;
         }
         .btn-action {
           flex: 1;
@@ -720,19 +804,20 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
           align-items: center;
           justify-content: center;
           gap: 6px;
-          padding: 10px;
-          border-radius: 12px;
-          font-size: 13.5px;
+          padding: 8px 12px;
+          border-radius: 8px;
+          font-size: 12.5px;
           font-weight: 600;
           cursor: pointer;
           border: none;
-          transition: all 0.2s;
+          transition: all 0.15s;
         }
         .btn-edit-profile {
-          background: #334155;
-          color: #f8fafc;
+          background: #27272a;
+          color: #f4f4f5;
+          border: 1px solid #3f3f46;
         }
-        .btn-edit-profile:hover { background: #475569; }
+        .btn-edit-profile:hover { background: #3f3f46; color: white; }
 
         .btn-private-call {
           background: #10b981;
@@ -741,178 +826,239 @@ const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }
         .btn-private-call:hover { background: #059669; }
 
         .btn-friend-action {
-          background: #4f46e5;
-          color: white;
+          background: #27272a;
+          border: 1px solid #3f3f46;
+          color: #f4f4f5;
         }
-        .btn-friend-action:hover { background: #4338ca; }
+        .btn-friend-action:hover { background: #3f3f46; }
 
         .btn-friend-pending {
-          background: rgba(245, 158, 11, 0.2);
-          border: 1px solid rgba(245, 158, 11, 0.4);
-          color: #fbbf24;
+          background: #27272a;
+          border: 1px solid #3f3f46;
+          color: #a1a1aa;
           cursor: default;
         }
 
         .btn-friend-accept {
-          background: #6366f1;
-          color: white;
+          background: #27272a;
+          border: 1px solid #52525b;
+          color: #ffffff;
         }
-        .btn-friend-accept:hover { background: #4f46e5; }
+        .btn-friend-accept:hover { background: #3f3f46; }
 
         .btn-friend-done {
-          background: rgba(16, 185, 129, 0.15);
-          border: 1px solid rgba(16, 185, 129, 0.35);
+          background: rgba(16, 185, 129, 0.1);
+          border: 1px solid rgba(16, 185, 129, 0.3);
           color: #34d399;
         }
-        .btn-friend-done:hover {
-          background: rgba(239, 68, 68, 0.2);
-          border-color: #ef4444;
-          color: #f87171;
-        }
 
-        /* Perks View */
+        /* Huy Hiệu Thành Viên Silver / Zinc Styles */
         .perks-view {
           text-align: left;
         }
-        .perk-badge-hero {
+        .perk-badge-hero-zinc {
           text-align: center;
-          background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(245, 158, 11, 0.15));
-          border: 1px solid rgba(245, 158, 11, 0.3);
-          border-radius: 14px;
+          background: #09090b;
+          border: 1px solid #27272a;
+          border-radius: 12px;
           padding: 14px 10px;
-          margin-bottom: 14px;
+          margin-bottom: 12px;
         }
-        .perk-hero-icon { margin-bottom: 6px; }
-        .perk-badge-hero h4 {
+        .perk-hero-icon-silver {
+          color: #e4e4e7;
+          display: flex;
+          justify-content: center;
+          margin-bottom: 6px;
+        }
+        .perk-badge-hero-zinc h4 {
           margin: 0;
-          font-size: 15px;
-          color: #fbbf24;
+          font-size: 14.5px;
+          color: #f4f4f5;
           font-weight: 700;
         }
-        .perk-hero-sub {
+        .perk-hero-sub-zinc {
           margin: 4px 0 0 0;
-          font-size: 11.5px;
-          color: #94a3b8;
+          font-size: 11px;
+          color: #71717a;
         }
         .perks-list {
           display: flex;
           flex-direction: column;
-          gap: 10px;
-          margin-bottom: 16px;
+          gap: 8px;
+          margin-bottom: 14px;
         }
-        .perk-item {
+        .perk-item-zinc {
           display: flex;
           align-items: flex-start;
-          gap: 10px;
-          background: rgba(255, 255, 255, 0.03);
-          border: 1px solid rgba(255, 255, 255, 0.06);
-          border-radius: 10px;
-          padding: 10px 12px;
+          gap: 8px;
+          background: #09090b;
+          border: 1px solid #27272a;
+          border-radius: 8px;
+          padding: 8px 10px;
         }
-        .perk-check {
-          color: #10b981;
+        .perk-check-silver {
+          color: #a1a1aa;
           flex-shrink: 0;
           margin-top: 2px;
         }
-        .perk-item strong {
+        .perk-item-zinc strong {
           display: block;
-          font-size: 12.5px;
-          color: #f1f5f9;
+          font-size: 12px;
+          color: #f4f4f5;
         }
-        .perk-item p {
+        .perk-item-zinc p {
           margin: 2px 0 0 0;
-          font-size: 11.5px;
-          color: #94a3b8;
+          font-size: 11px;
+          color: #71717a;
         }
-        .btn-claim-perk {
+
+        .btn-toggle-badge-zinc {
           width: 100%;
-          background: linear-gradient(135deg, #f59e0b, #d97706);
-          color: white;
-          border: none;
-          padding: 10px;
-          border-radius: 10px;
-          font-size: 13px;
-          font-weight: 700;
+          background: #27272a;
+          color: #f4f4f5;
+          border: 1px solid #3f3f46;
+          padding: 9px;
+          border-radius: 8px;
+          font-size: 12px;
+          font-weight: 600;
           cursor: pointer;
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 6px;
-          box-shadow: 0 4px 14px rgba(245, 158, 11, 0.3);
+          transition: all 0.15s;
+        }
+        .btn-toggle-badge-zinc:hover {
+          background: #3f3f46;
+          color: #ffffff;
         }
 
-        /* Edit Form */
+        /* Form Chỉnh sửa */
         .edit-profile-form {
           text-align: left;
         }
         .form-heading {
-          margin: 0 0 12px 0;
-          font-size: 14px;
+          margin: 0 0 10px 0;
+          font-size: 13.5px;
           font-weight: 600;
-          color: #818cf8;
+          color: #f4f4f5;
           text-align: center;
         }
+        .avatar-edit-label-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 4px;
+        }
+        .avatar-edit-label-row label {
+          margin-bottom: 0 !important;
+        }
+        .btn-dicebear-random {
+          background: transparent;
+          border: none;
+          color: #a1a1aa;
+          font-size: 11px;
+          font-weight: 600;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          padding: 2px 4px;
+        }
+        .btn-dicebear-random:hover { color: #f4f4f5; }
+
+        .avatar-presets-strip {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          margin-top: 6px;
+        }
+        .preset-hint {
+          font-size: 10px;
+          color: #71717a;
+        }
+        .preset-thumb-btn {
+          width: 26px;
+          height: 26px;
+          border-radius: 50%;
+          border: 1px solid #3f3f46;
+          background: #09090b;
+          padding: 1px;
+          cursor: pointer;
+          overflow: hidden;
+        }
+        .preset-thumb-btn img {
+          width: 100%;
+          height: 100%;
+          border-radius: 50%;
+        }
+        .preset-thumb-btn.active {
+          border-color: #f4f4f5;
+        }
+
         .edit-field {
-          margin-bottom: 12px;
+          margin-bottom: 10px;
         }
         .edit-field label {
           display: block;
-          font-size: 11px;
+          font-size: 10.5px;
           font-weight: 600;
-          color: #94a3b8;
+          color: #a1a1aa;
           margin-bottom: 4px;
           text-transform: uppercase;
         }
         .edit-field input, .edit-field textarea {
           width: 100%;
-          background: rgba(0, 0, 0, 0.35);
-          border: 1px solid #334155;
-          border-radius: 8px;
-          padding: 8px 10px;
-          color: #f8fafc;
-          font-size: 13.5px;
+          background: #09090b;
+          border: 1px solid #27272a;
+          border-radius: 6px;
+          padding: 7px 9px;
+          color: #f4f4f5;
+          font-size: 12.5px;
           outline: none;
           box-sizing: border-box;
           font-family: inherit;
         }
         .edit-field input:focus, .edit-field textarea:focus {
-          border-color: #6366f1;
+          border-color: #52525b;
         }
         .edit-row-2 {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 10px;
+          gap: 8px;
         }
         .edit-actions {
           display: flex;
-          gap: 10px;
-          margin-top: 14px;
+          gap: 8px;
+          margin-top: 12px;
         }
         .btn-edit-cancel {
           flex: 1;
-          background: #334155;
-          color: #cbd5e1;
-          border: none;
-          padding: 9px;
-          border-radius: 8px;
+          background: #27272a;
+          color: #d4d4d8;
+          border: 1px solid #3f3f46;
+          padding: 8px;
+          border-radius: 6px;
           font-weight: 600;
-          font-size: 13px;
+          font-size: 12px;
           cursor: pointer;
         }
         .btn-edit-save {
           flex: 1;
-          background: #4f46e5;
-          color: white;
+          background: #f4f4f5;
+          color: #18181b;
           border: none;
-          padding: 9px;
-          border-radius: 8px;
-          font-weight: 600;
-          font-size: 13px;
+          padding: 8px;
+          border-radius: 6px;
+          font-weight: 700;
+          font-size: 12px;
           cursor: pointer;
           display: flex;
           align-items: center;
           justify-content: center;
           gap: 6px;
+        }
+        .btn-edit-save:hover {
+          background: #e4e4e7;
         }
       `}} />
     </div>

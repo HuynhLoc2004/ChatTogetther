@@ -9,7 +9,7 @@ import axiosClient, { BACKEND_URL } from '../api/axiosClient';
 import { saveMessagesOffline, getMessagesOffline, getRoomsOffline } from '../utils/offlineDB';
 import UserProfileModal from './UserProfileModal';
 import FriendsModal from './FriendsModal';
-import SyncoraLogo from '../components/SyncoraLogo';
+import KlyvixLogo from '../components/KlyvixLogo';
 import SockJS from 'sockjs-client';
 import Stomp from 'stompjs';
 import toast from 'react-hot-toast';
@@ -708,7 +708,7 @@ const ChatRoom = () => {
       <aside className={`sidebar-left ${isSidebarOpen ? 'sidebar-open' : ''}`}>
         <div className="sidebar-header">
            <div className="brand" onClick={() => navigate('/')}>
-              <SyncoraLogo size={24} />
+              <KlyvixLogo size={24} />
            </div>
            <div style={{ display: 'flex', gap: '0.25rem' }}>
               <button onClick={() => navigate('/')} className="back-btn" title="Về trang chủ">

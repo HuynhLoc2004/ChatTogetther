@@ -1,6 +1,6 @@
 {
-  "short_name": "ChatTogether",
-  "name": "Chat Together - Nền Tảng Trò Chuyện & Gọi Thoại",
+  "short_name": "Klyvix",
+  "name": "Klyvix - Không Gian Trò Chuyện & Âm Nhạc",
   "icons": [
     {
       "src": "/favicon.svg",
@@ -9,9 +9,8 @@
     }
   ],
   "start_url": "/",
-  "background_color": "#090d16",
-  "theme_color": "#0f172a",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
   "display": "standalone",
   "orientation": "portrait"
 }
-

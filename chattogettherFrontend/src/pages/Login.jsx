@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import axiosClient from '../api/axiosClient';
-import SyncoraLogo from '../components/SyncoraLogo';
+import KlyvixLogo from '../components/KlyvixLogo';
 
 const Login = () => {
   const [formData, setFormData] = useState({ account: '', password: '' });
@@ -86,9 +86,9 @@ const Login = () => {
       className="auth-card"
     >
       <div className="auth-header" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <SyncoraLogo size={44} showText={false} style={{ marginBottom: 12 }} />
-        <h1 className="logo-text">Syncora</h1>
-        <p className="auth-subtitle">Không gian trò chuyện & kết nối thời gian thực</p>
+        <KlyvixLogo size={46} showText={false} style={{ marginBottom: 12 }} />
+        <h1 className="logo-text">Klyvix</h1>
+        <p className="auth-subtitle">Không gian trò chuyện & âm nhạc trực tiếp</p>
       </div>
 
       {error && <div className="error-message">{error}</div>}
