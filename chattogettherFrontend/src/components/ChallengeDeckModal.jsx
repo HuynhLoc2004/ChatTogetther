@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   X, Dices, Share2, Sparkles, Plus, Check, Loader2, 
   RotateCw, Flame, MessageSquareQuote, User, Send
@@ -24,27 +24,8 @@ export const ChallengeDeckModal = ({ isOpen, onClose, onShareToFeed }) => {
   const [newQuestionCategory, setNewQuestionCategory] = useState('DEEP_TALK');
   const [isSubmittingNew, setIsSubmittingNew] = useState(false);
 
-  // Lấy danh mục khi mở modal
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const fetchCategories = async () => {
-      try {
-        const res = await axiosClient.get('/challenges/categories');
-        if (res.data?.data && Array.isArray(res.data.data)) {
-          setCategories(res.data.data);
-        }
-      } catch (err) {
-        console.error("Không lấy được danh mục thử thách:", err);
-      }
-    };
-
-    fetchCategories();
-    drawRandomChallenge('ALL');
-  }, [isOpen]);
-
   // Bốc thẻ bài ngẫu nhiên từ API thực tế
-  const drawRandomChallenge = async (catKey = selectedCategory) => {
+  const drawRandomChallenge = useCallback(async (catKey = selectedCategory) => {
     try {
       setIsShuffling(true);
       setIsLoading(true);
@@ -72,7 +53,26 @@ export const ChallengeDeckModal = ({ isOpen, onClose, onShareToFeed }) => {
         usageCount: 12
       });
     }
-  };
+  }, [selectedCategory]);
+
+  // Lấy danh mục khi mở modal
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const fetchCategories = async () => {
+      try {
+        const res = await axiosClient.get('/challenges/categories');
+        if (res.data?.data && Array.isArray(res.data.data)) {
+          setCategories(res.data.data);
+        }
+      } catch (err) {
+        console.error("Không lấy được danh mục thử thách:", err);
+      }
+    };
+
+    fetchCategories();
+    drawRandomChallenge('ALL');
+  }, [isOpen, drawRandomChallenge]);
 
   const handleSelectCategory = (catKey) => {
     setSelectedCategory(catKey);

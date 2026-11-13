@@ -228,6 +228,7 @@ const Home = () => {
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [selectedProfileUserId, setSelectedProfileUserId] = useState(null);
   const [isFriendsOpen, setIsFriendsOpen] = useState(false);
+  const [friends, setFriends] = useState([]);
   const [sharePost, setSharePost] = useState(null);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState(() => {
@@ -710,10 +711,22 @@ const Home = () => {
     try {
       const res = await axiosClient.get('/friends/pending');
       if (res.data?.data) {
-        setPendingFriendsCount(res.data.data.length);
+        setPendingFriendsCount(Array.isArray(res.data.data) ? res.data.data.length : 0);
       }
     } catch {}
   };
+
+  const fetchFriends = useCallback(async () => {
+    if (!currentUserId) return;
+    try {
+      const res = await axiosClient.get('/friends/list');
+      if (res.data?.data && Array.isArray(res.data.data)) {
+        setFriends(res.data.data);
+      }
+    } catch (e) {
+      console.warn("Lỗi tải danh sách bạn bè:", e);
+    }
+  }, [currentUserId]);
 
   const handleAddComment = async (postId) => {
     const text = commentInputs[postId]?.trim();
@@ -938,6 +951,7 @@ const Home = () => {
       fetchPosts();
       fetchTracks();
       checkActiveRoom();
+      fetchFriends();
       fetchPendingFriendsCount();
     };
 
@@ -1117,8 +1131,13 @@ const Home = () => {
     return () => clearTimeout(timer);
   }, [searchKeyword]);
 
-  const displayedPosts = posts
+  const safePosts = Array.isArray(posts) ? posts.filter(Boolean) : [];
+  const safeRooms = Array.isArray(rooms) ? rooms.filter(Boolean) : [];
+  const safeFriends = Array.isArray(friends) ? friends.filter(Boolean) : [];
+
+  const displayedPosts = safePosts
     .filter(p => {
+      if (!p) return false;
       if (activeFilterTag) {
         const pVibe = (p.vibe || '').toLowerCase();
         const pContent = (p.content || '').toLowerCase();
@@ -1127,9 +1146,9 @@ const Home = () => {
       }
 
       if (activeTab === 'saved') {
-        return savedPostIds.includes(p.id);
+        return Array.isArray(savedPostIds) && savedPostIds.includes(p.id);
       }
-      if (searchKeyword.trim()) {
+      if (searchKeyword && searchKeyword.trim()) {
         const kw = searchKeyword.toLowerCase();
         const matchContent = (p.content || '').toLowerCase().includes(kw);
         const matchAuthor = (p.authorNickname || p.authorAccount || '').toLowerCase().includes(kw);
@@ -1139,6 +1158,7 @@ const Home = () => {
       return true;
     })
     .sort((a, b) => {
+      if (!a || !b) return 0;
       if (activeTab === 'trending') {
         // Thuật toán AI Tính điểm Thịnh hành (Search Frequency Dominance Algorithm):
         // Xếp hạng dựa trên: Lượt tìm kiếm bài viết (Search hits * 10) + Thảo luận (Comments * 3) + Cảm xúc (Likes * 1)
@@ -1157,9 +1177,10 @@ const Home = () => {
     });
 
   const allCommunitySparks = Array.from(new Set(
-    posts.flatMap(p => {
+    safePosts.flatMap(p => {
+      if (!p) return [];
       const tags = [];
-      if (p.vibe) {
+      if (p.vibe && typeof p.vibe === 'string') {
         p.vibe.split(/[|\s]+/).forEach(token => {
           const clean = token.replace(/^[#/]+/, '').trim().toLowerCase();
           if (clean && clean.length > 1) tags.push(clean);
@@ -1383,7 +1404,7 @@ const Home = () => {
                 className={`stream-tab ${activeTab === 'rooms' ? 'active' : ''}`}
                 onClick={() => { setActiveTab('rooms'); setActiveFilterTag(null); }}
               >
-                Phòng thoại ({rooms.length})
+                Phòng thoại ({safeRooms.length})
               </button>
             </div>
 
@@ -2152,7 +2173,7 @@ const Home = () => {
 
               {loadingRooms ? (
                 <div className="py-16 text-center text-zinc-500 text-xs font-mono">Đang nạp danh sách phòng đàm thoại...</div>
-              ) : rooms.length === 0 ? (
+              ) : safeRooms.length === 0 ? (
                 <div className="py-16 px-4 text-center rounded-2xl bg-zinc-900/40 border border-zinc-800/60">
                   <Radio size={32} className="mx-auto mb-3 text-zinc-600 opacity-60" />
                   <p className="text-zinc-400 text-sm font-medium mb-1">Chưa có phòng đàm thoại nào đang mở</p>
@@ -2166,7 +2187,7 @@ const Home = () => {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {rooms.map(room => {
+                  {safeRooms.map(room => {
                     const joined = isUserInRoom(room);
                     return (
                       <div 
@@ -2380,9 +2401,9 @@ const Home = () => {
         currentUserAccount={currentUserAccount}
         currentUserName={currentUserName}
         currentTrack={currentTrack}
-        posts={posts}
-        rooms={rooms}
-        friends={friends}
+        posts={safePosts}
+        rooms={safeRooms}
+        friends={safeFriends}
         navigate={navigate}
       />
 
@@ -2433,10 +2454,10 @@ const Home = () => {
                   Gửi vào phòng đàm thoại:
                 </span>
                 <div className="max-h-48 overflow-y-auto space-y-1.5 no-scrollbar">
-                  {rooms.length === 0 ? (
+                  {safeRooms.length === 0 ? (
                     <p className="text-zinc-500 text-xs italic py-2">Chưa có phòng đàm thoại nào đang mở.</p>
                   ) : (
-                    rooms.map((room) => (
+                    safeRooms.map((room) => (
                       <button
                         key={room.id}
                         type="button"

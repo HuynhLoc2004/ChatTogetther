@@ -31,7 +31,7 @@ class ErrorBoundary extends Component {
   handleResetCache = () => {
     localStorage.clear();
     sessionStorage.clear();
-    window.location.href = '/';
+    window.location.href = '/login';
   };
 
   render() {
@@ -43,38 +43,65 @@ class ErrorBoundary extends Component {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          background: '#090d16',
-          color: '#f8fafc',
+          background: '#09090b',
+          color: '#f4f4f5',
           padding: '24px',
           textAlign: 'center',
-          fontFamily: 'sans-serif'
+          fontFamily: 'system-ui, -apple-system, sans-serif'
         }}>
           <div style={{
-            background: '#0f172a',
-            border: '1px solid rgba(255,255,255,0.1)',
-            borderRadius: '16px',
-            padding: '32px',
-            maxWidth: '480px',
-            boxShadow: '0 20px 40px rgba(0,0,0,0.5)'
+            background: '#18181b',
+            border: '1px solid #27272a',
+            borderRadius: '20px',
+            padding: '32px 28px',
+            maxWidth: '460px',
+            width: '100%',
+            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.7)'
           }}>
-            <h2 style={{ fontSize: '20px', fontWeight: 600, marginBottom: '12px', color: '#818cf8' }}>
+            <div style={{
+              width: '44px',
+              height: '44px',
+              borderRadius: '12px',
+              background: '#27272a',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 16px auto',
+              color: '#10b981',
+              fontSize: '20px'
+            }}>
+              ✦
+            </div>
+
+            <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '8px', color: '#f4f4f5', letterSpacing: '-0.02em' }}>
               Đã khôi phục dữ liệu hiển thị
             </h2>
-            <p style={{ fontSize: '13.5px', color: '#94a3b8', marginBottom: '20px', lineHeight: 1.6 }}>
-              Ứng dụng vừa cập nhật các tính năng mới (chủ đề cộng đồng & phản hồi bình luận). Bạn hãy bấm nút bên dưới để tải lại nhé.
+            <p style={{ fontSize: '13px', color: '#a1a1aa', marginBottom: '22px', lineHeight: 1.5 }}>
+              Ứng dụng vừa hoàn tất đồng bộ phiên bản mới. Bạn hãy bấm nút bên dưới để tải lại và tiếp tục trải nghiệm.
             </p>
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+
+            {this.state.error && (
+              <details style={{ textAlign: 'left', marginBottom: '20px', padding: '10px 12px', background: '#09090b', borderRadius: '10px', border: '1px solid #27272a', fontSize: '11px', color: '#f87171', fontFamily: 'monospace' }}>
+                <summary style={{ cursor: 'pointer', color: '#71717a', userSelect: 'none' }}>Chi tiết kỹ thuật</summary>
+                <div style={{ marginTop: '8px', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                  {this.state.error.toString()}
+                </div>
+              </details>
+            )}
+
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexDirection: 'column' }}>
               <button 
                 onClick={this.handleReload}
                 style={{
-                  background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
-                  color: '#fff',
+                  background: '#f4f4f5',
+                  color: '#09090b',
                   border: 'none',
-                  padding: '10px 20px',
-                  borderRadius: '10px',
-                  fontSize: '13.5px',
+                  padding: '11px 20px',
+                  borderRadius: '12px',
+                  fontSize: '13px',
                   fontWeight: 600,
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  transition: 'opacity 0.15s'
                 }}
               >
                 Tải lại trang ngay
@@ -82,16 +109,16 @@ class ErrorBoundary extends Component {
               <button 
                 onClick={this.handleResetCache}
                 style={{
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  color: '#cbd5e1',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  background: 'transparent',
+                  color: '#a1a1aa',
+                  border: '1px solid #27272a',
                   padding: '10px 16px',
-                  borderRadius: '10px',
-                  fontSize: '13.5px',
+                  borderRadius: '12px',
+                  fontSize: '12.5px',
                   cursor: 'pointer'
                 }}
               >
-                Làm mới phiên
+                Làm mới phiên & Đăng nhập lại
               </button>
             </div>
           </div>
