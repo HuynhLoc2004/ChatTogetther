@@ -21,6 +21,7 @@ import TalovinLogo from '../components/TalovinLogo';
 import GroupCollageAvatar from '../components/GroupCollageAvatar';
 import IncomingCallModal from '../components/IncomingCallModal';
 import CommunitySection from '../components/CommunitySection';
+import ResonanceMatchModal from '../components/ResonanceMatchModal';
 
 // Avatar: Ưu tiên ảnh thật người dùng tải lên. Nếu chưa có ảnh, dùng Monogram chữ cái tối giản (Tuyệt đối không dùng avatar robot hoạt hình)
 export const UserAvatar = ({ avatar, name = '', size = 36, className = "" }) => {
@@ -866,31 +867,9 @@ const Home = () => {
     }
   };
 
-  // Speed Match - Kết nối trực tiếp thành viên thật hoặc duy trì Radar chờ
+  // Bộ ghép đôi đồng điệu 1-1 (Resonance Matchmaker)
   const handleStartSpeedMatch = () => {
     setIsSpeedMatchOpen(true);
-    setMatchingStatus('searching');
-
-    const myName = currentUserName || localStorage.getItem('nickname') || '';
-    const realUsers = (posts || [])
-      .map(p => ({
-        userId: p.authorId || p.userId,
-        nickname: p.authorName || p.authorNickname || p.author,
-        avatar: p.authorAvatar,
-        vibe: p.vibe ? `Quan tâm: ${p.vibe}` : 'Đang lắng nghe âm nhạc cùng sảnh Talovin',
-        icebreaker: ICEBREAKER_PROMPTS[Math.floor(Math.random() * ICEBREAKER_PROMPTS.length)]
-      }))
-      .filter(u => u.nickname && u.nickname !== myName);
-
-    setTimeout(() => {
-      if (realUsers.length > 0) {
-        const picked = realUsers[Math.floor(Math.random() * realUsers.length)];
-        setMatchedPartner(picked);
-        setMatchingStatus('matched');
-      } else {
-        setMatchingStatus('waiting');
-      }
-    }, 1500);
   };
 
   // Party Wheel
@@ -1406,58 +1385,81 @@ const Home = () => {
 
             <button 
               onClick={() => setIsNotifOpen(!isNotifOpen)} 
-              className="btn-header-notif"
+              className="btn-header-notif hidden sm:flex"
               title="Thông báo sảnh"
             >
               <Bell size={15} strokeWidth={1.5} />
               {notifications.some(n => n.unread) && <span className="notif-dot"></span>}
             </button>
 
-            {/* Dropdown Thông báo Thời gian thực */}
+            {/* Modal / Sheet Thông Báo Thời Gian Thực (Responsive chuẩn trên cả Mobile và Desktop) */}
             {isNotifOpen && (
-              <div className="notif-dropdown-card">
-                <div className="notif-header">
-                  <div className="flex items-center gap-2">
-                    <h4>Thông báo sảnh</h4>
-                    {notifications.filter(n => n.unread).length > 0 && (
-                      <span className="notif-counter-pill font-mono">
-                        {notifications.filter(n => n.unread).length}
-                      </span>
+              <div 
+                className="fixed inset-0 z-50 flex items-end sm:items-start sm:justify-end p-0 sm:p-4 bg-black/60 backdrop-blur-sm sm:bg-transparent sm:backdrop-blur-none"
+                onClick={() => setIsNotifOpen(false)}
+              >
+                <div 
+                  className="w-full sm:w-80 max-h-[85vh] sm:max-h-[500px] rounded-t-3xl sm:rounded-2xl bg-zinc-900 border border-zinc-800 shadow-2xl flex flex-col overflow-hidden sm:mt-12 sm:mr-4 animate-slide-up sm:animate-fade-in"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="notif-header flex items-center justify-between p-4 border-b border-zinc-800 flex-shrink-0">
+                    <div className="flex items-center gap-2">
+                      <Bell size={14} className="text-zinc-300" />
+                      <h4 className="text-zinc-100 font-bold text-xs tracking-tight">Thông báo sảnh</h4>
+                      {notifications.filter(n => n.unread).length > 0 && (
+                        <span className="notif-counter-pill font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] border border-emerald-500/30">
+                          {notifications.filter(n => n.unread).length}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {notifications.length > 0 && (
+                        <button 
+                          onClick={() => setNotifications(prev => prev.map(n => ({ ...n, unread: false })))} 
+                          className="text-zinc-400 hover:text-zinc-200 text-[11px] font-mono"
+                        >
+                          Đã đọc hết
+                        </button>
+                      )}
+                      <button 
+                        onClick={() => setIsNotifOpen(false)} 
+                        className="text-zinc-400 hover:text-white p-1"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="p-2 overflow-y-auto max-h-[60vh] divide-y divide-zinc-800/40">
+                    {notifications.length === 0 ? (
+                      <div className="notif-empty-state py-12 px-4 text-center">
+                        <Bell size={24} className="mx-auto mb-2 text-zinc-600 opacity-60" />
+                        <p className="text-xs text-zinc-400 font-medium">Chưa có thông báo nào</p>
+                        <p className="text-[11px] text-zinc-500 mt-1">Các lượt thả cảm xúc, lời mời kết bạn và bình luận sẽ hiển thị ở đây.</p>
+                      </div>
+                    ) : (
+                      notifications.map(n => (
+                        <div 
+                          key={n.id} 
+                          className={`p-3 rounded-xl hover:bg-zinc-800/50 cursor-pointer transition-colors flex items-start gap-3 ${n.unread ? 'bg-zinc-800/20' : ''}`}
+                          onClick={() => {
+                            setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, unread: false } : item));
+                            setIsNotifOpen(false);
+                            if (n.postId) {
+                              const el = document.getElementById(`post-${n.postId}`);
+                              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
+                          }}
+                        >
+                          <div className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0 bg-emerald-500" style={{ opacity: n.unread ? 1 : 0 }}></div>
+                          <div className="flex-1">
+                            <p className="text-xs text-zinc-200 leading-snug">{n.text}</p>
+                            <span className="font-mono text-[10px] text-zinc-500 mt-1 block">{n.time}</span>
+                          </div>
+                        </div>
+                      ))
                     )}
                   </div>
-                  {notifications.length > 0 && (
-                    <button onClick={() => setNotifications(prev => prev.map(n => ({ ...n, unread: false })))} className="btn-read-all">
-                      Đã đọc hết
-                    </button>
-                  )}
-                </div>
-                <div className="notif-list">
-                  {notifications.length === 0 ? (
-                    <div className="notif-empty-state py-8 px-4 text-center">
-                      <Bell size={20} className="mx-auto mb-2 text-zinc-600 opacity-60" />
-                      <p className="text-xs text-zinc-500 font-sans">Chưa có thông báo nào</p>
-                    </div>
-                  ) : (
-                    notifications.map(n => (
-                      <div 
-                        key={n.id} 
-                        className={`notif-item ${n.unread ? 'unread' : ''}`}
-                        onClick={() => {
-                          setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, unread: false } : item));
-                          if (n.postId) {
-                            const el = document.getElementById(`post-${n.postId}`);
-                            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                          }
-                        }}
-                      >
-                        <div className="notif-text-wrap">
-                          <p>{n.text}</p>
-                          <span className="font-mono">{n.time}</span>
-                        </div>
-                        {n.unread && <span className="notif-unread-indicator"></span>}
-                      </div>
-                    ))
-                  )}
                 </div>
               </div>
             )}
@@ -2254,21 +2256,21 @@ const Home = () => {
             )}
           </div>
 
-          {/* Widget 1: Kết Nối Ngẫu Nhiên (1-1) */}
+          {/* Widget 1: Kết Nối Đồng Điệu 1-1 (Resonance Matchmaker) */}
           <div className="widget-box-card">
             <div className="widget-card-title">
-              <Zap size={14} className="text-zinc-300" />
-              <span>Kết Nối Ngẫu Nhiên</span>
+              <Zap size={14} className="text-emerald-400" />
+              <span>Ghép Đôi Đồng Điệu 1-1</span>
             </div>
             <p className="widget-card-desc">
-              Ghép đôi 1-1 với thành viên trực tuyến đang cùng nghe nhạc và chung gu trò chuyện.
+              Thuật toán so khớp gu âm nhạc, mục đích kết nối & tự động loại trừ chính bạn.
             </p>
             <button 
               type="button" 
-              onClick={handleStartSpeedMatch} 
+              onClick={() => setIsSpeedMatchOpen(true)} 
               className="btn-widget-action"
             >
-              Tìm người kết nối
+              Tìm người đồng điệu
             </button>
           </div>
 
@@ -2366,82 +2368,19 @@ const Home = () => {
         </button>
       </nav>
 
-      {/* MODAL SPEED MATCH */}
-      {isSpeedMatchOpen && (
-        <div className="modal-veil" onClick={() => setIsSpeedMatchOpen(false)}>
-          <div className="modal-dialog-box modal-match-zinc" onClick={(e) => e.stopPropagation()}>
-            <div className="dialog-header">
-              <div className="dialog-title-flex">
-                <Zap size={16} color="#a1a1aa" />
-                <h4>Kết Nối Trực Tiếp</h4>
-              </div>
-              <button onClick={() => setIsSpeedMatchOpen(false)} className="btn-close-dialog"><X size={15} /></button>
-            </div>
-
-            {matchingStatus === 'searching' ? (
-              <div className="dialog-searching-body">
-                <div className="radar-circle-zinc">
-                  <Zap size={20} color="#f4f4f5" />
-                </div>
-                <p className="radar-status-text">Đang quét tìm thành viên trực tuyến cùng gu âm nhạc...</p>
-              </div>
-            ) : matchingStatus === 'waiting' ? (
-              <div className="dialog-searching-body">
-                <div className="radar-circle-zinc pulse-waiting">
-                  <Compass size={20} color="#a1a1aa" />
-                </div>
-                <p className="radar-status-text">Hiện tại chưa có thành viên khác trong hàng đợi ghép đôi.</p>
-                <div className="dialog-actions-row" style={{ marginTop: 14 }}>
-                  <button onClick={() => handleStartSpeedMatch()} className="btn-dialog-back">Quét lại</button>
-                  <button onClick={() => { setIsSpeedMatchOpen(false); setActiveTab('rooms'); }} className="btn-dialog-primary">
-                    Xem phòng trò chuyện
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="dialog-matched-body">
-                <div className="partner-matched-card-zinc">
-                  <UserAvatar avatar={matchedPartner?.avatar} name={matchedPartner?.nickname} size={42} />
-                  <div>
-                    <strong>{matchedPartner?.nickname}</strong>
-                    <p>{matchedPartner?.vibe}</p>
-                  </div>
-                </div>
-
-                {/* Bấm trực tiếp vào Gợi ý mở đầu để sao chép */}
-                <div 
-                  className="icebreaker-quote-interactive"
-                  onClick={() => {
-                    navigator.clipboard.writeText(matchedPartner?.icebreaker || '');
-                    toast.success("Đã sao chép câu gợi ý mở đầu!");
-                  }}
-                  title="Nhấp để sao chép câu mở đầu này"
-                >
-                  <div className="icebreaker-top-row">
-                    <span>Gợi ý mở đầu (Bấm để sao chép):</span>
-                    <Copy size={12} className="copy-icon-subtle" />
-                  </div>
-                  <p>"{matchedPartner?.icebreaker}"</p>
-                </div>
-
-                <div className="dialog-actions-row">
-                  <button onClick={() => handleStartSpeedMatch()} className="btn-dialog-back">Tìm người khác</button>
-                  <button 
-                    onClick={() => {
-                      navigator.clipboard.writeText(matchedPartner?.icebreaker || '');
-                      setIsSpeedMatchOpen(false);
-                      toast.success(`Đã sao chép câu mở đầu! Hãy bắt đầu trò chuyện cùng ${matchedPartner?.nickname}`);
-                    }} 
-                    className="btn-dialog-primary"
-                  >
-                    Bắt đầu trò chuyện
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {/* MODAL BỘ GHÉP ĐÔI ĐỒNG ĐIỆU (RESONANCE MATCHMAKER 1-1) */}
+      <ResonanceMatchModal 
+        isOpen={isSpeedMatchOpen}
+        onClose={() => setIsSpeedMatchOpen(false)}
+        currentUserId={currentUserId}
+        currentUserAccount={currentUserAccount}
+        currentUserName={currentUserName}
+        currentTrack={currentTrack}
+        posts={posts}
+        rooms={rooms}
+        friends={friends}
+        navigate={navigate}
+      />
 
       {/* MODAL PARTY WHEEL */}
       {isPartyWheelOpen && (
