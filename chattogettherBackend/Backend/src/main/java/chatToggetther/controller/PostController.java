@@ -69,7 +69,7 @@ public class PostController {
         return ResponseEntity.ok(this.postService.updatePost(token, postId, request));
     }
 
-    @DeleteMapping("/{id}")
+    @RequestMapping(value = {"/{id}", "/{id}/delete", "/delete/{id}"}, method = {RequestMethod.DELETE, RequestMethod.POST})
     public ResponseEntity<ResponseData<Boolean>> deletePost(
             JwtAuthenticationToken token,
             @PathVariable("id") Long postId

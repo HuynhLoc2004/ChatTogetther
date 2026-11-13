@@ -212,6 +212,20 @@ const Home = () => {
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
 
+  // Hộp thoại xác nhận tùy biến (thay thế hoàn toàn window.confirm & window.alert)
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    confirmText: 'Xác nhận',
+    isDanger: true,
+    onConfirm: null
+  });
+
+  const closeConfirmDialog = () => {
+    setConfirmDialog(prev => ({ ...prev, isOpen: false, onConfirm: null }));
+  };
+
   // Kiểm tra phòng đang tham gia
   const isUserInRoom = (room) => {
     if (!room || !room.userRoomDTOList) return false;
@@ -519,16 +533,26 @@ const Home = () => {
   };
 
   // Quản trị bài viết (Xóa / Chỉnh sửa)
-  const handleDeletePost = async (postId) => {
-    if (!window.confirm("Bạn có chắc chắn muốn xóa bài viết này không?")) return;
-    try {
-      await axiosClient.delete(`/posts/${postId}`);
-      setPosts(prev => prev.filter(p => p.id !== postId));
-      setPostMenuOpenId(null);
-      toast.success("Đã xóa bài viết thành công!");
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Không thể xóa bài viết!");
-    }
+  const handleDeletePost = (postId) => {
+    setPostMenuOpenId(null);
+    setConfirmDialog({
+      isOpen: true,
+      title: "Xóa bài viết",
+      message: "Bạn có chắc chắn muốn xóa bài viết này không? Bài viết và các bình luận liên quan sẽ được gỡ bỏ vĩnh viễn.",
+      confirmText: "Xóa bài viết",
+      isDanger: true,
+      onConfirm: async () => {
+        try {
+          await axiosClient.delete(`/posts/${postId}`);
+          setPosts(prev => prev.filter(p => p.id !== postId));
+          toast.success("Đã xóa bài viết thành công");
+        } catch (err) {
+          toast.error(err.response?.data?.message || "Không thể xóa bài viết");
+        } finally {
+          closeConfirmDialog();
+        }
+      }
+    });
   };
 
   const handleOpenEditPost = (post) => {
@@ -661,19 +685,29 @@ const Home = () => {
     }
   };
 
-  const handleDeleteComment = async (postId, commentId) => {
-    if (!window.confirm("Bạn có chắc muốn xóa bình luận này?")) return;
-    try {
-      await axiosClient.delete(`/posts/${postId}/comments/${commentId}`);
-      setCommentsMap(prev => ({
-        ...prev,
-        [postId]: (prev[postId] || []).filter(c => c.id !== commentId)
-      }));
-      setPosts(prev => prev.map(p => p.id === postId ? { ...p, commentsCount: Math.max(0, (p.commentsCount || 1) - 1) } : p));
-      toast.success("Đã xóa bình luận");
-    } catch (err) {
-      toast.error("Không thể xóa bình luận!");
-    }
+  const handleDeleteComment = (postId, commentId) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: "Xóa bình luận",
+      message: "Bạn có chắc chắn muốn gỡ bình luận này không?",
+      confirmText: "Gỡ bình luận",
+      isDanger: true,
+      onConfirm: async () => {
+        try {
+          await axiosClient.delete(`/posts/${postId}/comments/${commentId}`);
+          setCommentsMap(prev => ({
+            ...prev,
+            [postId]: (prev[postId] || []).filter(c => c.id !== commentId)
+          }));
+          setPosts(prev => prev.map(p => p.id === postId ? { ...p, commentsCount: Math.max(0, (p.commentsCount || 1) - 1) } : p));
+          toast.success("Đã gỡ bình luận");
+        } catch (err) {
+          toast.error(err.response?.data?.message || "Không thể xóa bình luận");
+        } finally {
+          closeConfirmDialog();
+        }
+      }
+    });
   };
 
   const handleStartEditComment = (comment) => {
@@ -2275,6 +2309,37 @@ const Home = () => {
         />
       )}
 
+      {/* MODAL XÁC NHẬN TÙY BIẾN (THAY THẾ HOÀN TOÀN WINDOW.CONFIRM & WINDOW.ALERT) */}
+      {confirmDialog.isOpen && (
+        <div className="custom-confirm-backdrop" onClick={closeConfirmDialog}>
+          <div className="custom-confirm-card" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-icon-row">
+              <div className="confirm-icon-badge">
+                <Trash2 size={18} className="text-rose-400" />
+              </div>
+              <h3 className="confirm-title">{confirmDialog.title}</h3>
+            </div>
+            <p className="confirm-message">{confirmDialog.message}</p>
+            <div className="confirm-actions-row">
+              <button 
+                type="button" 
+                onClick={closeConfirmDialog}
+                className="btn-confirm-cancel"
+              >
+                Hủy
+              </button>
+              <button 
+                type="button" 
+                onClick={() => confirmDialog.onConfirm && confirmDialog.onConfirm()}
+                className={`btn-confirm-submit ${confirmDialog.isDanger ? 'danger' : ''}`}
+              >
+                {confirmDialog.confirmText}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ============================================================== */}
       {/* CSS DARK ZINC TOÀN DIỆN - ANTI AI-GENERATED UI */}
       {/* ============================================================== */}
@@ -3679,6 +3744,92 @@ const Home = () => {
         }
 
         /* ================= MODALS COMMON ================= */
+        .custom-confirm-backdrop {
+          position: fixed;
+          inset: 0;
+          z-index: 2000;
+          background: rgba(0, 0, 0, 0.78);
+          backdrop-filter: blur(6px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 16px;
+        }
+        .custom-confirm-card {
+          width: 100%;
+          max-width: 380px;
+          background: #121214;
+          border: 1px solid #27272a;
+          border-radius: 14px;
+          padding: 20px 22px;
+          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.85);
+          animation: modalFadeIn 0.15s ease-out;
+        }
+        .confirm-icon-row {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-bottom: 10px;
+        }
+        .confirm-icon-badge {
+          width: 34px;
+          height: 34px;
+          border-radius: 10px;
+          background: rgba(244, 63, 94, 0.12);
+          border: 1px solid rgba(244, 63, 94, 0.25);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+        .confirm-title {
+          font-size: 15px;
+          font-weight: 600;
+          color: #f4f4f5;
+          margin: 0;
+        }
+        .confirm-message {
+          font-size: 12.5px;
+          color: #a1a1aa;
+          line-height: 1.5;
+          margin: 0 0 18px 0;
+        }
+        .confirm-actions-row {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 10px;
+        }
+        .btn-confirm-cancel {
+          padding: 7px 14px;
+          border-radius: 8px;
+          background: #27272a;
+          border: 1px solid #3f3f46;
+          color: #d4d4d8;
+          font-size: 12.5px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.15s ease;
+        }
+        .btn-confirm-cancel:hover {
+          background: #3f3f46;
+          color: #ffffff;
+        }
+        .btn-confirm-submit {
+          padding: 7px 16px;
+          border-radius: 8px;
+          background: #f43f5e;
+          border: 1px solid #f43f5e;
+          color: #ffffff;
+          font-size: 12.5px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: opacity 0.15s ease;
+        }
+        .btn-confirm-submit:hover {
+          opacity: 0.9;
+        }
+
         .modal-veil {
           position: fixed;
           inset: 0;

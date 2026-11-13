@@ -53,6 +53,16 @@ public class GlobalHandleException {
         }
         return ResponseEntity.status(responseErr.getStatusCode()).body(responseErr);
     }
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ResponseEntity<ResponseErr> handleNoResourceFound(org.springframework.web.servlet.resource.NoResourceFoundException e) {
+        ResponseErr responseErr = new ResponseErr();
+        responseErr.setCode(404);
+        responseErr.setStatusCode(404);
+        responseErr.setTime(new Date());
+        responseErr.setMessage("Nội dung hoặc bài viết này không tồn tại hoặc đã được gỡ bỏ.");
+        return ResponseEntity.status(404).body(responseErr);
+    }
+
     @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
     public ResponseEntity<ResponseErr> handleAccessDeniedException(org.springframework.security.access.AccessDeniedException e) {
         ResponseErr responseErr = new ResponseErr();
