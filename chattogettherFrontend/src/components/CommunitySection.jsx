@@ -1,24 +1,58 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Users, Plus, Search, Shield, Crown, CheckCircle2, XCircle, 
-  Settings, LogOut, Trash2, Camera, Lock, Globe, FileText, ChevronRight, X
+  Settings, LogOut, Trash2, Camera, Lock, Globe, FileText, ChevronRight, X,
+  ArrowLeft, MessageSquare, PhoneCall, Radio, Send, Image as ImageIcon,
+  Heart, MessageCircle, Sparkles, Flame, Check, CornerDownRight, Play,
+  Volume2, Share2, MoreVertical
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import GroupCollageAvatar from './GroupCollageAvatar';
 import toast from 'react-hot-toast';
 
-export const CommunitySection = ({ currentUserId, currentUserName, onNavigateFeed }) => {
+const COMMUNITY_CATEGORIES = [
+  { id: 'all', label: 'Tất cả cộng đồng' },
+  { id: 'music', label: 'Âm nhạc & Lo-Fi' },
+  { id: 'tech', label: 'Học tập & Tech' },
+  { id: 'lifestyle', label: 'Tâm sự & Chill' },
+  { id: 'game', label: 'Game & Giải trí' }
+];
+
+export const CommunitySection = ({ 
+  currentUserId, 
+  currentUserName, 
+  currentUserAvatar,
+  posts = [],
+  setPosts,
+  rooms = [],
+  navigate,
+  onSelectUser,
+  onStartPrivateCall,
+  onNavigateFeed 
+}) => {
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchKeyword, setSearchKeyword] = useState('');
+  const [activeCategory, setActiveCategory] = useState('all');
+
+  // Nhóm đang mở xem chi tiết
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [groupDetail, setGroupDetail] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
-  const [activeDetailTab, setActiveDetailTab] = useState('rules'); // rules, members, pending, settings
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState('feed'); // 'feed' | 'voice' | 'members' | 'rules' | 'settings'
+
+  // Phê duyệt thành viên
   const [pendingMembers, setPendingMembers] = useState([]);
   const [loadingPending, setLoadingPending] = useState(false);
 
-  // Modal Create Group
+  // Soạn bài viết thảo luận trong nhóm
+  const [groupPostText, setGroupPostText] = useState('');
+  const [groupAttachedImage, setGroupAttachedImage] = useState(null);
+  const [isPostingGroup, setIsPostingGroup] = useState(false);
+  const [activePostCommentId, setActivePostCommentId] = useState(null);
+  const [commentTextMap, setCommentTextMap] = useState({});
+
+  // Modal Tạo cộng đồng
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState({
     name: '',
@@ -31,11 +65,11 @@ export const CommunitySection = ({ currentUserId, currentUserName, onNavigateFee
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Edit Group Form (Chủ nhóm / Phó nhóm)
+  // Chỉnh sửa quy định
   const [isEditingRules, setIsEditingRules] = useState(false);
   const [editRulesText, setEditRulesText] = useState('');
 
-  // Fetch groups
+  // Nạp danh sách cộng đồng
   const fetchGroups = async (kw = '') => {
     try {
       setLoading(true);
@@ -56,10 +90,10 @@ export const CommunitySection = ({ currentUserId, currentUserName, onNavigateFee
     fetchGroups(searchKeyword);
   }, [searchKeyword]);
 
-  // Open detail
+  // Mở không gian cộng đồng chi tiết
   const handleOpenGroup = async (group) => {
     setSelectedGroup(group);
-    setActiveDetailTab('rules');
+    setActiveWorkspaceTab('feed');
     try {
       setLoadingDetail(true);
       const res = await axiosClient.get(`/groups/${group.id}`);
@@ -71,7 +105,7 @@ export const CommunitySection = ({ currentUserId, currentUserName, onNavigateFee
         }
       }
     } catch (err) {
-      toast.error("Không thể lấy thông tin chi tiết cộng đồng");
+      toast.error("Không thể lấy dữ liệu chi tiết cộng đồng");
     } finally {
       setLoadingDetail(false);
     }
@@ -91,64 +125,67 @@ export const CommunitySection = ({ currentUserId, currentUserName, onNavigateFee
     }
   };
 
-  // Join group
+  // Gia nhập cộng đồng
   const handleJoinGroup = async (groupId, e) => {
     if (e) e.stopPropagation();
     try {
       const res = await axiosClient.post(`/groups/${groupId}/join`);
       const status = res.data?.data;
       if (status === 'PENDING') {
-        toast.success("Đã gửi yêu cầu tham gia! Chờ Chủ/Phó nhóm duyệt.");
+        toast.success("Đã gửi yêu cầu gia nhập, vui lòng chờ Ban quản trị duyệt!");
       } else {
-        toast.success("Gia nhập cộng đồng thành công!");
+        toast.success("Chúc mừng bạn đã gia nhập cộng đồng!");
       }
       fetchGroups(searchKeyword);
       if (selectedGroup && selectedGroup.id === groupId) {
         handleOpenGroup(selectedGroup);
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || "Không thể tham gia nhóm");
+      toast.error(err.response?.data?.message || "Không thể gia nhập cộng đồng");
     }
   };
 
-  // Leave group
-  const handleLeaveGroup = async (groupId) => {
+  // Rời cộng đồng
+  const handleLeaveGroup = async (groupId, e) => {
+    if (e) e.stopPropagation();
     try {
       await axiosClient.post(`/groups/${groupId}/leave`);
       toast.success("Đã rời khỏi cộng đồng");
-      setSelectedGroup(null);
       fetchGroups(searchKeyword);
+      if (selectedGroup && selectedGroup.id === groupId) {
+        handleOpenGroup(selectedGroup);
+      }
     } catch (err) {
-      toast.error(err.response?.data?.message || "Không thể rời nhóm");
+      toast.error(err.response?.data?.message || "Lỗi khi rời nhóm");
     }
   };
 
-  // Approve member
-  const handleApproveMember = async (userId) => {
+  // Phê duyệt thành viên
+  const handleApproveMember = async (targetUserId) => {
     if (!selectedGroup) return;
     try {
-      await axiosClient.post(`/groups/${selectedGroup.id}/approve/${userId}`);
-      toast.success("Đã phê duyệt thành viên!");
-      setPendingMembers(prev => prev.filter(m => m.userId !== userId));
-      fetchGroups(searchKeyword);
+      await axiosClient.post(`/groups/${selectedGroup.id}/approve/${targetUserId}`);
+      toast.success("Đã phê duyệt thành viên mới!");
+      fetchPendingMembers(selectedGroup.id);
+      handleOpenGroup(selectedGroup);
     } catch (err) {
-      toast.error(err.response?.data?.message || "Lỗi khi phê duyệt");
+      toast.error(err.response?.data?.message || "Không thể duyệt thành viên");
     }
   };
 
-  // Reject member
-  const handleRejectMember = async (userId) => {
+  // Từ chối thành viên
+  const handleRejectMember = async (targetUserId) => {
     if (!selectedGroup) return;
     try {
-      await axiosClient.post(`/groups/${selectedGroup.id}/reject/${userId}`);
-      toast.success("Đã từ chối yêu cầu tham gia");
-      setPendingMembers(prev => prev.filter(m => m.userId !== userId));
+      await axiosClient.post(`/groups/${selectedGroup.id}/reject/${targetUserId}`);
+      toast.success("Đã từ chối yêu cầu");
+      fetchPendingMembers(selectedGroup.id);
     } catch (err) {
-      toast.error(err.response?.data?.message || "Lỗi khi từ chối");
+      toast.error(err.response?.data?.message || "Không thể từ chối");
     }
   };
 
-  // Set member role (promote/demote Deputy)
+  // Phân quyền
   const handleSetRole = async (targetUserId, newRole) => {
     if (!selectedGroup) return;
     try {
@@ -156,14 +193,14 @@ export const CommunitySection = ({ currentUserId, currentUserName, onNavigateFee
         userId: targetUserId,
         role: newRole
       });
-      toast.success(`Đã cập nhật quyền thành: ${newRole === 'DEPUTY' ? 'Phó nhóm' : 'Thành viên'}`);
+      toast.success(`Đã cập nhật chức vụ thành: ${newRole === 'DEPUTY' ? 'Phó nhóm' : 'Thành viên'}`);
       handleOpenGroup(selectedGroup);
     } catch (err) {
       toast.error(err.response?.data?.message || "Không thể cập nhật quyền");
     }
   };
 
-  // Save rules
+  // Lưu quy định
   const handleSaveRules = async () => {
     if (!selectedGroup) return;
     try {
@@ -178,7 +215,7 @@ export const CommunitySection = ({ currentUserId, currentUserName, onNavigateFee
     }
   };
 
-  // Create Group
+  // Tạo cộng đồng mới
   const handleCreateSubmit = async (e) => {
     e.preventDefault();
     if (!createForm.name.trim()) {
@@ -188,7 +225,7 @@ export const CommunitySection = ({ currentUserId, currentUserName, onNavigateFee
     try {
       setIsSubmitting(true);
       const res = await axiosClient.post('/groups', createForm);
-      toast.success("Tạo cộng đồng thành công!");
+      toast.success("Đã tạo cộng đồng thành công!");
       setIsCreateOpen(false);
       setCreateForm({
         name: '',
@@ -210,10 +247,9 @@ export const CommunitySection = ({ currentUserId, currentUserName, onNavigateFee
     }
   };
 
-  // Disband group
+  // Giải tán cộng đồng
   const handleDeleteGroup = async () => {
     if (!selectedGroup) return;
-    if (!window.confirm) {}
     try {
       await axiosClient.delete(`/groups/${selectedGroup.id}`);
       toast.success("Đã giải tán cộng đồng");
@@ -224,259 +260,280 @@ export const CommunitySection = ({ currentUserId, currentUserName, onNavigateFee
     }
   };
 
+  // Đăng bài thảo luận vào cộng đồng
+  const handleCreateGroupPost = async (e) => {
+    e.preventDefault();
+    if (!groupPostText.trim() && !groupAttachedImage) {
+      toast.error("Vui lòng nhập nội dung bài viết thảo luận!");
+      return;
+    }
+
+    try {
+      setIsPostingGroup(true);
+      const groupTag = `✦ Cộng đồng: ${selectedGroup.name}`;
+      
+      let payloadMedia = null;
+      if (groupAttachedImage) {
+        payloadMedia = JSON.stringify({
+          mediaUrl: groupAttachedImage,
+          mediaType: 'image'
+        });
+      }
+
+      const res = await axiosClient.post('/posts', {
+        content: groupPostText.trim() || "Thảo luận cộng đồng",
+        imageUrl: payloadMedia,
+        vibe: groupTag
+      });
+
+      if (res.data && res.data.data) {
+        toast.success("Đã đăng bài thảo luận vào cộng đồng!");
+        setGroupPostText('');
+        setGroupAttachedImage(null);
+        if (setPosts) {
+          setPosts(prev => [res.data.data, ...prev]);
+        }
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Không thể đăng bài viết lúc này");
+    } finally {
+      setIsPostingGroup(false);
+    }
+  };
+
+  // Tham gia hoặc tạo phòng thoại của nhóm
+  const handleOpenGroupVoiceRoom = async () => {
+    if (!selectedGroup) return;
+    if (!navigate) return;
+
+    try {
+      const gNameLower = selectedGroup.name.toLowerCase();
+      // Tìm phòng thoại đang mở khớp tên cộng đồng
+      const existingRoom = (rooms || []).find(r => 
+        (r.nameroom || '').toLowerCase().includes(gNameLower)
+      );
+
+      if (existingRoom) {
+        toast.success(`Đang vào phòng đàm thoại: ${existingRoom.nameroom}`);
+        navigate(`/room/${existingRoom.id}`);
+        return;
+      }
+
+      // Tạo mới phòng đàm thoại mang thương hiệu nhóm
+      const roomName = `[Cộng đồng] ${selectedGroup.name}`;
+      const res = await axiosClient.post('/rooms/create-room', {
+        roomName: roomName,
+        password: null
+      });
+
+      if (res.data && res.data.data) {
+        toast.success(`Đã mở không gian đàm thoại cho nhóm ${selectedGroup.name}!`);
+        navigate(`/room/${res.data.data.id}`);
+      }
+    } catch (err) {
+      toast.error("Không thể mở phòng đàm thoại lúc này");
+    }
+  };
+
+  // Mở chat 1-1 với thành viên nhóm
+  const handleDirectChatWithMember = async (member) => {
+    if (!navigate) return;
+    try {
+      const myName = currentUserName || 'Tôi';
+      const friendName = member.nickname || member.account || 'Thành viên';
+      const roomName = `Chat: ${myName} & ${friendName}`;
+
+      const res = await axiosClient.post('/rooms/create-room', {
+        roomName: roomName,
+        password: null
+      });
+
+      if (res.data && res.data.data) {
+        navigate(`/room/${res.data.data.id}`);
+      }
+    } catch (err) {
+      if (onSelectUser) onSelectUser(member.userId);
+    }
+  };
+
+  // Lọc các bài viết thuộc về cộng đồng đang chọn
+  const groupPosts = (posts || []).filter(p => {
+    if (!selectedGroup) return false;
+    const v = (p.vibe || '').toLowerCase();
+    const gName = selectedGroup.name.toLowerCase();
+    return v.includes(gName) || v.includes(`cộng đồng: ${gName}`);
+  });
+
+  // Tìm phòng thoại đang mở cho nhóm này
+  const activeGroupRoom = selectedGroup ? (rooms || []).find(r => 
+    (r.nameroom || '').toLowerCase().includes(selectedGroup.name.toLowerCase())
+  ) : null;
+
   return (
-    <div className="community-module-container py-2">
-      {/* Header Banner */}
-      <div className="community-header-dock flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-2xl bg-zinc-900/80 border border-zinc-800/80 mb-6">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <h2 className="text-zinc-100 font-bold text-lg tracking-tight">Cộng Đồng & Nhóm Thảo Luận</h2>
+    <div className="community-module-container py-2 text-zinc-100">
+      
+      {/* ========================================================================= */}
+      {/* TRƯỜNG HỢP 1: KHÔNG GIAN LÀM VIỆC CỦA CỘNG ĐỒNG ĐÃ CHỌN (COMMUNITY WORKSPACE) */}
+      {/* ========================================================================= */}
+      {selectedGroup ? (
+        <div className="community-workspace space-y-5 animate-fade-in">
+          
+          {/* Thanh Breadcrumb / Back Bar trên cùng */}
+          <div className="flex items-center justify-between pb-3 border-b border-zinc-800/80">
+            <button 
+              type="button"
+              onClick={() => setSelectedGroup(null)}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white text-xs font-semibold border border-zinc-800 transition-all active:scale-95"
+            >
+              <ArrowLeft size={15} />
+              <span>Quay lại danh sách cộng đồng</span>
+            </button>
+
+            <div className="flex items-center gap-2">
+              {selectedGroup.currentUserRole === 'OWNER' && (
+                <span className="px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-semibold flex items-center gap-1.5">
+                  <Crown size={12} /> Chủ nhóm
+                </span>
+              )}
+              {selectedGroup.currentUserRole === 'DEPUTY' && (
+                <span className="px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-semibold flex items-center gap-1.5">
+                  <Shield size={12} /> Phó nhóm
+                </span>
+              )}
+              {selectedGroup.currentUserRole === 'MEMBER' && (
+                <button 
+                  onClick={() => handleLeaveGroup(selectedGroup.id)}
+                  className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-rose-950/40 text-zinc-400 hover:text-rose-400 border border-zinc-800 text-xs font-medium transition-all"
+                >
+                  Rời nhóm
+                </button>
+              )}
+              {!selectedGroup.currentUserRole && (
+                <button 
+                  onClick={() => handleJoinGroup(selectedGroup.id)}
+                  className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md transition-all active:scale-95"
+                >
+                  Gia nhập cộng đồng
+                </button>
+              )}
+            </div>
           </div>
-          <p className="text-zinc-400 text-xs font-sans">
-            Không gian chia sẻ kiến thức, gắn kết đồng sở thích với quyền quản trị minh bạch
-          </p>
-        </div>
 
-        <button 
-          onClick={() => setIsCreateOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-100 hover:bg-white text-zinc-950 font-medium text-xs shadow-md transition-all active:scale-95"
-        >
-          <Plus size={14} strokeWidth={2} />
-          <span>Tạo cộng đồng mới</span>
-        </button>
-      </div>
-
-      {/* Search Input Bar */}
-      <div className="relative mb-6">
-        <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
-        <input 
-          type="text" 
-          placeholder="Tìm kiếm cộng đồng theo tên, chủ đề hoặc mô tả..."
-          value={searchKeyword}
-          onChange={(e) => setSearchKeyword(e.target.value)}
-          className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800/80 text-zinc-200 text-xs placeholder-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors"
-        />
-      </div>
-
-      {/* Grid of Groups */}
-      {loading ? (
-        <div className="py-16 text-center text-zinc-500 text-xs font-mono">
-          Đang tải danh sách cộng đồng...
-        </div>
-      ) : groups.length === 0 ? (
-        <div className="py-16 px-4 text-center rounded-2xl bg-zinc-900/40 border border-zinc-800/60">
-          <Users size={32} className="mx-auto mb-3 text-zinc-600 opacity-60" />
-          <p className="text-zinc-400 text-sm font-medium mb-1">Chưa có cộng đồng nào phù hợp</p>
-          <p className="text-zinc-500 text-xs mb-4">Hãy là người đầu tiên sáng lập một cộng đồng mới!</p>
-          <button 
-            onClick={() => setIsCreateOpen(true)}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium border border-zinc-700 transition-all"
-          >
-            <Plus size={13} /> Tạo cộng đồng ngay
-          </button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {groups.map(group => {
-            const isOwner = group.currentUserRole === 'OWNER';
-            const isDeputy = group.currentUserRole === 'DEPUTY';
-            const isMember = group.currentUserRole === 'MEMBER';
-            const isPending = group.currentUserRole === 'PENDING';
-
-            return (
-              <div 
-                key={group.id}
-                onClick={() => handleOpenGroup(group)}
-                className="group-card relative rounded-2xl bg-zinc-900 border border-zinc-800/80 hover:border-zinc-700 overflow-hidden cursor-pointer transition-all hover:shadow-lg flex flex-col justify-between"
-              >
-                {/* Cover Banner */}
-                <div className="h-28 relative bg-gradient-to-r from-zinc-800 via-zinc-900 to-zinc-950 overflow-hidden">
-                  {group.coverUrl ? (
-                    <img src={group.coverUrl} alt={group.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full opacity-30 bg-[radial-gradient(#3f3f46_1px,transparent_1px)] [background-size:12px_12px]"></div>
-                  )}
-                  {/* Badges on Top Right */}
-                  <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
-                    {group.requiresApproval ? (
-                      <span className="px-2 py-0.5 rounded-full bg-zinc-950/80 backdrop-blur-md border border-amber-500/30 text-[10px] font-mono text-amber-400 flex items-center gap-1">
-                        <Lock size={9} /> Cần duyệt
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 rounded-full bg-zinc-950/80 backdrop-blur-md border border-emerald-500/30 text-[10px] font-mono text-emerald-400 flex items-center gap-1">
-                        <Globe size={9} /> Công khai
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Content Body */}
-                <div className="p-4 pt-0 relative flex-1 flex flex-col justify-between">
-                  {/* Overlapping Avatar */}
-                  <div className="flex items-end justify-between -mt-7 mb-3">
-                    <GroupCollageAvatar 
-                      avatar={group.avatarUrl} 
-                      name={group.name}
-                      size={52}
-                      className="border-2 border-zinc-900 ring-2 ring-zinc-800"
-                    />
-
-                    {/* Role Pill */}
-                    {isOwner && (
-                      <span className="px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[10px] font-semibold flex items-center gap-1">
-                        <Crown size={10} /> Chủ nhóm
-                      </span>
-                    )}
-                    {isDeputy && (
-                      <span className="px-2 py-0.5 rounded-md bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-[10px] font-semibold flex items-center gap-1">
-                        <Shield size={10} /> Phó nhóm
-                      </span>
-                    )}
-                    {isMember && (
-                      <span className="px-2 py-0.5 rounded-md bg-zinc-800 border border-zinc-700 text-zinc-300 text-[10px] font-medium">
-                        Thành viên
-                      </span>
-                    )}
-                    {isPending && (
-                      <span className="px-2 py-0.5 rounded-md bg-amber-950/40 border border-amber-500/30 text-amber-400 text-[10px] font-medium">
-                        Đang chờ duyệt
-                      </span>
-                    )}
-                  </div>
-
-                  <div>
-                    <h3 className="text-zinc-100 font-semibold text-sm mb-1 line-clamp-1">{group.name}</h3>
-                    <p className="text-zinc-400 text-xs font-sans line-clamp-2 mb-3">
-                      {group.description || 'Chưa có mô tả cho cộng đồng này.'}
-                    </p>
-                  </div>
-
-                  {/* Footer Meta & CTA */}
-                  <div className="flex items-center justify-between pt-3 border-t border-zinc-800/80 text-xs">
-                    <span className="text-zinc-500 font-mono text-[11px] flex items-center gap-1">
-                      <Users size={12} /> {group.membersCount || 1} thành viên
-                    </span>
-
-                    {isOwner || isDeputy ? (
-                      <span className="text-xs font-medium text-emerald-400 flex items-center gap-1">
-                        Quản trị nhóm <ChevronRight size={13} />
-                      </span>
-                    ) : isMember ? (
-                      <span className="text-xs text-zinc-400 flex items-center gap-1">
-                        Xem chi tiết <ChevronRight size={13} />
-                      </span>
-                    ) : isPending ? (
-                      <span className="text-xs text-amber-400">
-                        Chờ duyệt...
-                      </span>
-                    ) : (
-                      <button 
-                        onClick={(e) => handleJoinGroup(group.id, e)}
-                        className="px-3 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium border border-zinc-700/80 transition-all"
-                      >
-                        Gia nhập
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* ========================================================= */}
-      {/* MODAL / DRAWER CHI TIẾT CỘNG ĐỒNG & QUẢN TRỊ */}
-      {/* ========================================================= */}
-      {selectedGroup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => setSelectedGroup(null)}>
-          <div 
-            className="relative w-full max-w-2xl max-h-[90vh] rounded-3xl bg-zinc-900 border border-zinc-800 flex flex-col shadow-2xl overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header Banner */}
-            <div className="h-36 relative bg-gradient-to-r from-zinc-800 via-zinc-900 to-zinc-950 overflow-hidden flex-shrink-0">
+          {/* Hero Header Cộng đồng */}
+          <div className="rounded-3xl bg-zinc-900 border border-zinc-800 overflow-hidden shadow-xl">
+            {/* Cover Banner */}
+            <div className="h-40 sm:h-48 relative bg-gradient-to-r from-zinc-800 via-indigo-950/40 to-zinc-950 overflow-hidden">
               {selectedGroup.coverUrl ? (
                 <img src={selectedGroup.coverUrl} alt={selectedGroup.name} className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full opacity-30 bg-[radial-gradient(#3f3f46_1px,transparent_1px)] [background-size:12px_12px]"></div>
+                <div className="w-full h-full opacity-40 bg-[radial-gradient(#6366f1_1px,transparent_1px)] [background-size:16px_16px]"></div>
               )}
-              
-              <button 
-                onClick={() => setSelectedGroup(null)}
-                className="absolute top-3 right-3 w-8 h-8 rounded-full bg-zinc-950/80 backdrop-blur-md border border-white/10 text-zinc-400 hover:text-white flex items-center justify-center transition-colors"
-              >
-                <X size={15} />
-              </button>
+              <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-zinc-900/30 to-transparent"></div>
             </div>
 
-            {/* Sub-header with Avatar, Name and Action */}
-            <div className="px-6 py-4 border-b border-zinc-800 flex-shrink-0">
-              <div className="flex items-end justify-between -mt-12 mb-3">
-                <GroupCollageAvatar 
-                  avatar={selectedGroup.avatarUrl} 
-                  name={selectedGroup.name}
-                  size={68}
-                  className="border-4 border-zinc-900 shadow-md"
-                />
+            {/* Thông tin chính & Action Bar */}
+            <div className="px-5 sm:px-6 pb-5 pt-0 relative">
+              <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 -mt-12 mb-4">
+                <div className="flex items-end gap-3.5">
+                  <GroupCollageAvatar 
+                    avatar={selectedGroup.avatarUrl} 
+                    name={selectedGroup.name}
+                    size={76}
+                    className="border-4 border-zinc-900 shadow-xl ring-2 ring-zinc-800 rounded-2xl"
+                  />
+                  <div className="pb-1">
+                    <h1 className="text-zinc-100 font-bold text-lg sm:text-xl tracking-tight leading-snug">
+                      {selectedGroup.name}
+                    </h1>
+                    <div className="flex items-center gap-2 text-xs text-zinc-400 font-mono mt-0.5">
+                      <span>{selectedGroup.membersCount || groupDetail?.members?.length || 1} thành viên</span>
+                      <span>•</span>
+                      <span className="text-emerald-400">
+                        {activeGroupRoom ? '● Đang có phòng thoại trực tiếp' : 'Sẵn sàng kết nối'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
 
-                <div className="flex items-center gap-2">
-                  {selectedGroup.currentUserRole === 'OWNER' && (
-                    <span className="px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-semibold flex items-center gap-1.5">
-                      <Crown size={12} /> Bạn là Chủ nhóm
-                    </span>
-                  )}
-                  {selectedGroup.currentUserRole === 'DEPUTY' && (
-                    <span className="px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-semibold flex items-center gap-1.5">
-                      <Shield size={12} /> Bạn là Phó nhóm
-                    </span>
-                  )}
-                  {selectedGroup.currentUserRole === 'MEMBER' && (
-                    <button 
-                      onClick={() => handleLeaveGroup(selectedGroup.id)}
-                      className="px-3 py-1 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/30 text-rose-300 text-xs font-medium transition-all"
-                    >
-                      Rời nhóm
-                    </button>
-                  )}
-                  {!selectedGroup.currentUserRole && (
-                    <button 
-                      onClick={() => handleJoinGroup(selectedGroup.id)}
-                      className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition-all shadow-md"
-                    >
-                      Gia nhập cộng đồng
-                    </button>
-                  )}
+                {/* Primary CTA Buttons */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button 
+                    type="button"
+                    onClick={handleOpenGroupVoiceRoom}
+                    className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-2 shadow-lg shadow-emerald-900/20 transition-all active:scale-95"
+                  >
+                    <Radio size={14} className="animate-pulse" />
+                    <span>{activeGroupRoom ? "Tham gia phòng thoại nhóm" : "Mở phòng thoại nhóm"}</span>
+                  </button>
+
+                  <button 
+                    type="button"
+                    onClick={() => setActiveWorkspaceTab('feed')}
+                    className="px-3.5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold border border-zinc-700/80 transition-all active:scale-95"
+                  >
+                    <MessageSquare size={14} />
+                    <span>Thảo luận</span>
+                  </button>
                 </div>
               </div>
 
-              <h2 className="text-zinc-100 font-bold text-lg mb-1">{selectedGroup.name}</h2>
-              <p className="text-zinc-400 text-xs font-sans mb-3">{selectedGroup.description || 'Chưa có mô tả'}</p>
+              {/* Mô tả nhóm */}
+              <p className="text-zinc-300 text-xs sm:text-sm leading-relaxed max-w-3xl pt-1">
+                {selectedGroup.description || 'Chào mừng bạn đến với cộng đồng. Cùng chia sẻ góc nhìn và tham gia các buổi đàm thoại bổ ích!'}
+              </p>
 
-              {/* Tabs Navigation */}
-              <div className="flex items-center gap-2 pt-2 border-t border-zinc-800/60">
+              {/* Segmented Workspace Tabs */}
+              <div className="flex items-center gap-1.5 pt-5 mt-4 border-t border-zinc-800/80 overflow-x-auto no-scrollbar">
                 <button 
-                  onClick={() => setActiveDetailTab('rules')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${activeDetailTab === 'rules' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'}`}
+                  type="button"
+                  onClick={() => setActiveWorkspaceTab('feed')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all flex-shrink-0 ${activeWorkspaceTab === 'feed' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}
                 >
-                  <span className="flex items-center gap-1.5"><FileText size={13} /> Quy định & Nội quy</span>
+                  <MessageSquare size={14} />
+                  <span>Bảng tin thảo luận ({groupPosts.length})</span>
                 </button>
+
                 <button 
-                  onClick={() => setActiveDetailTab('members')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${activeDetailTab === 'members' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'}`}
+                  type="button"
+                  onClick={() => setActiveWorkspaceTab('voice')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all flex-shrink-0 ${activeWorkspaceTab === 'voice' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}
                 >
-                  <span className="flex items-center gap-1.5"><Users size={13} /> Thành viên ({groupDetail?.members?.length || 1})</span>
+                  <Radio size={14} />
+                  <span>Phòng đàm thoại</span>
+                  {activeGroupRoom && (
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                  )}
                 </button>
+
+                <button 
+                  type="button"
+                  onClick={() => setActiveWorkspaceTab('members')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all flex-shrink-0 ${activeWorkspaceTab === 'members' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}
+                >
+                  <Users size={14} />
+                  <span>Thành viên ({groupDetail?.members?.length || selectedGroup.membersCount || 1})</span>
+                </button>
+
+                <button 
+                  type="button"
+                  onClick={() => setActiveWorkspaceTab('rules')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all flex-shrink-0 ${activeWorkspaceTab === 'rules' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}
+                >
+                  <FileText size={14} />
+                  <span>Quy định & Nội quy</span>
+                </button>
+
                 {['OWNER', 'DEPUTY'].includes(groupDetail?.currentUserRole || selectedGroup.currentUserRole) && (
                   <button 
+                    type="button"
                     onClick={() => {
-                      setActiveDetailTab('pending');
+                      setActiveWorkspaceTab('settings');
                       fetchPendingMembers(selectedGroup.id);
                     }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${activeDetailTab === 'pending' ? 'bg-zinc-800 text-amber-300' : 'text-zinc-400 hover:text-amber-300'}`}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all flex-shrink-0 ${activeWorkspaceTab === 'settings' ? 'bg-zinc-800 text-amber-300 shadow-sm' : 'text-zinc-400 hover:text-amber-300'}`}
                   >
-                    <span>Duyệt thành viên</span>
+                    <Settings size={14} />
+                    <span>Quản trị</span>
                     {pendingMembers.length > 0 && (
                       <span className="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-400 text-[10px] font-mono border border-amber-500/30">
                         {pendingMembers.length}
@@ -484,209 +541,654 @@ export const CommunitySection = ({ currentUserId, currentUserName, onNavigateFee
                     )}
                   </button>
                 )}
-                {selectedGroup.currentUserRole === 'OWNER' && (
-                  <button 
-                    onClick={() => setActiveDetailTab('settings')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${activeDetailTab === 'settings' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'}`}
-                  >
-                    <span className="flex items-center gap-1.5"><Settings size={13} /> Thiết lập</span>
-                  </button>
-                )}
               </div>
             </div>
+          </div>
 
-            {/* Modal Body Tab Content */}
-            <div className="p-6 overflow-y-auto flex-1">
-              {/* TAB 1: RULES & NỘI QUY */}
-              {activeDetailTab === 'rules' && (
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-zinc-200 font-semibold text-xs tracking-wide uppercase font-mono">Quy định của cộng đồng</h4>
-                    {['OWNER', 'DEPUTY'].includes(groupDetail?.currentUserRole || selectedGroup.currentUserRole) && !isEditingRules && (
-                      <button 
-                        onClick={() => setIsEditingRules(true)}
-                        className="text-xs text-emerald-400 hover:underline"
-                      >
-                        Chỉnh sửa quy định
-                      </button>
+          {/* ========================================================= */}
+          {/* TAB 1: BẢNG TIN THẢO LUẬN (FEED TRONG NHÓM) */}
+          {/* ========================================================= */}
+          {activeWorkspaceTab === 'feed' && (
+            <div className="space-y-4">
+              {/* Box soạn thảo bài viết dành riêng cho nhóm */}
+              <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 shadow-sm">
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-full bg-zinc-800 overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-xs text-white border border-zinc-700">
+                    {currentUserAvatar ? (
+                      <img src={currentUserAvatar} alt="Me" className="w-full h-full object-cover" />
+                    ) : (
+                      (currentUserName || 'U').charAt(0).toUpperCase()
                     )}
                   </div>
 
-                  {isEditingRules ? (
-                    <div className="space-y-3">
-                      <textarea 
-                        rows="6"
-                        value={editRulesText}
-                        onChange={(e) => setEditRulesText(e.target.value)}
-                        className="w-full p-3 rounded-xl bg-zinc-950 border border-zinc-700 text-zinc-200 text-xs focus:outline-none font-mono"
-                        placeholder="Nhập các quy định của nhóm..."
-                      />
-                      <div className="flex items-center justify-end gap-2">
+                  <div className="flex-1 min-w-0">
+                    <textarea 
+                      rows="3"
+                      value={groupPostText}
+                      onChange={(e) => setGroupPostText(e.target.value)}
+                      placeholder={`Chia sẻ câu chuyện, hỏi đáp hoặc ý tưởng vào cộng đồng ${selectedGroup.name}...`}
+                      className="w-full bg-transparent text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none resize-none leading-relaxed"
+                    />
+
+                    {groupAttachedImage && (
+                      <div className="relative mt-2 inline-block rounded-xl overflow-hidden border border-zinc-700 max-h-40">
+                        <img src={groupAttachedImage} alt="Attached" className="max-h-40 object-cover" />
                         <button 
-                          onClick={() => setIsEditingRules(false)}
-                          className="px-3 py-1.5 rounded-lg bg-zinc-800 text-zinc-300 text-xs"
+                          type="button" 
+                          onClick={() => setGroupAttachedImage(null)}
+                          className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/70 text-white flex items-center justify-center hover:bg-black"
                         >
-                          Hủy
-                        </button>
-                        <button 
-                          onClick={handleSaveRules}
-                          className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-medium"
-                        >
-                          Lưu quy định
+                          <X size={12} />
                         </button>
                       </div>
+                    )}
+
+                    <div className="flex items-center justify-between pt-3 border-t border-zinc-800/80 mt-2">
+                      <div className="flex items-center gap-2">
+                        <label className="cursor-pointer px-2.5 py-1.5 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs flex items-center gap-1.5 transition-all border border-zinc-700/60">
+                          <ImageIcon size={13} />
+                          <span>Ảnh minh họa</span>
+                          <input 
+                            type="file" 
+                            accept="image/*"
+                            className="hidden" 
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              const reader = new FileReader();
+                              reader.onload = (ev) => setGroupAttachedImage(ev.target.result);
+                              reader.readAsDataURL(file);
+                            }}
+                          />
+                        </label>
+                        <span className="text-[11px] text-zinc-500 font-mono hidden sm:inline">
+                          Tag: ✦ Cộng đồng: {selectedGroup.name}
+                        </span>
+                      </div>
+
+                      <button 
+                        type="button"
+                        onClick={handleCreateGroupPost}
+                        disabled={isPostingGroup || (!groupPostText.trim() && !groupAttachedImage)}
+                        className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md transition-all active:scale-95 disabled:opacity-40"
+                      >
+                        {isPostingGroup ? "Đang gửi..." : "Đăng thảo luận"}
+                      </button>
                     </div>
-                  ) : (
-                    <div className="p-4 rounded-2xl bg-zinc-950/60 border border-zinc-800/80 text-zinc-300 text-xs font-sans leading-relaxed whitespace-pre-wrap">
-                      {groupDetail?.rules || selectedGroup.rules || "Chưa có quy định cụ thể. Vui lòng tôn trọng các thành viên trong nhóm."}
-                    </div>
-                  )}
+                  </div>
                 </div>
-              )}
+              </div>
 
-              {/* TAB 2: MEMBERS */}
-              {activeDetailTab === 'members' && (
-                <div className="space-y-2">
-                  <h4 className="text-zinc-200 font-semibold text-xs tracking-wide uppercase font-mono mb-3">Danh sách thành viên</h4>
-                  {(groupDetail?.members || []).map(member => {
-                    const isOwner = member.role === 'OWNER';
-                    const isDeputy = member.role === 'DEPUTY';
-                    const canManage = selectedGroup.currentUserRole === 'OWNER' && !isOwner;
-
-                    return (
-                      <div key={member.id} className="flex items-center justify-between p-3 rounded-xl bg-zinc-950/50 border border-zinc-800/60">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center font-bold text-xs text-zinc-200 overflow-hidden">
-                            {member.avatar ? (
-                              <img src={member.avatar} alt={member.nickname} className="w-full h-full object-cover" />
+              {/* Danh sách bài viết thảo luận */}
+              {groupPosts.length === 0 ? (
+                <div className="py-14 px-4 text-center rounded-2xl bg-zinc-900/40 border border-zinc-800/60">
+                  <MessageSquare size={32} className="mx-auto mb-2 text-zinc-600 opacity-60" />
+                  <p className="text-zinc-300 text-sm font-semibold mb-1">Chưa có bài thảo luận nào trong cộng đồng này</p>
+                  <p className="text-zinc-500 text-xs max-w-md mx-auto">
+                    Hãy là thành viên đầu tiên mở bát chủ đề thảo luận hoặc chia sẻ góc nhìn thú vị cùng mọi người!
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3.5">
+                  {groupPosts.map(post => (
+                    <div key={post.id} className="p-4 sm:p-5 rounded-2xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700/80 transition-all shadow-sm">
+                      {/* Tác giả & Thời gian */}
+                      <div className="flex items-center justify-between mb-3">
+                        <div 
+                          className="flex items-center gap-2.5 cursor-pointer"
+                          onClick={() => {
+                            if (onSelectUser && post.authorId) onSelectUser(post.authorId);
+                          }}
+                        >
+                          <div className="w-9 h-9 rounded-full bg-zinc-800 flex items-center justify-center font-bold text-xs text-white overflow-hidden border border-zinc-700">
+                            {post.authorAvatar ? (
+                              <img src={post.authorAvatar} alt={post.authorNickname} className="w-full h-full object-cover" />
                             ) : (
-                              (member.nickname || 'U').charAt(0)
+                              (post.authorNickname || post.author || 'U').charAt(0).toUpperCase()
                             )}
                           </div>
                           <div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-zinc-100 text-xs font-semibold">{member.nickname}</span>
-                              <span className="text-zinc-500 font-mono text-[10px]">@{member.account}</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-zinc-100 font-bold text-xs">{post.authorNickname || post.author}</span>
+                              <span className="text-zinc-500 font-mono text-[10px]">@{post.authorAccount || 'user'}</span>
                             </div>
-                            <span className="text-zinc-500 text-[10px]">Tham gia lúc: {new Date(member.joinedAt).toLocaleDateString('vi-VN')}</span>
+                            <span className="text-zinc-500 text-[10px] font-mono">
+                              {post.createdAt ? new Date(post.createdAt).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : 'Vừa xong'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Nội dung bài viết */}
+                      <p className="text-zinc-200 text-xs sm:text-sm leading-relaxed whitespace-pre-wrap mb-3">
+                        {post.content}
+                      </p>
+
+                      {/* Hình ảnh nếu có */}
+                      {post.imageUrl && (
+                        <div className="rounded-xl overflow-hidden border border-zinc-800 max-h-80 mb-3 bg-black/40">
+                          <img src={post.imageUrl} alt="Đính kèm" className="w-full max-h-80 object-cover" />
+                        </div>
+                      )}
+
+                      {/* Phản hồi nhanh */}
+                      <div className="flex items-center gap-3 pt-2 border-t border-zinc-800/60 text-xs text-zinc-400">
+                        <span className="flex items-center gap-1 text-zinc-400">
+                          <Heart size={13} className="text-rose-500/80" /> {post.likesCount || 0}
+                        </span>
+                        <span className="flex items-center gap-1 text-zinc-400">
+                          <MessageCircle size={13} /> {post.commentsCount || 0} phản hồi
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ========================================================= */}
+          {/* TAB 2: PHÒNG ĐÀM THOẠI (LIVE VOICE ROOMS) */}
+          {/* ========================================================= */}
+          {activeWorkspaceTab === 'voice' && (
+            <div className="space-y-4">
+              {activeGroupRoom ? (
+                <div className="p-5 rounded-2xl bg-gradient-to-r from-emerald-950/40 via-zinc-900 to-zinc-900 border border-emerald-500/30 shadow-lg">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+                        <span className="text-emerald-400 font-mono text-xs font-semibold uppercase tracking-wider">
+                          Phòng thoại đang trực tiếp
+                        </span>
+                      </div>
+                      <h3 className="text-zinc-100 font-bold text-base mb-1">{activeGroupRoom.nameroom}</h3>
+                      <p className="text-zinc-400 text-xs font-mono">
+                        {activeGroupRoom.soluong || (activeGroupRoom.userRoomDTOList?.length || 1)} thành viên đang kết nối âm thanh
+                      </p>
+                    </div>
+
+                    <button 
+                      type="button"
+                      onClick={() => navigate(`/room/${activeGroupRoom.id}`)}
+                      className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/30 transition-all active:scale-95"
+                    >
+                      <Radio size={15} />
+                      <span>Tham gia đàm thoại ngay</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-8 text-center rounded-2xl bg-zinc-900/40 border border-zinc-800/80">
+                  <Radio size={36} className="mx-auto mb-3 text-zinc-600 opacity-60" />
+                  <h4 className="text-zinc-200 font-bold text-sm mb-1">Chưa có phòng đàm thoại nào đang mở</h4>
+                  <p className="text-zinc-400 text-xs max-w-md mx-auto mb-4">
+                    Bạn có thể khởi tạo một phòng voice call âm thanh độ trễ thấp dành riêng cho các thành viên cộng đồng {selectedGroup.name}.
+                  </p>
+                  <button 
+                    type="button"
+                    onClick={handleOpenGroupVoiceRoom}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow-md transition-all active:scale-95"
+                  >
+                    <Plus size={15} />
+                    <span>Mở phòng đàm thoại nhóm ngay</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ========================================================= */}
+          {/* TAB 3: THÀNH VIÊN CỘNG ĐỒNG */}
+          {/* ========================================================= */}
+          {activeWorkspaceTab === 'members' && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between pb-2">
+                <span className="text-zinc-400 text-xs font-mono uppercase tracking-wider">
+                  Tổng số {groupDetail?.members?.length || 1} thành viên
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {(groupDetail?.members || []).map(member => {
+                  const isOwner = member.role === 'OWNER';
+                  const isDeputy = member.role === 'DEPUTY';
+                  const isSelf = member.userId === currentUserId;
+                  const canManage = selectedGroup.currentUserRole === 'OWNER' && !isOwner;
+
+                  return (
+                    <div 
+                      key={member.id} 
+                      className="p-3.5 rounded-2xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 transition-all flex items-center justify-between gap-3 shadow-sm"
+                    >
+                      <div 
+                        className="flex items-center gap-3 min-w-0 cursor-pointer"
+                        onClick={() => {
+                          if (onSelectUser) onSelectUser(member.userId);
+                        }}
+                      >
+                        <div className="w-10 h-10 rounded-xl bg-zinc-800 flex items-center justify-center font-bold text-sm text-zinc-200 overflow-hidden border border-zinc-700 flex-shrink-0">
+                          {member.avatar ? (
+                            <img src={member.avatar} alt={member.nickname} className="w-full h-full object-cover" />
+                          ) : (
+                            (member.nickname || 'U').charAt(0).toUpperCase()
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <span className="text-zinc-100 font-semibold text-xs truncate">{member.nickname}</span>
+                            {isOwner && (
+                              <span className="px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[9px] font-bold">
+                                Chủ nhóm
+                              </span>
+                            )}
+                            {isDeputy && (
+                              <span className="px-1.5 py-0.2 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-[9px] font-bold">
+                                Phó nhóm
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-zinc-500 font-mono text-[10px] truncate block">@{member.account}</span>
+                        </div>
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {!isSelf && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleDirectChatWithMember(member)}
+                              className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-all"
+                              title="Nhắn tin 1-1"
+                            >
+                              <MessageSquare size={13} />
+                            </button>
+                            {onStartPrivateCall && (
+                              <button
+                                type="button"
+                                onClick={() => onStartPrivateCall({ id: member.userId, nickname: member.nickname, avatar: member.avatar })}
+                                className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-emerald-400 transition-all"
+                                title="Đàm thoại 1-1"
+                              >
+                                <PhoneCall size={13} />
+                              </button>
+                            )}
+                          </>
+                        )}
+                        {canManage && (
+                          <button
+                            type="button"
+                            onClick={() => handleSetRole(member.userId, isDeputy ? 'MEMBER' : 'DEPUTY')}
+                            className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] font-medium transition-colors"
+                          >
+                            {isDeputy ? 'Hạ Phó nhóm' : 'Thăng Phó nhóm'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================= */}
+          {/* TAB 4: QUY ĐỊNH & NỘI QUY */}
+          {/* ========================================================= */}
+          {activeWorkspaceTab === 'rules' && (
+            <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <FileText size={16} className="text-zinc-400" />
+                  <h3 className="text-zinc-100 font-bold text-sm">Quy Định Chung Của Cộng Đồng</h3>
+                </div>
+                {['OWNER', 'DEPUTY'].includes(groupDetail?.currentUserRole || selectedGroup.currentUserRole) && !isEditingRules && (
+                  <button 
+                    type="button"
+                    onClick={() => setIsEditingRules(true)}
+                    className="text-xs text-emerald-400 hover:underline font-medium"
+                  >
+                    Chỉnh sửa quy định
+                  </button>
+                )}
+              </div>
+
+              {isEditingRules ? (
+                <div className="space-y-3">
+                  <textarea 
+                    rows="6"
+                    value={editRulesText}
+                    onChange={(e) => setEditRulesText(e.target.value)}
+                    className="w-full p-3.5 rounded-xl bg-zinc-950 border border-zinc-700 text-zinc-200 text-xs focus:outline-none font-sans leading-relaxed"
+                    placeholder="Nhập nội quy và nguyên tắc sinh hoạt của cộng đồng..."
+                  />
+                  <div className="flex items-center justify-end gap-2">
+                    <button 
+                      type="button"
+                      onClick={() => setIsEditingRules(false)}
+                      className="px-3 py-1.5 rounded-lg bg-zinc-800 text-zinc-300 text-xs"
+                    >
+                      Hủy
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={handleSaveRules}
+                      className="px-4 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold shadow-md"
+                    >
+                      Lưu quy định
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 rounded-xl bg-zinc-950/70 border border-zinc-800/80 text-zinc-300 text-xs leading-relaxed whitespace-pre-wrap font-sans">
+                  {groupDetail?.rules || selectedGroup.rules || "Chào mừng bạn! Quy tắc cơ bản là tôn trọng lẫn nhau, không chia sẻ nội dung độc hại và cùng nhau xây dựng cộng đồng văn minh."}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ========================================================= */}
+          {/* TAB 5: QUẢN TRỊ & THIẾT LẬP (CHỦ / PHÓ NHÓM) */}
+          {/* ========================================================= */}
+          {activeWorkspaceTab === 'settings' && ['OWNER', 'DEPUTY'].includes(groupDetail?.currentUserRole || selectedGroup.currentUserRole) && (
+            <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-6">
+              
+              {/* Duyệt thành viên */}
+              <div>
+                <h4 className="text-zinc-200 font-bold text-xs uppercase tracking-wider font-mono mb-3">
+                  Yêu Cầu Gia Nhập Đang Chờ Duyệt ({pendingMembers.length})
+                </h4>
+                {loadingPending ? (
+                  <div className="py-4 text-center text-zinc-500 text-xs font-mono">Đang kiểm tra yêu cầu...</div>
+                ) : pendingMembers.length === 0 ? (
+                  <div className="py-6 px-4 rounded-xl bg-zinc-950/50 border border-zinc-800/80 text-center text-zinc-400 text-xs">
+                    Hiện không có yêu cầu tham gia nào đang chờ duyệt.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {pendingMembers.map(req => (
+                      <div key={req.id} className="flex items-center justify-between p-3 rounded-xl bg-zinc-950/80 border border-zinc-800">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center font-bold text-xs text-zinc-200 overflow-hidden">
+                            {req.avatar ? (
+                              <img src={req.avatar} alt={req.nickname} className="w-full h-full object-cover" />
+                            ) : (
+                              (req.nickname || 'U').charAt(0).toUpperCase()
+                            )}
+                          </div>
+                          <div>
+                            <span className="text-zinc-200 text-xs font-semibold block">{req.nickname}</span>
+                            <span className="text-zinc-500 font-mono text-[10px]">@{req.account}</span>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-2">
-                          {isOwner && (
-                            <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20 text-[10px] font-semibold flex items-center gap-1">
-                              <Crown size={10} /> Chủ nhóm
-                            </span>
-                          )}
-                          {isDeputy && (
-                            <span className="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 text-[10px] font-semibold flex items-center gap-1">
-                              <Shield size={10} /> Phó nhóm
-                            </span>
-                          )}
-                          
-                          {canManage && (
-                            <button
-                              onClick={() => handleSetRole(member.userId, isDeputy ? 'MEMBER' : 'DEPUTY')}
-                              className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] font-medium transition-colors"
-                            >
-                              {isDeputy ? 'Hạ xuống thành viên' : 'Bổ nhiệm Phó nhóm'}
-                            </button>
-                          )}
+                          <button 
+                            type="button"
+                            onClick={() => handleApproveMember(req.userId)}
+                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md transition-all active:scale-95"
+                          >
+                            <CheckCircle2 size={13} /> Phê duyệt
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={() => handleRejectMember(req.userId)}
+                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-rose-950/40 text-zinc-300 hover:text-rose-400 border border-zinc-700 text-xs transition-all"
+                          >
+                            <XCircle size={13} /> Từ chối
+                          </button>
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* TAB 3: PENDING MEMBERS APPROVAL */}
-              {activeDetailTab === 'pending' && (
-                <div>
-                  <h4 className="text-zinc-200 font-semibold text-xs tracking-wide uppercase font-mono mb-3">Yêu cầu gia nhập ({pendingMembers.length})</h4>
-                  {loadingPending ? (
-                    <div className="text-center py-6 text-zinc-500 text-xs">Đang kiểm tra yêu cầu...</div>
-                  ) : pendingMembers.length === 0 ? (
-                    <div className="text-center py-8 text-zinc-500 text-xs">Không có yêu cầu tham gia nào đang chờ duyệt.</div>
-                  ) : (
-                    <div className="space-y-2">
-                      {pendingMembers.map(req => (
-                        <div key={req.id} className="flex items-center justify-between p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center font-bold text-xs text-zinc-200 overflow-hidden">
-                              {req.avatar ? (
-                                <img src={req.avatar} alt={req.nickname} className="w-full h-full object-cover" />
-                              ) : (
-                                (req.nickname || 'U').charAt(0)
-                              )}
-                            </div>
-                            <div>
-                              <div className="text-zinc-200 text-xs font-semibold">{req.nickname}</div>
-                              <div className="text-zinc-500 font-mono text-[10px]">@{req.account}</div>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <button 
-                              onClick={() => handleApproveMember(req.userId)}
-                              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition-all"
-                            >
-                              <CheckCircle2 size={13} /> Phê duyệt
-                            </button>
-                            <button 
-                              onClick={() => handleRejectMember(req.userId)}
-                              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-rose-950/40 text-zinc-300 hover:text-rose-400 border border-zinc-700 transition-all text-xs"
-                            >
-                              <XCircle size={13} /> Từ chối
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* TAB 4: SETTINGS (CHỦ NHÓM ONLY) */}
-              {activeDetailTab === 'settings' && selectedGroup.currentUserRole === 'OWNER' && (
-                <div className="space-y-6">
-                  <div>
-                    <h4 className="text-zinc-200 font-semibold text-xs tracking-wide uppercase font-mono mb-2">Chế độ phê duyệt thành viên</h4>
-                    <p className="text-zinc-400 text-xs mb-3">
-                      Khi bật, người dùng xin gia nhập phải được bạn hoặc Phó nhóm phê duyệt trước khi có thể xem hoặc đăng bài.
-                    </p>
-                    <button 
-                      onClick={async () => {
-                        try {
-                          await axiosClient.put(`/groups/${selectedGroup.id}`, {
-                            requiresApproval: !selectedGroup.requiresApproval
-                          });
-                          setSelectedGroup(prev => ({ ...prev, requiresApproval: !prev.requiresApproval }));
-                          toast.success("Đã cập nhật chế độ phê duyệt!");
-                          fetchGroups(searchKeyword);
-                        } catch (e) {
-                          toast.error("Không thể cập nhật");
-                        }
-                      }}
-                      className={`px-4 py-2 rounded-xl text-xs font-medium border transition-all ${selectedGroup.requiresApproval ? 'bg-amber-500/10 border-amber-500/30 text-amber-300' : 'bg-zinc-800 border-zinc-700 text-zinc-300'}`}
-                    >
-                      {selectedGroup.requiresApproval ? "✓ Đang bật chế độ cần phê duyệt" : "○ Đang cho phép gia nhập tự do"}
-                    </button>
+                    ))}
                   </div>
+                )}
+              </div>
 
-                  <div className="pt-4 border-t border-zinc-800">
-                    <h4 className="text-rose-400 font-semibold text-xs tracking-wide uppercase font-mono mb-2">Vùng nguy hiểm</h4>
-                    <p className="text-zinc-500 text-xs mb-3">Giải tán cộng đồng sẽ xóa vĩnh viễn dữ liệu nhóm và toàn bộ thành viên.</p>
-                    <button 
-                      onClick={handleDeleteGroup}
-                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/30 text-rose-300 text-xs font-medium transition-all"
-                    >
-                      <Trash2 size={13} /> Giải tán cộng đồng
-                    </button>
-                  </div>
+              {/* Chế độ phê duyệt */}
+              <div className="pt-4 border-t border-zinc-800">
+                <h4 className="text-zinc-200 font-bold text-xs uppercase tracking-wider font-mono mb-2">Chế độ kiểm duyệt thành viên</h4>
+                <p className="text-zinc-400 text-xs mb-3">
+                  Khi bật, người dùng tham gia nhóm cần được sự chấp thuận của Quản trị viên trước khi truy cập đầy đủ.
+                </p>
+                <button 
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await axiosClient.put(`/groups/${selectedGroup.id}`, {
+                        requiresApproval: !selectedGroup.requiresApproval
+                      });
+                      setSelectedGroup(prev => ({ ...prev, requiresApproval: !prev.requiresApproval }));
+                      toast.success("Đã cập nhật chế độ phê duyệt!");
+                      fetchGroups(searchKeyword);
+                    } catch (e) {
+                      toast.error("Không thể cập nhật");
+                    }
+                  }}
+                  className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${selectedGroup.requiresApproval ? 'bg-amber-500/10 border-amber-500/30 text-amber-300' : 'bg-zinc-800 border-zinc-700 text-zinc-300'}`}
+                >
+                  {selectedGroup.requiresApproval ? "✓ Đang bật chế độ cần phê duyệt" : "○ Cho phép gia nhập tự do (Công khai)"}
+                </button>
+              </div>
+
+              {/* Vùng nguy hiểm: Giải tán nhóm */}
+              {selectedGroup.currentUserRole === 'OWNER' && (
+                <div className="pt-4 border-t border-zinc-800">
+                  <h4 className="text-rose-400 font-bold text-xs uppercase tracking-wider font-mono mb-1">Vùng nguy hiểm</h4>
+                  <p className="text-zinc-500 text-xs mb-3">Giải tán cộng đồng sẽ xóa vĩnh viễn dữ liệu nhóm và toàn bộ thành viên.</p>
+                  <button 
+                    type="button"
+                    onClick={handleDeleteGroup}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/30 text-rose-300 text-xs font-semibold transition-all active:scale-95"
+                  >
+                    <Trash2 size={13} /> Giải tán cộng đồng này
+                  </button>
                 </div>
               )}
             </div>
+          )}
+
+        </div>
+      ) : (
+
+        /* ========================================================================= */
+        /* TRƯỜNG HỢP 2: KHÁM PHÁ CÁC CỘNG ĐỒNG (COMMUNITY DISCOVERY SHOWCASE)       */
+        /* ========================================================================= */
+        <div className="space-y-6 animate-fade-in">
+          
+          {/* Header Banner Khám phá */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 sm:p-6 rounded-3xl bg-zinc-900 border border-zinc-800 shadow-md">
+            <div>
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <h2 className="text-zinc-100 font-bold text-lg sm:text-xl tracking-tight">Cộng Đồng & Không Gian Thảo Luận</h2>
+              </div>
+              <p className="text-zinc-400 text-xs sm:text-sm font-sans max-w-xl">
+                Khám phá các cộng đồng theo gu âm nhạc, sở thích và chuyên môn. Tham gia phòng đàm thoại và trao đổi trực tiếp!
+              </p>
+            </div>
+
+            <button 
+              type="button"
+              onClick={() => setIsCreateOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-100 hover:bg-white text-zinc-950 font-bold text-xs shadow-md transition-all active:scale-95 flex-shrink-0"
+            >
+              <Plus size={15} strokeWidth={2.5} />
+              <span>Tạo cộng đồng mới</span>
+            </button>
           </div>
+
+          {/* Search Bar & Category Filters */}
+          <div className="space-y-3">
+            <div className="relative">
+              <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+              <input 
+                type="text" 
+                placeholder="Tìm kiếm cộng đồng theo tên, chủ đề hoặc mô tả..."
+                value={searchKeyword}
+                onChange={(e) => setSearchKeyword(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-zinc-900 border border-zinc-800 text-zinc-200 text-xs placeholder-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors"
+              />
+            </div>
+
+            {/* Category Pills */}
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+              {COMMUNITY_CATEGORIES.map(cat => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setActiveCategory(cat.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border ${activeCategory === cat.id ? 'bg-zinc-800 text-white border-zinc-600 shadow-sm' : 'bg-zinc-900/60 text-zinc-400 border-zinc-800/80 hover:text-zinc-200'}`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Grid of Groups */}
+          {loading ? (
+            <div className="py-20 text-center text-zinc-500 text-xs font-mono">
+              <div className="w-6 h-6 border-2 border-zinc-700 border-t-zinc-300 rounded-full animate-spin mx-auto mb-2"></div>
+              <span>Đang tải các không gian cộng đồng...</span>
+            </div>
+          ) : groups.length === 0 ? (
+            <div className="py-16 px-4 text-center rounded-3xl bg-zinc-900/40 border border-zinc-800/80">
+              <Users size={36} className="mx-auto mb-3 text-zinc-600 opacity-60" />
+              <p className="text-zinc-300 text-sm font-semibold mb-1">Chưa có cộng đồng nào phù hợp</p>
+              <p className="text-zinc-500 text-xs mb-4">Hãy là người đầu tiên sáng lập một cộng đồng mới ngay hôm nay!</p>
+              <button 
+                type="button"
+                onClick={() => setIsCreateOpen(true)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold border border-zinc-700 transition-all active:scale-95"
+              >
+                <Plus size={14} /> Tạo cộng đồng ngay
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {groups.map(group => {
+                const isOwner = group.currentUserRole === 'OWNER';
+                const isDeputy = group.currentUserRole === 'DEPUTY';
+                const isMember = group.currentUserRole === 'MEMBER';
+                const isPending = group.currentUserRole === 'PENDING';
+
+                // Kiểm tra xem nhóm này có phòng thoại đang mở không
+                const hasVoiceRoom = (rooms || []).some(r => 
+                  (r.nameroom || '').toLowerCase().includes(group.name.toLowerCase())
+                );
+
+                return (
+                  <div 
+                    key={group.id}
+                    onClick={() => handleOpenGroup(group)}
+                    className="group-card relative rounded-3xl bg-zinc-900 border border-zinc-800/90 hover:border-zinc-700 overflow-hidden cursor-pointer transition-all hover:shadow-xl hover:-translate-y-0.5 flex flex-col justify-between"
+                  >
+                    {/* Cover Banner */}
+                    <div className="h-28 relative bg-gradient-to-r from-zinc-800 via-zinc-900 to-zinc-950 overflow-hidden">
+                      {group.coverUrl ? (
+                        <img src={group.coverUrl} alt={group.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full opacity-30 bg-[radial-gradient(#52525b_1px,transparent_1px)] [background-size:14px_14px]"></div>
+                      )}
+                      
+                      {/* Badges on Top Right */}
+                      <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
+                        {hasVoiceRoom && (
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-950/80 backdrop-blur-md border border-emerald-500/40 text-[10px] font-mono text-emerald-400 flex items-center gap-1 font-semibold">
+                            <Radio size={10} className="animate-pulse" /> Đang voice
+                          </span>
+                        )}
+                        {group.requiresApproval ? (
+                          <span className="px-2 py-0.5 rounded-full bg-zinc-950/80 backdrop-blur-md border border-amber-500/30 text-[10px] font-mono text-amber-400 flex items-center gap-1">
+                            <Lock size={9} /> Cần duyệt
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full bg-zinc-950/80 backdrop-blur-md border border-zinc-700 text-[10px] font-mono text-zinc-300 flex items-center gap-1">
+                            <Globe size={9} /> Công khai
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Content Body */}
+                    <div className="p-4 sm:p-5 pt-0 relative flex-1 flex flex-col justify-between">
+                      {/* Overlapping Avatar & Roles */}
+                      <div className="flex items-end justify-between -mt-7 mb-3">
+                        <GroupCollageAvatar 
+                          avatar={group.avatarUrl} 
+                          name={group.name}
+                          size={54}
+                          className="border-3 border-zinc-900 ring-2 ring-zinc-800 shadow-md rounded-2xl"
+                        />
+
+                        {/* Role Badge */}
+                        {isOwner && (
+                          <span className="px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[10px] font-bold flex items-center gap-1">
+                            <Crown size={10} /> Chủ nhóm
+                          </span>
+                        )}
+                        {isDeputy && (
+                          <span className="px-2 py-0.5 rounded-md bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-[10px] font-bold flex items-center gap-1">
+                            <Shield size={10} /> Phó nhóm
+                          </span>
+                        )}
+                        {isMember && (
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-[10px] font-medium">
+                            Đã tham gia
+                          </span>
+                        )}
+                        {isPending && (
+                          <span className="px-2 py-0.5 rounded-md bg-amber-950/40 border border-amber-500/30 text-amber-400 text-[10px] font-medium">
+                            Đang chờ duyệt
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Tên & Mô tả */}
+                      <div className="mb-3">
+                        <h3 className="text-zinc-100 font-bold text-sm mb-1 line-clamp-1">{group.name}</h3>
+                        <p className="text-zinc-400 text-xs font-sans line-clamp-2 leading-relaxed">
+                          {group.description || 'Không gian thảo luận và giao lưu dành cho các thành viên.'}
+                        </p>
+                      </div>
+
+                      {/* Footer Stats & Action CTA */}
+                      <div className="flex items-center justify-between pt-3 border-t border-zinc-800/80 text-xs">
+                        <div className="flex items-center gap-2 text-zinc-500 font-mono text-[11px]">
+                          <span className="flex items-center gap-1">
+                            <Users size={12} /> {group.membersCount || 1}
+                          </span>
+                          <span>•</span>
+                          <span className="text-zinc-400">
+                            {hasVoiceRoom ? 'Phòng thoại mở' : 'Sẵn sàng'}
+                          </span>
+                        </div>
+
+                        {isMember || isOwner || isDeputy ? (
+                          <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1 hover:text-emerald-300">
+                            Vào nhóm <ChevronRight size={14} />
+                          </span>
+                        ) : isPending ? (
+                          <span className="text-xs text-amber-400 font-medium">
+                            Chờ duyệt...
+                          </span>
+                        ) : (
+                          <button 
+                            type="button"
+                            onClick={(e) => handleJoinGroup(group.id, e)}
+                            className="px-3.5 py-1 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold border border-zinc-700 transition-all active:scale-95"
+                          >
+                            Gia nhập
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -694,72 +1196,79 @@ export const CommunitySection = ({ currentUserId, currentUserName, onNavigateFee
       {/* MODAL TẠO CỘNG ĐỒNG MỚI */}
       {/* ========================================================= */}
       {isCreateOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => setIsCreateOpen(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in" onClick={() => setIsCreateOpen(false)}>
           <div 
             className="relative w-full max-w-lg rounded-3xl bg-zinc-900 border border-zinc-800 p-6 shadow-2xl flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between pb-4 border-b border-zinc-800 mb-4">
-              <h3 className="text-zinc-100 font-bold text-base">Khởi Tạo Cộng Đồng Mới</h3>
-              <button onClick={() => setIsCreateOpen(false)} className="text-zinc-400 hover:text-white">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800 mb-4">
+              <div className="flex items-center gap-2">
+                <Users size={18} className="text-zinc-300" />
+                <h3 className="text-zinc-100 font-bold text-sm tracking-tight">Tạo Không Gian Cộng Đồng Mới</h3>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setIsCreateOpen(false)}
+                className="text-zinc-400 hover:text-white p-1"
+              >
                 <X size={16} />
               </button>
             </div>
 
-            <form onSubmit={handleCreateSubmit} className="space-y-4">
+            <form onSubmit={handleCreateSubmit} className="space-y-3.5">
               <div>
-                <label className="block text-zinc-300 text-xs font-medium mb-1">Tên cộng đồng *</label>
+                <label className="block text-zinc-300 text-xs font-semibold mb-1">Tên cộng đồng *</label>
                 <input 
                   type="text" 
-                  required
-                  placeholder="VD: Hội Lập Trình Viên Web & AI, Chill Beats Lounge..."
+                  placeholder="VD: Hội Yêu Thích Lo-Fi, Lập Trình Viên..."
                   value={createForm.name}
                   onChange={(e) => setCreateForm(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-700 text-zinc-200 text-xs focus:outline-none focus:border-zinc-500"
+                  required
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-700 text-zinc-100 text-xs focus:outline-none focus:border-zinc-500 placeholder-zinc-500"
                 />
               </div>
 
               <div>
-                <label className="block text-zinc-300 text-xs font-medium mb-1">Mô tả ngắn</label>
+                <label className="block text-zinc-300 text-xs font-semibold mb-1">Mô tả ngắn</label>
                 <textarea 
                   rows="2"
-                  placeholder="Mô tả mục tiêu và định hướng của cộng đồng..."
+                  placeholder="Mô tả mục tiêu, định hướng và chủ đề của cộng đồng..."
                   value={createForm.description}
                   onChange={(e) => setCreateForm(prev => ({ ...prev, description: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-700 text-zinc-200 text-xs focus:outline-none focus:border-zinc-500"
+                  className="w-full px-3.5 py-2 rounded-xl bg-zinc-950 border border-zinc-700 text-zinc-100 text-xs focus:outline-none focus:border-zinc-500 placeholder-zinc-500"
                 />
               </div>
 
               <div>
-                <label className="block text-zinc-300 text-xs font-medium mb-1">Quy định / Nội quy nhóm</label>
+                <label className="block text-zinc-300 text-xs font-semibold mb-1">Quy định / Nội quy ban đầu</label>
                 <textarea 
-                  rows="3"
-                  placeholder="1. Tôn trọng lẫn nhau&#10;2. Không spam nội dung rác..."
+                  rows="2"
+                  placeholder="Nguyên tắc tham gia và chia sẻ..."
                   value={createForm.rules}
                   onChange={(e) => setCreateForm(prev => ({ ...prev, rules: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-700 text-zinc-200 text-xs focus:outline-none focus:border-zinc-500"
+                  className="w-full px-3.5 py-2 rounded-xl bg-zinc-950 border border-zinc-700 text-zinc-100 text-xs focus:outline-none focus:border-zinc-500 placeholder-zinc-500"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-zinc-300 text-xs font-medium mb-1">Link ảnh bìa (Cover)</label>
+                  <label className="block text-zinc-300 text-xs font-semibold mb-1">Link ảnh bìa (Cover)</label>
                   <input 
                     type="url" 
                     placeholder="https://..."
                     value={createForm.coverUrl}
                     onChange={(e) => setCreateForm(prev => ({ ...prev, coverUrl: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-700 text-zinc-200 text-xs focus:outline-none focus:border-zinc-500"
+                    className="w-full px-3.5 py-2 rounded-xl bg-zinc-950 border border-zinc-700 text-zinc-100 text-xs focus:outline-none focus:border-zinc-500 placeholder-zinc-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-zinc-300 text-xs font-medium mb-1">Link avatar nhóm</label>
+                  <label className="block text-zinc-300 text-xs font-semibold mb-1">Link ảnh đại diện</label>
                   <input 
                     type="url" 
                     placeholder="https://..."
                     value={createForm.avatarUrl}
                     onChange={(e) => setCreateForm(prev => ({ ...prev, avatarUrl: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-700 text-zinc-200 text-xs focus:outline-none focus:border-zinc-500"
+                    className="w-full px-3.5 py-2 rounded-xl bg-zinc-950 border border-zinc-700 text-zinc-100 text-xs focus:outline-none focus:border-zinc-500 placeholder-zinc-500"
                   />
                 </div>
               </div>
@@ -776,18 +1285,18 @@ export const CommunitySection = ({ currentUserId, currentUserName, onNavigateFee
                 </label>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-800">
+              <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-zinc-800">
                 <button 
                   type="button"
                   onClick={() => setIsCreateOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium transition-all"
+                  className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition-all"
                 >
                   Hủy
                 </button>
                 <button 
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition-all shadow-md disabled:opacity-50"
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-md active:scale-95 disabled:opacity-50"
                 >
                   {isSubmitting ? "Đang tạo..." : "Tạo cộng đồng"}
                 </button>
@@ -801,4 +1310,3 @@ export const CommunitySection = ({ currentUserId, currentUserName, onNavigateFee
 };
 
 export default CommunitySection;
-

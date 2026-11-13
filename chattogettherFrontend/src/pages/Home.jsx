@@ -2422,6 +2422,13 @@ const Home = () => {
             <CommunitySection 
               currentUserId={currentUserId}
               currentUserName={currentUserName}
+              currentUserAvatar={currentUserAvatar}
+              posts={safePosts}
+              setPosts={setPosts}
+              rooms={safeRooms}
+              navigate={navigate}
+              onSelectUser={setSelectedProfileUserId}
+              onStartPrivateCall={handleStartPrivateCall}
               onNavigateFeed={() => setActiveTab('feed')}
             />
           )}
