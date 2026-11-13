@@ -885,6 +885,11 @@ const Home = () => {
 
   const handleSharePostToRoom = async (post, room) => {
     try {
+      // Đảm bảo đã tham gia phòng trước khi gửi tin nhắn bài viết chia sẻ
+      if (!isUserInRoom(room) && !room.hasPassword) {
+        await axiosClient.post('/rooms/join-room', { roomId: room.id, password: null }, { params: { room_id: room.id, idRoom: room.id } });
+      }
+
       const payload = JSON.stringify({
         type: 'shared_post',
         postId: post.id,
@@ -904,7 +909,11 @@ const Home = () => {
       toast.success(`Đã chia sẻ bài viết vào phòng #${room.nameroom || room.id}!`);
       setSharePost(null);
     } catch (err) {
-      toast.error("Không thể chia sẻ bài viết vào phòng lúc này!");
+      if (room.hasPassword && !isUserInRoom(room)) {
+        toast.error("Phòng có mật khẩu. Bạn cần tham gia phòng trước khi chia sẻ!");
+      } else {
+        toast.error(err.response?.data?.message || "Không thể chia sẻ bài viết vào phòng lúc này!");
+      }
     }
   };
 
@@ -1326,25 +1335,18 @@ const Home = () => {
           </div>
 
           {/* User Profile & Account Dock Card (Chân Sidebar chuẩn phong cách Linear / Discord) */}
-          <div className="nav-user-dock">
-            <div 
-              className="dock-user-profile" 
-              onClick={() => setSelectedProfileUserId(currentUserId)}
-              title="Quản lý tài khoản & tải ảnh đại diện"
-            >
+          <div 
+            className="nav-user-dock cursor-pointer" 
+            onClick={() => setSelectedProfileUserId(currentUserId)}
+            title="Quản lý tài khoản, hồ sơ & đăng xuất"
+          >
+            <div className="dock-user-profile">
               <UserAvatar avatar={localStorage.getItem('user_avatar')} name={currentUserName} size={32} />
               <div className="dock-user-meta">
                 <span className="dock-user-name">{currentUserName}</span>
                 <span className="dock-user-handle font-mono">@{currentUserAccount}</span>
               </div>
             </div>
-            <button 
-              onClick={handleLogout} 
-              className="btn-dock-logout" 
-              title="Đăng xuất khỏi Talovin"
-            >
-              <LogOut size={14} strokeWidth={1.5} />
-            </button>
           </div>
         </aside>
 
@@ -1702,9 +1704,9 @@ const Home = () => {
           )}
 
           {/* ============================================================== */}
-          {/* TAB: DANH SÁCH BÀI VIẾT */}
+          {/* TAB: DANH SÁCH BÀI VIẾT (Chỉ ở Sảnh trực tuyến, Thịnh hành hoặc Đã lưu) */}
           {/* ============================================================== */}
-          {activeTab !== 'rooms' && (
+          {(activeTab === 'feed' || activeTab === 'trending' || activeTab === 'saved') && (
             <div className="posts-stream-container">
               {loadingPosts ? (
                 <div className="feed-status-box font-mono">

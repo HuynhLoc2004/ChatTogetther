@@ -60,20 +60,12 @@ export const TalovinLogo = ({ size = 28, showText = true, textClassName = "", cl
       </svg>
 
       {showText && (
-        <div className="talovin-brand-text flex flex-col justify-center leading-none">
-          <span
-            className={`talovin-brand-title font-sans font-bold tracking-tight text-zinc-100 ${textClassName}`}
-            style={{ fontSize: Math.max(15, size * 0.58), letterSpacing: '-0.025em' }}
-          >
-            Talovin
-          </span>
-          <span
-            className="talovin-brand-subtitle text-zinc-400 font-semibold tracking-widest uppercase"
-            style={{ fontSize: Math.max(8.5, size * 0.3), marginTop: '3px' }}
-          >
-            Social Lounge
-          </span>
-        </div>
+        <span
+          className={`talovin-brand-title font-sans font-bold tracking-tight text-zinc-100 ${textClassName}`}
+          style={{ fontSize: Math.max(16, size * 0.65), letterSpacing: '-0.025em' }}
+        >
+          Talovin
+        </span>
       )}
     </div>
   );

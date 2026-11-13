@@ -3,7 +3,7 @@ import {
   X, Camera, Upload, Trash2, User, Mail, Phone, 
   MapPin, Calendar, Lock, ShieldCheck, Check, Edit3, 
   Loader2, UserCheck, Clock, UserPlus, PhoneCall, KeyRound, Sparkles,
-  ArrowLeft, ChevronLeft
+  ArrowLeft, ChevronLeft, LogOut
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
@@ -235,6 +235,12 @@ export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentU
     return url.includes('dicebear.com') || url.includes('bottts') || url.includes('avataaars');
   };
 
+  const handleLogout = () => {
+    localStorage.clear();
+    sessionStorage.clear();
+    window.location.href = '/login';
+  };
+
   const currentRawAvatar = editData.avatar || profile?.avatar;
   const validAvatar = currentRawAvatar && !isRobotAvatar(currentRawAvatar) ? currentRawAvatar : null;
   const displayName = editData.nickname || profile?.nickname || profile?.account || "Người dùng";
@@ -263,14 +269,27 @@ export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentU
               {isMe ? "Quản Lý Tài Khoản & Hồ Sơ" : "Hồ Sơ Người Dùng"}
             </h2>
           </div>
-          <button 
-            type="button"
-            onClick={onClose} 
-            className="w-8 h-8 rounded-xl bg-zinc-800/60 hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center transition-colors"
-            title="Đóng"
-          >
-            <X size={16} />
-          </button>
+          <div className="flex items-center gap-2">
+            {isMe && (
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="px-2.5 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 border border-rose-500/20 flex items-center gap-1.5 text-xs font-semibold transition-all active:scale-95"
+                title="Đăng xuất khỏi Talovin"
+              >
+                <LogOut size={14} />
+                <span className="hidden sm:inline">Đăng xuất</span>
+              </button>
+            )}
+            <button 
+              type="button"
+              onClick={onClose} 
+              className="w-8 h-8 rounded-xl bg-zinc-800/60 hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center transition-colors"
+              title="Đóng"
+            >
+              <X size={16} />
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -588,6 +607,24 @@ export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentU
                     >
                       {submitting ? "Đang lưu..." : "Cập nhật thông tin liên hệ"}
                     </button>
+                  </div>
+
+                  {/* ĐĂNG XUẤT TÀI KHOẢN TRONG MỤC CÁ NHÂN */}
+                  <div className="mt-8 pt-5 border-t border-zinc-800/80">
+                    <div className="p-4 rounded-2xl bg-zinc-950/70 border border-zinc-800/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                      <div>
+                        <h4 className="text-zinc-200 text-xs font-semibold">Đăng xuất tài khoản</h4>
+                        <p className="text-zinc-500 text-[11px] mt-0.5">Thoát phiên đăng nhập hiện tại trên thiết bị này</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleLogout}
+                        className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 border border-rose-500/30 text-xs font-semibold transition-all active:scale-95 w-full sm:w-auto"
+                      >
+                        <LogOut size={13} />
+                        <span>Đăng xuất</span>
+                      </button>
+                    </div>
                   </div>
                 </form>
               )}
