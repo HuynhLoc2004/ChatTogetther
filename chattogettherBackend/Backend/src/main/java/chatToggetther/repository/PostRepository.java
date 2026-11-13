@@ -1,6 +1,7 @@
 package chatToggetther.repository;
 
 import chatToggetther.modelEntity.PostEntity;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -10,6 +11,11 @@ import java.util.List;
 
 @Repository
 public interface PostRepository extends JpaRepository<PostEntity, Long> {
+
+    @Query("SELECT DISTINCT p FROM PostEntity p " +
+           "JOIN FETCH p.user u " +
+           "ORDER BY p.createdAt DESC")
+    List<PostEntity> findAllPostsWithDetails(Pageable pageable);
 
     @Query("SELECT DISTINCT p FROM PostEntity p " +
            "JOIN FETCH p.user u " +

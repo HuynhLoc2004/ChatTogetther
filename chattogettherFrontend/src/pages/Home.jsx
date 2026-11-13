@@ -231,9 +231,23 @@ const Home = () => {
   const [joinData, setJoinData] = useState({ nickname: '', password: '' });
   const [globalIncomingCall, setGlobalIncomingCall] = useState(null);
 
-  // State Bài Viết
-  const [posts, setPosts] = useState([]);
-  const [loadingPosts, setLoadingPosts] = useState(true);
+  // State Bài Viết (Tối ưu SWR Cache-First: Mở app là có ngay nội dung tức thì)
+  const [posts, setPosts] = useState(() => {
+    try {
+      const cached = localStorage.getItem('talovin_cached_posts');
+      return cached ? JSON.parse(cached) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+  const [loadingPosts, setLoadingPosts] = useState(() => {
+    try {
+      const cached = localStorage.getItem('talovin_cached_posts');
+      return !cached || JSON.parse(cached).length === 0;
+    } catch (e) {
+      return true;
+    }
+  });
   const [newPostContent, setNewPostContent] = useState('');
   const [selectedVibe, setSelectedVibe] = useState(null);
   const [postImageUrl, setPostImageUrl] = useState('');
@@ -492,17 +506,22 @@ const Home = () => {
   // ====================== BẢNG TIN / POSTS ======================
   const fetchPosts = useCallback(async (isSilent = false) => {
     try {
-      if (!isSilent) setLoadingPosts(true);
-      const response = await axiosClient.get('/posts');
+      if (!isSilent && posts.length === 0) setLoadingPosts(true);
+      const response = await axiosClient.get('/posts', {
+        params: { page: 0, size: 25 }
+      });
       if (response.data && response.data.data) {
         setPosts(response.data.data);
+        try {
+          localStorage.setItem('talovin_cached_posts', JSON.stringify(response.data.data.slice(0, 20)));
+        } catch (e) {}
       }
     } catch (err) {
       console.error("Lỗi khi nạp bài viết:", err);
     } finally {
-      if (!isSilent) setLoadingPosts(false);
+      setLoadingPosts(false);
     }
-  }, []);
+  }, [posts.length]);
 
   // Xử lý nén file ảnh bằng Canvas sang WebP nhẹ, hoặc video ngắn
   const handleFileSelect = (e) => {

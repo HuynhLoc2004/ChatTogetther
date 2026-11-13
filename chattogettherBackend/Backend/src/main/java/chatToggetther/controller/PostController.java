@@ -23,8 +23,12 @@ public class PostController {
     }
 
     @GetMapping
-    public ResponseEntity<ResponseData<List<PostDTO>>> getAllPosts(JwtAuthenticationToken token) {
-        return ResponseEntity.ok(this.postService.getAllPosts(token));
+    public ResponseEntity<ResponseData<List<PostDTO>>> getAllPosts(
+            JwtAuthenticationToken token,
+            @RequestParam(value = "page", required = false, defaultValue = "0") Integer page,
+            @RequestParam(value = "size", required = false, defaultValue = "25") Integer size
+    ) {
+        return ResponseEntity.ok(this.postService.getAllPosts(token, page, size));
     }
 
     @PostMapping

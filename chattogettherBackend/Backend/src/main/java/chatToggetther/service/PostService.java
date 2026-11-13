@@ -134,12 +134,98 @@ public class PostService {
 
     @Transactional(readOnly = true)
     public ResponseData<List<PostDTO>> getAllPosts(JwtAuthenticationToken token) {
+        return getAllPosts(token, 0, 25);
+    }
+
+    @Transactional(readOnly = true)
+    public ResponseData<List<PostDTO>> getAllPosts(JwtAuthenticationToken token, Integer page, Integer size) {
         UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
 
-        List<PostEntity> posts = this.postRepository.findAllPostsWithDetails();
-        List<PostDTO> dtos = posts.stream()
-                .map(p -> mapToPostDTO(p, currentUser))
-                .collect(Collectors.toList());
+        int pageNum = (page != null && page >= 0) ? page : 0;
+        int pageSize = (size != null && size > 0 && size <= 50) ? size : 25;
+
+        List<PostEntity> posts = this.postRepository.findAllPostsWithDetails(org.springframework.data.domain.PageRequest.of(pageNum, pageSize));
+        if (posts.isEmpty()) {
+            return new ResponseData<>(200, "Danh sách bài viết trống", List.of());
+        }
+
+        List<Long> postIds = posts.stream().map(PostEntity::getId).toList();
+
+        // 1. Tối ưu: Batch count lượt thích gom nhóm trong 1 truy vấn duy nhất (Không chạy vòng lặp)
+        Map<Long, Integer> likeCountMap = new HashMap<>();
+        List<Object[]> likeCounts = this.postLikeRepository.countLikesByPostIds(postIds);
+        for (Object[] row : likeCounts) {
+            Long pId = (Long) row[0];
+            Long count = (Long) row[1];
+            likeCountMap.put(pId, count != null ? count.intValue() : 0);
+        }
+
+        // 2. Tối ưu: Batch count bình luận gom nhóm trong 1 truy vấn duy nhất
+        Map<Long, Integer> commentCountMap = new HashMap<>();
+        List<Object[]> commentCounts = this.commentRepository.countCommentsByPostIds(postIds);
+        for (Object[] row : commentCounts) {
+            Long pId = (Long) row[0];
+            Long count = (Long) row[1];
+            commentCountMap.put(pId, count != null ? count.intValue() : 0);
+        }
+
+        // 3. Tối ưu: Batch lấy cảm xúc của user hiện tại
+        Map<Long, PostLikeEntity> userLikeMap = new HashMap<>();
+        if (currentUser != null) {
+            List<PostLikeEntity> userLikes = this.postLikeRepository.findByUserAndPostIds(currentUser, postIds);
+            for (PostLikeEntity pl : userLikes) {
+                userLikeMap.put(pl.getPost().getId(), pl);
+            }
+        }
+
+        // 4. Ánh xạ trực tiếp trên bộ nhớ RAM siêu tốc (0ms truy vấn thêm)
+        List<PostDTO> dtos = posts.stream().map(p -> {
+            PostDTO dto = new PostDTO();
+            dto.setId(p.getId());
+            dto.setContent(p.getContent());
+            dto.setImageUrl(p.getImageUrl());
+            dto.setVibe(p.getVibe());
+            dto.setCreatedAt(p.getCreatedAt());
+            dto.setFormattedTime(p.getCreatedAt() != null ? p.getCreatedAt().format(TIME_FORMATTER) : "");
+
+            UserEntity author = p.getUser();
+            if (author != null) {
+                dto.setAuthorId(author.getId());
+                dto.setAuthorNickname(author.getNickname() != null && !author.getNickname().isEmpty() ? author.getNickname() : author.getAccount());
+                dto.setAuthorAccount(author.getAccount());
+                dto.setAuthorAvatar(author.getAvatar());
+                dto.setAuthorLocation(author.getLocation());
+                dto.setAuthorRoles(author.getRoles());
+
+                boolean isAdmin = author.getRoles() != null && (author.getRoles().contains("ROLE_AMDIN") || author.getRoles().contains("ROLE_ADMIN"));
+                dto.setAuthorIsVerified(isAdmin);
+                dto.setAuthorVipTier(isAdmin ? "ADMIN" : "MEMBER");
+                dto.setAuthorBadge(isAdmin ? "ADMIN" : null);
+            }
+
+            int likesCount = likeCountMap.getOrDefault(p.getId(), 0);
+            int commentsCount = commentCountMap.getOrDefault(p.getId(), 0);
+            long hits = p.getSearchHits() != null ? p.getSearchHits() : 0L;
+
+            dto.setLikesCount(likesCount);
+            dto.setCommentsCount(commentsCount);
+            dto.setSearchHits(hits);
+
+            long hoursOld = p.getCreatedAt() != null ? Math.max(0, java.time.Duration.between(p.getCreatedAt(), LocalDateTime.now()).toHours()) : 0;
+            double trendingScore = ((hits * 10.0) + (commentsCount * 3.0) + (likesCount * 1.0)) / Math.pow(hoursOld + 2.0, 1.2);
+            dto.setTrendingScore(trendingScore);
+
+            PostLikeEntity myLike = userLikeMap.get(p.getId());
+            if (myLike != null) {
+                dto.setIsLikedByMe(true);
+                dto.setMyReaction(myLike.getReactionType() != null ? myLike.getReactionType() : "HEART");
+            } else {
+                dto.setIsLikedByMe(false);
+                dto.setMyReaction(null);
+            }
+
+            return dto;
+        }).collect(Collectors.toList());
 
         return new ResponseData<>(200, "Lấy danh sách bài viết thành công", dtos);
     }
