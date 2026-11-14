@@ -9,6 +9,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import ProfilePage from './pages/ProfilePage';
 import DirectMessagePage from './pages/DirectMessagePage';
 import CallPage from './pages/CallPage';
+import GlobalCallBanner from './components/GlobalCallBanner';
 import './App.css';
 
 // Error Boundary để ngăn chặn hoàn toàn màn hình đen (Blank Screen)
@@ -205,6 +206,7 @@ function App() {
               },
             }}
           />
+          <GlobalCallBanner />
           <Routes>
             <Route 
               path="/login" 

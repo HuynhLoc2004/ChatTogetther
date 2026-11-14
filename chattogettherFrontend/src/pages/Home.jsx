@@ -4625,18 +4625,7 @@ const Home = ({ initialTab }) => {
         </div>
       )}
 
-      {/* MODAL CUỘC GỌI ĐẾN THỜI GIAN THỰC (INCOMING CALL POPUP) */}
-      {globalIncomingCall && (
-        <IncomingCallModal 
-          call={globalIncomingCall}
-          onAccept={(call) => {
-            const rId = call.roomId;
-            setGlobalIncomingCall(null);
-            navigate(`/room/${rId}?autoCall=true`);
-          }}
-          onDecline={() => setGlobalIncomingCall(null)}
-        />
-      )}
+      {/* MODAL CUỘC GỌI ĐẾN ĐÃ ĐƯỢC QUẢN LÝ TOÀN CỤC BỞI GlobalCallBanner TRONG App.jsx */}
 
       {/* THANH THÔNG BÁO NỔI HỆ THỐNG THỜI GIAN THỰC (REALTIME FLOATING PILL) */}
       {floatingNotif && (

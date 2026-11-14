@@ -45,6 +45,13 @@ public class RoomController {
         return ResponseEntity.ok(this.roomService.getRoomDetail(effectiveId));
     }
 
+    @GetMapping("/{roomId}")
+    public ResponseEntity<ResponseData<RoomDTO>> getRoomById(
+            @PathVariable("roomId") Long roomId
+    ) {
+        return ResponseEntity.ok(this.roomService.getRoomDetail(roomId));
+    }
+
     @PostMapping("/join-room")
     public ResponseEntity<ResponseData<Long>> joinRoom(
             JwtAuthenticationToken jwtAuthenticationToken, 

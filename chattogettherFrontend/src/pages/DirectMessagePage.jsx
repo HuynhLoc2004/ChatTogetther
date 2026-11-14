@@ -5,12 +5,13 @@ import {
   Mic, MicOff, Send, Image as ImageIcon, Smile, MoreVertical, User, 
   Clock, CheckCircle2, ChevronDown, Volume2, Shield, Share2, Sparkles
 } from 'lucide-react';
-import axiosClient from '../api/axiosClient';
+import axiosClient, { BACKEND_URL } from '../api/axiosClient';
 import toast from 'react-hot-toast';
 import SockJS from 'sockjs-client';
 import Stomp from 'stompjs';
 import { UserAvatar } from './Home';
 import TalovinLogo from '../components/TalovinLogo';
+import { PhoneCall, PhoneMissed } from 'lucide-react';
 
 const ICE_SERVERS = {
   iceServers: [
@@ -135,7 +136,8 @@ export const DirectMessagePage = () => {
     const token = localStorage.getItem('accesstoken');
 
     try {
-      const socket = new SockJS('https://backend-936647963286.asia-southeast1.run.app/ws-gs-guide');
+      const socketUrl = BACKEND_URL ? `${BACKEND_URL}/ws-gs-guide` : '/ws-gs-guide';
+      const socket = new SockJS(socketUrl);
       client = Stomp.over(socket);
       client.debug = () => {};
 
@@ -659,6 +661,31 @@ export const DirectMessagePage = () => {
                 ) : (
                   messages.map((msg, index) => {
                     const isMe = msg.userId?.toString() === currentUserId?.toString();
+                    const text = msg.message || '';
+                    const isCallLog = text.startsWith('📞') || text.startsWith('📹');
+                    const isMissed = isCallLog && text.includes('nhỡ');
+                    const isVideo = isCallLog && text.startsWith('📹');
+
+                    if (isCallLog) {
+                      return (
+                        <div key={msg.id || index} className="w-full flex justify-center my-1.5">
+                          <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-zinc-900 border border-zinc-800 text-[11px] font-medium text-zinc-300 shadow-sm">
+                            {isMissed ? (
+                              <PhoneMissed size={13} className="text-rose-400 shrink-0" />
+                            ) : isVideo ? (
+                              <Video size={13} className="text-emerald-400 shrink-0" />
+                            ) : (
+                              <PhoneCall size={13} className="text-emerald-400 shrink-0" />
+                            )}
+                            <span>{text.replace(/^[📞📹]\s*/, '')}</span>
+                            <span className="text-[10px] font-mono text-zinc-500 ml-1">
+                              {msg.formattedTime || (msg.timeSend ? new Date(msg.timeSend).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '')}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    }
+
                     return (
                       <div 
                         key={msg.id || index}
