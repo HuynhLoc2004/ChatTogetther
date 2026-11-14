@@ -322,19 +322,25 @@ public class CommunityGroupService {
         dto.setAvatarUrl(g.getAvatarUrl());
         dto.setIsPrivate(g.getIsPrivate());
         dto.setRequiresApproval(g.getRequiresApproval());
-        dto.setOwnerId(g.getOwner().getId());
-        dto.setOwnerName(g.getOwner().getNickname() != null && !g.getOwner().getNickname().isEmpty() 
-            ? g.getOwner().getNickname() 
-            : g.getOwner().getAccount());
-        dto.setOwnerAvatar(g.getOwner().getAvatar());
+        if (g.getOwner() != null) {
+            dto.setOwnerId(g.getOwner().getId());
+            dto.setOwnerName(g.getOwner().getNickname() != null && !g.getOwner().getNickname().isEmpty() 
+                ? g.getOwner().getNickname() 
+                : g.getOwner().getAccount());
+            dto.setOwnerAvatar(g.getOwner().getAvatar());
+        } else {
+            dto.setOwnerName("Hệ thống");
+        }
         dto.setCreatedAt(g.getCreatedAt());
 
-        long activeCount = g.getMembers().stream().filter(m -> "ACTIVE".equals(m.getStatus())).count();
+        long activeCount = (g.getMembers() != null) 
+            ? g.getMembers().stream().filter(m -> m != null && "ACTIVE".equals(m.getStatus())).count() 
+            : 0;
         dto.setMembersCount(activeCount > 0 ? activeCount : 1L);
 
-        if (currentUser != null) {
+        if (currentUser != null && g.getMembers() != null) {
             Optional<CommunityMemberEntity> userMem = g.getMembers().stream()
-                    .filter(m -> m.getUser().getId().equals(currentUser.getId()))
+                    .filter(m -> m != null && m.getUser() != null && m.getUser().getId().equals(currentUser.getId()))
                     .findFirst();
             if (userMem.isPresent()) {
                 CommunityMemberEntity mem = userMem.get();
@@ -343,12 +349,16 @@ public class CommunityGroupService {
                 } else {
                     dto.setCurrentUserRole("PENDING");
                 }
+            } else {
+                dto.setCurrentUserRole(null);
             }
+        } else {
+            dto.setCurrentUserRole(null);
         }
 
-        if (includeMembers) {
+        if (includeMembers && g.getMembers() != null) {
             List<CommunityMemberDTO> memberDTOs = g.getMembers().stream()
-                    .filter(m -> "ACTIVE".equals(m.getStatus()))
+                    .filter(m -> m != null && "ACTIVE".equals(m.getStatus()))
                     .map(this::mapToMemberDTO)
                     .collect(Collectors.toList());
             dto.setMembers(memberDTOs);

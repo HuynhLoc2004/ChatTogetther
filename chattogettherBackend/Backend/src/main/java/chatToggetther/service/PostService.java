@@ -212,8 +212,48 @@ public class PostService {
             dto.setSearchHits(hits);
 
             long hoursOld = p.getCreatedAt() != null ? Math.max(0, java.time.Duration.between(p.getCreatedAt(), LocalDateTime.now()).toHours()) : 0;
-            double trendingScore = ((hits * 10.0) + (commentsCount * 3.0) + (likesCount * 1.0)) / Math.pow(hoursOld + 2.0, 1.2);
-            dto.setTrendingScore(trendingScore);
+            
+            // THUẬT TOÁN ĐỀ XUẤT THÔNG MINH (Personalized Resonance Ranking):
+            // 1. Điểm tương tác & độ tươi mới (Hacker News / Reddit decay)
+            double engagementScore = ((hits * 3.0) + (commentsCount * 4.0) + (likesCount * 3.0) + 1.0) / Math.pow(hoursOld + 2.0, 1.25);
+            
+            // 2. Hệ số cộng hưởng cá nhân hóa (Personal Resonance Multiplier)
+            double resonanceMultiplier = 1.0;
+
+            if (currentUser != null && author != null) {
+                // Tương thích độ tuổi (Age Affinity): Bạn cùng độ tuổi hoặc gần tuổi (+20% đến +40%)
+                if (currentUser.getAge() != null && author.getAge() != null) {
+                    int ageDiff = Math.abs(currentUser.getAge() - author.getAge());
+                    if (ageDiff <= 3) {
+                        resonanceMultiplier += 0.4; // Cùng thế hệ / độ tuổi
+                    } else if (ageDiff <= 7) {
+                        resonanceMultiplier += 0.2;
+                    }
+                }
+
+                // Tương thích vị trí địa lý nếu có
+                if (currentUser.getLocation() != null && author.getLocation() != null 
+                        && !currentUser.getLocation().trim().isEmpty() 
+                        && currentUser.getLocation().equalsIgnoreCase(author.getLocation())) {
+                    resonanceMultiplier += 0.25;
+                }
+
+                // Bài viết của chính mình hoặc bài admin
+                if (author.getId().equals(currentUser.getId())) {
+                    resonanceMultiplier += 0.15;
+                }
+            }
+
+            // Bài viết có đính kèm đa phương tiện phong phú (ảnh / video)
+            if (p.getImageUrl() != null && !p.getImageUrl().trim().isEmpty()) {
+                resonanceMultiplier += 0.2;
+            }
+            if (p.getVibe() != null && !p.getVibe().trim().isEmpty()) {
+                resonanceMultiplier += 0.1;
+            }
+
+            double finalRecommendScore = engagementScore * resonanceMultiplier;
+            dto.setTrendingScore(finalRecommendScore);
 
             PostLikeEntity myLike = userLikeMap.get(p.getId());
             if (myLike != null) {
@@ -226,6 +266,9 @@ public class PostService {
 
             return dto;
         }).collect(Collectors.toList());
+
+        // Sắp xếp bài viết thông minh theo điểm đề xuất tối ưu (Personalized Resonance)
+        dtos.sort((a, b) -> Double.compare(b.getTrendingScore(), a.getTrendingScore()));
 
         return new ResponseData<>(200, "Lấy danh sách bài viết thành công", dtos);
     }

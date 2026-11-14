@@ -76,11 +76,14 @@ export const CommunitySection = ({
       const res = await axiosClient.get('/groups', {
         params: kw.trim() ? { keyword: kw.trim() } : {}
       });
-      if (res.data && res.data.data) {
+      if (res.data && Array.isArray(res.data.data)) {
         setGroups(res.data.data);
+      } else {
+        setGroups([]);
       }
     } catch (err) {
-      console.error("Lỗi nạp danh sách cộng đồng:", err);
+      console.warn("Lỗi nạp danh sách cộng đồng:", err);
+      setGroups([]);
     } finally {
       setLoading(false);
     }
@@ -1053,7 +1056,7 @@ export const CommunitySection = ({
               <div className="w-6 h-6 border-2 border-zinc-700 border-t-zinc-300 rounded-full animate-spin mx-auto mb-2"></div>
               <span>Đang tải các không gian cộng đồng...</span>
             </div>
-          ) : groups.length === 0 ? (
+          ) : (!Array.isArray(groups) || groups.length === 0) ? (
             <div className="py-16 px-4 text-center rounded-3xl bg-zinc-900/40 border border-zinc-800/80">
               <Users size={36} className="mx-auto mb-3 text-zinc-600 opacity-60" />
               <p className="text-zinc-300 text-sm font-semibold mb-1">Chưa có cộng đồng nào phù hợp</p>
@@ -1068,7 +1071,7 @@ export const CommunitySection = ({
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {groups.map(group => {
+              {(Array.isArray(groups) ? groups : []).map(group => {
                 const isOwner = group.currentUserRole === 'OWNER';
                 const isDeputy = group.currentUserRole === 'DEPUTY';
                 const isMember = group.currentUserRole === 'MEMBER';

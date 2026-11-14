@@ -221,6 +221,7 @@ const Home = () => {
   const [activeTab, setActiveTab] = useState('feed');
   const [pendingFriendsCount, setPendingFriendsCount] = useState(0);
   const [replyTargetMap, setReplyTargetMap] = useState({});
+  const [isTopRefreshing, setIsTopRefreshing] = useState(false);
 
   // State Phòng Chat
   const [rooms, setRooms] = useState([]);
@@ -916,6 +917,26 @@ const Home = () => {
     }
   }, [currentUserId]);
 
+  // Làm mới ứng dụng khi ấn vào Logo (Cuộn lên đầu trang & chạy loading từ top center xuống)
+  const handleLogoRefresh = async () => {
+    setActiveTab('feed');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setIsTopRefreshing(true);
+    try {
+      await Promise.allSettled([
+        fetchPosts(0, true),
+        fetchRooms(),
+        fetchFriends()
+      ]);
+    } catch (e) {
+      console.warn("Lỗi làm mới ứng dụng:", e);
+    } finally {
+      setTimeout(() => {
+        setIsTopRefreshing(false);
+      }, 700);
+    }
+  };
+
   const handleAddComment = async (postId) => {
     const text = commentInputs[postId]?.trim();
     if (!text) return;
@@ -1412,6 +1433,16 @@ const Home = () => {
         onEnded={() => setPlayingVoicePostId(null)}
       />
 
+      {/* NÚT LOADING CHẠY TỪ TOP CENTER XUỐNG KHI ẤN VÀO LOGO */}
+      {isTopRefreshing && (
+        <div className="top-center-refresh-indicator">
+          <div className="refresh-pill">
+            <RefreshCw size={13} className="animate-spin text-emerald-400" />
+            <span>Đang làm mới bài viết mới nhất...</span>
+          </div>
+        </div>
+      )}
+
       {/* KHUNG CĂN GIỮA TOÀN BỘ ỨNG DỤNG - DARK ZINC MATTE */}
       <div className="app-main-layout">
 
@@ -1419,7 +1450,7 @@ const Home = () => {
         {/* CỘT 1: THANH ĐIỀU HƯỚNG TRÁI (220px - 240px) */}
         {/* ============================================================== */}
         <aside className="nav-sidebar">
-          <div className="nav-brand" onClick={() => setActiveTab('feed')}>
+          <div className="nav-brand" onClick={handleLogoRefresh} title="Bấm để cuộn lên đầu & làm mới dữ liệu">
             <TalovinLogo size={30} brandName={systemConfig.brand_name || 'Talovin'} />
           </div>
 
@@ -1582,7 +1613,7 @@ const Home = () => {
           
           {/* Header Mobile */}
           <header className="mobile-top-bar">
-            <div className="m-brand" onClick={() => setActiveTab('feed')}>
+            <div className="m-brand" onClick={handleLogoRefresh} title="Bấm để cuộn lên đầu & làm mới bài viết">
               <TalovinLogo size={26} />
             </div>
             <div className="m-actions">
@@ -2032,7 +2063,7 @@ const Home = () => {
                     title="Đính kèm ảnh hoặc video ngắn"
                   >
                     <ImageIcon size={15} strokeWidth={1.5} />
-                    <span>Ảnh / Film</span>
+                    <span>Ảnh/Video</span>
                   </button>
 
                   <button 
@@ -2042,7 +2073,7 @@ const Home = () => {
                     title="Ghi âm giọng nói 15 giây"
                   >
                     <Mic size={15} strokeWidth={1.5} />
-                    <span>{isRecordingVoice ? 'Đang thu' : (voiceBase64 ? 'Đã ghi âm' : 'Ghi âm 15s')}</span>
+                    <span>{isRecordingVoice ? 'Đang thu' : (voiceBase64 ? 'Đã thu' : 'Ghi âm')}</span>
                   </button>
 
                   <button 
@@ -3306,6 +3337,41 @@ const Home = () => {
           background: rgba(255, 255, 255, 0.05);
           color: var(--text-main);
         }
+        /* Hiệu ứng loading trượt từ top center màn hình xuống khi bấm logo */
+        .top-center-refresh-indicator {
+          position: fixed;
+          top: 16px;
+          left: 50%;
+          transform: translateX(-50%);
+          z-index: 9999;
+          animation: slideDownTop 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+          pointer-events: none;
+        }
+        .refresh-pill {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 18px;
+          background: rgba(18, 18, 24, 0.94);
+          backdrop-filter: blur(16px);
+          border: 1px solid rgba(255, 255, 255, 0.15);
+          border-radius: 9999px;
+          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6), 0 0 15px rgba(16, 185, 129, 0.25);
+          color: #f4f4f5;
+          font-size: 12px;
+          font-weight: 600;
+        }
+        @keyframes slideDownTop {
+          0% {
+            opacity: 0;
+            transform: translate(-50%, -24px) scale(0.92);
+          }
+          100% {
+            opacity: 1;
+            transform: translate(-50%, 0) scale(1);
+          }
+        }
+
         .nav-item.active {
           background: #202436;
           border: 1px solid #333a52;
@@ -3891,20 +3957,23 @@ const Home = () => {
         }
         .creator-field-wrap textarea::placeholder { color: #64748b; }
 
-        /* Preview Ảnh/Video trong Composer */
+        /* Preview Ảnh/Video trong Composer - Tối ưu 100% Responsive */
         .composer-attached-preview {
           margin: 10px 0 10px 48px;
           position: relative;
-          display: inline-block;
-          max-height: 220px;
-          border-radius: 10px;
+          display: block;
+          max-width: 100%;
+          border-radius: 12px;
           overflow: hidden;
           border: 1px solid var(--card-border);
+          background: #090a10;
         }
         .preview-media-element {
-          max-height: 220px;
+          width: 100%;
+          max-width: 100%;
+          max-height: 240px;
           display: block;
-          border-radius: 8px;
+          border-radius: 10px;
           object-fit: cover;
         }
         .btn-remove-attached {
@@ -4125,6 +4194,9 @@ const Home = () => {
           padding: 5px 9px;
           border-radius: 8px;
           transition: all 0.15s;
+          white-space: nowrap;
+          flex-shrink: 0;
+          user-select: none;
         }
         .btn-subtool:hover {
           background: rgba(255, 255, 255, 0.05);
@@ -4153,6 +4225,9 @@ const Home = () => {
           cursor: pointer;
           transition: all 0.15s;
           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+          white-space: nowrap;
+          flex-shrink: 0;
+          min-width: max-content;
         }
         .btn-publish-submit:hover:not(:disabled) {
           background: #ffffff;
@@ -5292,12 +5367,35 @@ const Home = () => {
           }
           .main-stream { max-width: 100%; min-width: 0; padding-bottom: max(75px, env(safe-area-inset-bottom)); }
           .rooms-active-grid { grid-template-columns: 1fr; }
-          .creator-bottom-row { padding-left: 0; }
-          .post-body-content { margin-left: 0; }
-          .post-actions-toolbar { margin-left: 0; }
-          .post-comments-container { margin-left: 0; }
-          .vibe-tags-row { margin-left: 0; }
-          .composer-attached-preview { margin-left: 0; }
+          .creator-bottom-row { 
+            padding-left: 0; 
+            gap: 4px;
+            flex-wrap: nowrap;
+            align-items: center;
+            justify-content: space-between;
+          }
+          .creator-left-tools {
+            display: flex;
+            gap: 3px;
+            align-items: center;
+            min-width: 0;
+            overflow-x: auto;
+            scrollbar-width: none;
+          }
+          .btn-subtool {
+            padding: 5px 6px;
+            font-size: 11px;
+            gap: 3px;
+          }
+          .btn-publish-submit {
+            padding: 6px 12px;
+            font-size: 12px;
+          }
+          .composer-attached-preview { 
+            margin: 8px 0; 
+            width: 100%;
+            max-width: 100%;
+          }
           .voice-recording-indicator { margin-left: 0; }
           .voice-preview-deck { margin-left: 0; }
           .community-sparks-section { margin-left: 0; }
