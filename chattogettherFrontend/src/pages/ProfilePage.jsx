@@ -3,13 +3,15 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Edit3, LogOut, UserPlus, UserCheck, Clock, 
   MapPin, Calendar, Mail, Phone, Lock, Check, X, 
-  Camera, Upload, Trash2, Heart, MessageSquare, Repeat, Share2, 
-  Bookmark, Shield, Sparkles, PhoneCall, Loader2, Users, FileText
+  Camera, Upload, Trash2, Heart, MessageSquare, Share2, 
+  Shield, Sparkles, Loader2, Users, Radio, Headphones, 
+  Mic, Play, Pause, Square, RotateCcw, AudioLines, Volume2, 
+  VolumeX, Music, Tag
 } from 'lucide-react';
-import axiosClient, { BACKEND_URL } from '../api/axiosClient';
+import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
 import TalovinLogo from '../components/TalovinLogo';
-import { UserAvatar } from './Home';
+import { UserAvatar, playHeartSound } from './Home';
 
 const TIME_FORMATTER = (dateStr) => {
   if (!dateStr) return 'Vừa xong';
@@ -33,29 +35,43 @@ const ProfilePage = () => {
   // States
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('posts'); // 'posts' | 'reposts' | 'saved' | 'friends'
+  const [activeTab, setActiveTab] = useState('posts'); // 'posts' | 'friends'
   const [isEditing, setIsEditing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // Dữ liệu bài viết, đã lưu, bạn bè
+  // Dữ liệu bài viết, bạn bè
   const [userPosts, setUserPosts] = useState([]);
-  const [savedPosts, setSavedPosts] = useState([]);
   const [userFriends, setUserFriends] = useState([]);
   const [loadingPosts, setLoadingPosts] = useState(false);
   const [loadingFriends, setLoadingFriends] = useState(false);
 
   // Trạng thái kết bạn (nếu xem người khác)
-  const [friendStatus, setFriendStatus] = useState('NONE'); // 'NONE' | 'PENDING_SENT' | 'PENDING_RECEIVED' | 'ACCEPTED'
+  const [friendStatus, setFriendStatus] = useState('NONE'); // 'NONE' | 'PENDING_SENT' | 'ACCEPTED'
   const [processingFriend, setProcessingFriend] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
-  // Form chỉnh sửa hồ sơ
+  // Voice Bio 10s State
+  const [voiceBioUrl, setVoiceBioUrl] = useState(() => {
+    return localStorage.getItem(`voice_bio_${effectiveUserId}`) || null;
+  });
+  const [isPlayingVoiceBio, setIsPlayingVoiceBio] = useState(false);
+  const [isRecordingBio, setIsRecordingBio] = useState(false);
+  const [recordTimeLeft, setRecordTimeLeft] = useState(10);
+  const [tempBioBlob, setTempBioBlob] = useState(null);
+
+  const voiceBioAudioRef = useRef(null);
+  const bioRecorderRef = useRef(null);
+  const bioTimerRef = useRef(null);
+  const bioChunksRef = useRef([]);
+
+  // Form chỉnh sửa hồ sơ & tần số
   const [editData, setEditData] = useState({
     nickname: '',
     age: '',
     location: '',
     bio: '',
-    email: '',
-    phone: '',
+    favoriteGenre: 'Lo-Fi Midnight • Chill & Focus',
+    favoriteFreq: '94.5 MHz • Cùng chạy deadline',
     avatar: ''
   });
 
@@ -79,23 +95,25 @@ const ProfilePage = () => {
       if (res.data?.data) {
         const data = res.data.data;
         setProfile(data);
+        const storedGenre = localStorage.getItem(`user_genre_${effectiveUserId}`) || 'Lo-Fi Midnight • Chill & Focus';
+        const storedFreq = localStorage.getItem(`user_freq_${effectiveUserId}`) || '94.5 MHz • Cùng chạy deadline';
+        
         setEditData({
           nickname: data.nickname || '',
           age: data.age || '',
           location: data.location || '',
           bio: data.bio || '',
-          email: data.email || '',
-          phone: data.phone || '',
+          favoriteGenre: data.favoriteGenre || storedGenre,
+          favoriteFreq: data.favoriteFreq || storedFreq,
           avatar: data.avatar || ''
         });
       }
     } catch (err) {
       console.warn("Lỗi tải thông tin cá nhân:", err);
-      // Fallback local info nếu chính mình
       if (isMe) {
         setProfile({
           id: currentUserId,
-          nickname: localStorage.getItem('nickname') || 'Người dùng',
+          nickname: localStorage.getItem('nickname') || 'Người dùng Talovin',
           account: localStorage.getItem('account') || 'user',
           avatar: localStorage.getItem('user_avatar') || '',
           bio: '',
@@ -126,27 +144,7 @@ const ProfilePage = () => {
     }
   }, [effectiveUserId]);
 
-  // 3. Nạp bài viết đã lưu (nếu là chính mình)
-  const fetchSavedPosts = useCallback(async () => {
-    if (!isMe) return;
-    try {
-      const savedIdsRaw = localStorage.getItem('saved_post_ids');
-      const savedIds = savedIdsRaw ? JSON.parse(savedIdsRaw) : [];
-      if (savedIds.length === 0) {
-        setSavedPosts([]);
-        return;
-      }
-      const res = await axiosClient.get('/posts');
-      if (res.data?.data) {
-        const filtered = res.data.data.filter(p => savedIds.includes(p.id));
-        setSavedPosts(filtered);
-      }
-    } catch (e) {
-      console.warn("Lỗi tải bài đã lưu:", e);
-    }
-  }, [isMe]);
-
-  // 5. Nạp danh sách bạn bè
+  // 3. Nạp danh sách bạn bè
   const fetchUserFriends = useCallback(async () => {
     try {
       setLoadingFriends(true);
@@ -168,11 +166,12 @@ const ProfilePage = () => {
   useEffect(() => {
     fetchProfile();
     fetchUserPosts();
-    if (isMe) fetchSavedPosts();
     fetchUserFriends();
-  }, [fetchProfile, fetchUserPosts, fetchSavedPosts, fetchUserFriends, isMe]);
+    const storedBio = localStorage.getItem(`voice_bio_${effectiveUserId}`);
+    setVoiceBioUrl(storedBio || null);
+  }, [fetchProfile, fetchUserPosts, fetchUserFriends, effectiveUserId]);
 
-  // Xử lý nén ảnh đại diện
+  // Xử lý nén ảnh đại diện WebP
   const handleAvatarFileSelect = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -220,18 +219,24 @@ const ProfilePage = () => {
         age: editData.age ? parseInt(editData.age, 10) : null,
         location: editData.location?.trim() || null,
         bio: editData.bio?.trim() || null,
-        email: editData.email?.trim() || null,
-        phone: editData.phone?.trim() || null,
         avatar: editData.avatar || null
       };
 
       const res = await axiosClient.put('/users/profile', payload);
       if (res.data?.data) {
-        setProfile(res.data.data);
+        setProfile(prev => ({
+          ...prev,
+          ...res.data.data,
+          favoriteGenre: editData.favoriteGenre,
+          favoriteFreq: editData.favoriteFreq
+        }));
         if (payload.nickname) localStorage.setItem('nickname', payload.nickname);
         if (payload.avatar) localStorage.setItem('user_avatar', payload.avatar);
       }
-      toast.success("Cập nhật hồ sơ thành công!");
+      localStorage.setItem(`user_genre_${effectiveUserId}`, editData.favoriteGenre);
+      localStorage.setItem(`user_freq_${effectiveUserId}`, editData.favoriteFreq);
+
+      toast.success("Đã lưu tần số & hồ sơ cá nhân!");
       setIsEditing(false);
     } catch (err) {
       toast.error(err.response?.data?.message || "Cập nhật thất bại!");
@@ -254,9 +259,9 @@ const ProfilePage = () => {
 
     setChangingPassword(true);
     try {
-      await axiosClient.put('/users/change-password', {
-        oldPassword: passwordData.oldPassword,
-        newPassword: passwordData.newPassword
+      await axiosClient.put('/auth/change_password', {
+        old_password: passwordData.oldPassword,
+        new_password: passwordData.newPassword
       });
       toast.success("Đổi mật khẩu thành công!");
       setPasswordData({ oldPassword: '', newPassword: '', confirmPassword: '' });
@@ -268,516 +273,805 @@ const ProfilePage = () => {
     }
   };
 
-  // Kết bạn
+  // Gửi lời mời kết bạn
   const handleSendFriendRequest = async () => {
     if (!effectiveUserId) return;
     setProcessingFriend(true);
     try {
-      await axiosClient.post('/friends/request', null, { params: { friend_id: effectiveUserId } });
-      toast.success("Đã gửi lời mời kết bạn!");
+      await axiosClient.post(`/friends/request/${effectiveUserId}`);
       setFriendStatus('PENDING_SENT');
+      toast.success("Đã gửi lời mời kết nối tần số!");
     } catch (err) {
-      toast.error(err.response?.data?.message || "Không thể gửi lời mời kết bạn");
+      toast.error(err.response?.data?.message || "Không thể gửi yêu cầu!");
     } finally {
       setProcessingFriend(false);
     }
   };
 
-  // Đăng xuất
-  const handleLogout = () => {
-    if (window.confirm("Bạn có chắc chắn muốn đăng xuất tài khoản?")) {
-      localStorage.clear();
-      sessionStorage.clear();
-      toast.success("Đã đăng xuất");
-      navigate('/login');
+  // ==========================================
+  // VOICE BIO 10S: RECORD & PLAYBACK
+  // ==========================================
+  const startRecordingVoiceBio = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      bioChunksRef.current = [];
+      const recorder = new MediaRecorder(stream);
+      bioRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) bioChunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = () => {
+        const audioBlob = new Blob(bioChunksRef.current, { type: 'audio/webm' });
+        setTempBioBlob(audioBlob);
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64Audio = reader.result;
+          setVoiceBioUrl(base64Audio);
+          localStorage.setItem(`voice_bio_${effectiveUserId}`, base64Audio);
+          toast.success("Đã ghi lại tín hiệu giọng nói 10s!");
+        };
+        reader.readAsDataURL(audioBlob);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      recorder.start();
+      setIsRecordingBio(true);
+      setRecordTimeLeft(10);
+
+      bioTimerRef.current = setInterval(() => {
+        setRecordTimeLeft(prev => {
+          if (prev <= 1) {
+            stopRecordingVoiceBio();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } catch (err) {
+      console.warn("Lỗi Microphone:", err);
+      toast.error("Vui lòng cấp quyền Microphone để ghi âm giọng nói!");
     }
   };
 
-  const isAdmin = profile?.roles?.includes('ROLE_ADMIN') || profile?.roles?.includes('ROLE_AMDIN');
-  const isFounder = profile?.vipTier === 'FOUNDER' || isAdmin;
+  const stopRecordingVoiceBio = () => {
+    if (bioTimerRef.current) clearInterval(bioTimerRef.current);
+    if (bioRecorderRef.current && bioRecorderRef.current.state === 'recording') {
+      bioRecorderRef.current.stop();
+    }
+    setIsRecordingBio(false);
+  };
 
-  // Dialog xác nhận đăng xuất
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const togglePlayVoiceBio = () => {
+    if (!voiceBioAudioRef.current) return;
+    if (isPlayingVoiceBio) {
+      voiceBioAudioRef.current.pause();
+      setIsPlayingVoiceBio(false);
+    } else {
+      voiceBioAudioRef.current.currentTime = 0;
+      voiceBioAudioRef.current.play().then(() => {
+        setIsPlayingVoiceBio(true);
+      }).catch(err => {
+        console.warn("Không thể phát Voice Bio:", err);
+      });
+    }
+  };
+
+  const handleDeleteVoiceBio = () => {
+    if (voiceBioAudioRef.current) {
+      voiceBioAudioRef.current.pause();
+    }
+    setIsPlayingVoiceBio(false);
+    setVoiceBioUrl(null);
+    localStorage.removeItem(`voice_bio_${effectiveUserId}`);
+    toast.success("Đã xóa tín hiệu giọng nói.");
+  };
+
+  // Thả tim bài viết
+  const handleLikePost = async (postId) => {
+    if (!postId) return;
+    playHeartSound();
+    setUserPosts(prev => prev.map(p => {
+      if (String(p.id) !== String(postId)) return p;
+      const wasLiked = p.isLikedByMe;
+      return {
+        ...p,
+        isLikedByMe: !wasLiked,
+        likesCount: wasLiked ? Math.max(0, (p.likesCount || 1) - 1) : (p.likesCount || 0) + 1
+      };
+    }));
+    try {
+      await axiosClient.post(`/posts/${postId}/like`, null, { params: { type: 'HEART' } });
+    } catch (err) {
+      console.warn("Lỗi like bài:", err);
+    }
+  };
+
+  const isOnline = Boolean(profile?.isOnline ?? true);
+  const userGenre = editData.favoriteGenre || 'Lo-Fi Midnight • Chill & Focus';
+  const userFreq = editData.favoriteFreq || '94.5 MHz • Cùng chạy deadline';
 
   return (
-    <div className="profile-page-root min-h-screen bg-[#13151b] text-[#f1f5f9] font-sans pb-28">
-      {/* 1. TOP STICKY BAR */}
-      <header className="sticky top-0 z-40 bg-[#13151b]/90 backdrop-blur-md border-b border-[#232838] px-4 py-3 flex items-center justify-between max-w-2xl mx-auto">
-        <div className="flex items-center gap-3">
-          <button 
-            type="button" 
-            onClick={() => navigate('/')}
-            className="p-2 rounded-full hover:bg-[#1a1a1a] text-zinc-400 hover:text-white transition-all active:scale-95"
-            title="Quay lại sảnh"
-          >
-            <ArrowLeft size={18} />
-          </button>
-          <div className="min-w-0">
-            <h1 className="text-sm font-bold text-white truncate flex items-center gap-1.5">
-              <span>{profile?.nickname || profile?.account || 'Hồ sơ người dùng'}</span>
-              {isAdmin && (
-                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-[#222222] text-zinc-300 border border-[#333333]">
-                  ADMIN
-                </span>
-              )}
-            </h1>
-          </div>
-        </div>
+    <div className="min-h-screen bg-[#09090b] text-[#f4f4f5] font-sans pb-28 selection:bg-emerald-500 selection:text-black">
+      {/* Audio Element cho Voice Bio */}
+      {voiceBioUrl && (
+        <audio 
+          ref={voiceBioAudioRef} 
+          src={voiceBioUrl} 
+          onEnded={() => setIsPlayingVoiceBio(false)} 
+        />
+      )}
 
-        <div className="flex items-center gap-2">
-          {isMe && (
-            <button
-              type="button"
-              onClick={() => setShowLogoutConfirm(true)}
-              className="px-3 py-1.5 rounded-xl bg-[#1c1c1c] hover:bg-[#252525] text-zinc-300 hover:text-rose-400 border border-[#2a2a2a] text-xs font-medium flex items-center gap-1.5 transition-all active:scale-95"
+      {/* TOP NAVBAR MINIMAL */}
+      <header className="sticky top-0 z-40 bg-[#0c0d12]/90 backdrop-blur-md border-b border-zinc-800/80 px-4 sm:px-6 py-3.5">
+        <div className="max-w-5xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button 
+              type="button" 
+              onClick={() => navigate('/')}
+              className="p-2 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-800 transition-all active:scale-95 flex items-center gap-2 text-xs font-medium"
+              title="Quay lại sảnh chính"
             >
-              <LogOut size={13} />
-              <span>Đăng xuất</span>
+              <ArrowLeft size={16} />
+              <span className="hidden sm:inline">Quay lại sảnh</span>
             </button>
-          )}
+            <div className="flex items-center gap-2">
+              <Radio size={16} className="text-emerald-400" />
+              <span className="text-sm font-bold text-white tracking-tight">Trạm Tần Số Cá Nhân</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {isMe && (
+              <button
+                type="button"
+                onClick={() => setShowLogoutConfirm(true)}
+                className="px-3 py-1.5 rounded-xl bg-zinc-900/80 hover:bg-rose-950/40 text-zinc-300 hover:text-rose-400 border border-zinc-800 hover:border-rose-900/60 text-xs font-medium flex items-center gap-1.5 transition-all active:scale-95"
+              >
+                <LogOut size={13} />
+                <span>Đăng xuất</span>
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
-      {/* 2. HERO PROFILE CONTAINER (CHUẨN BỐ CỤC THREADS PHẲNG, RỘNG RÃI) */}
-      <div className="max-w-2xl mx-auto px-4 pt-4 sm:pt-6">
-        <div className="border-b border-[#1e1e1e] pb-6">
-          <div className="flex items-start justify-between gap-4">
-            {/* Cột thông tin tên & Bio */}
-            <div className="flex-1 min-w-0">
-              <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight flex items-center gap-2">
-                <span>{profile?.nickname || profile?.account || 'Người dùng Talovin'}</span>
-                {isFounder && (
-                  <span className="p-0.5 rounded text-zinc-400" title="Nhà sáng lập">
-                    <Sparkles size={14} />
-                  </span>
-                )}
-              </h2>
-              <p className="text-xs font-mono text-[#777777] mt-0.5">
-                @{profile?.account || 'user'}
-              </p>
-
-              {/* Tiểu sử (Bio) */}
-              <p className="text-xs sm:text-sm text-zinc-200 mt-3 leading-relaxed font-normal whitespace-pre-wrap">
-                {profile?.bio || (isMe ? 'Chưa cập nhật tiểu sử. Bấm nút bên dưới để giới thiệu về bản thân bạn.' : 'Người dùng này chưa cập nhật tiểu sử.')}
-              </p>
-
-              {/* Thông tin phụ: Nơi ở, Tuổi */}
-              <div className="flex flex-wrap items-center gap-3 mt-3 text-xs text-[#777777]">
-                {profile?.location && (
-                  <span className="flex items-center gap-1">
-                    <MapPin size={12} />
-                    <span>{profile.location}</span>
-                  </span>
-                )}
-                {profile?.age && (
-                  <span className="flex items-center gap-1">
-                    <Calendar size={12} />
-                    <span>{profile.age} tuổi</span>
-                  </span>
-                )}
-              </div>
-
-              {/* Stats Counters */}
-              <div className="flex items-center gap-3 mt-3 text-xs text-[#777777]">
-                <span><strong className="text-white">{userPosts.length}</strong> bài viết</span>
-                <span>•</span>
-                <span><strong className="text-white">{userFriends.length}</strong> bạn bè</span>
-                {isMe && (
-                  <>
-                    <span>•</span>
-                    <span><strong className="text-white">{savedPosts.length}</strong> đã lưu</span>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* Avatar lớn bên phải */}
-            <div className="relative flex-shrink-0 group">
-              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border border-[#2a2a2a] bg-[#181818] flex items-center justify-center">
-                <UserAvatar avatar={profile?.avatar} name={profile?.nickname || profile?.account} size={96} className="w-full h-full" />
-              </div>
-              {isMe && (
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="absolute bottom-0 right-0 p-1.5 rounded-full bg-[#222222] hover:bg-[#333333] text-white border border-[#3f3f46] shadow-md active:scale-90 transition-all cursor-pointer"
-                  title="Thay đổi ảnh đại diện"
-                >
-                  <Camera size={12} strokeWidth={2.5} />
-                </button>
-              )}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleAvatarFileSelect}
-                className="hidden"
-              />
-            </div>
-          </div>
-
-          {/* Hàng nút hành động rộng toàn chiều ngang */}
-          <div className="mt-4 flex items-center gap-2">
-            {isMe ? (
-              <button
-                type="button"
-                onClick={() => setIsEditing(!isEditing)}
-                className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-1.5 active:scale-98 border ${
-                  isEditing 
-                    ? 'bg-[#1e1e1e] text-zinc-200 border-[#2a2a2a]' 
-                    : 'bg-[#181818] hover:bg-[#202020] text-white border-[#2a2a2a]'
-                }`}
-              >
-                <Edit3 size={13} />
-                <span>{isEditing ? 'Đóng chỉnh sửa' : 'Cập nhật hồ sơ'}</span>
-              </button>
-            ) : (
-              <div className="flex-1 flex items-center gap-2">
-                {friendStatus === 'ACCEPTED' ? (
-                  <div className="flex-1 py-2 rounded-xl bg-[#1c1c1c] text-zinc-200 border border-[#2e2e2e] text-xs font-medium flex items-center justify-center gap-1.5">
-                    <UserCheck size={14} />
-                    <span>Bạn bè</span>
+      {/* BỐ CỤC 2 CỘT CHUẨN: MOBILE 1 CỘT -> DESKTOP 12 CỘT */}
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-4 sm:py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          
+          {/* ============================================================== */}
+          {/* CỘT TRÁI (lg:col-span-4): THẺ CĂN CƯỚC TẦN SỐ (AUDIO-FIRST ID) */}
+          {/* ============================================================== */}
+          <aside className="lg:col-span-4 lg:sticky lg:top-20 space-y-5">
+            <div className="bg-zinc-900/90 backdrop-blur-md border border-zinc-800/90 p-5 sm:p-6 rounded-2xl space-y-5 shadow-2xl">
+              
+              {/* Header thẻ: Avatar vuông bo góc + Chấm Online + Tên */}
+              <div className="flex flex-col sm:flex-row lg:flex-col items-start gap-4">
+                <div className="relative flex-shrink-0">
+                  <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden border border-zinc-700/80 bg-zinc-950 shadow-lg">
+                    <UserAvatar 
+                      avatar={profile?.avatar} 
+                      name={profile?.nickname || profile?.account} 
+                      size={96} 
+                      className="w-full h-full rounded-2xl object-cover" 
+                    />
                   </div>
-                ) : friendStatus === 'PENDING_SENT' ? (
-                  <div className="flex-1 py-2 rounded-xl bg-[#1c1c1c] text-zinc-300 border border-[#2e2e2e] text-xs font-medium flex items-center justify-center gap-1.5">
-                    <Clock size={14} />
-                    <span>Đã gửi lời mời</span>
+                  {/* Chấm Online / Offline */}
+                  <span 
+                    className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full ring-4 ring-zinc-900 ${
+                      isOnline ? 'bg-emerald-500' : 'bg-zinc-600'
+                    }`}
+                    title={isOnline ? 'Đang trực tuyến' : 'Ngoại tuyến'}
+                  />
+                  {isMe && (
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="absolute -top-1.5 -right-1.5 p-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700 shadow-md active:scale-90 transition-all cursor-pointer"
+                      title="Đổi ảnh đại diện"
+                    >
+                      <Camera size={12} strokeWidth={2.5} />
+                    </button>
+                  )}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarFileSelect}
+                    className="hidden"
+                  />
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <h2 className="text-xl font-bold text-white tracking-tight truncate">
+                      {profile?.nickname || profile?.account || 'Người dùng Talovin'}
+                    </h2>
+                    {profile?.roles?.includes('ROLE_ADMIN') && (
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        ADMIN
+                      </span>
+                    )}
+                  </div>
+                  <p className="font-mono text-xs text-zinc-400 mt-0.5">
+                    @{profile?.account || 'user'}
+                  </p>
+                  
+                  {/* Tiểu sử */}
+                  <p className="text-xs text-zinc-300 mt-2.5 leading-relaxed whitespace-pre-wrap">
+                    {profile?.bio || (isMe ? 'Chưa cập nhật tiểu sử. Bấm nút dưới để viết đôi dòng giới thiệu.' : 'Người dùng này chưa cập nhật tiểu sử.')}
+                  </p>
+
+                  {/* Vị trí & Tuổi */}
+                  <div className="flex flex-wrap items-center gap-2.5 mt-2.5 text-xs text-zinc-400">
+                    {profile?.location && (
+                      <span className="flex items-center gap-1">
+                        <MapPin size={11} className="text-zinc-500" />
+                        <span>{profile.location}</span>
+                      </span>
+                    )}
+                    {profile?.age && (
+                      <span className="flex items-center gap-1">
+                        <Calendar size={11} className="text-zinc-500" />
+                        <span>{profile.age} tuổi</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Hàng nút hành động (Touch-friendly h-11) */}
+              <div>
+                {!isMe ? (
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {friendStatus === 'ACCEPTED' ? (
+                      <div className="h-11 rounded-xl bg-zinc-800 text-zinc-200 border border-zinc-700 text-xs font-semibold flex items-center justify-center gap-1.5 select-none">
+                        <UserCheck size={15} className="text-emerald-400" />
+                        <span>Bạn bè</span>
+                      </div>
+                    ) : friendStatus === 'PENDING_SENT' ? (
+                      <div className="h-11 rounded-xl bg-zinc-800 text-zinc-400 border border-zinc-700 text-xs font-semibold flex items-center justify-center gap-1.5 select-none">
+                        <Clock size={15} />
+                        <span>Đã gửi lời mời</span>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleSendFriendRequest}
+                        disabled={processingFriend}
+                        className="h-11 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-md disabled:opacity-50"
+                      >
+                        <UserPlus size={15} />
+                        <span>{processingFriend ? 'Đang gửi...' : 'Kết bạn'}</span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => navigate('/')}
+                      className="h-11 rounded-xl bg-zinc-800/80 hover:bg-zinc-700/80 border border-zinc-700 text-white font-semibold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                    >
+                      <MessageSquare size={15} />
+                      <span>Trò chuyện</span>
+                    </button>
                   </div>
                 ) : (
                   <button
                     type="button"
-                    onClick={handleSendFriendRequest}
-                    disabled={processingFriend}
-                    className="flex-1 py-2 rounded-xl bg-white hover:bg-zinc-200 text-black text-xs font-semibold transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                    onClick={() => setIsEditing(!isEditing)}
+                    className="w-full h-11 rounded-xl bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-700 text-white font-semibold text-xs transition-all active:scale-98 flex items-center justify-center gap-2 shadow-sm"
                   >
-                    <UserPlus size={14} />
-                    <span>Kết bạn</span>
+                    <Edit3 size={15} />
+                    <span>{isEditing ? 'Đóng chỉnh sửa' : 'Chỉnh sửa tần số & Hồ sơ'}</span>
                   </button>
                 )}
+              </div>
 
-                <button
-                  type="button"
-                  onClick={() => toast("Tính năng đàm thoại sẽ kết nối qua phòng trò chuyện")}
-                  className="px-4 py-2 rounded-xl bg-[#1c1c1c] hover:bg-[#242424] text-zinc-300 border border-[#2a2a2a] text-xs font-medium transition-all active:scale-95 flex items-center gap-1.5"
-                >
-                  <PhoneCall size={14} />
-                  <span>Trò chuyện</span>
-                </button>
+              {/* KHỐI 1: TÍN HIỆU GIỌNG NÓI (VOICE BIO 10S) */}
+              <div className="p-3.5 rounded-xl bg-zinc-950/80 border border-zinc-800/80 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Volume2 size={14} className="text-emerald-400" />
+                    <span className="text-xs font-semibold text-zinc-200">Tín hiệu giọng nói (10s)</span>
+                  </div>
+                  {voiceBioUrl && (
+                    <span className="text-[10px] font-mono text-zinc-400 px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800">
+                      00:10
+                    </span>
+                  )}
+                </div>
+
+                {voiceBioUrl ? (
+                  <div className="flex items-center gap-3 bg-zinc-900/60 p-2.5 rounded-lg border border-zinc-800/60">
+                    <button
+                      type="button"
+                      onClick={togglePlayVoiceBio}
+                      className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
+                        isPlayingVoiceBio 
+                          ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20' 
+                          : 'bg-white text-black hover:bg-zinc-200'
+                      }`}
+                      title={isPlayingVoiceBio ? "Tạm dừng" : "Phát tín hiệu"}
+                    >
+                      {isPlayingVoiceBio ? <Pause size={14} /> : <Play size={14} className="ml-0.5" />}
+                    </button>
+
+                    {/* Dải sóng âm thanh Visualizer */}
+                    <div className="flex-1 flex items-center gap-1 h-6 px-1">
+                      {[35, 60, 85, 45, 95, 70, 50, 90, 65, 40, 80, 55].map((h, i) => (
+                        <span 
+                          key={i} 
+                          className={`flex-1 rounded-full transition-all duration-200 ${
+                            isPlayingVoiceBio 
+                              ? 'bg-emerald-400 animate-pulse' 
+                              : 'bg-zinc-700'
+                          }`}
+                          style={{ 
+                            height: isPlayingVoiceBio ? `${Math.max(20, (h * Math.sin(i + 1)) % 100)}%` : `${h * 0.4}%` 
+                          }}
+                        />
+                      ))}
+                    </div>
+
+                    {isMe && (
+                      <button
+                        type="button"
+                        onClick={handleDeleteVoiceBio}
+                        className="p-1.5 text-zinc-500 hover:text-rose-400 transition-colors"
+                        title="Xóa tín hiệu giọng nói"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    {isMe ? (
+                      <div>
+                        {isRecordingBio ? (
+                          <div className="flex items-center justify-between bg-rose-950/30 border border-rose-800/40 p-2.5 rounded-lg">
+                            <div className="flex items-center gap-2 text-rose-400 text-xs font-mono">
+                              <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+                              <span>Đang thu: {recordTimeLeft}s</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={stopRecordingVoiceBio}
+                              className="px-3 py-1 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold flex items-center gap-1"
+                            >
+                              <Square size={12} />
+                              <span>Hoàn tất</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={startRecordingVoiceBio}
+                            className="w-full py-2.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-800 text-xs font-semibold flex items-center justify-center gap-2 transition-all active:scale-98"
+                          >
+                            <Mic size={14} className="text-emerald-400" />
+                            <span>Ghi âm giới thiệu 10s</span>
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-zinc-500 italic py-1 text-center">
+                        Chưa phát tín hiệu giọng nói
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* KHỐI 2: BĂNG TẦN & GU NHẠC */}
+              <div className="space-y-2.5">
+                <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 block px-1">
+                  Băng Tần & Gu Âm Nhạc
+                </span>
+
+                <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800/80 space-y-2">
+                  <div className="flex items-center gap-2 text-xs text-zinc-300">
+                    <Headphones size={13} className="text-emerald-400 flex-shrink-0" />
+                    <span className="truncate">{userGenre}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs font-mono text-emerald-400">
+                    <Radio size={13} className="text-emerald-400 flex-shrink-0" />
+                    <span className="truncate">{userFreq}</span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            {/* PANEL CHỈNH SỬA HỒ SƠ & TẦN SỐ (Khi isEditing mở) */}
+            {isMe && isEditing && (
+              <div className="bg-zinc-900/90 border border-zinc-800/90 p-5 rounded-2xl space-y-4 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Edit3 size={14} className="text-emerald-400" />
+                    <span>Cập nhật tần số cá nhân</span>
+                  </h3>
+                  <button type="button" onClick={() => setIsEditing(false)} className="text-zinc-400 hover:text-white">
+                    <X size={15} />
+                  </button>
+                </div>
+
+                <form onSubmit={handleSaveProfile} className="space-y-3.5">
+                  <div>
+                    <label className="text-[11px] text-zinc-400 font-mono block mb-1">Tên hiển thị</label>
+                    <input 
+                      type="text"
+                      value={editData.nickname}
+                      onChange={(e) => setEditData(prev => ({ ...prev, nickname: e.target.value }))}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-zinc-600"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] text-zinc-400 font-mono block mb-1">Tiểu sử</label>
+                    <textarea 
+                      rows={3}
+                      value={editData.bio}
+                      onChange={(e) => setEditData(prev => ({ ...prev, bio: e.target.value }))}
+                      placeholder="Viết đôi dòng về năng lượng và tần số của bạn..."
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-zinc-600 resize-none"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="text-[11px] text-zinc-400 font-mono block mb-1">Tuổi</label>
+                      <input 
+                        type="number"
+                        value={editData.age}
+                        onChange={(e) => setEditData(prev => ({ ...prev, age: e.target.value }))}
+                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-zinc-600"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-zinc-400 font-mono block mb-1">Vị trí / Khu vực</label>
+                      <input 
+                        type="text"
+                        value={editData.location}
+                        onChange={(e) => setEditData(prev => ({ ...prev, location: e.target.value }))}
+                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-zinc-600"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] text-zinc-400 font-mono block mb-1">Kênh nhạc Lo-Fi yêu thích</label>
+                    <select
+                      value={editData.favoriteGenre}
+                      onChange={(e) => setEditData(prev => ({ ...prev, favoriteGenre: e.target.value }))}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-zinc-600"
+                    >
+                      <option value="Lo-Fi Midnight • Chill & Focus">Lo-Fi Midnight • Chill & Focus</option>
+                      <option value="Ambient Rain • Sâu lắng đêm khuya">Ambient Rain • Sâu lắng đêm khuya</option>
+                      <option value="Acoustic Coffee • Thư giãn sáng sớm">Acoustic Coffee • Thư giãn sáng sớm</option>
+                      <option value="Synthwave Retro • Năng lượng làm việc">Synthwave Retro • Năng lượng làm việc</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] text-zinc-400 font-mono block mb-1">Băng tần thường tham gia</label>
+                    <select
+                      value={editData.favoriteFreq}
+                      onChange={(e) => setEditData(prev => ({ ...prev, favoriteFreq: e.target.value }))}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-zinc-600"
+                    >
+                      <option value="94.5 MHz • Cùng chạy deadline">94.5 MHz • Cùng chạy deadline</option>
+                      <option value="89.2 MHz • Chill & Nghe nhạc">89.2 MHz • Chill & Nghe nhạc</option>
+                      <option value="99.0 MHz • Tâm sự đêm muộn">99.0 MHz • Tâm sự đêm muộn</option>
+                      <option value="105.4 MHz • Kết nối tự do">105.4 MHz • Kết nối tự do</option>
+                    </select>
+                  </div>
+
+                  <div className="pt-2 flex items-center justify-end gap-2">
+                    <button 
+                      type="button" 
+                      onClick={() => setIsEditing(false)} 
+                      className="px-3 py-2 rounded-xl text-xs text-zinc-400 hover:text-white"
+                    >
+                      Hủy
+                    </button>
+                    <button 
+                      type="submit" 
+                      disabled={submitting}
+                      className="px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs transition-all active:scale-95 disabled:opacity-50"
+                    >
+                      {submitting ? 'Đang lưu...' : 'Lưu thay đổi'}
+                    </button>
+                  </div>
+                </form>
+
+                {/* Nút mở đổi mật khẩu */}
+                <div className="border-t border-zinc-800 pt-3">
+                  <button 
+                    type="button" 
+                    onClick={() => setShowPasswordSection(!showPasswordSection)}
+                    className="text-xs text-zinc-400 hover:text-white flex items-center gap-1.5"
+                  >
+                    <Lock size={12} />
+                    <span>{showPasswordSection ? 'Ẩn đổi mật khẩu' : 'Đổi mật khẩu tài khoản'}</span>
+                  </button>
+
+                  {showPasswordSection && (
+                    <form onSubmit={handleChangePassword} className="mt-3 space-y-2.5">
+                      <input 
+                        type="password"
+                        placeholder="Mật khẩu cũ"
+                        value={passwordData.oldPassword}
+                        onChange={(e) => setPasswordData(prev => ({ ...prev, oldPassword: e.target.value }))}
+                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                        required
+                      />
+                      <input 
+                        type="password"
+                        placeholder="Mật khẩu mới (tối thiểu 6 ký tự)"
+                        value={passwordData.newPassword}
+                        onChange={(e) => setPasswordData(prev => ({ ...prev, newPassword: e.target.value }))}
+                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                        required
+                      />
+                      <input 
+                        type="password"
+                        placeholder="Xác nhận mật khẩu mới"
+                        value={passwordData.confirmPassword}
+                        onChange={(e) => setPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                        required
+                      />
+                      <button
+                        type="submit"
+                        disabled={changingPassword}
+                        className="w-full py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-semibold transition-all active:scale-98"
+                      >
+                        {changingPassword ? 'Đang cập nhật...' : 'Xác nhận đổi mật khẩu'}
+                      </button>
+                    </form>
+                  )}
+                </div>
               </div>
             )}
-          </div>
-        </div>
+          </aside>
 
-        {/* 3. KHU VỰC CHỈNH SỬA HỒ SƠ RIÊNG BIỆT (CHỈ MỞ KHI BẤM NÚT) */}
-        {isEditing && isMe && (
-          <div className="my-4 p-5 rounded-2xl bg-[#141414] border border-[#222222] shadow-xl animate-fade-in">
-            <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#222222]">
-              <div className="flex items-center gap-2">
-                <Edit3 size={15} className="text-zinc-300" />
-                <h3 className="text-sm font-bold text-white">Chỉnh sửa thông tin hồ sơ</h3>
-              </div>
-              <button 
-                type="button" 
-                onClick={() => setIsEditing(false)}
-                className="text-zinc-400 hover:text-white p-1 rounded-lg"
+          {/* ============================================================== */}
+          {/* CỘT PHẢI (lg:col-span-8): KHOẢNH KHẮC & KẾT NỐI */}
+          {/* ============================================================== */}
+          <section className="lg:col-span-8 space-y-4">
+            
+            {/* Thanh Tab dính: Đúng 2 tab tối giản có vùng chạm lớn */}
+            <div className="sticky top-16 z-30 bg-[#09090b]/90 backdrop-blur-md border-b border-zinc-800 flex items-center gap-8 px-2">
+              <button
+                type="button"
+                onClick={() => setActiveTab('posts')}
+                className={`py-3.5 text-sm font-medium transition-all relative flex items-center gap-2 ${
+                  activeTab === 'posts' ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'
+                }`}
               >
-                <X size={16} />
+                <span>Khoảnh khắc & Tín hiệu</span>
+                <span className="font-mono text-xs px-1.5 py-0.2 rounded-full bg-zinc-800 text-zinc-300">
+                  {userPosts.length}
+                </span>
+                {activeTab === 'posts' && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-white rounded-full" />
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('friends')}
+                className={`py-3.5 text-sm font-medium transition-all relative flex items-center gap-2 ${
+                  activeTab === 'friends' ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                <span>Kết nối (Bạn bè)</span>
+                <span className="font-mono text-xs px-1.5 py-0.2 rounded-full bg-zinc-800 text-zinc-300">
+                  {userFriends.length}
+                </span>
+                {activeTab === 'friends' && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-white rounded-full" />
+                )}
               </button>
             </div>
 
-            <form onSubmit={handleSaveProfile} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-zinc-300 mb-1">Tên hiển thị (Biệt danh)</label>
-                <input
-                  type="text"
-                  value={editData.nickname}
-                  onChange={(e) => setEditData({ ...editData, nickname: e.target.value })}
-                  placeholder="Nhập biệt danh của bạn..."
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#171a23] border border-[#242b3b] text-[#f1f5f9] text-xs focus:outline-none focus:border-[#44526d] transition-colors"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-zinc-300 mb-1">Tuổi</label>
-                  <input
-                    type="number"
-                    value={editData.age}
-                    onChange={(e) => setEditData({ ...editData, age: e.target.value })}
-                    placeholder="VD: 22"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#171a23] border border-[#242b3b] text-[#f1f5f9] text-xs focus:outline-none focus:border-[#44526d] transition-colors"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-zinc-300 mb-1">Nơi sinh sống</label>
-                  <input
-                    type="text"
-                    value={editData.location}
-                    onChange={(e) => setEditData({ ...editData, location: e.target.value })}
-                    placeholder="VD: TP. Hồ Chí Minh"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#171a23] border border-[#242b3b] text-[#f1f5f9] text-xs focus:outline-none focus:border-[#44526d] transition-colors"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-zinc-300 mb-1">Tiểu sử / Lời giới thiệu</label>
-                <textarea
-                  rows="3"
-                  value={editData.bio}
-                  onChange={(e) => setEditData({ ...editData, bio: e.target.value })}
-                  placeholder="Chia sẻ đôi dòng về công việc, sở thích âm nhạc hoặc tâm sự..."
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#171a23] border border-[#242b3b] text-[#f1f5f9] text-xs focus:outline-none focus:border-[#44526d] transition-colors"
-                />
-              </div>
-
-              <div className="flex items-center justify-between pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowPasswordSection(!showPasswordSection)}
-                  className="text-xs font-semibold text-zinc-400 hover:text-white flex items-center gap-1"
-                >
-                  <Lock size={12} />
-                  <span>{showPasswordSection ? 'Ẩn đổi mật khẩu' : 'Đổi mật khẩu tài khoản'}</span>
-                </button>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsEditing(false)}
-                    className="px-4 py-2 rounded-xl bg-[#1e2332] hover:bg-[#282f42] text-zinc-300 text-xs font-semibold transition-all border border-[#2e374c]"
-                  >
-                    Hủy
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    className="px-5 py-2 rounded-xl bg-white hover:bg-zinc-200 text-black text-xs font-semibold transition-all shadow-sm active:scale-95"
-                  >
-                    {submitting ? 'Đang lưu...' : 'Lưu thay đổi'}
-                  </button>
-                </div>
-              </div>
-            </form>
-
-            {/* Khung đổi mật khẩu */}
-            {showPasswordSection && (
-              <form onSubmit={handleChangePassword} className="mt-4 pt-4 border-t border-[#242b3b] space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <input
-                    type="password"
-                    placeholder="Mật khẩu hiện tại"
-                    value={passwordData.oldPassword}
-                    onChange={(e) => setPasswordData({ ...passwordData, oldPassword: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-[#171a23] border border-[#242b3b] text-white text-xs focus:border-[#44526d] focus:outline-none"
-                    required
-                  />
-                  <input
-                    type="password"
-                    placeholder="Mật khẩu mới (>= 6 ký tự)"
-                    value={passwordData.newPassword}
-                    onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-[#171a23] border border-[#242b3b] text-white text-xs focus:border-[#44526d] focus:outline-none"
-                    required
-                  />
-                  <input
-                    type="password"
-                    placeholder="Xác nhận mật khẩu mới"
-                    value={passwordData.confirmPassword}
-                    onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-[#171a23] border border-[#242b3b] text-white text-xs focus:border-[#44526d] focus:outline-none"
-                    required
-                  />
-                </div>
-                <div className="flex justify-end">
-                  <button
-                    type="submit"
-                    disabled={changingPassword}
-                    className="px-4 py-1.5 rounded-xl bg-white hover:bg-zinc-200 text-black text-xs font-semibold transition-all"
-                  >
-                    {changingPassword ? 'Đang cập nhật...' : 'Xác nhận đổi mật khẩu'}
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
-        )}
-
-        {/* 4. TABS BÀI VIẾT | ĐÃ LƯU | BẠN BÈ */}
-        <div className="flex items-center justify-around border-b border-[#1e1e1e] text-xs">
-          <button
-            type="button"
-            onClick={() => setActiveTab('posts')}
-            className={`py-3.5 text-xs font-semibold transition-all border-b-2 flex-1 text-center ${
-              activeTab === 'posts' 
-                ? 'border-white text-white' 
-                : 'border-transparent text-[#777777] hover:text-zinc-300'
-            }`}
-          >
-            Bài viết ({userPosts.length})
-          </button>
-
-          {isMe && (
-            <button
-              type="button"
-              onClick={() => setActiveTab('saved')}
-              className={`py-3.5 text-xs font-semibold transition-all border-b-2 flex-1 text-center ${
-                activeTab === 'saved' 
-                  ? 'border-white text-white' 
-                  : 'border-transparent text-[#777777] hover:text-zinc-300'
-              }`}
-            >
-              Đã lưu ({savedPosts.length})
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('friends')}
-            className={`py-3.5 text-xs font-semibold transition-all border-b-2 flex-1 text-center ${
-              activeTab === 'friends' 
-                ? 'border-white text-white' 
-                : 'border-transparent text-[#777777] hover:text-zinc-300'
-            }`}
-          >
-            Bạn bè ({userFriends.length})
-          </button>
-        </div>
-
-        {/* 5. NỘI DUNG TỪNG TAB */}
-        <div className="divide-y divide-[#1e1e1e]">
-          {/* TAB 1: BÀI VIẾT DO USER ĐĂNG */}
-          {activeTab === 'posts' && (
-            loadingPosts ? (
-              <div className="py-12 text-center text-zinc-500 font-mono text-xs">
-                <Loader2 size={20} className="animate-spin mx-auto mb-2 text-zinc-400" />
-                <span>Đang tải danh sách bài viết...</span>
-              </div>
-            ) : userPosts.length === 0 ? (
-              <div className="py-16 text-center text-zinc-500">
-                <FileText size={28} className="mx-auto mb-2 text-zinc-600 opacity-60" />
-                <p className="text-sm font-semibold text-zinc-400">Chưa có bài viết nào</p>
-                <p className="text-xs text-zinc-600 mt-1">Người dùng này chưa xuất bản bài đăng nào trên hệ thống.</p>
-              </div>
-            ) : (
-              userPosts.map(post => (
-                <article key={post.id} className="py-4 hover:bg-[#141414]/40 transition-colors">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2.5">
-                      <UserAvatar avatar={post.authorAvatar} name={post.authorNickname || post.authorAccount} size={34} />
-                      <div>
-                        <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                          <span>{post.authorNickname || post.authorAccount}</span>
-                        </div>
-                        <span className="text-[10.5px] font-mono text-zinc-500">
-                          {post.formattedTime || TIME_FORMATTER(post.createdAt)}
-                        </span>
-                      </div>
+            {/* NỘI DUNG TAB 1: KHOẢNH KHẮC & TÍN HIỆU */}
+            {activeTab === 'posts' && (
+              <div className="space-y-4">
+                {loadingPosts ? (
+                  <div className="py-20 text-center text-zinc-500 flex flex-col items-center gap-3">
+                    <Loader2 size={24} className="animate-spin text-zinc-400" />
+                    <span className="text-xs">Đang đồng bộ khoảnh khắc từ tần số...</span>
+                  </div>
+                ) : userPosts.length === 0 ? (
+                  /* Empty State chuẩn phong cách Trạm Tần Số */
+                  <div className="py-20 px-4 text-center rounded-2xl border border-dashed border-zinc-800/80 bg-zinc-900/20 space-y-3">
+                    <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mx-auto text-zinc-500">
+                      <AudioLines size={22} className="opacity-70" />
                     </div>
-                  </div>
-
-                  <p className="text-xs sm:text-sm text-zinc-200 leading-relaxed whitespace-pre-wrap my-2">
-                    {post.content}
-                  </p>
-
-                  {/* Hành động */}
-                  <div className="flex items-center gap-5 pt-2 text-xs text-[#777777]">
-                    <span className="flex items-center gap-1.5 hover:text-white cursor-pointer transition-colors">
-                      <Heart size={15} className={post.isLikedByMe ? "fill-rose-500 text-rose-500" : ""} />
-                      <span>{post.likesCount || 0}</span>
-                    </span>
-                    <span className="flex items-center gap-1.5 hover:text-white cursor-pointer transition-colors">
-                      <MessageSquare size={15} />
-                      <span>{post.commentsCount || 0}</span>
-                    </span>
-                  </div>
-                </article>
-              ))
-            )
-          )}
-
-          {/* TAB 2: BÀI VIẾT ĐÃ LƯU (CHỈ CHÍNH CHỦ) */}
-          {activeTab === 'saved' && isMe && (
-            savedPosts.length === 0 ? (
-              <div className="py-16 text-center text-zinc-500">
-                <Bookmark size={28} className="mx-auto mb-2 text-zinc-600 opacity-60" />
-                <p className="text-sm font-semibold text-zinc-400">Chưa có bài viết đã lưu</p>
-                <p className="text-xs text-zinc-600 mt-1">Lưu các bài viết yêu thích tại Sảnh để xem lại bất cứ lúc nào.</p>
-              </div>
-            ) : (
-              savedPosts.map(post => (
-                <article key={`saved-${post.id}`} className="py-4 hover:bg-[#141414]/40 transition-colors">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2.5">
-                      <UserAvatar avatar={post.authorAvatar} name={post.authorNickname || post.authorAccount} size={34} />
-                      <div>
-                        <div className="text-xs font-bold text-white">{post.authorNickname || post.authorAccount}</div>
-                        <span className="text-[10.5px] font-mono text-zinc-500">{post.formattedTime || TIME_FORMATTER(post.createdAt)}</span>
-                      </div>
+                    <div>
+                      <p className="text-sm font-semibold text-zinc-300">Chưa có tín hiệu nào</p>
+                      <p className="text-xs text-zinc-500 max-w-sm mx-auto mt-1 leading-relaxed">
+                        {isMe 
+                          ? 'Bạn chưa đăng bài viết hoặc bản ghi âm nào lên sảnh trực tuyến. Hãy chia sẻ góc nhìn đầu tiên!' 
+                          : 'Người dùng này chưa phát tín hiệu hoặc bài viết nào.'}
+                      </p>
                     </div>
+                    {isMe && (
+                      <button
+                        type="button"
+                        onClick={() => navigate('/')}
+                        className="mt-2 px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-semibold transition-all active:scale-95"
+                      >
+                        Đến sảnh đăng bài
+                      </button>
+                    )}
                   </div>
-
-                  <p className="text-xs sm:text-sm text-zinc-200 leading-relaxed whitespace-pre-wrap my-2">
-                    {post.content}
-                  </p>
-                </article>
-              ))
-            )
-          )}
-
-          {/* TAB 4: BẠN BÈ */}
-          {activeTab === 'friends' && (
-            userFriends.length === 0 ? (
-              <div className="py-16 text-center text-zinc-500">
-                <Users size={28} className="mx-auto mb-2 text-zinc-600 opacity-60" />
-                <p className="text-sm font-semibold text-zinc-400">Chưa có bạn bè nào</p>
-                <p className="text-xs text-zinc-600 mt-1">Kết nối thêm nhiều bạn bè từ Sảnh và các phòng thoại để giao lưu!</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-[#1e1e1e]">
-                {userFriends.map(friend => {
-                  const friendUser = friend.friend?.id?.toString() === effectiveUserId?.toString() ? friend.user : friend.friend;
-                  const fNickname = friendUser?.nickname || friendUser?.account || 'Người dùng';
-                  const fAccount = friendUser?.account || 'user';
-                  const fAvatar = friendUser?.avatar;
-
-                  return (
-                    <div 
-                      key={friend.id} 
-                      className="py-3 flex items-center justify-between hover:bg-[#141414]/40 transition-colors cursor-pointer"
-                      onClick={() => navigate(`/profile/${friendUser?.id}`)}
+                ) : (
+                  /* Danh sách bài viết Dark Zinc */
+                  userPosts.map(post => (
+                    <article 
+                      key={post.id} 
+                      className="p-5 rounded-2xl bg-zinc-900/80 border border-zinc-800/80 hover:border-zinc-700/80 transition-all space-y-3.5 shadow-sm"
                     >
-                      <div className="flex items-center gap-3">
-                        <UserAvatar avatar={fAvatar} name={fNickname} size={40} />
-                        <div>
-                          <div className="text-xs font-bold text-white hover:underline">{fNickname}</div>
-                          <div className="text-[11px] font-mono text-zinc-500">@{fAccount}</div>
+                      {/* Header tác giả */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <UserAvatar 
+                            avatar={post.authorAvatar || profile?.avatar} 
+                            name={post.authorNickname || profile?.nickname} 
+                            size={38} 
+                            className="rounded-xl"
+                          />
+                          <div>
+                            <span className="text-xs font-bold text-white block">
+                              {post.authorNickname || profile?.nickname || 'Người dùng'}
+                            </span>
+                            <span className="text-[11px] font-mono text-zinc-400">
+                              {post.formattedTime || TIME_FORMATTER(post.createdAt)}
+                            </span>
+                          </div>
                         </div>
+
+                        {post.vibe && (
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 border border-zinc-700">
+                            {post.vibe}
+                          </span>
+                        )}
                       </div>
 
-                      <span className="text-xs text-zinc-400 font-medium px-3 py-1 rounded-xl bg-[#181818] border border-[#262626]">
-                        Bạn bè
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            )
-          )}
-        </div>
-      </div>
+                      {/* Nội dung bài viết */}
+                      <p className="text-sm text-zinc-200 leading-relaxed whitespace-pre-wrap">
+                        {post.content}
+                      </p>
 
-      {/* MODAL XÁC NHẬN ĐĂNG XUẤT NỘI BỘ (KHÔNG DÙNG WINDOW.CONFIRM XẤU XÍ) */}
+                      {/* Media (Ảnh / Video / Voice) */}
+                      {post.imageUrl && (
+                        <div className="rounded-xl overflow-hidden border border-zinc-800 my-2">
+                          {post.imageUrl.includes('.mp4') || post.imageUrl.includes('video') ? (
+                            <video src={post.imageUrl} controls className="w-full max-h-[380px] object-cover" />
+                          ) : (
+                            <img src={post.imageUrl} alt="Post media" className="w-full max-h-[380px] object-cover" />
+                          )}
+                        </div>
+                      )}
+
+                      {/* Hàng tương tác (Ẩn khung bình luận mặc định) */}
+                      <div className="flex items-center justify-between pt-2 border-t border-zinc-800/60 text-xs text-zinc-400">
+                        <div className="flex items-center gap-4">
+                          <button
+                            type="button"
+                            onClick={() => handleLikePost(post.id)}
+                            className={`flex items-center gap-1.5 transition-colors ${
+                              post.isLikedByMe ? 'text-rose-500 font-semibold' : 'hover:text-white'
+                            }`}
+                          >
+                            <Heart size={15} className={post.isLikedByMe ? 'fill-rose-500 text-rose-500' : ''} />
+                            <span>{post.likesCount || 0}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => navigate('/')}
+                            className="flex items-center gap-1.5 hover:text-white transition-colors"
+                            title="Xem thảo luận tại sảnh chính"
+                          >
+                            <MessageSquare size={15} />
+                            <span>{post.commentsCount || 0}</span>
+                          </button>
+                        </div>
+
+                        <span className="font-mono text-[10px] text-zinc-400">Talovin Signal</span>
+                      </div>
+                    </article>
+                  ))
+                )}
+              </div>
+            )}
+
+            {/* NỘI DUNG TAB 2: KẾT NỐI (BẠN BÈ) */}
+            {activeTab === 'friends' && (
+              <div>
+                {loadingFriends ? (
+                  <div className="py-20 text-center text-zinc-500 flex flex-col items-center gap-3">
+                    <Loader2 size={24} className="animate-spin text-zinc-400" />
+                    <span className="text-xs">Đang tải danh sách kết nối...</span>
+                  </div>
+                ) : userFriends.length === 0 ? (
+                  <div className="py-20 px-4 text-center rounded-2xl border border-dashed border-zinc-800/80 bg-zinc-900/20 space-y-2">
+                    <Users size={24} className="mx-auto text-zinc-500 opacity-60" />
+                    <p className="text-sm font-semibold text-zinc-300">Chưa có kết nối nào</p>
+                    <p className="text-xs text-zinc-500">Các người bạn cùng tần số sẽ xuất hiện tại đây.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {userFriends.map(friend => (
+                      <div 
+                        key={friend.id}
+                        className="p-3.5 rounded-2xl bg-zinc-900/80 border border-zinc-800/80 hover:border-zinc-700/80 transition-all flex items-center justify-between gap-3"
+                      >
+                        <div 
+                          className="flex items-center gap-3 min-w-0 cursor-pointer"
+                          onClick={() => navigate(`/profile/${friend.id}`)}
+                        >
+                          <UserAvatar avatar={friend.avatar} name={friend.nickname || friend.account} size={42} className="rounded-xl flex-shrink-0" />
+                          <div className="min-w-0">
+                            <h4 className="text-xs font-bold text-white truncate hover:underline">
+                              {friend.nickname || friend.account || 'Thành viên'}
+                            </h4>
+                            <p className="text-[11px] font-mono text-zinc-400 truncate">
+                              @{friend.account || 'user'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/profile/${friend.id}`)}
+                          className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-medium transition-all active:scale-95 flex-shrink-0"
+                        >
+                          Hồ sơ
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+          </section>
+
+        </div>
+      </main>
+
+      {/* MODAL XÁC NHẬN ĐĂNG XUẤT */}
       {showLogoutConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={() => setShowLogoutConfirm(false)}>
-          <div className="bg-[#141414] border border-[#222222] rounded-2xl w-full max-w-sm p-5 space-y-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-sm font-bold text-white">Xác nhận đăng xuất</h3>
-            <p className="text-xs text-zinc-400">Bạn có chắc chắn muốn đăng xuất khỏi tài khoản trên thiết bị này không?</p>
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#1e1e1e]">
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in"
+          onClick={() => setShowLogoutConfirm(false)}
+        >
+          <div 
+            className="w-full max-w-sm bg-zinc-900 border border-zinc-800 p-6 rounded-2xl space-y-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center">
+              <LogOut size={18} />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white">Đăng xuất tài khoản?</h3>
+              <p className="text-xs text-zinc-400 mt-1">
+                Bạn sẽ cần đăng nhập lại để tiếp tục kết nối các trạm tần số âm thanh.
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => setShowLogoutConfirm(false)}
-                className="px-4 py-2 rounded-xl bg-[#1e1e1e] hover:bg-[#282828] text-zinc-300 text-xs font-semibold border border-[#2e2e2e]"
+                className="px-4 py-2 rounded-xl text-xs text-zinc-400 hover:text-white"
               >
                 Hủy
               </button>
@@ -786,10 +1080,9 @@ const ProfilePage = () => {
                 onClick={() => {
                   localStorage.clear();
                   sessionStorage.clear();
-                  toast.success("Đã đăng xuất");
                   navigate('/login');
                 }}
-                className="px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-black text-xs font-semibold shadow-sm"
+                className="px-4 py-2 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-semibold text-xs transition-all active:scale-95"
               >
                 Đăng xuất
               </button>
@@ -802,5 +1095,3 @@ const ProfilePage = () => {
 };
 
 export default ProfilePage;
-
-
