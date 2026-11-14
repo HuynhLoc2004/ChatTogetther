@@ -587,10 +587,10 @@ const ProfilePage = () => {
                       type="button"
                       onClick={() => navigate(`/messages/${targetUserId}`)}
                       className="h-10 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs transition-colors duration-150 active:scale-[0.98] flex items-center justify-center gap-1.5 shadow-sm"
-                      title="Nhắn tin riêng 1-1 với người này"
+                      title="Gửi tin nhắn cho người này"
                     >
                       <MessageSquare size={14} />
-                      <span>Nhắn tin riêng</span>
+                      <span>Nhắn tin</span>
                     </button>
 
                     <button

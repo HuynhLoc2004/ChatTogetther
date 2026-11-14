@@ -452,11 +452,11 @@ export const DirectMessagePage = () => {
           <div className="h-4 w-[1px] bg-zinc-800"></div>
 
           <TalovinLogo size={22} />
-          <span className="font-bold text-sm tracking-tight text-zinc-100">
-            Tin Nhắn Riêng 1-1
+          <span className="font-semibold text-sm tracking-tight text-zinc-100 font-sans">
+            Tin nhắn
           </span>
-          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hidden sm:inline">
-            E2E ENCRYPTED
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-900 text-zinc-400 border border-zinc-800 hidden sm:inline">
+            Mã hóa E2E
           </span>
         </div>
 
@@ -494,7 +494,7 @@ export const DirectMessagePage = () => {
           {/* List items */}
           <div className="flex-1 overflow-y-auto overscroll-contain p-2 space-y-1 custom-scrollbar">
             <div className="px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-semibold">
-              Hội thoại & Bạn bè ({filteredFriends.length})
+              Danh bạ trò chuyện ({filteredFriends.length})
             </div>
 
             {loadingFriends ? (
@@ -551,11 +551,11 @@ export const DirectMessagePage = () => {
           {!activePartner ? (
             <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-zinc-500 space-y-3">
               <div className="w-16 h-16 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400">
-                <MessageSquare size={28} />
+                <MessageSquare size={26} />
               </div>
-              <h3 className="font-bold text-base text-zinc-200">Hộp Thư Tin Nhắn Riêng 1-1</h3>
-              <p className="text-xs max-w-sm text-zinc-400 leading-relaxed">
-                Chọn một người bạn từ danh sách bên trái để bắt đầu cuộc trò chuyện riêng tư được mã hóa, đàm thoại thoại hoặc gọi video trực tiếp.
+              <h3 className="font-semibold text-base text-zinc-200 font-sans">Hộp thư tin nhắn</h3>
+              <p className="text-xs max-w-sm text-zinc-400 leading-relaxed font-sans">
+                Chọn một người bạn từ danh sách bên trái để bắt đầu nhắn tin, gọi thoại hoặc gọi video trực tiếp.
               </p>
             </div>
           ) : (
@@ -600,7 +600,7 @@ export const DirectMessagePage = () => {
                     type="button"
                     onClick={() => navigate(`/call/direct/${activePartner.id}?type=audio`)}
                     className="h-9 px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-medium flex items-center gap-1.5 transition-colors duration-150 active:scale-[0.98]"
-                    title="Bắt đầu cuộc gọi thoại 1-1"
+                    title="Bắt đầu cuộc gọi thoại"
                   >
                     <Phone size={13} className="text-zinc-300" />
                     <span className="hidden sm:inline">Gọi thoại</span>
@@ -610,7 +610,7 @@ export const DirectMessagePage = () => {
                     type="button"
                     onClick={() => navigate(`/call/direct/${activePartner.id}?type=video`)}
                     className="h-9 px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-medium flex items-center gap-1.5 transition-colors duration-150 active:scale-[0.98]"
-                    title="Bắt đầu cuộc gọi Video 1-1"
+                    title="Bắt đầu cuộc gọi video"
                   >
                     <Video size={13} className="text-zinc-300" />
                     <span className="hidden sm:inline">Gọi Video</span>
@@ -754,7 +754,7 @@ export const DirectMessagePage = () => {
 
             <div className="text-center">
               <h4 className="font-bold text-sm text-zinc-100">
-                {activePartner ? (activePartner.nickname || activePartner.account) : 'Cuộc gọi 1-1'}
+                {activePartner ? (activePartner.nickname || activePartner.account) : 'Cuộc trò chuyện'}
               </h4>
               <span className="text-xs font-mono text-emerald-400 flex items-center justify-center gap-1.5 mt-0.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -859,7 +859,7 @@ export const DirectMessagePage = () => {
           <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></div>
           <div>
             <span className="text-xs font-bold text-white block">
-              Đang gọi: {activePartner?.nickname || 'Cuộc gọi 1-1'}
+              Đang gọi: {activePartner?.nickname || 'Cuộc trò chuyện'}
             </span>
             <span className="text-[10px] font-mono text-zinc-400">
               {Math.floor(callDuration / 60)}:{(callDuration % 60).toString().padStart(2, '0')} • Nhấp để mở lại

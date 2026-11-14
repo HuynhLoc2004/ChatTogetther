@@ -2350,10 +2350,10 @@ const Home = ({ initialTab }) => {
               type="button"
               className="nav-item"
               onClick={() => navigate('/messages')}
-              title="Hộp thư nhắn tin riêng 1-1"
+              title="Hộp thư tin nhắn"
             >
               <MessageSquare size={15} strokeWidth={1.5} />
-              <span>Tin nhắn riêng</span>
+              <span>Tin nhắn</span>
             </button>
 
             {dynamicMenu.friends?.visible !== false && (

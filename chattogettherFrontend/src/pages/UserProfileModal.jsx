@@ -499,14 +499,14 @@ export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentU
                         </button>
                       )}
 
-                      {/* Nút Nhắn tin riêng */}
+                      {/* Nút Nhắn tin */}
                       <button 
                         type="button"
                         onClick={() => { onClose(); navigate(`/messages/${effectiveUserId}`); }}
                         className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-medium transition-colors active:scale-[0.98]"
-                        title="Nhắn tin riêng 1-1"
+                        title="Gửi tin nhắn"
                       >
-                        <MessageSquare size={13} /> Nhắn tin riêng
+                        <MessageSquare size={13} /> Nhắn tin
                       </button>
 
                       {/* Nút Gọi ngay */}
