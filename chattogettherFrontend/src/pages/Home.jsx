@@ -27,6 +27,74 @@ import CommunitySection from '../components/CommunitySection';
 import ResonanceMatchModal from '../components/ResonanceMatchModal';
 import ChallengeDeckModal from '../components/ChallengeDeckModal';
 
+// ==========================================
+// TALOVIN WEB AUDIO SOUND EFFECTS (Độ trễ 0ms, không tốn băng thông)
+// ==========================================
+const getAudioCtx = () => {
+  if (typeof window === 'undefined') return null;
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx) return null;
+  if (!window._talovinAudioCtx) {
+    window._talovinAudioCtx = new AudioCtx();
+  }
+  if (window._talovinAudioCtx.state === 'suspended') {
+    window._talovinAudioCtx.resume().catch(() => {});
+  }
+  return window._talovinAudioCtx;
+};
+
+// Âm thanh khi thả Tim / Bày tỏ cảm xúc (Pop bubble nảy êm tai)
+export const playHeartSound = () => {
+  try {
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = 'sine';
+    const now = ctx.currentTime;
+
+    osc.frequency.setValueAtTime(380, now);
+    osc.frequency.exponentialRampToValueAtTime(780, now + 0.11);
+
+    gain.gain.setValueAtTime(0.22, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(now);
+    osc.stop(now + 0.14);
+  } catch (_) {}
+};
+
+// Âm thanh khi gửi Phản hồi / Bình luận thành công (Chime đôi thánh thót)
+export const playCommentSuccessSound = () => {
+  try {
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+
+    [523.25, 783.99].forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'triangle';
+      const startAt = now + idx * 0.07;
+      osc.frequency.setValueAtTime(freq, startAt);
+
+      gain.gain.setValueAtTime(0.18, startAt);
+      gain.gain.exponentialRampToValueAtTime(0.001, startAt + 0.22);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(startAt);
+      osc.stop(startAt + 0.23);
+    });
+  } catch (_) {}
+};
+
 // Avatar: Ưu tiên ảnh thật người dùng tải lên. Nếu chưa có ảnh hoặc lỗi tải, dùng DiceBear Avatar
 export const UserAvatar = ({ avatar, name = '', size = 36, className = "" }) => {
   const seed = encodeURIComponent((name || 'user').trim() || 'user');
@@ -314,6 +382,18 @@ const Home = () => {
   });
   const [hotSearches, setHotSearches] = useState([]);
   const [activeReactionPicker, setActiveReactionPicker] = useState(null);
+  const reactionTimeoutRef = useRef(null);
+
+  // Lắng nghe click bên ngoài để tự động đóng popup reactions
+  useEffect(() => {
+    const handleGlobalClick = (e) => {
+      if (!e.target.closest('.reaction-drop-wrapper') && !e.target.closest('.reactions-popup-menu')) {
+        setActiveReactionPicker(null);
+      }
+    };
+    document.addEventListener('pointerdown', handleGlobalClick);
+    return () => document.removeEventListener('pointerdown', handleGlobalClick);
+  }, []);
 
   // Multimedia Signals State (Ảnh/Film webp + Ghi âm giọng nói 15s)
   const [attachedMedia, setAttachedMedia] = useState(null); // { url, type, name }
@@ -961,12 +1041,14 @@ const Home = () => {
 
   // Thả cảm xúc
   const handleReactPost = async (postId, reactionType) => {
+    if (!postId) return;
+    playHeartSound();
     setActiveReactionPicker(null);
     const targetType = reactionType || 'HEART';
 
-    // 1. Cập nhật Optimistic cho danh sách bài viết ngoài feed
+    // 1. Cập nhật Optimistic cho danh sách bài viết ngoài feed (hỗ trợ String và Number id)
     setPosts(prev => prev.map(p => {
-      if (p.id !== postId) return p;
+      if (String(p.id) !== String(postId)) return p;
       const wasLiked = p.isLikedByMe;
       const sameType = p.myReaction === targetType;
 
@@ -989,7 +1071,7 @@ const Home = () => {
 
     // 2. Đồng bộ tức thì cả selectedThreadPost (nếu đang mở trong Modal chi tiết)
     setSelectedThreadPost(prev => {
-      if (!prev || prev.id !== postId) return prev;
+      if (!prev || String(prev.id) !== String(postId)) return prev;
       const wasLiked = prev.isLikedByMe || (prev.myReaction != null);
       const sameType = prev.myReaction === targetType;
 
@@ -1016,14 +1098,14 @@ const Home = () => {
       });
       if (res.data && res.data.data) {
         const updatedPost = res.data.data;
-        setPosts(prev => prev.map(p => p.id === postId ? updatedPost : p));
-        setSelectedThreadPost(prev => prev && prev.id === postId ? updatedPost : prev);
+        setPosts(prev => prev.map(p => String(p.id) === String(postId) ? updatedPost : p));
+        setSelectedThreadPost(prev => (prev && String(prev.id) === String(postId)) ? updatedPost : prev);
       }
     } catch (err) {
       console.warn("Lỗi thả cảm xúc:", err);
       if (err.response?.status === 404) {
-        setPosts(prev => prev.filter(p => p.id !== postId));
-        setSelectedThreadPost(prev => prev?.id === postId ? null : prev);
+        setPosts(prev => prev.filter(p => String(p.id) !== String(postId)));
+        setSelectedThreadPost(prev => (prev && String(prev.id) === String(postId)) ? null : prev);
       } else {
         fetchPosts(true);
       }
@@ -1058,11 +1140,13 @@ const Home = () => {
 
   // Thả cảm xúc / Tim cho phản hồi (Bình luận)
   const handleToggleLikeComment = async (postId, commentId) => {
+    if (!postId || !commentId) return;
+    playHeartSound();
     // Cập nhật Optimistic ngay lập tức để tạo phản hồi tức thì
     setCommentsMap(prev => {
       const currentList = prev[postId] || [];
       const updated = currentList.map(c => {
-        if (c.id === commentId) {
+        if (String(c.id) === String(commentId)) {
           const wasLiked = Boolean(c.isLiked);
           const currentCount = Number(c.likesCount || 0);
           return {
@@ -1087,7 +1171,7 @@ const Home = () => {
           const currentList = prev[postId] || [];
           return {
             ...prev,
-            [postId]: currentList.map(c => c.id === commentId ? {
+            [postId]: currentList.map(c => String(c.id) === String(commentId) ? {
               ...c,
               isLiked: updatedCmt.isLiked,
               likesCount: updatedCmt.likesCount
@@ -1211,6 +1295,7 @@ const Home = () => {
           ...prev,
           [postId]: [...(prev[postId] || []), res.data.data]
         }));
+        playCommentSuccessSound();
         setCommentInputs(prev => ({ ...prev, [postId]: '' }));
         setReplyTargetMap(prev => ({ ...prev, [postId]: null }));
         setPosts(prev => prev.map(p => p.id === postId ? { ...p, commentsCount: (p.commentsCount || 0) + 1 } : p));
@@ -3047,12 +3132,23 @@ const Home = () => {
                       {/* Thanh tương tác (Phẳng, không viền pill quanh từng nút) */}
                       <div className="post-actions-toolbar">
                         
-                        {/* Reaction Popover: Luôn đặt trên nút, KHÔNG che chữ */}
-                        <div className="reaction-drop-wrapper">
+                        {/* Reaction Popover: Luôn đặt trên nút, KHÔNG che chữ, tự động biến mất khi rời chuột */}
+                        <div 
+                          className="reaction-drop-wrapper relative group"
+                          onMouseEnter={() => {
+                            if (reactionTimeoutRef.current) clearTimeout(reactionTimeoutRef.current);
+                            setActiveReactionPicker(post.id);
+                          }}
+                          onMouseLeave={() => {
+                            if (reactionTimeoutRef.current) clearTimeout(reactionTimeoutRef.current);
+                            reactionTimeoutRef.current = setTimeout(() => {
+                              setActiveReactionPicker(null);
+                            }, 180);
+                          }}
+                        >
                           <button 
                             type="button"
                             onClick={() => handleReactPost(post.id, post.myReaction || 'HEART')}
-                            onMouseEnter={() => setActiveReactionPicker(post.id)}
                             className={`action-btn ${post.isLikedByMe ? 'active-liked' : ''}`}
                             title={currentReaction ? currentReaction.label : "Thả cảm xúc"}
                           >
@@ -3072,15 +3168,15 @@ const Home = () => {
                           </button>
 
                           {activeReactionPicker === post.id && (
-                            <div 
-                              className="reactions-popup-menu"
-                              onMouseLeave={() => setActiveReactionPicker(null)}
-                            >
+                            <div className="reactions-popup-menu">
                               {REACTION_EMOJIS.map(item => (
                                 <button
                                   key={item.type}
                                   type="button"
-                                  onClick={() => handleReactPost(post.id, item.type)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleReactPost(post.id, item.type);
+                                  }}
                                   className="reaction-emoji-item"
                                   title={item.label}
                                 >
@@ -4631,11 +4727,22 @@ const Home = () => {
                 {/* Hàng nút hành động nhanh với Reaction Popover đầy đủ emoji (KHÔNG CÓ NÚT ĐĂNG LẠI) */}
                 <div className="flex items-center justify-around py-1 border-b border-zinc-800/80 text-zinc-400 relative">
                   {/* Cụm Thả Cảm Xúc / Emoji Popover */}
-                  <div className="relative group">
+                  <div 
+                    className="relative group reaction-drop-wrapper"
+                    onMouseEnter={() => {
+                      if (reactionTimeoutRef.current) clearTimeout(reactionTimeoutRef.current);
+                      setActiveReactionPicker(`modal_${selectedThreadPost.id}`);
+                    }}
+                    onMouseLeave={() => {
+                      if (reactionTimeoutRef.current) clearTimeout(reactionTimeoutRef.current);
+                      reactionTimeoutRef.current = setTimeout(() => {
+                        setActiveReactionPicker(null);
+                      }, 180);
+                    }}
+                  >
                     <button 
                       type="button"
                       onClick={() => handleReactPost(selectedThreadPost.id, selectedThreadPost.myReaction || 'HEART')}
-                      onMouseEnter={() => setActiveReactionPicker(`modal_${selectedThreadPost.id}`)}
                       className={`flex items-center gap-1.5 p-2 rounded-xl hover:text-white transition-all active:scale-95 ${
                         selectedThreadPost.isLikedByMe || selectedThreadPost.myReaction ? 'text-rose-500 font-semibold' : ''
                       }`}
@@ -6153,46 +6260,43 @@ const Home = () => {
         }
         .action-btn.active-liked { color: #f87171; }
 
-        /* REACTION POPOVER: NẰM GỌN TRÊN NÚT, KHÔNG CHE CHỮ */
+        /* REACTION POPOVER: NẰM GỌN TRÊN NÚT, TỰ BIẾN MẤT MƯỢT MÀ KHI RỜI CHUỘT */
         .reactions-popup-menu {
           position: absolute;
-          bottom: calc(100% + 8px);
+          bottom: calc(100% + 6px);
           left: 0;
-          background: #161616;
-          border: 1px solid #262626;
-          border-radius: 10px;
-          padding: 5px 8px;
-          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+          background: #181922;
+          border: 1px solid #2e3446;
+          border-radius: 14px;
+          padding: 6px 10px;
+          box-shadow: 0 16px 36px -4px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.06);
           display: flex;
           align-items: center;
-          gap: 6px;
-          z-index: 50;
-          animation: fadeInReaction 0.15s ease-out;
+          gap: 7px;
+          z-index: 70;
+          animation: slideUpReaction 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+          pointer-events: auto;
         }
-          box-shadow: 0 20px 30px -5px rgba(0, 0, 0, 0.8);
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          z-index: 50;
-          animation: fadeInReaction 0.15s ease-out;
-        }
-        @keyframes fadeInReaction {
-          from { opacity: 0; transform: translateY(4px); }
-          to { opacity: 1; transform: translateY(0); }
+        @keyframes slideUpReaction {
+          from { opacity: 0; transform: translateY(8px) scale(0.92); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
         }
         .reaction-emoji-item {
           background: transparent;
           border: none;
-          font-size: 18px;
+          font-size: 20px;
           cursor: pointer;
-          padding: 3px 5px;
-          border-radius: 6px;
+          padding: 4px;
+          border-radius: 8px;
           line-height: 1;
-          transition: transform 0.15s ease;
+          transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275), background 0.15s;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
         .reaction-emoji-item:hover {
-          transform: scale(1.3);
-          background: rgba(255, 255, 255, 0.08);
+          transform: scale(1.35) translateY(-3px);
+          background: rgba(255, 255, 255, 0.12);
         }
 
         /* Post Dropdown Menu */
