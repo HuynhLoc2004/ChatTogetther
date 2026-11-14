@@ -840,7 +840,7 @@ export const AdminDashboard = () => {
   // --- Âm nhạc ---
   const fetchTracks = async () => {
     try {
-      const res = await axiosClient.get('/admin/tracks');
+      const res = await axiosClient.get('/admin/music-tracks').catch(() => axiosClient.get('/admin/tracks'));
       if (res?.data?.data) setTracks(res.data.data);
     } catch (e) {
       console.warn("Không thể tải tracks:", e);
@@ -849,12 +849,22 @@ export const AdminDashboard = () => {
 
   const handleAddTrack = async (e) => {
     e.preventDefault();
-    if (!newTrack.name.trim() || !newTrack.audioSrc.trim()) {
+    const trackName = (newTrack.name || newTrack.title || '').trim();
+    const trackAudio = (newTrack.audioSrc || newTrack.audioUrl || '').trim();
+    if (!trackName || !trackAudio) {
       toast.error("Vui lòng nhập tên và link nhạc hợp lệ!");
       return;
     }
     try {
-      await axiosClient.post('/admin/tracks', newTrack);
+      await axiosClient.post('/admin/music-tracks', {
+        title: trackName,
+        artist: newTrack.artist || 'Talovin Lo-Fi',
+        genreTag: newTrack.genre || newTrack.genreTag || 'Lo-Fi Chill',
+        audioUrl: trackAudio,
+        coverUrl: newTrack.coverUrl || '',
+        isFeatured: false,
+        isActive: true
+      }).catch(() => axiosClient.post('/admin/tracks', newTrack));
       toast.success("Đã thêm bài hát vào hệ thống!");
       setIsAddTrackOpen(false);
       setNewTrack({ name: '', artist: '', genre: 'Lo-Fi Chill', audioSrc: '' });
@@ -867,7 +877,7 @@ export const AdminDashboard = () => {
   const handleDeleteTrack = async (id) => {
     if (!window.confirm("Bạn có chắc chắn muốn xóa bài hát này?")) return;
     try {
-      await axiosClient.delete(`/admin/tracks/${id}`);
+      await axiosClient.delete(`/admin/music-tracks/${id}`).catch(() => axiosClient.delete(`/admin/tracks/${id}`));
       toast.success("Đã xóa bài hát");
       if (playingTrackId === id && audioPlayer) {
         audioPlayer.pause();

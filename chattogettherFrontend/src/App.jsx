@@ -8,6 +8,7 @@ import ChatRoom from './pages/ChatRoom';
 import AdminDashboard from './pages/AdminDashboard';
 import ProfilePage from './pages/ProfilePage';
 import DirectMessagePage from './pages/DirectMessagePage';
+import CallPage from './pages/CallPage';
 import './App.css';
 
 // Error Boundary để ngăn chặn hoàn toàn màn hình đen (Blank Screen)
@@ -262,6 +263,30 @@ function App() {
               element={
                 <ProtectedRoute>
                   <DirectMessagePage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/call/direct/:userId" 
+              element={
+                <ProtectedRoute>
+                  <CallPage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/call/room/:roomId" 
+              element={
+                <ProtectedRoute>
+                  <CallPage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/call" 
+              element={
+                <ProtectedRoute>
+                  <CallPage />
                 </ProtectedRoute>
               } 
             />

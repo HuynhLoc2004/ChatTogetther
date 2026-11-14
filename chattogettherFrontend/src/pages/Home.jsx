@@ -1247,7 +1247,7 @@ const Home = () => {
       }
       toast.success(res.data?.message || "Đã cập nhật đăng lại bài viết!");
     } catch (err) {
-      toast.error(err.response?.data?.message || "Không thể đăng lại bài viết!");
+      toast.error(err.response?.data?.message || "Không thể đăng lại bài viết!", { id: 'repost-err' });
       fetchPosts(true);
     }
   };
@@ -1323,7 +1323,7 @@ const Home = () => {
         setPosts(prev => prev.filter(p => p.id !== postId));
         setSelectedThreadPost(prev => prev?.id === postId ? null : prev);
       }
-      toast.error(err.response?.data?.message || "Lỗi gửi phản hồi!");
+      toast.error(err.response?.data?.message || "Lỗi gửi phản hồi!", { id: 'comment-err' });
     } finally {
       setSubmittingComment(prev => ({ ...prev, [postId]: false }));
     }
@@ -1485,16 +1485,20 @@ const Home = () => {
       return;
     }
     const track = tracks[currentTrackIndex];
-    if (!audioRef.current.src && track) {
-      audioRef.current.src = track.audioSrc || track.streamUrl || '';
+    const trackSrc = track?.audioUrl || track?.audioSrc || track?.streamUrl || '';
+    if (!audioRef.current.src && trackSrc) {
+      audioRef.current.src = trackSrc;
     }
     if (isPlayingRadio) {
       audioRef.current.pause();
       setIsPlayingRadio(false);
     } else {
+      if (audioRef.current.src !== trackSrc) {
+        audioRef.current.src = trackSrc;
+      }
       audioRef.current.play().then(() => {
         setIsPlayingRadio(true);
-        toast.success(`Đang phát: ${track?.name || 'Âm nhạc'}`);
+        toast.success(`Đang phát: ${track?.title || track?.name || 'Âm nhạc hệ thống'}`);
       }).catch(err => {
         console.warn("Lỗi phát audio:", err);
       });
@@ -1507,7 +1511,8 @@ const Home = () => {
     setCurrentTrackIndex(nextIdx);
     if (audioRef.current) {
       const nextTrack = tracks[nextIdx];
-      audioRef.current.src = nextTrack?.audioSrc || nextTrack?.streamUrl || '';
+      const nextSrc = nextTrack?.audioUrl || nextTrack?.audioSrc || nextTrack?.streamUrl || '';
+      audioRef.current.src = nextSrc;
       if (isPlayingRadio) {
         audioRef.current.play().catch(() => {});
       }
@@ -1581,20 +1586,44 @@ const Home = () => {
 
   const fetchTracks = useCallback(async () => {
     try {
-      // Ưu tiên nạp kênh phát nhạc động từ /match/config
+      // 1. Ưu tiên nạp bản nhạc từ API công khai /api/public/lobby-config
+      const lobbyRes = await axiosClient.get('/public/lobby-config').catch(() => null);
+      const serverTracks = lobbyRes?.data?.data?.tracks;
+      if (serverTracks && Array.isArray(serverTracks) && serverTracks.length > 0) {
+        setTracks(serverTracks.map(t => ({
+          id: t.id,
+          name: t.title,
+          title: t.title,
+          artist: t.artist || 'Talovin Lo-Fi Station',
+          genre: t.genreTag || 'Lofi / Relax',
+          genreTag: t.genreTag,
+          audioSrc: t.audioUrl,
+          audioUrl: t.audioUrl,
+          streamUrl: t.audioUrl,
+          coverUrl: t.coverUrl
+        })));
+        return;
+      }
+
+      // 2. Fallback nạp từ /match/config
       const configRes = await axiosClient.get('/match/config').catch(() => null);
       if (configRes?.data?.channels && Array.isArray(configRes.data.channels) && configRes.data.channels.length > 0) {
         const mappedChannels = configRes.data.channels.map(c => ({
           id: c.id,
           name: c.name,
+          title: c.name,
           artist: 'Talovin Radio',
           genre: c.genreTag,
+          genreTag: c.genreTag,
           audioSrc: c.streamUrl,
+          audioUrl: c.streamUrl,
           streamUrl: c.streamUrl
         }));
         setTracks(mappedChannels);
         return;
       }
+
+      // 3. Fallback /tracks
       const res = await axiosClient.get('/tracks');
       if (res.data?.data && Array.isArray(res.data.data)) {
         setTracks(res.data.data);
@@ -2045,7 +2074,7 @@ const Home = () => {
     <div className="social-app-wrapper">
       <audio 
         ref={audioRef} 
-        src={currentTrack ? (currentTrack.audioSrc || currentTrack.streamUrl) : ""} 
+        src={currentTrack ? (currentTrack.audioUrl || currentTrack.audioSrc || currentTrack.streamUrl) : ""} 
         preload="none"
       />
       {/* Audio element ẩn để phát voice note của các bài viết */}
@@ -2080,7 +2109,7 @@ const Home = () => {
             <div className="radio-top-row">
               <Music size={13} className="text-zinc-400" />
               <span className="radio-name-text">
-                {currentTrack ? currentTrack.name : "Âm nhạc hệ thống"}
+                {currentTrack ? (currentTrack.title || currentTrack.name) : "Âm nhạc hệ thống"}
               </span>
               {currentTrack && (
                 <div className="equalizer-bars-group">
@@ -2110,7 +2139,7 @@ const Home = () => {
                   <Shuffle size={12} />
                 </button>
                 <span className="radio-genre-label font-mono">
-                  {currentTrack.genre || "Bản nhạc"}
+                  {currentTrack.genreTag || currentTrack.genre || "Bản nhạc"}
                 </span>
               </div>
             ) : (
@@ -4316,7 +4345,7 @@ const Home = () => {
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
-              transition={{ type: "spring", damping: 32, stiffness: 380, mass: 0.7 }}
+              transition={{ duration: 0.28, ease: [0.32, 0.72, 0, 1] }}
               drag="x"
               dragConstraints={{ left: 0 }}
               dragElastic={{ right: 0.5 }}

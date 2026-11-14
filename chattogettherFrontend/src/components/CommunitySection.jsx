@@ -501,11 +501,13 @@ export const CommunitySection = ({
     if (!selectedGroup) return;
     try {
       setIsSubmittingReport(true);
-      await axiosClient.post(`/communities/${selectedGroup.id}/report`, {
+      await axiosClient.post('/reports', {
+        targetType: 'COMMUNITY',
+        targetId: selectedGroup.id,
         reason: reportReason,
         description: reportDescription.trim() || undefined
       }).catch(() =>
-        axiosClient.post(`/groups/${selectedGroup.id}/report`, {
+        axiosClient.post(`/communities/${selectedGroup.id}/report`, {
           reason: reportReason,
           description: reportDescription.trim() || undefined
         })

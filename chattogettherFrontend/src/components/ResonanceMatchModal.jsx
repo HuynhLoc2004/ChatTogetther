@@ -332,7 +332,7 @@ export const ResonanceMatchModal = ({
             toast.success(`Đã có thính giả bắt sóng trên tần số ${data.frequency} MHz! Đang chuyển vào phòng...`);
             handleModalClose();
             if (data.roomId) {
-              navigate(`/room/${data.roomId}`);
+              navigate(`/call/room/${data.roomId}?video=false`);
             }
           } catch (e) {
             console.error("Lỗi parse match event:", e);
@@ -473,7 +473,7 @@ export const ResonanceMatchModal = ({
       if (res.data && res.data.roomId) {
         toast.success(`Đã khóa thành công tần số ${station.frequency} MHz! Đang vào phòng thoại 1-1...`);
         handleModalClose();
-        navigate(`/room/${res.data.roomId}`);
+        navigate(`/call/room/${res.data.roomId}?video=false`);
       }
     } catch (err) {
       toast.error(err.response?.data?.message || "Không thể khóa tần số này!");
@@ -988,7 +988,7 @@ export const ResonanceMatchModal = ({
                     type="button"
                     onClick={() => handleLockStation(activeStation)}
                     disabled={isLocking}
-                    className="flex-1 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm flex items-center justify-center gap-2 transition-all shadow-md active:scale-[0.98] disabled:opacity-50"
+                    className="flex-1 h-11 px-4 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-sm flex items-center justify-center gap-2 transition-colors active:scale-[0.98] disabled:opacity-50"
                   >
                     <PhoneCall size={16} />
                     <span>{isLocking ? 'Đang kết nối đàm thoại...' : 'Khóa tần số & Call 1-1 (Enter)'}</span>

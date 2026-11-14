@@ -551,21 +551,21 @@ const ProfilePage = () => {
                     <button
                       type="button"
                       onClick={() => navigate(`/messages/${targetUserId}`)}
-                      className="h-11 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-md"
+                      className="h-10 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs transition-colors duration-150 active:scale-[0.98] flex items-center justify-center gap-1.5 shadow-sm"
                       title="Nhắn tin riêng 1-1 với người này"
                     >
-                      <MessageSquare size={15} />
+                      <MessageSquare size={14} />
                       <span>Nhắn tin riêng</span>
                     </button>
 
                     <button
                       type="button"
-                      onClick={() => navigate(`/messages/${targetUserId}`)}
-                      className="h-11 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/80 text-white font-semibold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5"
-                      title="Mở cuộc gọi thoại / video 1-1"
+                      onClick={() => navigate(`/call/direct/${targetUserId}?video=false`)}
+                      className="h-10 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-200 font-medium text-xs transition-colors duration-150 active:scale-[0.98] flex items-center justify-center gap-1.5"
+                      title="Gọi ngay với người này"
                     >
-                      <PhoneCall size={15} className="text-emerald-400" />
-                      <span>Gọi trực tiếp</span>
+                      <PhoneCall size={14} className="text-zinc-300" />
+                      <span>Gọi ngay</span>
                     </button>
                   </div>
                 ) : (

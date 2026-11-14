@@ -594,33 +594,33 @@ export const DirectMessagePage = () => {
                   </div>
                 </div>
 
-                {/* Nút Gọi Thoại & Gọi Video 1-1 */}
+                {/* Nút Gọi Thoại & Gọi Video 1-1 -> Chuyển sang Full-screen Call Page */}
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     type="button"
-                    onClick={startVoiceCall}
-                    className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 hover:border-zinc-700 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+                    onClick={() => navigate(`/call/direct/${activePartner.id}?video=false`)}
+                    className="h-9 px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-medium flex items-center gap-1.5 transition-colors duration-150 active:scale-[0.98]"
                     title="Bắt đầu cuộc gọi thoại 1-1"
                   >
-                    <Phone size={14} className="text-emerald-400" />
+                    <Phone size={13} className="text-zinc-300" />
                     <span className="hidden sm:inline">Gọi thoại</span>
                   </button>
 
                   <button
                     type="button"
-                    onClick={startVideoCall}
-                    className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 hover:border-zinc-700 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+                    onClick={() => navigate(`/call/direct/${activePartner.id}?video=true`)}
+                    className="h-9 px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-medium flex items-center gap-1.5 transition-colors duration-150 active:scale-[0.98]"
                     title="Bắt đầu cuộc gọi Video 1-1"
                   >
-                    <Video size={14} className="text-purple-400" />
+                    <Video size={13} className="text-zinc-300" />
                     <span className="hidden sm:inline">Gọi Video</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => navigate(`/profile/${activePartner.id}`)}
-                    className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900 border border-transparent hover:border-zinc-800 transition-colors"
-                    title="Hồ sơ người dùng"
+                    className="h-9 w-9 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900 border border-transparent hover:border-zinc-800 flex items-center justify-center transition-colors active:scale-[0.98]"
+                    title="Xem hồ sơ người dùng"
                   >
                     <User size={15} />
                   </button>
@@ -716,14 +716,19 @@ export const DirectMessagePage = () => {
               <button
                 type="button"
                 onClick={() => setIncomingCall(null)}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs flex items-center gap-1.5 transition-all shadow-md"
+                className="h-9 px-4 rounded-xl bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-rose-400 font-medium text-xs flex items-center gap-1.5 transition-colors"
               >
                 <PhoneOff size={14} /> Từ chối
               </button>
               <button
                 type="button"
-                onClick={answerIncomingCall}
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5 transition-all shadow-md"
+                onClick={() => {
+                  const isVid = Boolean(incomingCall.isVideo);
+                  const callerId = incomingCall.callerId;
+                  setIncomingCall(null);
+                  navigate(`/call/direct/${callerId}?video=${isVid}`);
+                }}
+                className="h-9 px-4 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs flex items-center gap-1.5 transition-colors"
               >
                 <Phone size={14} /> Nghe máy
               </button>

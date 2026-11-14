@@ -503,29 +503,27 @@ export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentU
                       <button 
                         type="button"
                         onClick={() => { onClose(); navigate(`/messages/${effectiveUserId}`); }}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-semibold shadow-md transition-all active:scale-95"
+                        className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-medium transition-colors active:scale-[0.98]"
                         title="Nhắn tin riêng 1-1"
                       >
                         <MessageSquare size={13} /> Nhắn tin riêng
                       </button>
 
-                      {/* Nút Gọi trực tiếp 1-1 */}
-                      {onStartPrivateCall && (
-                        <button 
-                          type="button"
-                          onClick={() => { onClose(); onStartPrivateCall(profile); }}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md transition-all active:scale-95"
-                          title="Gọi thoại trực tiếp"
-                        >
-                          <PhoneCall size={13} /> Gọi trực tiếp
-                        </button>
-                      )}
+                      {/* Nút Gọi ngay */}
+                      <button 
+                        type="button"
+                        onClick={() => { onClose(); navigate(`/call/direct/${effectiveUserId}?video=false`); }}
+                        className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-medium transition-colors active:scale-[0.98]"
+                        title="Gọi đàm thoại ngay"
+                      >
+                        <PhoneCall size={13} className="text-zinc-300" /> Gọi ngay
+                      </button>
 
                       {/* Nút xem trang cá nhân đầy đủ */}
                       <button
                         type="button"
                         onClick={() => { onClose(); navigate(`/profile/${effectiveUserId}`); }}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium border border-zinc-700 transition-colors"
+                        className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-medium transition-colors active:scale-[0.98]"
                         title="Xem toàn bộ hồ sơ trang cá nhân"
                       >
                         <User size={13} /> Trang cá nhân
