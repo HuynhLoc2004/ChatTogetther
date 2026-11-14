@@ -2368,17 +2368,34 @@ const Home = () => {
           </div>
 
           {/* ============================================================== */}
-          {/* SIDE DRAWER CHUYỂN KHÔNG GIAN CHO MOBILE (TRƯỢT TỪ PHẢI SANG TRÁI, TỐI GIẢN) */}
+          {/* SIDE DRAWER CHUYỂN KHÔNG GIAN CHO MOBILE (TRƯỢT MƯỢT MÀ 60/120FPS) */}
           {/* ============================================================== */}
-          {isSpaceDrawerOpen && (
-            <div 
-              className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm animate-fade-in"
-              onClick={() => setIsSpaceDrawerOpen(false)}
-            >
-              <div 
-                className="w-[300px] max-w-[85vw] h-full bg-[#161923] border-l border-[#242b3b] p-5 shadow-2xl flex flex-col space-y-4 drawer-slide-right"
-                onClick={(e) => e.stopPropagation()}
+          <AnimatePresence>
+            {isSpaceDrawerOpen && (
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.22, ease: "easeOut" }}
+                className="fixed inset-0 z-50 flex justify-end bg-black/65 backdrop-blur-md"
+                onClick={() => setIsSpaceDrawerOpen(false)}
               >
+                <motion.div 
+                  initial={{ x: "100%" }}
+                  animate={{ x: 0 }}
+                  exit={{ x: "100%" }}
+                  transition={{ type: "spring", damping: 32, stiffness: 380, mass: 0.7 }}
+                  drag="x"
+                  dragConstraints={{ left: 0 }}
+                  dragElastic={{ right: 0.5 }}
+                  onDragEnd={(e, { offset, velocity }) => {
+                    if (offset.x > 80 || velocity.x > 300) {
+                      setIsSpaceDrawerOpen(false);
+                    }
+                  }}
+                  className="w-[300px] max-w-[85vw] h-full bg-[#161923] border-l border-[#242b3b] p-5 shadow-2xl flex flex-col space-y-4 will-change-transform touch-pan-y"
+                  onClick={(e) => e.stopPropagation()}
+                >
                 <div className="flex items-center justify-between pb-3 border-b border-[#222838]">
                   <div>
                     <h3 className="text-sm font-bold text-white tracking-tight">Không gian trải nghiệm</h3>
@@ -2431,9 +2448,10 @@ const Home = () => {
                     );
                   })}
                 </div>
-              </div>
-            </div>
+              </motion.div>
+            </motion.div>
           )}
+        </AnimatePresence>
 
           {/* THANH BÁO HIỆU SOFT TRANSITION KHI CHUYỂN TAB */}
           {isTabSwitching && (
@@ -4314,17 +4332,34 @@ const Home = () => {
       )}
 
       {/* ============================================================== */}
-      {/* SLIDE-OVER NOTIFICATION DRAWER (Trượt từ ngoài mép phải vào cho cả PC & Mobile) */}
+      {/* SLIDE-OVER NOTIFICATION DRAWER (Trượt mượt mà 60/120fps chuẩn Native App) */}
       {/* ============================================================== */}
-      {isNotifOpen && (
-        <div 
-          className="fixed inset-0 z-[120] flex justify-end bg-black/60 backdrop-blur-sm transition-opacity duration-300"
-          onClick={() => setIsNotifOpen(false)}
-        >
-          <div 
-            className="w-full sm:w-[420px] max-w-full h-full bg-[#0c0d12] border-l border-zinc-800 shadow-[-20px_0_50px_rgba(0,0,0,0.85)] flex flex-col transform transition-transform duration-300 ease-out drawer-slide-right"
-            onClick={(e) => e.stopPropagation()}
+      <AnimatePresence>
+        {isNotifOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+            className="fixed inset-0 z-[120] flex justify-end bg-black/65 backdrop-blur-md"
+            onClick={() => setIsNotifOpen(false)}
           >
+            <motion.div 
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", damping: 32, stiffness: 380, mass: 0.7 }}
+              drag="x"
+              dragConstraints={{ left: 0 }}
+              dragElastic={{ right: 0.5 }}
+              onDragEnd={(e, { offset, velocity }) => {
+                if (offset.x > 80 || velocity.x > 300) {
+                  setIsNotifOpen(false);
+                }
+              }}
+              className="w-full sm:w-[420px] max-w-full h-full bg-[#0c0d12] border-l border-zinc-800 shadow-[-20px_0_50px_rgba(0,0,0,0.9)] flex flex-col will-change-transform touch-pan-y"
+              onClick={(e) => e.stopPropagation()}
+            >
             {/* Header Drawer */}
             <div className="flex items-center justify-between px-4 py-3.5 border-b border-zinc-800/80 bg-[#12131a] flex-shrink-0">
               <div className="flex items-center gap-2.5">
@@ -4435,9 +4470,10 @@ const Home = () => {
                 Xóa toàn bộ
               </button>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
+    </AnimatePresence>
 
       {/* ============================================================== */}
       {/* MODAL CHI TIẾT BÀI VIẾT & DÒNG THẢO LUẬN (TALOVIN DUAL-VIEW) */}
