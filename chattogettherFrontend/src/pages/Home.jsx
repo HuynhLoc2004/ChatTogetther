@@ -7,11 +7,11 @@ import {
   Search, Sparkles, Send, Copy, Compass, Radio, ChevronRight, CornerDownRight,
   Bell, Bookmark, Flame, Gem, Crown, Volume2, VolumeX, Music, Play, Pause,
   Shuffle, Image as ImageIcon, CheckCircle2, Zap, Dices, Maximize2, Download,
-  Edit3, Trash2, MoreVertical, Tag, Filter, Check,
+  Edit3, Trash2, MoreVertical, Tag, Filter, Check, Disc,
   Mic, Headphones, Moon, Gamepad2, Film, Square,
   Flag, AlertTriangle, UserCheck,
   ChevronDown, Menu, Globe, Layers, SlidersHorizontal, Repeat, Sun, Smile,
-  ArrowLeft, RefreshCw, Clock, Loader2
+  ArrowLeft, RefreshCw, Clock, Loader2, SkipBack, SkipForward, ChevronLeft
 } from 'lucide-react';
 import axiosClient, { BACKEND_URL } from '../api/axiosClient';
 import { saveRoomsOffline, getRoomsOffline } from '../utils/offlineDB';
@@ -207,28 +207,55 @@ const ICEBREAKER_PROMPTS = [
   "Thói quen nhỏ nào mỗi ngày giúp bạn nạp lại năng lượng nhanh nhất?"
 ];
 
-// Helper phân tích dữ liệu đa phương tiện từ trường imageUrl
-const parsePostMedia = (raw) => {
-  if (!raw) return { mediaUrl: null, mediaType: null, audioUrl: null, audioDuration: null };
-  if (typeof raw === 'string' && raw.trim().startsWith('{') && raw.trim().endsWith('}')) {
-    try {
-      const parsed = JSON.parse(raw);
-      return {
-        mediaUrl: parsed.mediaUrl || null,
-        mediaType: parsed.mediaType || (parsed.mediaUrl?.includes('video') ? 'video' : 'image'),
-        audioUrl: parsed.audioUrl || null,
-        audioDuration: parsed.audioDuration || null
-      };
-    } catch (e) {
-      // fallback
+// Helper phân tích dữ liệu đa phương tiện từ trường imageUrl hoặc fallbackPost
+const parsePostMedia = (raw, fallbackPost = null) => {
+  const directAudio = fallbackPost?.audioUrl || fallbackPost?.voiceUrl || fallbackPost?.audio || null;
+  const directDuration = fallbackPost?.audioDuration || null;
+
+  if (!raw && !directAudio) return { mediaUrl: null, mediaType: null, audioUrl: null, audioDuration: null };
+
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('{\\"') && trimmed.endsWith('\\"}'))) {
+      try {
+        let jsonStr = trimmed;
+        if (jsonStr.startsWith('{\\"')) {
+          jsonStr = JSON.parse(`"${jsonStr}"`);
+        }
+        const parsed = JSON.parse(jsonStr);
+        return {
+          mediaUrl: parsed.mediaUrl || null,
+          mediaType: parsed.mediaType || (parsed.mediaUrl?.includes('video') ? 'video' : 'image'),
+          audioUrl: parsed.audioUrl || directAudio || null,
+          audioDuration: parsed.audioDuration || directDuration || null
+        };
+      } catch (e) {
+        // fallback
+      }
     }
+    const isVideo = trimmed.match(/\.(mp4|webm|mov)(\?.*)?$/i) || trimmed.startsWith('data:video/');
+    const isAudio = trimmed.match(/\.(mp3|wav|ogg|m4a|aac|webm)(\?.*)?$/i) || trimmed.startsWith('data:audio/');
+    if (isAudio) {
+      return {
+        mediaUrl: null,
+        mediaType: 'audio',
+        audioUrl: trimmed,
+        audioDuration: directDuration || null
+      };
+    }
+    return {
+      mediaUrl: trimmed,
+      mediaType: isVideo ? 'video' : 'image',
+      audioUrl: directAudio || null,
+      audioDuration: directDuration || null
+    };
   }
-  const isVideo = typeof raw === 'string' && (raw.match(/\.(mp4|webm|mov)(\?.*)?$/i) || raw.startsWith('data:video/'));
+
   return {
-    mediaUrl: raw,
-    mediaType: isVideo ? 'video' : 'image',
-    audioUrl: null,
-    audioDuration: null
+    mediaUrl: null,
+    mediaType: null,
+    audioUrl: directAudio || null,
+    audioDuration: directDuration || null
   };
 };
 
@@ -505,6 +532,7 @@ const Home = ({ initialTab }) => {
   const [isPlayingRadio, setIsPlayingRadio] = useState(false);
   const [tracks, setTracks] = useState([]);
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
+  const [showMobileMusicSheet, setShowMobileMusicSheet] = useState(false);
   const audioRef = useRef(null);
   const newPostInputRef = useRef(null);
 
@@ -951,17 +979,25 @@ const Home = ({ initialTab }) => {
     }
   };
 
-  // Phát Voice Note trên thẻ bài viết
+  // Phát Voice Note trên thẻ bài viết hoặc modal chi tiết
   const handleTogglePlayPostVoice = (postId, audioSrc) => {
     if (!cardVoiceAudioRef.current) return;
     if (playingVoicePostId === postId) {
       cardVoiceAudioRef.current.pause();
       setPlayingVoicePostId(null);
     } else {
+      // Tạm dừng nhạc nền hệ thống nếu đang phát để nghe rõ giọng nói
+      if (audioRef.current && isPlayingRadio) {
+        audioRef.current.pause();
+        setIsPlayingRadio(false);
+      }
       cardVoiceAudioRef.current.src = audioSrc;
       cardVoiceAudioRef.current.play().then(() => {
         setPlayingVoicePostId(postId);
-      }).catch(err => console.warn("Lỗi phát voice note:", err));
+      }).catch(err => {
+        console.warn("Lỗi phát voice note:", err);
+        setPlayingVoicePostId(null);
+      });
     }
   };
 
@@ -1577,6 +1613,34 @@ const Home = ({ initialTab }) => {
       if (isPlayingRadio) {
         audioRef.current.play().catch(() => {});
       }
+    }
+  };
+
+  const playPrevRadio = () => {
+    if (!tracks || tracks.length === 0) return;
+    const prevIdx = (currentTrackIndex - 1 + tracks.length) % tracks.length;
+    setCurrentTrackIndex(prevIdx);
+    if (audioRef.current) {
+      const prevTrack = tracks[prevIdx];
+      const prevSrc = prevTrack?.audioUrl || prevTrack?.audioSrc || prevTrack?.streamUrl || '';
+      audioRef.current.src = prevSrc;
+      if (isPlayingRadio) {
+        audioRef.current.play().catch(() => {});
+      }
+    }
+  };
+
+  const handleSelectRadioTrack = (index) => {
+    if (!tracks || !tracks[index]) return;
+    setCurrentTrackIndex(index);
+    if (audioRef.current) {
+      const selectedTrack = tracks[index];
+      const src = selectedTrack?.audioUrl || selectedTrack?.audioSrc || selectedTrack?.streamUrl || '';
+      audioRef.current.src = src;
+      audioRef.current.play().then(() => {
+        setIsPlayingRadio(true);
+        toast.success(`Đang phát: ${selectedTrack?.title || selectedTrack?.name || 'Bản nhạc'}`);
+      }).catch(err => console.warn("Lỗi phát audio:", err));
     }
   };
 
@@ -2369,11 +2433,23 @@ const Home = ({ initialTab }) => {
                 <Search size={14} />
               </button>
               <button 
-                onClick={togglePlayRadio} 
-                className={`m-radio-pill ${isPlayingRadio ? 'active' : ''}`}
+                type="button"
+                onClick={() => setShowMobileMusicSheet(true)} 
+                className={`m-radio-pill max-w-[145px] ${isPlayingRadio ? 'active !border-emerald-500/50 !bg-zinc-800 text-white' : ''}`}
+                title={currentTrack ? `Nhạc nền: ${currentTrack.title || currentTrack.name} (Chạm để mở trình phát)` : 'Mở trình phát nhạc'}
               >
-                <Music size={12} />
-                <span>{isPlayingRadio ? 'Đang phát' : (currentTrack ? 'Phát nhạc' : 'Âm nhạc')}</span>
+                {isPlayingRadio ? (
+                  <span className="flex items-center gap-0.5 h-3 flex-shrink-0">
+                    <span className="w-0.5 h-2 bg-emerald-400 rounded-full animate-bounce"></span>
+                    <span className="w-0.5 h-3 bg-emerald-400 rounded-full animate-bounce [animation-delay:0.15s]"></span>
+                    <span className="w-0.5 h-1.5 bg-emerald-400 rounded-full animate-bounce [animation-delay:0.3s]"></span>
+                  </span>
+                ) : (
+                  <Music size={12} className="flex-shrink-0 text-zinc-400" />
+                )}
+                <span className="truncate font-medium text-[11px] text-zinc-200">
+                  {currentTrack ? (currentTrack.title || currentTrack.name) : 'Âm nhạc'}
+                </span>
               </button>
               {isAdminUser && (
                 <button 
@@ -2948,7 +3024,7 @@ const Home = ({ initialTab }) => {
                   const isSaved = Array.isArray(savedPostIds) && savedPostIds.includes(post.id);
                   const isMe = currentUserId && post.authorId?.toString() === currentUserId.toString();
                   const isFounder = post.authorVipTier === 'FOUNDER' || post.authorRoles?.includes('ROLE_ADMIN') || post.authorRoles?.includes('ROLE_AMDIN') || post.authorBadge;
-                  const parsedMedia = parsePostMedia(post.imageUrl);
+                  const parsedMedia = parsePostMedia(post.imageUrl, post);
 
                   return (
                     <article key={post.id} id={`post-${post.id}`} className="post-item-card">
@@ -3158,18 +3234,24 @@ const Home = ({ initialTab }) => {
                           fetchComments(post.id);
                         }}
                       >
-                        <p>{post.content}</p>
+                        {/* Chỉ hiển thị chữ nếu không phải là nhãn fallback 'Ghi âm giọng nói' khi đã có audioUrl */}
+                        {post.content && (post.content.trim() !== 'Ghi âm giọng nói' || !parsedMedia.audioUrl) && (
+                          <p>{post.content}</p>
+                        )}
 
                         {/* Hiển thị Media: Ảnh hoặc Video ngắn tự động lặp muted + Click để mở toàn màn hình (Lightbox) */}
                         {parsedMedia.mediaUrl && (
                           <div 
                             className="post-media-frame cursor-pointer group/media relative"
-                            onClick={() => setLightboxMedia({
-                              url: parsedMedia.mediaUrl,
-                              type: parsedMedia.mediaType,
-                              author: post.authorNickname || post.authorName || post.author,
-                              title: post.content
-                            })}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setLightboxMedia({
+                                url: parsedMedia.mediaUrl,
+                                type: parsedMedia.mediaType,
+                                author: post.authorNickname || post.authorName || post.author,
+                                title: post.content
+                              });
+                            }}
                             title="Bấm để xem chi tiết / phóng to toàn màn hình"
                           >
                             {parsedMedia.mediaType === 'video' ? (
@@ -3206,7 +3288,10 @@ const Home = ({ initialTab }) => {
 
                         {/* Trình phát Voice Note ngắn trên thẻ */}
                         {parsedMedia.audioUrl && (
-                          <div className="post-voice-player-pill">
+                          <div 
+                            className="post-voice-player-pill"
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             <button 
                               type="button"
                               onClick={() => handleTogglePlayPostVoice(post.id, parsedMedia.audioUrl)}
@@ -3967,6 +4052,218 @@ const Home = ({ initialTab }) => {
         </button>
       </nav>
 
+      {/* ============================================================== */}
+      {/* FLOATING MOBILE MUSIC MINI-PLAYER (Hiện diện ghim trên điện thoại) */}
+      {/* ============================================================== */}
+      {currentTrack && isPlayingRadio && (
+        <div 
+          className="fixed bottom-[68px] left-3 right-3 sm:hidden z-[75] bg-zinc-900/95 backdrop-blur-md border border-zinc-800 rounded-2xl p-2.5 flex items-center justify-between shadow-2xl animate-fade-in"
+          onClick={() => setShowMobileMusicSheet(true)}
+        >
+          <div className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer">
+            <div className="w-9 h-9 rounded-xl bg-zinc-800 border border-zinc-700/80 flex items-center justify-center flex-shrink-0 relative overflow-hidden">
+              <Disc size={18} className="text-zinc-300 animate-spin [animation-duration:4s]" />
+              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-white truncate leading-tight">
+                {currentTrack.title || currentTrack.name}
+              </p>
+              <p className="text-[10px] text-zinc-400 font-mono truncate leading-tight mt-0.5">
+                {currentTrack.genreTag || currentTrack.genre || 'Âm nhạc không gian'} • Chạm để mở
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 flex-shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={togglePlayRadio}
+              className="w-8 h-8 rounded-full bg-white text-zinc-950 flex items-center justify-center hover:bg-zinc-200 active:scale-95 transition-all shadow"
+              title={isPlayingRadio ? "Tạm dừng" : "Phát"}
+            >
+              {isPlayingRadio ? <Pause size={13} className="fill-zinc-950" /> : <Play size={13} className="fill-zinc-950 ml-0.5" />}
+            </button>
+            <button
+              type="button"
+              onClick={playNextRadio}
+              className="w-8 h-8 rounded-full bg-zinc-800 text-zinc-300 hover:text-white flex items-center justify-center border border-zinc-700 active:scale-95 transition-all"
+              title="Chuyển bài tiếp theo"
+            >
+              <Shuffle size={13} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MOBILE MUSIC DRAWER / SHEET MODAL (Dark Zinc Chuẩn Mực) */}
+      {/* ============================================================== */}
+      <AnimatePresence>
+        {showMobileMusicSheet && (
+          <div 
+            className="fixed inset-0 z-[120] bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 select-none"
+            onClick={() => setShowMobileMusicSheet(false)}
+          >
+            <motion.div 
+              initial={{ y: "100%", opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: "100%", opacity: 0 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="w-full sm:w-[440px] bg-zinc-950 border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl flex flex-col max-h-[85vh] overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Thanh gạt trên Mobile */}
+              <div className="w-12 h-1 rounded-full bg-zinc-700/80 mx-auto mb-3 sm:hidden" />
+
+              {/* Header Drawer */}
+              <div className="flex items-center justify-between pb-3 border-b border-zinc-800/80">
+                <div className="flex items-center gap-2">
+                  <Music size={16} className="text-emerald-400" />
+                  <span className="text-sm font-bold text-white tracking-wide">Nhạc Nền Không Gian</span>
+                </div>
+                <button 
+                  type="button"
+                  onClick={() => setShowMobileMusicSheet(false)}
+                  className="w-7 h-7 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center transition-colors"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+
+              {/* Nội dung Trình phát trung tâm */}
+              <div className="py-5 flex flex-col items-center">
+                {/* Đĩa than Vinyl phong cách Audio-First */}
+                <div className="relative w-36 h-36 rounded-full bg-zinc-900 border-4 border-zinc-800 flex items-center justify-center shadow-2xl my-2">
+                  <div className={`w-32 h-32 rounded-full border border-zinc-700/60 flex items-center justify-center ${isPlayingRadio ? 'animate-spin [animation-duration:8s]' : ''}`}>
+                    <div className="w-20 h-20 rounded-full border border-zinc-700/40 flex items-center justify-center">
+                      <div className="w-12 h-12 rounded-full bg-zinc-800 border-2 border-emerald-500/40 flex items-center justify-center">
+                        <Disc size={20} className={isPlayingRadio ? "text-emerald-400" : "text-zinc-500"} />
+                      </div>
+                    </div>
+                  </div>
+                  {isPlayingRadio && (
+                    <span className="absolute bottom-2 right-2 w-3 h-3 rounded-full bg-emerald-400 border-2 border-zinc-900 animate-pulse"></span>
+                  )}
+                </div>
+
+                {/* Thông tin bản nhạc đang phát */}
+                <h3 className="text-base font-bold text-white text-center px-4 mt-3 truncate max-w-full">
+                  {currentTrack ? (currentTrack.title || currentTrack.name) : "Chưa chọn bản nhạc"}
+                </h3>
+                <p className="text-xs font-mono text-zinc-400 text-center mt-1">
+                  {currentTrack ? (currentTrack.genreTag || currentTrack.genre || "Bản nhạc thư giãn") : "Hệ thống Talovin"}
+                </p>
+
+                {/* Equalizer Visualizer */}
+                <div className="flex items-center gap-1.5 h-6 mt-4">
+                  {[40, 75, 55, 90, 65, 80, 45, 95, 70, 85, 50, 100, 60, 80].map((h, i) => (
+                    <span
+                      key={i}
+                      className={`w-1 rounded-full transition-all duration-200 ${
+                        isPlayingRadio ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-800'
+                      }`}
+                      style={{
+                        height: isPlayingRadio ? `${Math.max(25, (h * ((i % 3) + 1)) % 100)}%` : '20%',
+                        animationDelay: `${i * 70}ms`
+                      }}
+                    />
+                  ))}
+                </div>
+
+                {/* Cụm nút điều khiển phát nhạc */}
+                <div className="flex items-center justify-center gap-5 mt-6">
+                  <button
+                    type="button"
+                    onClick={playPrevRadio}
+                    disabled={!tracks || tracks.length === 0}
+                    className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white flex items-center justify-center active:scale-95 transition-all disabled:opacity-40"
+                    title="Bản nhạc trước"
+                  >
+                    <SkipBack size={18} />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={togglePlayRadio}
+                    disabled={!tracks || tracks.length === 0}
+                    className="w-14 h-14 rounded-full bg-white text-zinc-950 hover:bg-zinc-200 active:scale-95 flex items-center justify-center shadow-xl transition-all disabled:opacity-40"
+                    title={isPlayingRadio ? "Tạm dừng" : "Phát nhạc"}
+                  >
+                    {isPlayingRadio ? <Pause size={22} className="fill-zinc-950" /> : <Play size={22} className="fill-zinc-950 ml-0.5" />}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={playNextRadio}
+                    disabled={!tracks || tracks.length === 0}
+                    className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white flex items-center justify-center active:scale-95 transition-all disabled:opacity-40"
+                    title="Bản nhạc kế tiếp"
+                  >
+                    <SkipForward size={18} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Danh sách các bản nhạc (Playlist Selector) */}
+              <div className="flex-1 min-h-0 flex flex-col pt-3 border-t border-zinc-800/80">
+                <div className="flex items-center justify-between mb-2 px-1">
+                  <span className="text-xs font-semibold text-zinc-400">Danh sách ({tracks?.length || 0})</span>
+                  <span className="text-[11px] font-mono text-zinc-500">Chạm để đổi bài</span>
+                </div>
+                <div className="overflow-y-auto space-y-1 max-h-40 custom-dark-scrollbar pr-1">
+                  {tracks && tracks.length > 0 ? (
+                    tracks.map((tr, idx) => {
+                      const isCurrent = idx === currentTrackIndex;
+                      return (
+                        <div
+                          key={tr.id || idx}
+                          onClick={() => handleSelectRadioTrack(idx)}
+                          className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all ${
+                            isCurrent 
+                              ? 'bg-zinc-900 border border-emerald-500/40 text-white' 
+                              : 'hover:bg-zinc-900/60 text-zinc-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            {isCurrent && isPlayingRadio ? (
+                              <span className="flex items-center gap-0.5 h-3 flex-shrink-0">
+                                <span className="w-0.5 h-2 bg-emerald-400 rounded-full animate-bounce"></span>
+                                <span className="w-0.5 h-3 bg-emerald-400 rounded-full animate-bounce [animation-delay:0.15s]"></span>
+                                <span className="w-0.5 h-1.5 bg-emerald-400 rounded-full animate-bounce [animation-delay:0.3s]"></span>
+                              </span>
+                            ) : (
+                              <span className="text-[11px] font-mono text-zinc-500 w-4 text-center shrink-0">
+                                {idx + 1}
+                              </span>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <p className={`text-xs font-medium truncate ${isCurrent ? 'text-emerald-400 font-semibold' : 'text-zinc-200'}`}>
+                                {tr.title || tr.name}
+                              </p>
+                              <p className="text-[10px] text-zinc-500 font-mono truncate">
+                                {tr.genreTag || tr.genre || "Bản nhạc"}
+                              </p>
+                            </div>
+                          </div>
+                          {isCurrent && (
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                              {isPlayingRadio ? 'Đang phát' : 'Đã chọn'}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-xs text-zinc-500 text-center py-4">Chưa có bản nhạc nào trong hệ thống</p>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* MODAL LIGHTBOX XEM ĐA PHƯƠNG TIỆN TOÀN MÀN HÌNH (ẢNH & VIDEO) */}
       {lightboxMedia && (
         <div 
@@ -4688,21 +4985,74 @@ const Home = ({ initialTab }) => {
                 </div>
 
                 {/* Nội dung bài viết */}
-                <p className="text-[15px] text-[#f1f5f9] leading-relaxed whitespace-pre-wrap font-sans">
-                  {selectedThreadPost.content}
-                </p>
+                {selectedThreadPost.content && (selectedThreadPost.content.trim() !== 'Ghi âm giọng nói' || !parsePostMedia(selectedThreadPost.imageUrl, selectedThreadPost).audioUrl) && (
+                  <p className="text-[15px] text-[#f1f5f9] leading-relaxed whitespace-pre-wrap font-sans">
+                    {selectedThreadPost.content}
+                  </p>
+                )}
 
-                {/* Media bài viết */}
+                {/* Media bài viết (Ảnh / Video / Voice Note) */}
                 {(() => {
-                  const media = parsePostMedia(selectedThreadPost.imageUrl);
+                  const media = parsePostMedia(selectedThreadPost.imageUrl, selectedThreadPost);
                   if (!media.mediaUrl && !media.audioUrl) return null;
                   return (
-                    <div className="rounded-xl overflow-hidden border border-zinc-800 my-2">
-                      {media.mediaType === 'video' ? (
-                        <video src={media.mediaUrl} controls autoPlay loop muted playsInline className="w-full max-h-[340px] object-cover" />
-                      ) : media.mediaUrl ? (
-                        <img src={media.mediaUrl} alt="Media" className="w-full max-h-[340px] object-cover" />
-                      ) : null}
+                    <div className="space-y-3 my-2">
+                      {media.mediaUrl && (
+                        <div className="rounded-xl overflow-hidden border border-zinc-800">
+                          {media.mediaType === 'video' ? (
+                            <video src={media.mediaUrl} controls autoPlay loop muted playsInline className="w-full max-h-[340px] object-cover" />
+                          ) : (
+                            <img src={media.mediaUrl} alt="Media" className="w-full max-h-[340px] object-cover" />
+                          )}
+                        </div>
+                      )}
+
+                      {/* Tín hiệu giọng nói (Voice Note Player) */}
+                      {media.audioUrl && (
+                        <div className="p-3.5 rounded-2xl bg-zinc-900 border border-zinc-800 shadow-lg flex items-center gap-3.5 group hover:border-zinc-700 transition-all">
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePlayPostVoice(selectedThreadPost.id, media.audioUrl)}
+                            className="w-11 h-11 rounded-full bg-white text-zinc-950 hover:bg-zinc-200 active:scale-95 flex items-center justify-center flex-shrink-0 shadow-md transition-all"
+                            title={playingVoicePostId === selectedThreadPost.id ? "Tạm dừng" : "Nghe ghi âm"}
+                          >
+                            {playingVoicePostId === selectedThreadPost.id ? (
+                              <Pause size={18} className="fill-zinc-950" />
+                            ) : (
+                              <Play size={18} className="fill-zinc-950 ml-0.5" />
+                            )}
+                          </button>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-1.5">
+                              <div className="flex items-center gap-1.5">
+                                <Mic size={13} className="text-emerald-400" />
+                                <span className="text-xs font-semibold text-zinc-200">
+                                  {playingVoicePostId === selectedThreadPost.id ? "Đang phát giọng nói..." : "Tín hiệu giọng nói"}
+                                </span>
+                              </div>
+                              <span className="text-xs font-mono tabular-nums text-zinc-400">
+                                {media.audioDuration ? `00:${media.audioDuration < 10 ? `0${media.audioDuration}` : media.audioDuration}` : '00:15'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1 h-5 overflow-hidden">
+                              {[35, 70, 50, 90, 60, 85, 45, 100, 75, 80, 55, 95, 65, 80, 40, 70, 50, 65].map((h, idx) => (
+                                <span
+                                  key={idx}
+                                  className={`w-1 rounded-full transition-all duration-200 ${
+                                    playingVoicePostId === selectedThreadPost.id
+                                      ? 'bg-emerald-400 animate-pulse'
+                                      : 'bg-zinc-700'
+                                  }`}
+                                  style={{
+                                    height: playingVoicePostId === selectedThreadPost.id ? `${Math.max(25, (h * ((idx % 3) + 1)) % 100)}%` : `${h * 0.4}%`,
+                                    animationDelay: `${idx * 50}ms`
+                                  }}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
@@ -4859,21 +5209,74 @@ const Home = ({ initialTab }) => {
                 </div>
 
                 {/* Nội dung bài viết chính */}
-                <p className="text-[15px] text-[#f1f5f9] leading-relaxed whitespace-pre-wrap font-sans">
-                  {selectedThreadPost.content}
-                </p>
+                {selectedThreadPost.content && (selectedThreadPost.content.trim() !== 'Ghi âm giọng nói' || !parsePostMedia(selectedThreadPost.imageUrl, selectedThreadPost).audioUrl) && (
+                  <p className="text-[15px] text-[#f1f5f9] leading-relaxed whitespace-pre-wrap font-sans">
+                    {selectedThreadPost.content}
+                  </p>
+                )}
 
-                {/* Media bài viết */}
+                {/* Media bài viết (Ảnh / Video / Voice Note) */}
                 {(() => {
-                  const media = parsePostMedia(selectedThreadPost.imageUrl);
+                  const media = parsePostMedia(selectedThreadPost.imageUrl, selectedThreadPost);
                   if (!media.mediaUrl && !media.audioUrl) return null;
                   return (
-                    <div className="rounded-2xl overflow-hidden border border-zinc-800 my-2">
-                      {media.mediaType === 'video' ? (
-                        <video src={media.mediaUrl} controls autoPlay loop muted playsInline className="w-full max-h-[380px] object-cover" />
-                      ) : media.mediaUrl ? (
-                        <img src={media.mediaUrl} alt="Media" className="w-full max-h-[380px] object-cover" />
-                      ) : null}
+                    <div className="space-y-3 my-2">
+                      {media.mediaUrl && (
+                        <div className="rounded-2xl overflow-hidden border border-zinc-800">
+                          {media.mediaType === 'video' ? (
+                            <video src={media.mediaUrl} controls autoPlay loop muted playsInline className="w-full max-h-[380px] object-cover" />
+                          ) : (
+                            <img src={media.mediaUrl} alt="Media" className="w-full max-h-[380px] object-cover" />
+                          )}
+                        </div>
+                      )}
+
+                      {/* Tín hiệu giọng nói (Voice Note Player) */}
+                      {media.audioUrl && (
+                        <div className="p-3.5 rounded-2xl bg-zinc-900 border border-zinc-800 shadow-lg flex items-center gap-3.5 group hover:border-zinc-700 transition-all">
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePlayPostVoice(selectedThreadPost.id, media.audioUrl)}
+                            className="w-11 h-11 rounded-full bg-white text-zinc-950 hover:bg-zinc-200 active:scale-95 flex items-center justify-center flex-shrink-0 shadow-md transition-all"
+                            title={playingVoicePostId === selectedThreadPost.id ? "Tạm dừng" : "Nghe ghi âm"}
+                          >
+                            {playingVoicePostId === selectedThreadPost.id ? (
+                              <Pause size={18} className="fill-zinc-950" />
+                            ) : (
+                              <Play size={18} className="fill-zinc-950 ml-0.5" />
+                            )}
+                          </button>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-1.5">
+                              <div className="flex items-center gap-1.5">
+                                <Mic size={13} className="text-emerald-400" />
+                                <span className="text-xs font-semibold text-zinc-200">
+                                  {playingVoicePostId === selectedThreadPost.id ? "Đang phát giọng nói..." : "Tín hiệu giọng nói"}
+                                </span>
+                              </div>
+                              <span className="text-xs font-mono tabular-nums text-zinc-400">
+                                {media.audioDuration ? `00:${media.audioDuration < 10 ? `0${media.audioDuration}` : media.audioDuration}` : '00:15'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1 h-5 overflow-hidden">
+                              {[35, 70, 50, 90, 60, 85, 45, 100, 75, 80, 55, 95, 65, 80, 40, 70, 50, 65].map((h, idx) => (
+                                <span
+                                  key={idx}
+                                  className={`w-1 rounded-full transition-all duration-200 ${
+                                    playingVoicePostId === selectedThreadPost.id
+                                      ? 'bg-emerald-400 animate-pulse'
+                                      : 'bg-zinc-700'
+                                  }`}
+                                  style={{
+                                    height: playingVoicePostId === selectedThreadPost.id ? `${Math.max(25, (h * ((idx % 3) + 1)) % 100)}%` : `${h * 0.4}%`,
+                                    animationDelay: `${idx * 50}ms`
+                                  }}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
