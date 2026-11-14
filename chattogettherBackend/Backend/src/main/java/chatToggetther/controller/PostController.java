@@ -85,10 +85,18 @@ public class PostController {
         return ResponseEntity.ok(this.postService.getPostComments(token, postId));
     }
 
-    @PostMapping(value = {"/comments/{commentId}/like", "/{id}/comments/{commentId}/like"})
+    @PostMapping("/comments/{commentId}/like")
     public ResponseEntity<ResponseData<CommentDTO>> toggleLikeComment(
             JwtAuthenticationToken token,
-            @PathVariable(value = "id", required = false) Long postId,
+            @PathVariable("commentId") Long commentId
+    ) {
+        return ResponseEntity.ok(this.postService.toggleLikeComment(token, commentId));
+    }
+
+    @PostMapping("/{id}/comments/{commentId}/like")
+    public ResponseEntity<ResponseData<CommentDTO>> toggleLikeCommentWithPost(
+            JwtAuthenticationToken token,
+            @PathVariable("id") Long postId,
             @PathVariable("commentId") Long commentId
     ) {
         return ResponseEntity.ok(this.postService.toggleLikeComment(token, commentId));

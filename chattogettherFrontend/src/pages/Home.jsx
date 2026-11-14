@@ -975,10 +975,13 @@ const Home = () => {
   // Thả cảm xúc
   const handleReactPost = async (postId, reactionType) => {
     setActiveReactionPicker(null);
+    const targetType = reactionType || 'HEART';
+
+    // 1. Cập nhật Optimistic cho danh sách bài viết ngoài feed
     setPosts(prev => prev.map(p => {
       if (p.id !== postId) return p;
       const wasLiked = p.isLikedByMe;
-      const sameType = p.myReaction === reactionType;
+      const sameType = p.myReaction === targetType;
 
       if (wasLiked && sameType) {
         return {
@@ -991,18 +994,43 @@ const Home = () => {
         return {
           ...p,
           isLikedByMe: true,
-          myReaction: reactionType,
+          myReaction: targetType,
           likesCount: wasLiked ? p.likesCount : (p.likesCount || 0) + 1
         };
       }
     }));
 
+    // 2. Đồng bộ tức thì cả selectedThreadPost (nếu đang mở trong Modal chi tiết)
+    setSelectedThreadPost(prev => {
+      if (!prev || prev.id !== postId) return prev;
+      const wasLiked = prev.isLikedByMe || (prev.myReaction != null);
+      const sameType = prev.myReaction === targetType;
+
+      if (wasLiked && sameType) {
+        return {
+          ...prev,
+          isLikedByMe: false,
+          myReaction: null,
+          likesCount: Math.max(0, (prev.likesCount || 1) - 1)
+        };
+      } else {
+        return {
+          ...prev,
+          isLikedByMe: true,
+          myReaction: targetType,
+          likesCount: wasLiked ? prev.likesCount : (prev.likesCount || 0) + 1
+        };
+      }
+    });
+
     try {
       const res = await axiosClient.post(`/posts/${postId}/like`, null, {
-        params: { type: reactionType, reactionType }
+        params: { type: targetType, reactionType: targetType }
       });
       if (res.data && res.data.data) {
-        setPosts(prev => prev.map(p => p.id === postId ? res.data.data : p));
+        const updatedPost = res.data.data;
+        setPosts(prev => prev.map(p => p.id === postId ? updatedPost : p));
+        setSelectedThreadPost(prev => prev && prev.id === postId ? updatedPost : prev);
       }
     } catch (err) {
       console.warn("Lỗi thả cảm xúc:", err);
@@ -1053,7 +1081,10 @@ const Home = () => {
     });
 
     try {
-      const res = await axiosClient.post(`/posts/comments/${commentId}/like`);
+      // Gọi cả 2 endpoint tương thích: có postId hoặc standalone
+      const res = await axiosClient.post(`/posts/${postId}/comments/${commentId}/like`).catch(() => 
+        axiosClient.post(`/posts/comments/${commentId}/like`)
+      );
       if (res.data?.data) {
         const updatedCmt = res.data.data;
         setCommentsMap(prev => {
@@ -1075,7 +1106,7 @@ const Home = () => {
 
   // Đăng lại bài viết (Repost)
   const handleToggleRepost = async (postId) => {
-    // Optimistic UI Update
+    // Optimistic UI Update cho feed
     setPosts(prev => prev.map(p => {
       if (p.id === postId) {
         const wasReposted = Boolean(p.isRepostedByMe);
@@ -1089,6 +1120,18 @@ const Home = () => {
       return p;
     }));
 
+    // Optimistic UI Update cho selectedThreadPost (nếu đang mở Modal chi tiết)
+    setSelectedThreadPost(prev => {
+      if (!prev || prev.id !== postId) return prev;
+      const wasReposted = Boolean(prev.isRepostedByMe);
+      const currentCount = Number(prev.repostsCount || 0);
+      return {
+        ...prev,
+        isRepostedByMe: !wasReposted,
+        repostsCount: wasReposted ? Math.max(0, currentCount - 1) : currentCount + 1
+      };
+    });
+
     try {
       const res = await axiosClient.post(`/posts/${postId}/repost`);
       if (res.data?.data) {
@@ -1098,8 +1141,13 @@ const Home = () => {
           repostsCount: updated.repostsCount,
           isRepostedByMe: updated.isRepostedByMe
         } : p));
+        setSelectedThreadPost(prev => prev && prev.id === postId ? {
+          ...prev,
+          repostsCount: updated.repostsCount,
+          isRepostedByMe: updated.isRepostedByMe
+        } : prev);
       }
-      toast.success(res.data?.message || "Đã đăng lại bài viết!");
+      toast.success(res.data?.message || "Đã cập nhật đăng lại bài viết!");
     } catch (err) {
       toast.error(err.response?.data?.message || "Không thể đăng lại bài viết!");
       fetchPosts(true);
@@ -4166,15 +4214,15 @@ const Home = () => {
       {/* ============================================================== */}
       {selectedThreadPost && (
         <div 
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-5 bg-black/75 backdrop-blur-md modal-backdrop-smooth"
           onClick={() => setSelectedThreadPost(null)}
         >
           <div 
-            className="relative w-full sm:max-w-4xl lg:max-w-5xl h-[100dvh] sm:h-[88vh] bg-[#151822] border-0 sm:border border-[#242b3b] sm:rounded-2xl flex flex-col overflow-hidden animate-slide-up sm:animate-fade-in shadow-2xl"
+            className="relative w-full sm:max-w-4xl lg:max-w-5xl h-[100dvh] sm:h-auto sm:max-h-[88vh] bg-[#151822] border-0 sm:border border-[#283144] sm:rounded-2xl flex flex-col overflow-hidden modal-card-smooth"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header Modal View */}
-            <div className="sticky top-0 z-30 flex items-center justify-between px-4 sm:px-5 py-3 border-b border-[#222838] bg-[#13151f]/95 backdrop-blur-md flex-shrink-0">
+            <div className="sticky top-0 z-30 flex items-center justify-between px-4 sm:px-5 py-3.5 border-b border-[#222838] bg-[#13151f]/95 backdrop-blur-md flex-shrink-0">
               <div className="flex items-center gap-3">
                 <button 
                   type="button"
@@ -4200,7 +4248,7 @@ const Home = () => {
             </div>
 
             {/* Split View trên PC / Single Scroll trên Mobile */}
-            <div className="flex-1 flex flex-col sm:flex-row overflow-hidden">
+            <div className="flex-1 flex flex-col sm:flex-row overflow-hidden min-h-0 sm:min-h-[460px]">
               {/* CỘT TRÁI: BÀI VIẾT CHÍNH (FOCUSED POST CARD) */}
               <div className="w-full sm:w-[48%] flex flex-col border-b sm:border-b-0 sm:border-r border-[#222838] bg-[#161924] p-4 sm:p-5 overflow-y-auto custom-dark-scrollbar space-y-4">
                 {/* Header tác giả */}
@@ -4274,16 +4322,59 @@ const Home = () => {
                   <span><strong className="text-[#f1f5f9]">{selectedThreadPost.repostsCount || 0}</strong> đăng lại</span>
                 </div>
 
-                {/* Hàng nút hành động nhanh */}
-                <div className="flex items-center justify-around py-1 border-b border-[#222838] text-slate-400">
-                  <button 
-                    type="button"
-                    onClick={() => handleReactPost(selectedThreadPost.id, 'LIKE')}
-                    className={`flex items-center gap-1.5 p-2 rounded-lg hover:text-white transition-colors ${selectedThreadPost.myReaction ? 'text-rose-500 font-semibold' : ''}`}
-                  >
-                    <Heart size={17} className={selectedThreadPost.myReaction ? 'fill-rose-500' : ''} />
-                    <span className="text-xs">Thích</span>
-                  </button>
+                {/* Hàng nút hành động nhanh với Reaction Popover đầy đủ emoji */}
+                <div className="flex items-center justify-around py-1 border-b border-[#222838] text-slate-400 relative">
+                  {/* Cụm Thả Cảm Xúc / Emoji Popover */}
+                  <div className="relative group">
+                    <button 
+                      type="button"
+                      onClick={() => handleReactPost(selectedThreadPost.id, selectedThreadPost.myReaction || 'HEART')}
+                      onMouseEnter={() => setActiveReactionPicker(`modal_${selectedThreadPost.id}`)}
+                      className={`flex items-center gap-1.5 p-2 rounded-lg hover:text-white transition-all active:scale-95 ${
+                        selectedThreadPost.isLikedByMe || selectedThreadPost.myReaction ? 'text-rose-500 font-semibold' : ''
+                      }`}
+                    >
+                      {selectedThreadPost.myReaction && REACTION_EMOJIS.find(r => r.type === selectedThreadPost.myReaction) ? (
+                        <span className="text-base select-none leading-none inline-block transform hover:scale-110 transition-transform">
+                          {REACTION_EMOJIS.find(r => r.type === selectedThreadPost.myReaction).emoji}
+                        </span>
+                      ) : (
+                        <Heart 
+                          size={17} 
+                          className={selectedThreadPost.isLikedByMe || selectedThreadPost.myReaction ? 'fill-rose-500 text-rose-500' : ''} 
+                        />
+                      )}
+                      <span className="text-xs">
+                        {selectedThreadPost.myReaction && REACTION_EMOJIS.find(r => r.type === selectedThreadPost.myReaction)
+                          ? REACTION_EMOJIS.find(r => r.type === selectedThreadPost.myReaction).label
+                          : 'Thích'}
+                      </span>
+                    </button>
+
+                    {/* Popover Emoji Menu */}
+                    {activeReactionPicker === `modal_${selectedThreadPost.id}` && (
+                      <div 
+                        className="reactions-popup-menu"
+                        style={{ bottom: '100%', left: '0', marginBottom: '8px', zIndex: 60 }}
+                        onMouseLeave={() => setActiveReactionPicker(null)}
+                      >
+                        {REACTION_EMOJIS.map(item => (
+                          <button
+                            key={item.type}
+                            type="button"
+                            onClick={() => {
+                              handleReactPost(selectedThreadPost.id, item.type);
+                              setActiveReactionPicker(null);
+                            }}
+                            className="reaction-emoji-item"
+                            title={item.label}
+                          >
+                            {item.emoji}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
 
                   <button 
                     type="button"
@@ -4291,7 +4382,7 @@ const Home = () => {
                       const input = document.getElementById(`thread-modal-reply-input`);
                       if (input) input.focus();
                     }}
-                    className="flex items-center gap-1.5 p-2 rounded-lg hover:text-white transition-colors"
+                    className="flex items-center gap-1.5 p-2 rounded-lg hover:text-white transition-colors active:scale-95"
                   >
                     <MessageSquare size={17} />
                     <span className="text-xs">Phản hồi</span>
@@ -4300,16 +4391,18 @@ const Home = () => {
                   <button 
                     type="button"
                     onClick={() => handleToggleRepost(selectedThreadPost.id)}
-                    className={`flex items-center gap-1.5 p-2 rounded-lg hover:text-white transition-colors ${selectedThreadPost.isRepostedByMe ? 'text-emerald-400 font-semibold' : ''}`}
+                    className={`flex items-center gap-1.5 p-2 rounded-lg hover:text-white transition-colors active:scale-95 ${
+                      selectedThreadPost.isRepostedByMe ? 'text-emerald-400 font-semibold' : ''
+                    }`}
                   >
-                    <Repeat size={17} />
-                    <span className="text-xs">Đăng lại</span>
+                    <Repeat size={17} className={selectedThreadPost.isRepostedByMe ? 'text-emerald-400' : ''} />
+                    <span className="text-xs">{selectedThreadPost.isRepostedByMe ? 'Đã đăng lại' : 'Đăng lại'}</span>
                   </button>
 
                   <button 
                     type="button"
                     onClick={() => setSharePost(selectedThreadPost)}
-                    className="flex items-center gap-1.5 p-2 rounded-lg hover:text-white transition-colors"
+                    className="flex items-center gap-1.5 p-2 rounded-lg hover:text-white transition-colors active:scale-95"
                   >
                     <Share2 size={17} />
                     <span className="text-xs">Chia sẻ</span>
@@ -4562,10 +4655,38 @@ const Home = () => {
         .custom-dark-scrollbar::-webkit-scrollbar-thumb:hover {
           background: #3b4662;
         }
-          --text-main: #f3f5f7; /* Soft white for titles and author names */
-          --text-body: #e1e3e6; /* High-contrast, clean body text */
-          --text-muted: #777777; /* Subtle charcoal gray for timestamps & handles */
-          --text-subtle: #555555;
+
+        /* Hiệu ứng Pop-up có chiều sâu, đàn hồi mượt mà cho Modal Chi tiết bài viết */
+        @keyframes modalBackdropFadeIn {
+          from {
+            opacity: 0;
+            backdrop-filter: blur(0px);
+          }
+          to {
+            opacity: 1;
+            backdrop-filter: blur(10px);
+          }
+        }
+        @keyframes modalCardPopIn {
+          0% {
+            opacity: 0;
+            transform: scale(0.92) translateY(18px);
+          }
+          65% {
+            opacity: 1;
+            transform: scale(1.01) translateY(-2px);
+          }
+          100% {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+          }
+        }
+        .modal-backdrop-smooth {
+          animation: modalBackdropFadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .modal-card-smooth {
+          animation: modalCardPopIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+          box-shadow: 0 25px 70px -10px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.08);
         }
 
         .social-app-wrapper {
