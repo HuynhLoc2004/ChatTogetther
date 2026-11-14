@@ -1,5 +1,5 @@
 import React, { Component, useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Users, LogOut, Plus, MessageSquare, Shield, User, X, Lock, Hash, 

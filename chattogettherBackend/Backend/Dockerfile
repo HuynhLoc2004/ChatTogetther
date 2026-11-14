@@ -28,6 +28,6 @@ USER appuser
 ENV PORT=8080
 EXPOSE 8080
 
-# Chạy ứng dụng Spring Boot với cổng động từ Render
-ENTRYPOINT ["sh", "-c", "java -Dserver.port=${PORT} -jar app.jar"]
+# Chạy ứng dụng Spring Boot với cổng động từ Render & tối ưu RAM cho Render Free Tier (512MB)
+ENTRYPOINT ["sh", "-c", "java -Dserver.port=${PORT} -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -Xss512k -jar app.jar"]
 

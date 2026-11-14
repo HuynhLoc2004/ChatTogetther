@@ -16,7 +16,7 @@ const Login = () => {
   // Khởi động làm ấm máy chủ ngay khi người dùng mở trang Đăng Nhập
   useEffect(() => {
     // Gửi request nhẹ không yêu cầu xác thực để đánh thức Render trong lúc người dùng đang nhập tài khoản
-    axiosClient.get('/tracks').catch(() => {});
+    axiosClient.get('/ping').catch(() => {});
   }, []);
 
   const handleSubmit = async (e) => {
@@ -86,7 +86,7 @@ const Login = () => {
           setError(err.response.data?.message || 'Đã có lỗi xảy ra!');
         }
       } else {
-        setError('Không thể kết nối đến server! Đang thử lại...');
+        setError('Máy chủ đang thức dậy từ chế độ ngủ (Render Free). Vui lòng đợi khoảng 30 - 50 giây rồi bấm lại!');
       }
     } finally {
       clearTimeout(timer);
