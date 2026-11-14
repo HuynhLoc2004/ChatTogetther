@@ -149,4 +149,13 @@ public class PostController {
         this.postService.trackSearch(effectiveKw);
         return ResponseEntity.ok(new ResponseData<>(200, "Đã ghi nhận dữ liệu tìm kiếm thành công", null));
     }
+
+    @PostMapping("/{id}/report")
+    public ResponseEntity<ResponseData<Boolean>> reportPost(
+            JwtAuthenticationToken token,
+            @PathVariable("id") Long id,
+            @RequestBody(required = false) java.util.Map<String, String> request
+    ) {
+        return ResponseEntity.ok(this.postService.reportPost(token, id, request));
+    }
 }

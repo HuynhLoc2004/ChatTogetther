@@ -281,7 +281,7 @@ export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentU
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in" onClick={onClose}>
       <div 
-        className="relative w-full sm:max-w-xl h-[100dvh] sm:h-auto sm:max-h-[90vh] rounded-none sm:rounded-3xl bg-zinc-900 border-0 sm:border border-zinc-800 shadow-2xl flex flex-col overflow-hidden animate-slide-up sm:animate-fade-in"
+        className={`relative w-full ${isMe ? 'sm:max-w-xl' : 'sm:max-w-md'} h-[100dvh] sm:h-auto sm:max-h-[85vh] rounded-none sm:rounded-3xl bg-zinc-900 border-0 sm:border border-zinc-800 shadow-2xl flex flex-col overflow-hidden animate-slide-up sm:animate-fade-in`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Sticky Header - Cố định trên cùng, luôn có nút Back rõ ràng trên Mobile & Desktop */}
@@ -620,33 +620,46 @@ export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentU
                       </div>
                     </form>
                   ) : (
-                    /* Chế độ xem người khác */
-                    <div className="space-y-3">
-                      <div className="p-3.5 rounded-2xl bg-zinc-950/60 border border-zinc-800/80">
-                        <span className="text-[10px] font-mono text-zinc-500 block mb-1">Tiểu sử</span>
+                    /* Chế độ xem người khác: Thiết kế Card hiện đại, cân đối, không khoảng trống thừa */
+                    <div className="space-y-3.5 pb-2">
+                      <div className="p-3.5 rounded-2xl bg-zinc-950/70 border border-zinc-800/80 shadow-sm">
+                        <span className="text-[10px] font-mono text-zinc-400 font-semibold block mb-1.5 flex items-center gap-1.5">
+                          <Sparkles size={11} className="text-emerald-400" /> Giới thiệu bản thân
+                        </span>
                         <p className="text-xs text-zinc-200 font-sans leading-relaxed">
-                          {profile?.bio || "Người dùng này chưa cập nhật tiểu sử."}
+                          {profile?.bio?.trim() ? profile.bio : "Người dùng này chưa cập nhật tiểu sử hoặc thông điệp cá nhân."}
                         </p>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="p-3 rounded-2xl bg-zinc-950/60 border border-zinc-800/80">
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <div className="p-3 rounded-2xl bg-zinc-950/70 border border-zinc-800/80">
                           <span className="text-[10px] font-mono text-zinc-500 block mb-1 flex items-center gap-1">
-                            <Calendar size={11} /> Tuổi
+                            <Calendar size={11} className="text-indigo-400" /> Tuổi
                           </span>
-                          <span className="text-xs text-zinc-200 font-medium">
-                            {profile?.age ? `${profile.age} tuổi` : "Chưa cập nhật"}
+                          <span className="text-xs text-zinc-200 font-semibold">
+                            {profile?.age ? `${profile.age} tuổi` : "Chưa chia sẻ"}
                           </span>
                         </div>
 
-                        <div className="p-3 rounded-2xl bg-zinc-950/60 border border-zinc-800/80">
+                        <div className="p-3 rounded-2xl bg-zinc-950/70 border border-zinc-800/80">
                           <span className="text-[10px] font-mono text-zinc-500 block mb-1 flex items-center gap-1">
-                            <MapPin size={11} /> Nơi sinh sống
+                            <MapPin size={11} className="text-rose-400" /> Nơi sinh sống
                           </span>
-                          <span className="text-xs text-zinc-200 font-medium">
-                            {profile?.location || "Chưa cập nhật"}
+                          <span className="text-xs text-zinc-200 font-semibold truncate block">
+                            {profile?.location ? profile.location : "Chưa chia sẻ"}
                           </span>
                         </div>
+                      </div>
+
+                      {/* Trạng thái sinh thái cộng đồng & An toàn bảo mật */}
+                      <div className="p-3 rounded-2xl bg-zinc-950/40 border border-zinc-800/60 flex items-center justify-between text-xs text-zinc-400">
+                        <div className="flex items-center gap-2">
+                          <ShieldCheck size={14} className="text-emerald-400" />
+                          <span className="text-[11px] font-mono">Tài khoản thành viên Talovin</span>
+                        </div>
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          Đã kích hoạt
+                        </span>
                       </div>
                     </div>
                   )}

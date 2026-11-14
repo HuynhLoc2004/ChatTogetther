@@ -8,7 +8,8 @@ import {
   Bell, Bookmark, Flame, Gem, Crown, Volume2, VolumeX, Music, Play, Pause,
   Shuffle, Image as ImageIcon, CheckCircle2, Zap, Dices, Maximize2, Download,
   Edit3, Trash2, MoreVertical, Tag, Filter, Check,
-  Mic, Headphones, Moon, Gamepad2, Film, Square
+  Mic, Headphones, Moon, Gamepad2, Film, Square,
+  Flag, AlertTriangle, UserCheck
 } from 'lucide-react';
 import axiosClient, { BACKEND_URL } from '../api/axiosClient';
 import { saveRoomsOffline, getRoomsOffline } from '../utils/offlineDB';
@@ -331,6 +332,23 @@ const Home = () => {
   const [sharePost, setSharePost] = useState(null);
   const [lightboxMedia, setLightboxMedia] = useState(null); // { url, type, author, title }
 
+  // Báo cáo vi phạm bài viết (Report Post - Động từ CSDL)
+  const [reportingPostId, setReportingPostId] = useState(null);
+  const [reportReasons, setReportReasons] = useState([
+    { id: 'HARASSMENT', label: 'Quấy rối / Đả kích cá nhân' },
+    { id: 'SPAM', label: 'Spam / Quảng cáo / Tin rác' },
+    { id: 'HATE_SPEECH', label: 'Ngôn từ thù địch / Phản cảm' },
+    { id: 'NSFW', label: 'Nội dung 18+ / Bạo lực' },
+    { id: 'MISINFORMATION', label: 'Thông tin sai lệch / Lừa đảo' },
+    { id: 'COPYRIGHT', label: 'Vi phạm bản quyền sở hữu' }
+  ]);
+  const [selectedReportReason, setSelectedReportReason] = useState('HARASSMENT');
+  const [customReportDetails, setCustomReportDetails] = useState('');
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
+
+  // Thanh thông báo nổi thời gian thực (Floating Notification Banner)
+  const [floatingNotif, setFloatingNotif] = useState(null);
+
   // Lắng nghe phím Esc để đóng Lightbox xem đa phương tiện
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -387,6 +405,14 @@ const Home = () => {
               }
             } catch {}
           }
+          if (cfg.report_reasons) {
+            try {
+              const parsed = JSON.parse(cfg.report_reasons);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                setReportReasons(parsed);
+              }
+            } catch {}
+          }
         }
       } catch (err) {
         // Fallback to defaults
@@ -432,6 +458,42 @@ const Home = () => {
       } catch {}
     }
   }, [notifications, currentUserId]);
+
+  // Tự động ẩn thanh thông báo nổi sau 5.5 giây
+  useEffect(() => {
+    if (floatingNotif) {
+      const timer = setTimeout(() => {
+        setFloatingNotif(null);
+      }, 5500);
+      return () => clearTimeout(timer);
+    }
+  }, [floatingNotif]);
+
+  // Xử lý báo cáo bài viết vi phạm
+  const handleOpenReportModal = (postId) => {
+    setPostMenuOpenId(null);
+    setReportingPostId(postId);
+    setSelectedReportReason(reportReasons[0]?.id || 'HARASSMENT');
+    setCustomReportDetails('');
+  };
+
+  const handleSubmitReport = async (e) => {
+    if (e) e.preventDefault();
+    if (!reportingPostId) return;
+    setIsSubmittingReport(true);
+    try {
+      await axiosClient.post(`/posts/${reportingPostId}/report`, {
+        reason: selectedReportReason,
+        details: customReportDetails
+      });
+      toast.success("Báo cáo đã được gửi. Ban quản trị sẽ sớm xem xét xử lý!");
+      setReportingPostId(null);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Không thể gửi báo cáo lúc này");
+    } finally {
+      setIsSubmittingReport(false);
+    }
+  };
 
   // Hộp thoại xác nhận tùy biến (thay thế hoàn toàn window.confirm & window.alert)
   const [confirmDialog, setConfirmDialog] = useState({
@@ -1188,17 +1250,27 @@ const Home = () => {
         stompClient.subscribe('/topic/posts', () => fetchPosts(true));
 
         if (currentUserId) {
-          // Kênh thông báo cá nhân hóa thời gian thực (Cảm xúc, Bình luận, Kết bạn)
+          // Kênh thông báo cá nhân hóa thời gian thực (Cảm xúc, Bình luận, Tố cáo & Gỡ bài)
           stompClient.subscribe(`/topic/user/${currentUserId}/notifications`, (message) => {
             try {
               const notif = JSON.parse(message.body);
-              setNotifications(prev => [notif, ...prev.filter(n => n.id !== notif.id)]);
-              toast((t) => (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
-                  <Bell size={14} style={{ color: '#38bdf8', flexShrink: 0 }} />
-                  <span>{notif.text}</span>
-                </div>
-              ), { duration: 4000 });
+              const normalizedNotif = {
+                id: notif.id || Date.now(),
+                text: notif.text || notif.message || notif.title || 'Thông báo mới từ hệ thống',
+                title: notif.title || (notif.type === 'POST_TAKEDOWN' ? 'Kiểm duyệt nội dung' : 'Thông báo hệ thống'),
+                type: notif.type || 'SYSTEM',
+                time: notif.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                unread: true,
+                postId: notif.postId,
+                reason: notif.reason,
+                adminNote: notif.adminNote || notif.note
+              };
+              setNotifications(prev => [normalizedNotif, ...prev.filter(n => n.id !== normalizedNotif.id)]);
+              setFloatingNotif(normalizedNotif);
+
+              if (notif.type === 'POST_TAKEDOWN') {
+                fetchPosts(true);
+              }
             } catch (e) {
               console.warn("Parse notif error:", e);
             }
@@ -1210,6 +1282,7 @@ const Home = () => {
               fetchPendingFriendsCount();
               const notifItem = {
                 id: Date.now(),
+                title: 'Kết nối bạn bè',
                 text: message.body === 'FRIEND_REQUEST_RECEIVED' 
                   ? 'Bạn có một lời mời kết bạn mới!' 
                   : 'Lời mời kết bạn của bạn đã được chấp nhận!',
@@ -1218,6 +1291,7 @@ const Home = () => {
                 type: 'FRIEND'
               };
               setNotifications(prev => [notifItem, ...prev]);
+              setFloatingNotif(notifItem);
             }
           });
 
@@ -2014,12 +2088,12 @@ const Home = () => {
 
               {/* Nhập Sparks / Chủ đề cộng đồng nếu mở */}
               {showSparkInput && (
-                <div className="community-sparks-section">
+                <div className="community-sparks-section animate-fade-in">
                   <div className="custom-spark-input-row">
-                    <Hash size={13} className="spark-input-icon" />
+                    <Hash size={14} className="spark-input-icon text-emerald-400" />
                     <input 
                       type="text" 
-                      placeholder="Nhập thẻ chủ đề (nhấn Enter)..."
+                      placeholder="Gắn thẻ góc nhìn, #chủ đề quan tâm..."
                       value={customTagInput}
                       onChange={(e) => setCustomTagInput(e.target.value)}
                       onKeyDown={handleAddCustomTag}
@@ -2030,11 +2104,31 @@ const Home = () => {
                       disabled={!customTagInput.trim()}
                       className="btn-add-spark-action"
                     >
-                      <Plus size={11} /> Thêm
+                      <Plus size={12} /> <span>Thêm</span>
                     </button>
                   </div>
+
+                  {/* Gợi ý chủ đề nhanh để người dùng không cần gõ thủ công */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pt-2 pb-0.5">
+                    <span className="text-[10px] text-zinc-500 font-mono flex-shrink-0">Gợi ý nhanh:</span>
+                    {['#tam_su', '#am_nhac', '#cong_nghe', '#doi_song', '#goc_nhin'].map(suggested => (
+                      <button
+                        key={suggested}
+                        type="button"
+                        onClick={() => {
+                          if (!selectedTags.includes(suggested)) {
+                            setSelectedTags(prev => [...prev, suggested]);
+                          }
+                        }}
+                        className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-zinc-850 hover:bg-zinc-800 text-zinc-300 hover:text-emerald-400 border border-zinc-700/60 flex-shrink-0 transition-colors active:scale-95"
+                      >
+                        {suggested}
+                      </button>
+                    ))}
+                  </div>
+
                   {selectedTags.length > 0 && (
-                    <div className="selected-sparks-wrap">
+                    <div className="selected-sparks-wrap pt-1">
                       {selectedTags.map(tag => (
                         <span key={tag} className="active-spark-chip font-mono">
                           {tag}
@@ -2231,36 +2325,57 @@ const Home = () => {
                             <Bookmark size={15} strokeWidth={1.5} fill={isSaved ? "currentColor" : "none"} />
                           </button>
 
-                          {isMe && (
-                            <div className="post-menu-container">
-                              <button 
-                                type="button"
-                                onClick={() => setPostMenuOpenId(postMenuOpenId === post.id ? null : post.id)}
-                                className="post-menu-btn"
-                              >
-                                <MoreVertical size={15} strokeWidth={1.5} />
-                              </button>
+                          <div className="post-menu-container">
+                            <button 
+                              type="button"
+                              onClick={() => setPostMenuOpenId(postMenuOpenId === post.id ? null : post.id)}
+                              className="post-menu-btn"
+                              title="Tùy chọn bài viết"
+                            >
+                              <MoreVertical size={15} strokeWidth={1.5} />
+                            </button>
 
-                              {postMenuOpenId === post.id && (
-                                <div className="post-menu-dropdown">
+                            {postMenuOpenId === post.id && (
+                              <div className="post-menu-dropdown animate-fade-in">
+                                {isMe ? (
+                                  <>
+                                    <button 
+                                      type="button" 
+                                      onClick={() => handleOpenEditPost(post)} 
+                                      className="post-menu-item"
+                                    >
+                                      <Edit3 size={13} /> Sửa bài viết
+                                    </button>
+                                    <button 
+                                      type="button" 
+                                      onClick={() => handleDeletePost(post.id)} 
+                                      className="post-menu-item danger"
+                                    >
+                                      <Trash2 size={13} /> Xóa bài viết
+                                    </button>
+                                  </>
+                                ) : (
                                   <button 
                                     type="button" 
-                                    onClick={() => handleOpenEditPost(post)} 
-                                    className="post-menu-item"
+                                    onClick={() => handleOpenReportModal(post.id)} 
+                                    className="post-menu-item text-amber-400 hover:text-amber-300"
                                   >
-                                    <Edit3 size={13} /> Sửa bài viết
+                                    <Flag size={13} /> Báo cáo vi phạm
                                   </button>
+                                )}
+
+                                {isAdminUser && !isMe && (
                                   <button 
                                     type="button" 
                                     onClick={() => handleDeletePost(post.id)} 
                                     className="post-menu-item danger"
                                   >
-                                    <Trash2 size={13} /> Xóa bài viết
+                                    <Trash2 size={13} /> Xóa bài (Admin)
                                   </button>
-                                </div>
-                              )}
-                            </div>
-                          )}
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
 
@@ -2607,6 +2722,8 @@ const Home = () => {
                   );
                 })
               )}
+              {/* Khoảng đệm đáy an toàn (Bottom Spacer) để thanh Navigation không che khuất bài viết cuối cùng */}
+              <div className="h-24 w-full pointer-events-none" />
             </div>
           )}
 
@@ -3210,6 +3327,129 @@ const Home = () => {
           }}
           onDecline={() => setGlobalIncomingCall(null)}
         />
+      )}
+
+      {/* THANH THÔNG BÁO NỔI HỆ THỐNG THỜI GIAN THỰC (REALTIME FLOATING PILL) */}
+      {floatingNotif && (
+        <div 
+          className="fixed top-14 left-1/2 -translate-x-1/2 z-[9999] max-w-md w-[92vw] sm:w-[420px] bg-zinc-900/98 border border-zinc-700/80 rounded-2xl p-3.5 shadow-2xl backdrop-blur-xl flex items-start gap-3 animate-fade-in"
+          style={{ boxShadow: '0 20px 40px -8px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.08)' }}
+        >
+          <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${
+            floatingNotif.type === 'POST_TAKEDOWN' 
+              ? 'bg-rose-500/15 border border-rose-500/30 text-rose-400'
+              : floatingNotif.type === 'FRIEND'
+              ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400'
+              : 'bg-indigo-500/15 border border-indigo-500/30 text-indigo-400'
+          }`}>
+            {floatingNotif.type === 'POST_TAKEDOWN' ? (
+              <AlertTriangle size={16} />
+            ) : floatingNotif.type === 'FRIEND' ? (
+              <UserCheck size={16} />
+            ) : (
+              <Bell size={16} />
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-bold text-zinc-100 flex items-center justify-between">
+              <span>{floatingNotif.title}</span>
+              <span className="text-[10px] text-zinc-500 font-mono">{floatingNotif.time}</span>
+            </div>
+            <p className="text-xs text-zinc-300 mt-0.5 leading-relaxed break-words font-sans">
+              {floatingNotif.text}
+            </p>
+          </div>
+          <button 
+            type="button" 
+            onClick={() => setFloatingNotif(null)} 
+            className="text-zinc-500 hover:text-zinc-300 p-1 rounded-lg hover:bg-zinc-800 transition-colors"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {/* MODAL BÁO CÁO BÀI VIẾT VI PHẠM (REPORT POST MODAL - DYNAMIC REASONS) */}
+      {reportingPostId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in" onClick={() => setReportingPostId(null)}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <Flag size={14} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Báo Cáo Bài Viết</h3>
+                  <p className="text-[11px] text-zinc-400">Chọn lý do vi phạm để gửi tới ban quản trị kiểm duyệt</p>
+                </div>
+              </div>
+              <button onClick={() => setReportingPostId(null)} className="text-zinc-400 hover:text-white">
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitReport} className="space-y-4">
+              <div>
+                <label className="text-xs text-zinc-300 font-medium mb-2 block">
+                  Lý do gắn cờ vi phạm:
+                </label>
+                <div className="space-y-2">
+                  {reportReasons.map((r) => (
+                    <label 
+                      key={r.id} 
+                      className={`flex items-center gap-2.5 p-2.5 rounded-xl border cursor-pointer transition-all ${
+                        selectedReportReason === r.id 
+                          ? 'bg-rose-500/10 border-rose-500/40 text-rose-300' 
+                          : 'bg-zinc-950/70 border-zinc-800 text-zinc-300 hover:border-zinc-700'
+                      }`}
+                    >
+                      <input 
+                        type="radio" 
+                        name="reportReason" 
+                        value={r.id}
+                        checked={selectedReportReason === r.id}
+                        onChange={() => setSelectedReportReason(r.id)}
+                        className="text-rose-500 focus:ring-0 cursor-pointer"
+                      />
+                      <span className="text-xs font-medium">{r.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs text-zinc-300 font-medium mb-1 block">
+                  Mô tả chi tiết vi phạm (Không bắt buộc):
+                </label>
+                <textarea 
+                  rows={3}
+                  value={customReportDetails}
+                  onChange={(e) => setCustomReportDetails(e.target.value)}
+                  placeholder="Nhập thêm bằng chứng, thời điểm hoặc ngữ cảnh vi phạm..."
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-rose-500 resize-none font-sans"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-800">
+                <button 
+                  type="button" 
+                  onClick={() => setReportingPostId(null)} 
+                  className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold"
+                >
+                  Hủy
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={isSubmittingReport} 
+                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-md shadow-rose-950 flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <Flag size={13} />
+                  <span>{isSubmittingReport ? 'Đang gửi...' : 'Gửi báo cáo vi phạm'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* ============================================================== */}
@@ -4155,29 +4395,52 @@ const Home = () => {
         .custom-spark-input-row {
           display: flex;
           align-items: center;
-          gap: 6px;
-          background: var(--input-bg);
-          border: 1px solid var(--input-border);
-          border-radius: 8px;
-          padding: 5px 10px;
+          gap: 8px;
+          background: #11141e;
+          border: 1px solid #282f45;
+          border-radius: 12px;
+          padding: 6px 12px;
+          box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+          transition: all 0.15s ease;
         }
-        .spark-input-icon { color: #64748b; }
+        .custom-spark-input-row:focus-within {
+          border-color: #10b981;
+          box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4), 0 0 0 2px rgba(16, 185, 129, 0.15);
+        }
+        .spark-input-icon { color: #10b981; }
         .custom-spark-input-row input {
           flex: 1;
           background: transparent;
           border: none;
-          color: white;
+          color: #f4f4f5;
           font-size: 12px;
           outline: none;
         }
+        .custom-spark-input-row input::placeholder {
+          color: #64748b;
+          font-style: normal;
+        }
         .btn-add-spark-action {
-          background: #23283c;
-          border: 1px solid #3b4360;
-          color: #f4f4f5;
+          background: rgba(16, 185, 129, 0.15);
+          border: 1px solid rgba(16, 185, 129, 0.35);
+          color: #34d399;
           font-size: 11px;
-          padding: 3px 8px;
-          border-radius: 6px;
+          font-weight: 600;
+          padding: 4px 10px;
+          border-radius: 8px;
           cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 3px;
+          transition: all 0.15s ease;
+        }
+        .btn-add-spark-action:hover:not(:disabled) {
+          background: rgba(16, 185, 129, 0.25);
+          color: #6ee7b7;
+        }
+        .btn-add-spark-action:disabled {
+          opacity: 0.35;
+          cursor: not-allowed;
         }
         .selected-sparks-wrap {
           display: flex;
@@ -4189,17 +4452,17 @@ const Home = () => {
           display: inline-flex;
           align-items: center;
           gap: 4px;
-          background: #23283c;
-          border: 1px solid #3b4360;
-          color: #f4f4f5;
-          font-size: 10.5px;
-          padding: 2px 7px;
+          background: #1c2234;
+          border: 1px solid #333d5c;
+          color: #38bdf8;
+          font-size: 11px;
+          padding: 3px 8px;
           border-radius: 6px;
         }
         .btn-remove-spark {
           background: transparent;
           border: none;
-          color: #a1a1aa;
+          color: #94a3b8;
           cursor: pointer;
           display: flex;
           align-items: center;
@@ -4249,29 +4512,37 @@ const Home = () => {
           color: #fb7185;
         }
 
-        /* Nút CTA Đăng bài: Nền sáng - Chữ tối */
+        /* Nút CTA Đăng bài: Nền Emerald rực rỡ - Đầy tương phản & phân cấp rõ ràng */
         .btn-publish-submit {
-          background: #f8fafc;
-          color: #0b0d14;
+          background: #10b981;
+          color: #022c22;
           border: none;
           padding: 7px 18px;
-          border-radius: 8px;
-          font-size: 12.5px;
+          border-radius: 10px;
+          font-size: 12px;
           font-weight: 700;
           cursor: pointer;
           transition: all 0.15s;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+          box-shadow: 0 3px 12px rgba(16, 185, 129, 0.28);
           white-space: nowrap;
           flex-shrink: 0;
           min-width: max-content;
         }
         .btn-publish-submit:hover:not(:disabled) {
-          background: #ffffff;
+          background: #34d399;
           transform: translateY(-1px);
+          box-shadow: 0 5px 16px rgba(16, 185, 129, 0.38);
+        }
+        .btn-publish-submit:active:not(:disabled) {
+          transform: scale(0.96);
         }
         .btn-publish-submit:disabled {
-          opacity: 0.35;
+          background: #1c202d;
+          color: #525a70;
+          border: 1px solid #282f42;
+          box-shadow: none;
           cursor: not-allowed;
+          opacity: 0.7;
         }
 
         /* ================= THẺ BÀI VIẾT (TALOVIN HIGH-CONTRAST CARD) ================= */
@@ -5401,12 +5672,26 @@ const Home = () => {
             opacity: 0;
             pointer-events: none;
           }
-          .main-stream { max-width: 100%; min-width: 0; padding-bottom: max(75px, env(safe-area-inset-bottom)); }
+          .main-stream { 
+            max-width: 100%; 
+            min-width: 0; 
+            padding-bottom: calc(96px + env(safe-area-inset-bottom, 24px)); 
+          }
           .rooms-active-grid { grid-template-columns: 1fr; }
           .vibe-tags-row {
             margin: 8px 0;
             padding-left: 0;
-            gap: 5px;
+            padding-right: 20px;
+            gap: 6px;
+            overflow-x: auto;
+            scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
+            display: flex;
+            flex-wrap: nowrap;
+          }
+          .vibe-tag-pill {
+            flex-shrink: 0;
+            white-space: nowrap;
           }
           .creator-bottom-row { 
             padding-left: 0; 
@@ -5424,18 +5709,22 @@ const Home = () => {
             flex-shrink: 1;
             overflow-x: auto;
             scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
           }
           .btn-subtool {
-            padding: 5px 6px;
+            padding: 5px 8px;
             font-size: 11px;
             gap: 3px;
             white-space: nowrap;
+            flex-shrink: 0;
           }
           .btn-publish-submit {
-            padding: 6px 14px;
+            padding: 6px 15px;
             font-size: 12px;
             flex-shrink: 0;
             white-space: nowrap;
+            font-weight: 700;
+            border-radius: 9px;
           }
           .composer-attached-preview { 
             margin: 8px 0; 

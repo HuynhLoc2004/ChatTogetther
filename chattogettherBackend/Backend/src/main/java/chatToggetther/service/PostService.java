@@ -14,12 +14,14 @@ import chatToggetther.modelEntity.CommunityMemberEntity;
 import chatToggetther.modelEntity.FriendshipEntity;
 import chatToggetther.modelEntity.PostEntity;
 import chatToggetther.modelEntity.PostLikeEntity;
+import chatToggetther.modelEntity.PostReportEntity;
 import chatToggetther.modelEntity.UserEntity;
 import chatToggetther.repository.CommentRepository;
 import chatToggetther.repository.CommunityGroupRepository;
 import chatToggetther.repository.CommunityMemberRepository;
 import chatToggetther.repository.FriendshipRepository;
 import chatToggetther.repository.PostLikeRepository;
+import chatToggetther.repository.PostReportRepository;
 import chatToggetther.repository.PostRepository;
 import chatToggetther.repository.UserRepository;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -42,6 +44,7 @@ public class PostService {
     private final CommunityGroupRepository groupRepository;
     private final CommunityMemberRepository memberRepository;
     private final FriendshipRepository friendshipRepository;
+    private final PostReportRepository postReportRepository;
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm dd/MM");
 
@@ -53,7 +56,8 @@ public class PostService {
             SimpMessagingTemplate messagingTemplate,
             CommunityGroupRepository groupRepository,
             CommunityMemberRepository memberRepository,
-            FriendshipRepository friendshipRepository
+            FriendshipRepository friendshipRepository,
+            PostReportRepository postReportRepository
     ) {
         this.postRepository = postRepository;
         this.postLikeRepository = postLikeRepository;
@@ -63,6 +67,7 @@ public class PostService {
         this.groupRepository = groupRepository;
         this.memberRepository = memberRepository;
         this.friendshipRepository = friendshipRepository;
+        this.postReportRepository = postReportRepository;
     }
 
     private PostDTO mapToPostDTO(PostEntity post, UserEntity currentUser) {
@@ -835,5 +840,41 @@ public class PostService {
         } catch (Exception ignored) {}
 
         return new ResponseData<>(200, "Cập nhật bình luận thành công", mapToCommentDTO(comment));
+    }
+
+    @Transactional
+    public ResponseData<Boolean> reportPost(JwtAuthenticationToken token, Long postId, Map<String, String> request) {
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        if (currentUser == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
+        }
+
+        PostEntity post = this.postRepository.findById(postId).orElseThrow(() ->
+            new AppException(404, "Bài viết không tồn tại", 404)
+        );
+
+        String reason = request != null && request.containsKey("reason") ? request.get("reason") : "OTHER";
+        String details = request != null && request.containsKey("details") ? request.get("details") : "";
+
+        PostReportEntity report = PostReportEntity.builder()
+                .postId(post.getId())
+                .postContent(post.getContent())
+                .postAuthorId(post.getUser() != null ? post.getUser().getId() : null)
+                .postAuthorName(post.getUser() != null ? (post.getUser().getNickname() != null ? post.getUser().getNickname() : post.getUser().getAccount()) : "Người dùng")
+                .reporterId(currentUser.getId())
+                .reporterName(currentUser.getNickname() != null ? currentUser.getNickname() : currentUser.getAccount())
+                .reason(reason)
+                .details(details)
+                .status("PENDING")
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        this.postReportRepository.save(report);
+
+        try {
+            this.messagingTemplate.convertAndSend("/topic/admin/reports", "NEW_POST_REPORT");
+        } catch (Exception ignored) {}
+
+        return new ResponseData<>(200, "Báo cáo bài viết thành công. Ban quản trị sẽ sớm xem xét xử lý!", true);
     }
 }

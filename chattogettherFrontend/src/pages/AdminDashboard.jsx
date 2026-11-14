@@ -152,6 +152,22 @@ export const AdminDashboard = () => {
   ]);
   const [newReasonInput, setNewReasonInput] = useState('');
 
+  // Quản lý Báo cáo Vi phạm Bài viết (Post Reports)
+  const [reports, setReports] = useState([]);
+  const [loadingReports, setLoadingReports] = useState(false);
+  const [reportFilter, setReportFilter] = useState('ALL'); // 'ALL' | 'PENDING' | 'RESOLVED_TAKEDOWN' | 'DISMISSED'
+  const [reportActionModal, setReportActionModal] = useState({ isOpen: false, report: null, action: 'TAKEDOWN', note: '' });
+  const [reportReasons, setReportReasons] = useState([
+    { id: 'HARASSMENT', label: 'Quấy rối / Đả kích cá nhân' },
+    { id: 'SPAM', label: 'Spam / Quảng cáo / Tin rác' },
+    { id: 'HATE_SPEECH', label: 'Ngôn từ thù địch / Phản cảm' },
+    { id: 'NSFW', label: 'Nội dung 18+ / Bạo lực' },
+    { id: 'MISINFORMATION', label: 'Thông tin sai lệch / Lừa đảo' },
+    { id: 'COPYRIGHT', label: 'Vi phạm bản quyền sở hữu' }
+  ]);
+  const [newReportReason, setNewReportReason] = useState({ id: '', label: '' });
+  const [isAddReportReasonOpen, setIsAddReportReasonOpen] = useState(false);
+
   // ==========================================
   // KHỞI TẠO & PHÂN QUYỀN TRUY CẬP (RBAC RESOLVER)
   // ==========================================
@@ -190,6 +206,7 @@ export const AdminDashboard = () => {
       await fetchTracks();
       await fetchUsers();
       await fetchAdminGroups();
+      await fetchReports();
     } catch (err) {
       console.error("Lỗi xác thực quyền:", err);
       toast.error("Phiên làm việc hết hạn hoặc không có quyền quản trị");
@@ -242,7 +259,8 @@ export const AdminDashboard = () => {
           { id: 'challenges', label: `Thẻ bài thử thách (${challenges.length})`, icon: Sparkles, permission: 'TL_PERM_CHALLENGE_MANAGE' },
           { id: 'vibes', label: `Chủ đề & Cảm xúc (${parsedVibes.length})`, icon: Tag, permission: 'TL_PERM_TOPIC_MANAGE' },
           { id: 'music', label: `Âm nhạc hệ thống (${tracks.length})`, icon: Music, permission: 'TL_PERM_MUSIC_MANAGE' },
-          { id: 'communities', label: `Cộng đồng & Nhóm (${adminGroups.length})`, icon: Globe, permission: 'TL_PERM_COMMUNITY_MANAGE' }
+          { id: 'communities', label: `Cộng đồng & Nhóm (${adminGroups.length})`, icon: Globe, permission: 'TL_PERM_COMMUNITY_MANAGE' },
+          { id: 'reports', label: `Báo cáo vi phạm (${reports.filter(r => r.status === 'PENDING').length})`, icon: AlertTriangle, permission: 'TL_PERM_COMMUNITY_MANAGE' }
         ]
       },
       {
@@ -253,7 +271,7 @@ export const AdminDashboard = () => {
         ]
       }
     ];
-  }, [challenges.length, parsedVibes.length, tracks.length, adminGroups.length, users.length, systemRoles.length]);
+  }, [challenges.length, parsedVibes.length, tracks.length, adminGroups.length, reports.length, users.length, systemRoles.length]);
 
   // Tự động chuyển tab nếu tab hiện tại không được phép
   useEffect(() => {
@@ -302,6 +320,12 @@ export const AdminDashboard = () => {
           if (d.reject_reasons) {
             const parsedReasons = JSON.parse(d.reject_reasons);
             if (Array.isArray(parsedReasons) && parsedReasons.length > 0) setRejectReasons(parsedReasons);
+          }
+        } catch {}
+        try {
+          if (d.report_reasons) {
+            const parsedReports = JSON.parse(d.report_reasons);
+            if (Array.isArray(parsedReports) && parsedReports.length > 0) setReportReasons(parsedReports);
           }
         } catch {}
       }
@@ -362,6 +386,55 @@ export const AdminDashboard = () => {
     const updated = rejectReasons.filter(r => r.id !== idToDelete);
     setRejectReasons(updated);
     await saveConfigToBackend({ reject_reasons: JSON.stringify(updated) }, "Đã xóa lý do từ chối bài viết!");
+  };
+
+  // --- Quản lý Báo cáo Vi phạm ---
+  const fetchReports = async () => {
+    try {
+      setLoadingReports(true);
+      const res = await axiosClient.get('/admin/reports');
+      if (res?.data?.data) {
+        setReports(res.data.data);
+      }
+    } catch (e) {
+      console.warn("Không thể tải danh sách báo cáo vi phạm:", e);
+    } finally {
+      setLoadingReports(false);
+    }
+  };
+
+  const handleResolveReport = async (reportId, action, note) => {
+    try {
+      await axiosClient.post(`/admin/reports/${reportId}/resolve`, {
+        action,
+        note
+      });
+      toast.success(action === 'TAKEDOWN' ? "Đã gỡ bài viết vi phạm và gửi thông báo tới tác giả!" : "Đã bỏ qua báo cáo!");
+      setReportActionModal({ isOpen: false, report: null, action: 'TAKEDOWN', note: '' });
+      fetchReports();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Không thể xử lý báo cáo lúc này");
+    }
+  };
+
+  const handleAddReportReason = async (e) => {
+    e.preventDefault();
+    if (!newReportReason.id.trim() || !newReportReason.label.trim()) {
+      toast.error("Vui lòng điền mã và mô tả lý do báo cáo");
+      return;
+    }
+    const cleanId = newReportReason.id.trim().toUpperCase().replace(/\s+/g, '_');
+    const updated = [...reportReasons.filter(r => r.id !== cleanId), { id: cleanId, label: newReportReason.label.trim() }];
+    setReportReasons(updated);
+    await saveConfigToBackend({ report_reasons: JSON.stringify(updated) }, "Đã lưu lý do báo cáo vi phạm mới!");
+    setNewReportReason({ id: '', label: '' });
+    setIsAddReportReasonOpen(false);
+  };
+
+  const handleDeleteReportReason = async (idToDelete) => {
+    const updated = reportReasons.filter(r => r.id !== idToDelete);
+    setReportReasons(updated);
+    await saveConfigToBackend({ report_reasons: JSON.stringify(updated) }, "Đã xóa lý do báo cáo!");
   };
 
   const saveConfigToBackend = async (partialConfigs, successMsg = "Đã lưu cấu hình thành công!") => {
@@ -1683,6 +1756,283 @@ export const AdminDashboard = () => {
               </div>
             )}
 
+            {/* ====================================================
+                TAB 8: QUẢN TRỊ BÁO CÁO VI PHẠM & KIỂM DUYỆT (POST REPORTS)
+                ==================================================== */}
+            {activeTab === 'reports' && hasPermission('TL_PERM_COMMUNITY_MANAGE') && (
+              <div className="space-y-6 animate-fade-in">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-xl font-bold text-zinc-100 tracking-tight flex items-center gap-2">
+                      <AlertTriangle size={20} className="text-amber-400" />
+                      <span>Quản Trị Báo Cáo Vi Phạm & Kiểm Duyệt</span>
+                    </h2>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      Kiểm duyệt các bài viết bị người dùng gắn cờ vi phạm, xem xét gỡ bỏ nội dung và gửi cảnh báo trực tiếp qua hệ thống thông báo realtime.
+                    </p>
+                  </div>
+                  <button
+                    onClick={fetchReports}
+                    className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold flex items-center gap-1.5 transition-all self-start sm:self-auto"
+                  >
+                    <RefreshCw size={13} className={loadingReports ? "animate-spin" : ""} />
+                    <span>Làm mới danh sách</span>
+                  </button>
+                </div>
+
+                {/* 4 Thẻ chỉ số tổng quan báo cáo */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="p-3.5 rounded-2xl bg-zinc-900 border border-amber-500/30">
+                    <span className="text-[10px] font-mono text-amber-400 block mb-1">Chờ xử lý</span>
+                    <span className="text-2xl font-black text-amber-300 font-mono">
+                      {reports.filter(r => r.status === 'PENDING').length}
+                    </span>
+                  </div>
+                  <div className="p-3.5 rounded-2xl bg-zinc-900 border border-rose-500/30">
+                    <span className="text-[10px] font-mono text-rose-400 block mb-1">Đã gỡ bài</span>
+                    <span className="text-2xl font-black text-rose-400 font-mono">
+                      {reports.filter(r => r.status === 'RESOLVED_TAKEDOWN').length}
+                    </span>
+                  </div>
+                  <div className="p-3.5 rounded-2xl bg-zinc-900 border border-zinc-800">
+                    <span className="text-[10px] font-mono text-zinc-400 block mb-1">Đã bỏ qua</span>
+                    <span className="text-2xl font-black text-zinc-300 font-mono">
+                      {reports.filter(r => r.status === 'DISMISSED').length}
+                    </span>
+                  </div>
+                  <div className="p-3.5 rounded-2xl bg-zinc-900 border border-zinc-800">
+                    <span className="text-[10px] font-mono text-zinc-400 block mb-1">Tổng số báo cáo</span>
+                    <span className="text-2xl font-black text-zinc-100 font-mono">
+                      {reports.length}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Bộ lọc trạng thái */}
+                <div className="flex items-center gap-1.5 p-1 bg-zinc-900/90 rounded-xl border border-zinc-800 w-fit">
+                  {[
+                    { id: 'ALL', label: `Tất cả (${reports.length})` },
+                    { id: 'PENDING', label: `Chờ xử lý (${reports.filter(r => r.status === 'PENDING').length})` },
+                    { id: 'RESOLVED_TAKEDOWN', label: `Đã gỡ bài (${reports.filter(r => r.status === 'RESOLVED_TAKEDOWN').length})` },
+                    { id: 'DISMISSED', label: `Đã bỏ qua (${reports.filter(r => r.status === 'DISMISSED').length})` }
+                  ].map(f => (
+                    <button
+                      key={f.id}
+                      onClick={() => setReportFilter(f.id)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                        reportFilter === f.id
+                          ? 'bg-zinc-800 text-white shadow-sm'
+                          : 'text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Danh sách Báo cáo */}
+                <div className="space-y-3">
+                  {reports
+                    .filter(r => reportFilter === 'ALL' || r.status === reportFilter)
+                    .map(r => {
+                      const reasonObj = reportReasons.find(item => item.id === r.reason);
+                      const reasonLabel = reasonObj ? reasonObj.label : r.reason;
+
+                      return (
+                        <div
+                          key={r.id}
+                          className={`p-4 rounded-2xl bg-zinc-900/90 border transition-all ${
+                            r.status === 'PENDING'
+                              ? 'border-amber-500/40 shadow-lg shadow-amber-950/10'
+                              : 'border-zinc-800/80 opacity-80'
+                          }`}
+                        >
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800/80 pb-3 mb-3">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider ${
+                                r.status === 'PENDING'
+                                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                  : r.status === 'RESOLVED_TAKEDOWN'
+                                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                                  : 'bg-zinc-800 text-zinc-400 border border-zinc-700'
+                              }`}>
+                                {r.status === 'PENDING' ? '⏳ Chờ xem xét' : r.status === 'RESOLVED_TAKEDOWN' ? '🚫 Đã gỡ bỏ bài' : '✓ Đã bỏ qua'}
+                              </span>
+
+                              <span className="px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 text-xs font-semibold">
+                                {reasonLabel}
+                              </span>
+
+                              <span className="text-[11px] font-mono text-zinc-500">
+                                Mã bài viết: #{r.postId}
+                              </span>
+                            </div>
+
+                            <span className="text-[11px] font-mono text-zinc-500">
+                              Báo cáo lúc: {r.createdAt ? new Date(r.createdAt).toLocaleString('vi-VN') : 'Gần đây'}
+                            </span>
+                          </div>
+
+                          {/* Chi tiết nội dung bài viết bị báo cáo */}
+                          <div className="space-y-2 mb-3">
+                            <div className="p-3 rounded-xl bg-zinc-950/70 border border-zinc-800/60">
+                              <span className="text-[10px] font-mono text-zinc-400 block mb-1">
+                                Tác giả: <strong className="text-zinc-200">{r.postAuthorName || 'Thành viên'}</strong> (ID: {r.postAuthorId})
+                              </span>
+                              <p className="text-xs text-zinc-200 italic font-serif leading-relaxed line-clamp-3">
+                                "{r.postContent || '(Bài viết không có văn bản hoặc chỉ có ảnh/video)'}"
+                              </p>
+                            </div>
+
+                            <div className="text-xs text-zinc-400 flex items-center gap-1.5">
+                              <span className="font-mono text-zinc-500">Người báo cáo:</span>
+                              <strong className="text-zinc-300">{r.reporterName}</strong>
+                              {r.details && (
+                                <span className="text-zinc-400">
+                                  — Ghi chú thêm: <em className="text-zinc-300 font-sans">"{r.details}"</em>
+                                </span>
+                              )}
+                            </div>
+
+                            {r.adminNote && (
+                              <div className="p-2.5 rounded-xl bg-zinc-950/40 border border-zinc-800/50 text-xs text-zinc-400">
+                                <span className="font-mono text-amber-400">Ghi chú xử lý của Quản trị viên:</span> {r.adminNote}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Hành động của Quản trị viên */}
+                          {r.status === 'PENDING' && (
+                            <div className="flex items-center gap-2 pt-2 border-t border-zinc-800/60 flex-wrap">
+                              <button
+                                type="button"
+                                onClick={() => setReportActionModal({
+                                  isOpen: true,
+                                  report: r,
+                                  action: 'TAKEDOWN',
+                                  note: `Vi phạm quy chuẩn: ${reasonLabel}`
+                                })}
+                                className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-all shadow-md shadow-rose-950/30 flex items-center gap-1.5 active:scale-95"
+                              >
+                                <Trash2 size={13} />
+                                <span>Gỡ bài vi phạm & Báo tác giả</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleResolveReport(r.id, 'DISMISS', 'Nội dung hợp lệ')}
+                                className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition-all border border-zinc-700 active:scale-95"
+                              >
+                                Bỏ qua báo cáo
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                  {reports.filter(r => reportFilter === 'ALL' || r.status === reportFilter).length === 0 && (
+                    <div className="p-12 text-center text-zinc-500 text-xs font-mono bg-zinc-900/40 rounded-2xl border border-zinc-800">
+                      Không có báo cáo nào trong mục này.
+                    </div>
+                  )}
+                </div>
+
+                {/* ====================================================
+                    QUẢN LÝ DANH MỤC LÝ DO BÁO CÁO (ĐỘNG TỪ CSDL)
+                    ==================================================== */}
+                <div className="p-5 rounded-2xl bg-zinc-900/90 border border-zinc-800 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
+                        <Tag size={15} className="text-emerald-400" />
+                        <span>Danh Mục Lý Do Báo Cáo Vi Phạm (Động từ CSDL)</span>
+                      </h3>
+                      <p className="text-xs text-zinc-400 mt-0.5">
+                        Tất cả lý do này được lưu trong CSDL hệ thống và đồng bộ ngay lập tức tới modal báo cáo phía người dùng mà không cần sửa code.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsAddReportReasonOpen(true)}
+                      className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 transition-all self-start sm:self-auto shadow-sm"
+                    >
+                      <Plus size={14} />
+                      <span>Thêm lý do mới</span>
+                    </button>
+                  </div>
+
+                  {/* Form thêm lý do mới */}
+                  {isAddReportReasonOpen && (
+                    <form onSubmit={handleAddReportReason} className="p-4 rounded-xl bg-zinc-950 border border-emerald-500/40 space-y-3 animate-fade-in">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[11px] text-zinc-400 font-mono block mb-1">Mã định danh (ID) *</label>
+                          <input
+                            type="text"
+                            placeholder="VD: COPYRIGHT, SCAM, INAPPROPRIATE..."
+                            value={newReportReason.id}
+                            onChange={(e) => setNewReportReason({ ...newReportReason, id: e.target.value })}
+                            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono uppercase"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-zinc-400 font-mono block mb-1">Tên hiển thị cho người dùng *</label>
+                          <input
+                            type="text"
+                            placeholder="VD: Vi phạm bản quyền hình ảnh..."
+                            value={newReportReason.label}
+                            onChange={(e) => setNewReportReason({ ...newReportReason, label: e.target.value })}
+                            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-end gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setIsAddReportReasonOpen(false)}
+                          className="px-3 py-1.5 rounded-lg bg-zinc-800 text-zinc-300 text-xs font-semibold"
+                        >
+                          Hủy
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-sm"
+                        >
+                          Lưu vào hệ thống
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {/* Danh sách các lý do báo cáo hiện tại */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {reportReasons.map((reason) => (
+                      <div
+                        key={reason.id}
+                        className="flex items-center justify-between p-3 rounded-xl bg-zinc-950/80 border border-zinc-800/80"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0"></span>
+                          <span className="text-xs font-semibold text-zinc-200 truncate">{reason.label}</span>
+                          <span className="text-[10px] font-mono text-zinc-500 flex-shrink-0">({reason.id})</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteReportReason(reason.id)}
+                          className="text-zinc-500 hover:text-rose-400 p-1 transition-colors flex-shrink-0"
+                          title="Xóa lý do này"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
           </div>
         </div>
       </main>
@@ -2151,6 +2501,70 @@ export const AdminDashboard = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ====================================================
+          MODAL: XÁC NHẬN GỠ BÀI VIẾT VI PHẠM & GỬI THÔNG BÁO
+          ==================================================== */}
+      {reportActionModal.isOpen && reportActionModal.report && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in" onClick={() => setReportActionModal({ isOpen: false, report: null, action: 'TAKEDOWN', note: '' })}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <AlertTriangle size={16} className="text-rose-400" />
+                <span>Gỡ Bỏ Bài Viết Vi Phạm</span>
+              </h3>
+              <button 
+                onClick={() => setReportActionModal({ isOpen: false, report: null, action: 'TAKEDOWN', note: '' })} 
+                className="text-zinc-400 hover:text-white"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 text-xs space-y-1">
+              <span className="text-zinc-400 font-mono text-[10px] block">Nội dung bài viết:</span>
+              <p className="text-zinc-200 italic line-clamp-3 font-serif">"{reportActionModal.report.postContent}"</p>
+              <div className="pt-1 text-[11px] text-zinc-400 font-mono">
+                Tác giả: <strong className="text-zinc-200">{reportActionModal.report.postAuthorName}</strong>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs text-zinc-300 font-medium mb-1 block">
+                Lý do & ghi chú gửi trực tiếp tới tác giả (Realtime):
+              </label>
+              <textarea
+                rows={3}
+                value={reportActionModal.note}
+                onChange={(e) => setReportActionModal({ ...reportActionModal, note: e.target.value })}
+                placeholder="Nhập chi tiết điều khoản vi phạm để gửi thông báo cho tác giả..."
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-rose-500 font-sans resize-none"
+              />
+              <span className="text-[10px] text-zinc-500 font-mono mt-1 block">
+                Thông báo này sẽ xuất hiện ngay trên chuông và thanh nổi của tác giả bài viết.
+              </span>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-800">
+              <button
+                type="button"
+                onClick={() => setReportActionModal({ isOpen: false, report: null, action: 'TAKEDOWN', note: '' })}
+                className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={() => handleResolveReport(reportActionModal.report.id, 'TAKEDOWN', reportActionModal.note)}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-md shadow-rose-950 flex items-center gap-1.5"
+              >
+                <Trash2 size={13} />
+                <span>Xác nhận gỡ bài & Gửi cảnh báo</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

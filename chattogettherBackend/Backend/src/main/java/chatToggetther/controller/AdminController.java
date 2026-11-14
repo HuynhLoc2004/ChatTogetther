@@ -156,5 +156,23 @@ public class AdminController {
         Boolean requiresPostApproval = body != null ? body.get("requiresPostApproval") : false;
         return ResponseEntity.ok(this.adminService.toggleGroupPostApproval(token, id, requiresPostApproval));
     }
+
+    // ==========================================
+    // QUẢN TRỊ BÁO CÁO VI PHẠM (POST REPORTS)
+    // ==========================================
+
+    @GetMapping("/reports")
+    public ResponseEntity<ResponseData<List<chatToggetther.DTO.PostReportDTO>>> getAllReports(JwtAuthenticationToken token) {
+        return ResponseEntity.ok(this.adminService.getAllReports(token));
+    }
+
+    @PostMapping("/reports/{id}/resolve")
+    public ResponseEntity<ResponseData<Boolean>> resolveReport(
+            JwtAuthenticationToken token,
+            @PathVariable("id") Long id,
+            @RequestBody Map<String, Object> body
+    ) {
+        return ResponseEntity.ok(this.adminService.resolveReport(token, id, body));
+    }
 }
 

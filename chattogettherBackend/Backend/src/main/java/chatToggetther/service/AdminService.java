@@ -5,16 +5,19 @@ import chatToggetther.Customize.ResponseData;
 import chatToggetther.Customize.SecurityUtils;
 import chatToggetther.DTO.CommunityGroupDTO;
 import chatToggetther.DTO.PostDTO;
+import chatToggetther.DTO.PostReportDTO;
 import chatToggetther.DTO.UserDTO;
 import chatToggetther.ENUMS.ErrorCode;
 import chatToggetther.modelEntity.ChallengeEntity;
 import chatToggetther.modelEntity.CommunityGroupEntity;
 import chatToggetther.modelEntity.PostEntity;
+import chatToggetther.modelEntity.PostReportEntity;
 import chatToggetther.modelEntity.RoomEntity;
 import chatToggetther.modelEntity.SystemConfigEntity;
 import chatToggetther.modelEntity.TrackEntity;
 import chatToggetther.modelEntity.UserEntity;
 import chatToggetther.repository.*;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +39,8 @@ public class AdminService {
     private final ChallengeRepository challengeRepository;
     private final SystemConfigRepository systemConfigRepository;
     private final CommunityGroupRepository groupRepository;
+    private final PostReportRepository postReportRepository;
+    private final SimpMessagingTemplate messagingTemplate;
 
     public AdminService(
             UserRepository userRepository,
@@ -45,7 +50,9 @@ public class AdminService {
             TrackRepository trackRepository,
             ChallengeRepository challengeRepository,
             SystemConfigRepository systemConfigRepository,
-            CommunityGroupRepository groupRepository
+            CommunityGroupRepository groupRepository,
+            PostReportRepository postReportRepository,
+            SimpMessagingTemplate messagingTemplate
     ) {
         this.userRepository = userRepository;
         this.postRepository = postRepository;
@@ -55,6 +62,8 @@ public class AdminService {
         this.challengeRepository = challengeRepository;
         this.systemConfigRepository = systemConfigRepository;
         this.groupRepository = groupRepository;
+        this.postReportRepository = postReportRepository;
+        this.messagingTemplate = messagingTemplate;
     }
 
     private void verifyAdmin(JwtAuthenticationToken token) {
@@ -300,6 +309,9 @@ public class AdminService {
         if (!map.containsKey("reject_reasons")) {
             map.put("reject_reasons", "[{\"id\":\"SPAM\",\"label\":\"Spam / Quảng cáo / Tin rác\"},{\"id\":\"RULE_VIOLATION\",\"label\":\"Vi phạm quy định & nội quy cộng đồng\"},{\"id\":\"OFF_TOPIC\",\"label\":\"Lạc đề / Không phù hợp với chủ đề nhóm\"},{\"id\":\"INAPPROPRIATE\",\"label\":\"Ngôn từ thù địch / Phản cảm / Độc hại\"},{\"id\":\"COPYRIGHT\",\"label\":\"Vi phạm bản quyền nội dung / hình ảnh\"}]");
         }
+        if (!map.containsKey("report_reasons")) {
+            map.put("report_reasons", "[{\"id\":\"HARASSMENT\",\"label\":\"Quấy rối / Đả kích cá nhân\"},{\"id\":\"SPAM\",\"label\":\"Spam / Quảng cáo / Tin rác\"},{\"id\":\"HATE_SPEECH\",\"label\":\"Ngôn từ thù địch / Phản cảm\"},{\"id\":\"NSFW\",\"label\":\"Nội dung 18+ / Bạo lực\"},{\"id\":\"MISINFORMATION\",\"label\":\"Thông tin sai lệch / Lừa đảo\"},{\"id\":\"COPYRIGHT\",\"label\":\"Vi phạm bản quyền sở hữu\"}]");
+        }
 
         return new ResponseData<>(200, "Lấy cấu hình hệ thống thành công", map);
     }
@@ -443,6 +455,84 @@ public class AdminService {
         group.setRequiresPostApproval(requiresPostApproval != null && requiresPostApproval);
         this.groupRepository.save(group);
         return new ResponseData<>(200, "Đã cập nhật chế độ duyệt bài trước khi đăng", true);
+    }
+
+    // ==========================================
+    // QUẢN TRỊ BÁO CÁO BÀI VIẾT (POST REPORTS)
+    // ==========================================
+
+    public ResponseData<List<PostReportDTO>> getAllReports(JwtAuthenticationToken token) {
+        verifyAdmin(token, "TL_PERM_COMMUNITY_MANAGE");
+        List<PostReportEntity> reports = postReportRepository.findAllByOrderByCreatedAtDesc();
+        List<PostReportDTO> dtos = reports.stream().map(this::mapToReportDTO).collect(Collectors.toList());
+        return new ResponseData<>(200, "Lấy danh sách báo cáo vi phạm thành công", dtos);
+    }
+
+    @Transactional
+    public ResponseData<Boolean> resolveReport(JwtAuthenticationToken token, Long reportId, Map<String, Object> body) {
+        verifyAdmin(token, "TL_PERM_COMMUNITY_MANAGE");
+        PostReportEntity report = postReportRepository.findById(reportId)
+                .orElseThrow(() -> new AppException(404, "Báo cáo không tồn tại", 404));
+
+        String action = body != null && body.containsKey("action") ? (String) body.get("action") : "TAKEDOWN";
+        String adminNote = body != null && body.containsKey("note") ? (String) body.get("note") : "";
+
+        report.setAdminNote(adminNote);
+        report.setResolvedAt(LocalDateTime.now());
+
+        if ("TAKEDOWN".equalsIgnoreCase(action)) {
+            report.setStatus("RESOLVED_TAKEDOWN");
+
+            Optional<PostEntity> postOpt = postRepository.findById(report.getPostId());
+            if (postOpt.isPresent()) {
+                PostEntity post = postOpt.get();
+                Long authorId = post.getUser() != null ? post.getUser().getId() : null;
+                postRepository.delete(post);
+
+                try {
+                    messagingTemplate.convertAndSend("/topic/posts", "POST_DELETED");
+                } catch (Exception ignored) {}
+
+                // Gửi Realtime System Notification cho tác giả bài viết
+                if (authorId != null) {
+                    Map<String, Object> notif = new HashMap<>();
+                    notif.put("type", "POST_TAKEDOWN");
+                    notif.put("title", "Bài viết bị gỡ bỏ do vi phạm");
+                    String noteText = adminNote.trim().isEmpty() ? "" : (". Lý do chi tiết: " + adminNote.trim());
+                    notif.put("message", "Bài viết của bạn đã bị gỡ bỏ do vi phạm quy chuẩn cộng đồng (" + report.getReason() + ")" + noteText);
+                    notif.put("reason", report.getReason());
+                    notif.put("adminNote", adminNote);
+                    notif.put("createdAt", LocalDateTime.now().toString());
+
+                    try {
+                        messagingTemplate.convertAndSend("/topic/user/" + authorId + "/notifications", notif);
+                    } catch (Exception ignored) {}
+                }
+            }
+        } else {
+            report.setStatus("DISMISSED");
+        }
+
+        postReportRepository.save(report);
+        return new ResponseData<>(200, "Xử lý báo cáo thành công", true);
+    }
+
+    private PostReportDTO mapToReportDTO(PostReportEntity entity) {
+        return PostReportDTO.builder()
+                .id(entity.getId())
+                .postId(entity.getPostId())
+                .postContent(entity.getPostContent())
+                .postAuthorId(entity.getPostAuthorId())
+                .postAuthorName(entity.getPostAuthorName())
+                .reporterId(entity.getReporterId())
+                .reporterName(entity.getReporterName())
+                .reason(entity.getReason())
+                .details(entity.getDetails())
+                .status(entity.getStatus())
+                .adminNote(entity.getAdminNote())
+                .createdAt(entity.getCreatedAt())
+                .resolvedAt(entity.getResolvedAt())
+                .build();
     }
 }
 
