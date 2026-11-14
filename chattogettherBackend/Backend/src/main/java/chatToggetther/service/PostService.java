@@ -119,6 +119,9 @@ public class PostService {
         dto.setGroupName(post.getGroupName());
         dto.setStatus(post.getStatus() != null ? post.getStatus() : "APPROVED");
         dto.setRejectionReason(post.getRejectionReason());
+        dto.setIsDeleted(Boolean.TRUE.equals(post.getIsDeleted()));
+        dto.setDeletedAt(post.getDeletedAt());
+        dto.setDeletedReason(post.getDeletedReason());
 
         // Thuật toán AI Tính điểm Thịnh hành (Search Frequency Dominance Algorithm):
         // Ưu tiên cao nhất các bài viết được cộng đồng tìm kiếm nhiều nhất (Search Hits * 10),
@@ -1042,5 +1045,185 @@ public class PostService {
         }).collect(Collectors.toList());
 
         return new ResponseData<>(200, "Lấy danh sách bài đăng lại thành công", dtos);
+    }
+
+    @Transactional
+    public ResponseData<PostDTO> adminSoftDeletePost(JwtAuthenticationToken token, Long postId, String reason) {
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        boolean isAdmin = currentUser != null && currentUser.getRoles() != null &&
+                (currentUser.getRoles().contains("ROLE_ADMIN") || currentUser.getRoles().contains("ROLE_AMDIN"));
+        if (!isAdmin) {
+            throw new AppException(403, "Bạn không có quyền quản trị để thực hiện gỡ bài viết!", 403);
+        }
+
+        PostEntity post = this.postRepository.findById(postId).orElseThrow(() ->
+            new AppException(404, "Bài viết không tồn tại", 404)
+        );
+
+        String effectiveReason = (reason != null && !reason.trim().isEmpty()) ? reason.trim() : "Vi phạm tiêu chuẩn cộng đồng Talovin";
+        post.setIsDeleted(true);
+        post.setDeletedReason(effectiveReason);
+        post.setDeletedAt(LocalDateTime.now());
+        this.postRepository.save(post);
+
+        // Gửi realtime notification tới tác giả bài viết
+        if (post.getUser() != null) {
+            try {
+                Map<String, Object> notif = new HashMap<>();
+                notif.put("id", UUID.randomUUID().toString());
+                notif.put("type", "POST_TAKEDOWN");
+                notif.put("text", "Bài viết của bạn đã bị Ban Quản Trị gỡ xuống. Lý do: " + effectiveReason);
+                notif.put("time", LocalDateTime.now().format(TIME_FORMATTER));
+                notif.put("postId", post.getId());
+                notif.put("unread", true);
+                this.messagingTemplate.convertAndSend("/topic/user/" + post.getUser().getId() + "/notifications", notif);
+            } catch (Exception ignored) {}
+        }
+
+        try {
+            this.messagingTemplate.convertAndSend("/topic/posts", "POST_DELETED");
+        } catch (Exception ignored) {}
+
+        return new ResponseData<>(200, "Đã gỡ bài viết (xóa mềm) thành công!", mapToPostDTO(post, currentUser));
+    }
+
+    @Transactional
+    public ResponseData<PostDTO> adminRestorePost(JwtAuthenticationToken token, Long postId) {
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        boolean isAdmin = currentUser != null && currentUser.getRoles() != null &&
+                (currentUser.getRoles().contains("ROLE_ADMIN") || currentUser.getRoles().contains("ROLE_AMDIN"));
+        if (!isAdmin) {
+            throw new AppException(403, "Bạn không có quyền quản trị!", 403);
+        }
+
+        PostEntity post = this.postRepository.findById(postId).orElseThrow(() ->
+            new AppException(404, "Bài viết không tồn tại", 404)
+        );
+
+        post.setIsDeleted(false);
+        post.setDeletedReason(null);
+        post.setDeletedAt(null);
+        this.postRepository.save(post);
+
+        // Gửi realtime notification tới tác giả bài viết
+        if (post.getUser() != null) {
+            try {
+                Map<String, Object> notif = new HashMap<>();
+                notif.put("id", UUID.randomUUID().toString());
+                notif.put("type", "POST_RESTORED");
+                notif.put("text", "Bài viết của bạn đã được Ban Quản Trị khôi phục hiển thị.");
+                notif.put("time", LocalDateTime.now().format(TIME_FORMATTER));
+                notif.put("postId", post.getId());
+                notif.put("unread", true);
+                this.messagingTemplate.convertAndSend("/topic/user/" + post.getUser().getId() + "/notifications", notif);
+            } catch (Exception ignored) {}
+        }
+
+        try {
+            this.messagingTemplate.convertAndSend("/topic/posts", "POST_RESTORED");
+        } catch (Exception ignored) {}
+
+        return new ResponseData<>(200, "Đã khôi phục bài viết thành công!", mapToPostDTO(post, currentUser));
+    }
+
+    @Transactional
+    public ResponseData<Boolean> adminHardDeletePost(JwtAuthenticationToken token, Long postId) {
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        boolean isAdmin = currentUser != null && currentUser.getRoles() != null &&
+                (currentUser.getRoles().contains("ROLE_ADMIN") || currentUser.getRoles().contains("ROLE_AMDIN"));
+        if (!isAdmin) {
+            throw new AppException(403, "Bạn không có quyền quản trị!", 403);
+        }
+
+        PostEntity post = this.postRepository.findById(postId).orElseThrow(() ->
+            new AppException(404, "Bài viết không tồn tại", 404)
+        );
+
+        this.postRepostRepository.deleteAllByPost(post);
+        this.postRepository.delete(post);
+
+        try {
+            this.messagingTemplate.convertAndSend("/topic/posts", "POST_DELETED");
+        } catch (Exception ignored) {}
+
+        return new ResponseData<>(200, "Đã xóa vĩnh viễn bài viết khỏi hệ thống!", true);
+    }
+
+    @Transactional
+    public ResponseData<Boolean> adminDeleteRepost(JwtAuthenticationToken token, Long repostId) {
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        boolean isAdmin = currentUser != null && currentUser.getRoles() != null &&
+                (currentUser.getRoles().contains("ROLE_ADMIN") || currentUser.getRoles().contains("ROLE_AMDIN"));
+        if (!isAdmin) {
+            throw new AppException(403, "Bạn không có quyền quản trị!", 403);
+        }
+
+        PostRepostEntity repost = this.postRepostRepository.findById(repostId).orElseThrow(() ->
+            new AppException(404, "Bản ghi đăng lại không tồn tại", 404)
+        );
+
+        this.postRepostRepository.delete(repost);
+
+        try {
+            this.messagingTemplate.convertAndSend("/topic/posts", "POST_REPOST_UPDATED");
+        } catch (Exception ignored) {}
+
+        return new ResponseData<>(200, "Đã gỡ bài đăng lại của thành viên thành công!", true);
+    }
+
+    @Transactional(readOnly = true)
+    public ResponseData<List<PostDTO>> getAdminPosts(JwtAuthenticationToken token, String filter) {
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        boolean isAdmin = currentUser != null && currentUser.getRoles() != null &&
+                (currentUser.getRoles().contains("ROLE_ADMIN") || currentUser.getRoles().contains("ROLE_AMDIN"));
+        if (!isAdmin) {
+            throw new AppException(403, "Yêu cầu quyền quản trị viên!", 403);
+        }
+
+        List<PostEntity> posts;
+        if ("DELETED".equalsIgnoreCase(filter)) {
+            posts = this.postRepository.findDeletedPosts();
+        } else if ("ACTIVE".equalsIgnoreCase(filter)) {
+            posts = this.postRepository.findAllPostsWithDetails();
+        } else {
+            posts = this.postRepository.findAllPostsForAdmin();
+        }
+
+        List<PostDTO> dtos = posts.stream().map(p -> mapToPostDTO(p, currentUser)).collect(Collectors.toList());
+        return new ResponseData<>(200, "Lấy danh sách bài viết quản trị thành công", dtos);
+    }
+
+    @Transactional(readOnly = true)
+    public ResponseData<List<Map<String, Object>>> getAdminReposts(JwtAuthenticationToken token) {
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        boolean isAdmin = currentUser != null && currentUser.getRoles() != null &&
+                (currentUser.getRoles().contains("ROLE_ADMIN") || currentUser.getRoles().contains("ROLE_AMDIN"));
+        if (!isAdmin) {
+            throw new AppException(403, "Yêu cầu quyền quản trị viên!", 403);
+        }
+
+        List<PostRepostEntity> reposts = this.postRepostRepository.findAllRepostsForAdmin();
+        List<Map<String, Object>> result = reposts.stream().map(r -> {
+            Map<String, Object> map = new HashMap<>();
+            map.put("id", r.getId());
+            map.put("createdAt", r.getCreatedAt() != null ? r.getCreatedAt().format(TIME_FORMATTER) : "");
+            map.put("reposterId", r.getUser().getId());
+            map.put("reposterAccount", r.getUser().getAccount());
+            map.put("reposterNickname", r.getUser().getNickname() != null ? r.getUser().getNickname() : r.getUser().getAccount());
+            map.put("reposterAvatar", r.getUser().getAvatar());
+
+            PostEntity post = r.getPost();
+            map.put("postId", post.getId());
+            map.put("postContent", post.getContent());
+            map.put("postIsDeleted", Boolean.TRUE.equals(post.getIsDeleted()));
+            if (post.getUser() != null) {
+                map.put("authorId", post.getUser().getId());
+                map.put("authorAccount", post.getUser().getAccount());
+                map.put("authorNickname", post.getUser().getNickname() != null ? post.getUser().getNickname() : post.getUser().getAccount());
+            }
+            return map;
+        }).collect(Collectors.toList());
+
+        return new ResponseData<>(200, "Lấy danh sách đăng lại của người dùng thành công", result);
     }
 }

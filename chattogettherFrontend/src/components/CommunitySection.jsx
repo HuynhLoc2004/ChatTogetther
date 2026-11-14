@@ -29,7 +29,7 @@ const DEFAULT_REJECT_REASONS = [
 export const CommunitySection = ({ 
   currentUserId, 
   currentUserName, 
-  currentUserAvatar,
+  currentUserAvatar = '',
   posts = [],
   setPosts,
   rooms = [],
@@ -39,6 +39,7 @@ export const CommunitySection = ({
   onStartPrivateCall,
   onNavigateFeed 
 }) => {
+  const safeAvatar = currentUserAvatar || localStorage.getItem('user_avatar') || '';
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchKeyword, setSearchKeyword] = useState('');
@@ -720,8 +721,8 @@ export const CommunitySection = ({
               <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 shadow-sm">
                 <div className="flex items-start gap-3">
                   <div className="w-9 h-9 rounded-full bg-zinc-800 overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-xs text-white border border-zinc-700">
-                    {currentUserAvatar ? (
-                      <img src={currentUserAvatar} alt="Me" className="w-full h-full object-cover" />
+                    {safeAvatar ? (
+                      <img src={safeAvatar} alt="Me" className="w-full h-full object-cover" />
                     ) : (
                       (currentUserName || 'U').charAt(0).toUpperCase()
                     )}

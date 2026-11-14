@@ -45,6 +45,11 @@ public class PostDTO {
     private String myReaction; // "HEART", "FIRE", "HAHA", "WOW", "LIKE", "CROWN"
     private String reactionSummary; // e.g. "❤️ 🔥 😂"
 
+    // Trạng thái gỡ bài / Xóa mềm & Lý do của Admin
+    private Boolean isDeleted;
+    private LocalDateTime deletedAt;
+    private String deletedReason;
+
     // Thông tin Cộng đồng (Nếu bài viết đăng trong một Group)
     private Long groupId;
     private String groupName;

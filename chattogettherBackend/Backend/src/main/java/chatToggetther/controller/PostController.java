@@ -193,4 +193,57 @@ public class PostController {
     ) {
         return ResponseEntity.ok(this.postService.getUserReposts(token, userId));
     }
+
+    // ==========================================
+    // QUẢN TRỊ BÀI VIẾT & ĐĂNG LẠI (ADMIN MODERATION)
+    // ==========================================
+
+    @GetMapping("/admin/all")
+    public ResponseEntity<ResponseData<List<PostDTO>>> getAdminPosts(
+            JwtAuthenticationToken token,
+            @RequestParam(value = "filter", defaultValue = "ALL") String filter
+    ) {
+        return ResponseEntity.ok(this.postService.getAdminPosts(token, filter));
+    }
+
+    @PostMapping("/{id}/admin-takedown")
+    public ResponseEntity<ResponseData<PostDTO>> adminSoftDeletePost(
+            JwtAuthenticationToken token,
+            @PathVariable("id") Long id,
+            @RequestBody(required = false) java.util.Map<String, String> request
+    ) {
+        String reason = request != null && request.containsKey("reason") ? request.get("reason") : null;
+        return ResponseEntity.ok(this.postService.adminSoftDeletePost(token, id, reason));
+    }
+
+    @PostMapping("/{id}/admin-restore")
+    public ResponseEntity<ResponseData<PostDTO>> adminRestorePost(
+            JwtAuthenticationToken token,
+            @PathVariable("id") Long id
+    ) {
+        return ResponseEntity.ok(this.postService.adminRestorePost(token, id));
+    }
+
+    @DeleteMapping("/{id}/admin-hard-delete")
+    public ResponseEntity<ResponseData<Boolean>> adminHardDeletePost(
+            JwtAuthenticationToken token,
+            @PathVariable("id") Long id
+    ) {
+        return ResponseEntity.ok(this.postService.adminHardDeletePost(token, id));
+    }
+
+    @GetMapping("/admin/reposts")
+    public ResponseEntity<ResponseData<List<java.util.Map<String, Object>>>> getAdminReposts(
+            JwtAuthenticationToken token
+    ) {
+        return ResponseEntity.ok(this.postService.getAdminReposts(token));
+    }
+
+    @DeleteMapping("/admin/reposts/{repostId}")
+    public ResponseEntity<ResponseData<Boolean>> adminDeleteRepost(
+            JwtAuthenticationToken token,
+            @PathVariable("repostId") Long repostId
+    ) {
+        return ResponseEntity.ok(this.postService.adminDeleteRepost(token, repostId));
+    }
 }

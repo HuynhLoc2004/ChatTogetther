@@ -2189,7 +2189,7 @@ const Home = () => {
                   <textarea 
                     ref={newPostInputRef}
                     rows="2" 
-                    placeholder="Chia sẻ một khoảnh khắc, hình ảnh hoặc ghi âm ngắn với mọi người..."
+                    placeholder="Bạn đang nghĩ gì? Chia sẻ câu chuyện, cảm xúc hoặc một khoảnh khắc cùng cộng đồng..."
                     value={newPostContent}
                     onChange={(e) => setNewPostContent(e.target.value)}
                   />
@@ -2403,10 +2403,10 @@ const Home = () => {
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     className={`btn-subtool ${attachedMedia ? 'active' : ''}`}
-                    title="Đính kèm ảnh hoặc video ngắn"
+                    title="Đính kèm hình ảnh hoặc video clip ngắn"
                   >
                     <ImageIcon size={15} strokeWidth={1.5} />
-                    <span>Ảnh/Video</span>
+                    <span>Ảnh / Video</span>
                   </button>
 
                   <button 
@@ -2416,17 +2416,17 @@ const Home = () => {
                     title="Ghi âm giọng nói 15 giây"
                   >
                     <Mic size={15} strokeWidth={1.5} />
-                    <span>{isRecordingVoice ? 'Đang thu' : (voiceBase64 ? 'Đã thu' : 'Ghi âm')}</span>
+                    <span>{isRecordingVoice ? 'Đang thu âm...' : (voiceBase64 ? 'Đã thu 15s' : 'Ghi âm 15s')}</span>
                   </button>
 
                   <button 
                     type="button"
                     onClick={() => setShowSparkInput(!showSparkInput)}
                     className={`btn-subtool ${showSparkInput || selectedTags.length > 0 ? 'active' : ''}`}
-                    title="Gắn thẻ chủ đề"
+                    title="Gắn thẻ chủ đề bài viết"
                   >
                     <Tag size={15} strokeWidth={1.5} />
-                    <span>Chủ đề</span>
+                    <span>Gắn chủ đề</span>
                   </button>
                 </div>
 
@@ -2818,7 +2818,7 @@ const Home = () => {
                                         />
                                       </div>
                                       <div className={`cmt-bubble-content ${isReply ? 'reply-bubble' : 'root-bubble'}`}>
-                                        <div className="cmt-name-row">
+                                        <div className="cmt-header-row">
                                           <div className="cmt-author-info min-w-0">
                                             <span 
                                               className={`cmt-user-name ${isReply ? 'reply-name' : ''} cursor-pointer hover:underline truncate`}
@@ -2831,67 +2831,6 @@ const Home = () => {
                                             </span>
                                             <span className="cmt-meta-dot flex-shrink-0">·</span>
                                             <span className="cmt-time-label flex-shrink-0">{cmt.formattedTime || 'Vừa xong'}</span>
-                                          </div>
-
-                                          <div className="cmt-action-btns flex-shrink-0">
-                                            {/* Nút Thả tim / Cảm xúc cho phản hồi */}
-                                            <button
-                                              type="button"
-                                              onClick={() => handleToggleLikeComment(post.id, cmt.id)}
-                                              className={`btn-cmt-act reaction ${cmt.isLiked ? 'liked text-rose-500' : ''}`}
-                                              title={cmt.isLiked ? 'Bỏ thích phản hồi' : 'Thích phản hồi'}
-                                            >
-                                              <Heart 
-                                                size={11} 
-                                                className={cmt.isLiked ? "fill-rose-500 text-rose-500 transition-all scale-105" : "transition-all"} 
-                                              />
-                                              {Number(cmt.likesCount || 0) > 0 && (
-                                                <span className="cmt-like-count font-mono text-[10px]">{cmt.likesCount}</span>
-                                              )}
-                                            </button>
-
-                                            {/* Nút Trả lời phản hồi */}
-                                            <button 
-                                              type="button" 
-                                              onClick={() => {
-                                                setReplyTargetMap(prev => ({
-                                                  ...prev,
-                                                  [post.id]: {
-                                                    commentId: cmt.id,
-                                                    authorAccount: cmt.authorAccount || 'user',
-                                                    authorNickname: cmt.authorNickname || cmt.authorAccount || 'Thành viên'
-                                                  }
-                                                }));
-                                                const inputEl = document.getElementById(`comment-input-${post.id}`);
-                                                if (inputEl) inputEl.focus();
-                                              }} 
-                                              className="btn-cmt-act reply"
-                                              title="Trả lời bình luận này"
-                                            >
-                                              <CornerDownRight size={11} className="flex-shrink-0" />
-                                              <span className="whitespace-nowrap flex-shrink-0">Trả lời</span>
-                                            </button>
-
-                                            {isCmtMe && !isEditingThisCmt && (
-                                              <button 
-                                                type="button" 
-                                                onClick={() => handleStartEditComment(cmt)} 
-                                                className="btn-cmt-act"
-                                                title="Sửa phản hồi"
-                                              >
-                                                <Edit3 size={11} />
-                                              </button>
-                                            )}
-                                            {canDeleteCmt && (
-                                              <button 
-                                                type="button" 
-                                                onClick={() => handleDeleteComment(post.id, cmt.id)} 
-                                                className="btn-cmt-act danger"
-                                                title="Xóa phản hồi"
-                                              >
-                                                <Trash2 size={11} />
-                                              </button>
-                                            )}
                                           </div>
                                         </div>
 
@@ -2927,14 +2866,80 @@ const Home = () => {
                                             </div>
                                           </div>
                                         ) : (
-                                          <p className="cmt-body-text">
-                                            {cmt.replyToUser && (
-                                              <span className="cmt-mention-badge font-mono">
-                                                @{cmt.replyToUser}
-                                              </span>
-                                            )}
-                                            {cmt.content}
-                                          </p>
+                                          <>
+                                            <p className="cmt-body-text">
+                                              {cmt.replyToUser && (
+                                                <span className="cmt-mention-badge font-mono">
+                                                  @{cmt.replyToUser}{' '}
+                                                </span>
+                                              )}
+                                              {cmt.content}
+                                            </p>
+
+                                            {/* Footer thao tác bình luận: Like, Trả lời, Sửa, Xóa */}
+                                            <div className="cmt-footer-row">
+                                              {/* Nút Thả tim / Cảm xúc */}
+                                              <button
+                                                type="button"
+                                                onClick={() => handleToggleLikeComment(post.id, cmt.id)}
+                                                className={`btn-cmt-act reaction ${cmt.isLiked ? 'liked text-rose-500 font-bold' : ''}`}
+                                                title={cmt.isLiked ? 'Bỏ thích phản hồi' : 'Thích phản hồi'}
+                                              >
+                                                <Heart 
+                                                  size={11.5} 
+                                                  className={cmt.isLiked ? "fill-rose-500 text-rose-500 transition-all scale-105" : "transition-all"} 
+                                                />
+                                                {Number(cmt.likesCount || 0) > 0 && (
+                                                  <span className="cmt-like-count font-mono text-[10.5px]">{cmt.likesCount}</span>
+                                                )}
+                                              </button>
+
+                                              {/* Nút Trả lời */}
+                                              <button 
+                                                type="button" 
+                                                onClick={() => {
+                                                  setReplyTargetMap(prev => ({
+                                                    ...prev,
+                                                    [post.id]: {
+                                                      commentId: cmt.id,
+                                                      authorAccount: cmt.authorAccount || 'user',
+                                                      authorNickname: cmt.authorNickname || cmt.authorAccount || 'Thành viên'
+                                                    }
+                                                  }));
+                                                  const inputEl = document.getElementById(`comment-input-${post.id}`);
+                                                  if (inputEl) inputEl.focus();
+                                                }} 
+                                                className="btn-cmt-act reply"
+                                                title="Trả lời phản hồi này"
+                                              >
+                                                <CornerDownRight size={11.5} className="flex-shrink-0" />
+                                                <span>Trả lời</span>
+                                              </button>
+
+                                              {isCmtMe && !isEditingThisCmt && (
+                                                <button 
+                                                  type="button" 
+                                                  onClick={() => handleStartEditComment(cmt)} 
+                                                  className="btn-cmt-act"
+                                                  title="Sửa phản hồi"
+                                                >
+                                                  <Edit3 size={11} />
+                                                  <span>Sửa</span>
+                                                </button>
+                                              )}
+                                              {canDeleteCmt && (
+                                                <button 
+                                                  type="button" 
+                                                  onClick={() => handleDeleteComment(post.id, cmt.id)} 
+                                                  className="btn-cmt-act danger text-zinc-500 hover:text-rose-400"
+                                                  title="Xóa phản hồi"
+                                                >
+                                                  <Trash2 size={11} />
+                                                  <span>Xóa</span>
+                                                </button>
+                                              )}
+                                            </div>
+                                          </>
                                         )}
                                       </div>
                                     </div>
@@ -5223,6 +5228,7 @@ const Home = () => {
           border-color: #38425d;
         }
 
+        .cmt-header-row,
         .cmt-name-row {
           display: flex;
           justify-content: space-between;
@@ -5230,6 +5236,13 @@ const Home = () => {
           margin-bottom: 4px;
           gap: 8px;
           min-width: 0;
+        }
+        .cmt-footer-row {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-top: 6px;
+          padding-top: 2px;
         }
         .cmt-author-info {
           display: flex;

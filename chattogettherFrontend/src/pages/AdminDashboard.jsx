@@ -6,7 +6,8 @@ import {
   Lock, Unlock, Eye, EyeOff, Tag, Compass, Flame, Bookmark, Play, Pause,
   AlertTriangle, CheckCircle2, ChevronRight, Sliders, LayoutGrid,
   ShieldCheck, ShieldAlert, KeyRound, Palette, ExternalLink, Layers,
-  FolderCog, Save, UserCheck, ShieldPlus, LogOut, Menu, Globe
+  FolderCog, Save, UserCheck, ShieldPlus, LogOut, Menu, Globe,
+  FileText, Repeat, RotateCcw, AlertOctagon
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
@@ -168,6 +169,16 @@ export const AdminDashboard = () => {
   const [newReportReason, setNewReportReason] = useState({ id: '', label: '' });
   const [isAddReportReasonOpen, setIsAddReportReasonOpen] = useState(false);
 
+  // Quản lý Bài viết & Đăng lại (Posts Moderation & Soft Delete)
+  const [adminPosts, setAdminPosts] = useState([]);
+  const [loadingAdminPosts, setLoadingAdminPosts] = useState(false);
+  const [adminPostFilter, setAdminPostFilter] = useState('ALL'); // 'ALL' | 'ACTIVE' | 'DELETED'
+  const [adminPostSearch, setAdminPostSearch] = useState('');
+  const [adminPostsSubTab, setAdminPostsSubTab] = useState('posts'); // 'posts' | 'reposts'
+  const [takedownModal, setTakedownModal] = useState({ isOpen: false, post: null, reason: 'Vi phạm tiêu chuẩn cộng đồng Talovin' });
+  const [adminReposts, setAdminReposts] = useState([]);
+  const [loadingAdminReposts, setLoadingAdminReposts] = useState(false);
+
   // ==========================================
   // KHỞI TẠO & PHÂN QUYỀN TRUY CẬP (RBAC RESOLVER)
   // ==========================================
@@ -207,6 +218,8 @@ export const AdminDashboard = () => {
       await fetchUsers();
       await fetchAdminGroups();
       await fetchReports();
+      await fetchAdminPosts();
+      await fetchAdminReposts();
     } catch (err) {
       console.error("Lỗi xác thực quyền:", err);
       toast.error("Phiên làm việc hết hạn hoặc không có quyền quản trị");
@@ -256,6 +269,7 @@ export const AdminDashboard = () => {
       {
         sectionTitle: 'NỘI DUNG & TƯƠNG TÁC',
         items: [
+          { id: 'posts_moderation', label: `Bài viết & Đăng lại (${adminPosts.length})`, icon: FileText, permission: 'TL_PERM_COMMUNITY_MANAGE' },
           { id: 'challenges', label: `Thẻ bài thử thách (${challenges.length})`, icon: Sparkles, permission: 'TL_PERM_CHALLENGE_MANAGE' },
           { id: 'vibes', label: `Chủ đề & Cảm xúc (${parsedVibes.length})`, icon: Tag, permission: 'TL_PERM_TOPIC_MANAGE' },
           { id: 'music', label: `Âm nhạc hệ thống (${tracks.length})`, icon: Music, permission: 'TL_PERM_MUSIC_MANAGE' },
@@ -271,7 +285,7 @@ export const AdminDashboard = () => {
         ]
       }
     ];
-  }, [challenges.length, parsedVibes.length, tracks.length, adminGroups.length, reports.length, users.length, systemRoles.length]);
+  }, [adminPosts.length, challenges.length, parsedVibes.length, tracks.length, adminGroups.length, reports.length, users.length, systemRoles.length]);
 
   // Tự động chuyển tab nếu tab hiện tại không được phép
   useEffect(() => {
@@ -449,6 +463,87 @@ export const AdminDashboard = () => {
       toast.error(err.response?.data?.message || "Không thể cập nhật cấu hình");
     } finally {
       setIsSavingConfig(false);
+    }
+  };
+
+  // --- Quản lý Bài viết & Đăng lại (Posts Moderation & Soft Delete) ---
+  const fetchAdminPosts = async (filter = adminPostFilter) => {
+    setLoadingAdminPosts(true);
+    try {
+      const res = await axiosClient.get(`/posts/admin/all?filter=${filter}`);
+      if (res.data?.data) {
+        setAdminPosts(res.data.data);
+      }
+    } catch (err) {
+      console.error("Lỗi tải bài viết quản trị:", err);
+    } finally {
+      setLoadingAdminPosts(false);
+    }
+  };
+
+  const fetchAdminReposts = async () => {
+    setLoadingAdminReposts(true);
+    try {
+      const res = await axiosClient.get('/posts/admin/reposts');
+      if (res.data?.data) {
+        setAdminReposts(res.data.data);
+      }
+    } catch (err) {
+      console.error("Lỗi tải lượt đăng lại quản trị:", err);
+    } finally {
+      setLoadingAdminReposts(false);
+    }
+  };
+
+  const handleAdminSoftDelete = async (postId, reason) => {
+    if (!reason || !reason.trim()) {
+      toast.error("Vui lòng nhập lý do gỡ bài!");
+      return;
+    }
+    try {
+      await axiosClient.post(`/posts/${postId}/admin-takedown`, { reason: reason.trim() });
+      toast.success("Đã gỡ bài viết (xóa mềm) và gửi thông báo tới tác giả!");
+      setTakedownModal({ isOpen: false, post: null, reason: 'Vi phạm tiêu chuẩn cộng đồng Talovin' });
+      fetchAdminPosts();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Không thể gỡ bài viết!");
+    }
+  };
+
+  const handleAdminRestorePost = async (postId) => {
+    try {
+      await axiosClient.post(`/posts/${postId}/admin-restore`);
+      toast.success("Đã khôi phục bài viết thành công!");
+      fetchAdminPosts();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Không thể khôi phục bài viết!");
+    }
+  };
+
+  const handleAdminHardDelete = async (postId) => {
+    if (!window.confirm("Bạn có chắc chắn muốn xóa VĨNH VIỄN bài viết này cùng toàn bộ bình luận, tương tác và đăng lại liên quan? Hành động này KHÔNG THỂ khôi phục!")) {
+      return;
+    }
+    try {
+      await axiosClient.delete(`/posts/${postId}/admin-hard-delete`);
+      toast.success("Đã xóa vĩnh viễn bài viết khỏi hệ thống!");
+      fetchAdminPosts();
+      fetchAdminReposts();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Không thể xóa bài viết!");
+    }
+  };
+
+  const handleAdminDeleteRepost = async (repostId) => {
+    if (!window.confirm("Bạn có chắc chắn muốn xóa lượt đăng lại này của người dùng? Bài viết gốc của tác giả vẫn sẽ được giữ nguyên hoàn toàn.")) {
+      return;
+    }
+    try {
+      await axiosClient.delete(`/posts/admin/reposts/${repostId}`);
+      toast.success("Đã gỡ lượt đăng lại của người dùng thành công!");
+      fetchAdminReposts();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Không thể xóa lượt đăng lại!");
     }
   };
 
@@ -1162,6 +1257,371 @@ export const AdminDashboard = () => {
                     </div>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* ====================================================
+                TAB: QUẢN LÝ BÀI VIẾT & ĐĂNG LẠI (POSTS MODERATION & SOFT DELETE)
+                ==================================================== */}
+            {activeTab === 'posts_moderation' && (hasPermission('TL_PERM_COMMUNITY_MANAGE') || hasPermission('TL_PERM_USER_MANAGE')) && (
+              <div className="space-y-6 animate-fade-in">
+                {/* Header & Sub-tab Switcher */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-xl font-bold text-zinc-100 tracking-tight flex items-center gap-2">
+                      <FileText size={20} className="text-emerald-400" />
+                      <span>Kiểm Duyệt Bài Viết & Đăng Lại</span>
+                    </h2>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      Gỡ bài viết kèm lý do (xóa mềm), khôi phục bài viết, xóa vĩnh viễn và kiểm duyệt các lượt đăng lại độc lập của thành viên
+                    </p>
+                  </div>
+
+                  {/* Sub-tab Navigation */}
+                  <div className="flex items-center gap-1.5 p-1 bg-zinc-900 border border-zinc-800 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() => setAdminPostsSubTab('posts')}
+                      className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                        adminPostsSubTab === 'posts' 
+                          ? 'bg-emerald-600 text-white shadow-sm' 
+                          : 'text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      <FileText size={13} />
+                      <span>Bài viết ({adminPosts.length})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAdminPostsSubTab('reposts');
+                        fetchAdminReposts();
+                      }}
+                      className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                        adminPostsSubTab === 'reposts' 
+                          ? 'bg-emerald-600 text-white shadow-sm' 
+                          : 'text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      <Repeat size={13} />
+                      <span>Lượt đăng lại ({adminReposts.length})</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Sub-tab 1: Danh sách Bài viết */}
+                {adminPostsSubTab === 'posts' && (
+                  <div className="space-y-4">
+                    {/* Toolbar Lọc & Tìm kiếm */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-zinc-900/90 border border-zinc-800/80">
+                      {/* Bộ lọc trạng thái */}
+                      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAdminPostFilter('ALL');
+                            fetchAdminPosts('ALL');
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
+                            adminPostFilter === 'ALL' 
+                              ? 'bg-zinc-800 text-white border border-zinc-700' 
+                              : 'text-zinc-400 hover:text-zinc-200'
+                          }`}
+                        >
+                          Tất cả bài viết
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAdminPostFilter('ACTIVE');
+                            fetchAdminPosts('ACTIVE');
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap flex items-center gap-1 ${
+                            adminPostFilter === 'ACTIVE' 
+                              ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30' 
+                              : 'text-zinc-400 hover:text-zinc-200'
+                          }`}
+                        >
+                          <CheckCircle2 size={12} />
+                          <span>Đang hiển thị</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAdminPostFilter('DELETED');
+                            fetchAdminPosts('DELETED');
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap flex items-center gap-1 ${
+                            adminPostFilter === 'DELETED' 
+                              ? 'bg-rose-600/20 text-rose-400 border border-rose-500/30' 
+                              : 'text-zinc-400 hover:text-zinc-200'
+                          }`}
+                        >
+                          <AlertOctagon size={12} />
+                          <span>Thùng rác / Đã gỡ</span>
+                        </button>
+                      </div>
+
+                      {/* Thanh tìm kiếm */}
+                      <div className="relative min-w-[240px]">
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+                        <input
+                          type="text"
+                          placeholder="Tìm theo nội dung, tác giả..."
+                          value={adminPostSearch}
+                          onChange={(e) => setAdminPostSearch(e.target.value)}
+                          className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Danh sách bài viết */}
+                    {loadingAdminPosts ? (
+                      <div className="p-12 text-center text-zinc-500 text-xs font-mono flex flex-col items-center gap-2">
+                        <RefreshCw size={20} className="animate-spin text-emerald-500" />
+                        <span>Đang tải danh sách bài viết hệ thống...</span>
+                      </div>
+                    ) : adminPosts.length === 0 ? (
+                      <div className="p-12 text-center rounded-2xl bg-zinc-900/40 border border-zinc-800 text-zinc-500 text-xs">
+                        Không tìm thấy bài viết nào theo bộ lọc hiện tại.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-3">
+                        {adminPosts
+                          .filter(p => {
+                            if (!adminPostSearch.trim()) return true;
+                            const q = adminPostSearch.toLowerCase();
+                            return (p.content || '').toLowerCase().includes(q) ||
+                                   (p.authorAccount || '').toLowerCase().includes(q) ||
+                                   (p.authorNickname || '').toLowerCase().includes(q);
+                          })
+                          .map((post) => {
+                            const isSoftDeleted = Boolean(post.isDeleted);
+                            return (
+                              <div
+                                key={post.id}
+                                className={`p-4 rounded-2xl border transition-all ${
+                                  isSoftDeleted 
+                                    ? 'bg-rose-950/10 border-rose-900/40 hover:border-rose-800/60' 
+                                    : 'bg-zinc-900/80 border-zinc-800/80 hover:border-zinc-700'
+                                }`}
+                              >
+                                <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                                  {/* Cột trái: Tác giả + Nội dung */}
+                                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                                    <div className="w-9 h-9 rounded-full bg-zinc-800 border border-zinc-700 flex-shrink-0 flex items-center justify-center font-bold text-xs text-zinc-300 overflow-hidden">
+                                      {post.authorAvatar ? (
+                                        <img src={post.authorAvatar} alt="avatar" className="w-full h-full object-cover" />
+                                      ) : (
+                                        (post.authorNickname || post.authorAccount || 'U').charAt(0).toUpperCase()
+                                      )}
+                                    </div>
+                                    <div className="space-y-1.5 flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="font-bold text-xs text-white">{post.authorNickname || post.authorAccount}</span>
+                                        <span className="text-[11px] font-mono text-zinc-500">@{post.authorAccount}</span>
+                                        <span className="text-[10.5px] text-zinc-600 font-mono">#{post.id}</span>
+                                        <span className="text-zinc-600 text-xs">·</span>
+                                        <span className="text-[11px] text-zinc-400 font-mono">{post.formattedTime || post.createdAt}</span>
+
+                                        {/* Status badge */}
+                                        {isSoftDeleted ? (
+                                          <span className="px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-400 text-[10.5px] font-semibold border border-rose-500/30 flex items-center gap-1">
+                                            <AlertOctagon size={11} />
+                                            Đã gỡ (Xóa mềm)
+                                          </span>
+                                        ) : (
+                                          <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 text-[10.5px] font-semibold border border-emerald-500/20 flex items-center gap-1">
+                                            <CheckCircle2 size={11} />
+                                            Đang hiển thị
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      {/* Lý do gỡ bài nếu có */}
+                                      {isSoftDeleted && post.deletedReason && (
+                                        <div className="p-2 rounded-lg bg-rose-950/40 border border-rose-800/40 text-[11px] text-rose-300">
+                                          <strong>Lý do gỡ:</strong> {post.deletedReason}
+                                        </div>
+                                      )}
+
+                                      {/* Nội dung bài */}
+                                      <p className="text-xs text-zinc-200 whitespace-pre-wrap leading-relaxed line-clamp-4">
+                                        {post.content || <em className="text-zinc-500">(Bài viết chỉ có tệp đính kèm)</em>}
+                                      </p>
+
+                                      {/* Stats bar */}
+                                      <div className="flex items-center gap-4 pt-1 text-[11px] text-zinc-400 font-mono">
+                                        <span className="flex items-center gap-1">
+                                          <Heart size={12} className="text-rose-500" />
+                                          {post.likesCount || 0} thích
+                                        </span>
+                                        <span className="flex items-center gap-1">
+                                          <MessageSquare size={12} className="text-indigo-400" />
+                                          {post.commentsCount || 0} bình luận
+                                        </span>
+                                        <span className="flex items-center gap-1">
+                                          <Repeat size={12} className="text-emerald-400" />
+                                          {post.repostsCount || 0} đăng lại
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Cột phải: Thao tác Admin */}
+                                  <div className="flex md:flex-col items-center md:items-end justify-end gap-2 flex-shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-zinc-800">
+                                    {!isSoftDeleted ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => setTakedownModal({
+                                          isOpen: true,
+                                          post,
+                                          reason: 'Vi phạm tiêu chuẩn cộng đồng Talovin'
+                                        })}
+                                        className="px-3 py-1.5 rounded-xl bg-rose-600/10 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all"
+                                        title="Gỡ bài viết này khỏi trang chủ và thông báo cho tác giả"
+                                      >
+                                        <AlertTriangle size={13} />
+                                        <span>Gỡ bài (Kèm lý do)</span>
+                                      </button>
+                                    ) : (
+                                      <div className="flex items-center gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleAdminRestorePost(post.id)}
+                                          className="px-3 py-1.5 rounded-xl bg-emerald-600/15 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all"
+                                          title="Khôi phục lại bài viết này lên Bảng tin công khai"
+                                        >
+                                          <RotateCcw size={13} />
+                                          <span>Khôi phục</span>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleAdminHardDelete(post.id)}
+                                          className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
+                                          title="Xóa triệt để khỏi cơ sở dữ liệu"
+                                        >
+                                          <Trash2 size={13} />
+                                          <span>Xóa vĩnh viễn</span>
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Sub-tab 2: Quản lý Đăng lại (Reposts) của User */}
+                {adminPostsSubTab === 'reposts' && (
+                  <div className="space-y-4">
+                    <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800 text-xs text-zinc-300 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Repeat size={16} className="text-emerald-400 flex-shrink-0" />
+                        <span>
+                          Quản lý các lượt chia sẻ/đăng lại của thành viên. 
+                          <strong> Khi gỡ một lượt đăng lại, bài viết gốc của tác giả vẫn được bảo toàn nguyên vẹn.</strong>
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={fetchAdminReposts}
+                        className="px-3 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs flex items-center gap-1 font-mono flex-shrink-0"
+                      >
+                        <RefreshCw size={11} />
+                        Làm mới
+                      </button>
+                    </div>
+
+                    {loadingAdminReposts ? (
+                      <div className="p-12 text-center text-zinc-500 text-xs font-mono flex flex-col items-center gap-2">
+                        <RefreshCw size={20} className="animate-spin text-emerald-500" />
+                        <span>Đang tải danh sách đăng lại của thành viên...</span>
+                      </div>
+                    ) : adminReposts.length === 0 ? (
+                      <div className="p-12 text-center rounded-2xl bg-zinc-900/40 border border-zinc-800 text-zinc-500 text-xs">
+                        Chưa có lượt đăng lại nào từ thành viên.
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto rounded-2xl border border-zinc-800 bg-zinc-900/80">
+                        <table className="w-full text-left border-collapse text-xs">
+                          <thead>
+                            <tr className="border-b border-zinc-800 text-zinc-400 font-mono text-[11px] bg-zinc-950/60">
+                              <th className="p-3.5">ID</th>
+                              <th className="p-3.5">Người đăng lại</th>
+                              <th className="p-3.5">Bài viết gốc</th>
+                              <th className="p-3.5">Tác giả bài gốc</th>
+                              <th className="p-3.5">Trạng thái bài gốc</th>
+                              <th className="p-3.5">Thời gian</th>
+                              <th className="p-3.5 text-right">Thao tác</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-zinc-800/60">
+                            {adminReposts.map((rep) => {
+                              const origPost = rep.post;
+                              const isOrigDeleted = origPost && Boolean(origPost.isDeleted);
+                              return (
+                                <tr key={rep.id} className="hover:bg-zinc-800/30 transition-colors">
+                                  <td className="p-3.5 font-mono text-zinc-500">#{rep.id}</td>
+                                  <td className="p-3.5">
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-6 h-6 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-[10px] text-zinc-300">
+                                        {(rep.user?.nickname || rep.user?.account || 'U').charAt(0).toUpperCase()}
+                                      </div>
+                                      <div>
+                                        <div className="font-bold text-white">{rep.user?.nickname || rep.user?.account}</div>
+                                        <div className="text-[10px] font-mono text-zinc-500">@{rep.user?.account}</div>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="p-3.5 max-w-xs">
+                                    <p className="line-clamp-2 text-zinc-300 text-[11.5px]">
+                                      {origPost ? (origPost.content || '(Tệp đính kèm)') : '<Bài viết không còn tồn tại>'}
+                                    </p>
+                                  </td>
+                                  <td className="p-3.5">
+                                    <span className="font-medium text-zinc-300">
+                                      {origPost?.userEntity?.nickname || origPost?.userEntity?.account || 'N/A'}
+                                    </span>
+                                  </td>
+                                  <td className="p-3.5">
+                                    {isOrigDeleted ? (
+                                      <span className="px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-400 text-[10.5px] font-semibold border border-rose-500/30">
+                                        Đã gỡ bài gốc
+                                      </span>
+                                    ) : (
+                                      <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 text-[10.5px] font-semibold border border-emerald-500/20">
+                                        Đang hoạt động
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="p-3.5 font-mono text-[11px] text-zinc-500">
+                                    {rep.createdAt ? new Date(rep.createdAt).toLocaleString('vi-VN') : 'N/A'}
+                                  </td>
+                                  <td className="p-3.5 text-right">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAdminDeleteRepost(rep.id)}
+                                      className="px-2.5 py-1 rounded-lg bg-rose-600/10 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/30 text-xs font-semibold transition-all inline-flex items-center gap-1"
+                                      title="Gỡ lượt đăng lại này mà không ảnh hưởng tới bài viết gốc"
+                                    >
+                                      <Trash2 size={12} />
+                                      <span>Gỡ đăng lại</span>
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -2612,6 +3072,103 @@ export const AdminDashboard = () => {
               >
                 <Trash2 size={13} />
                 <span>Xác nhận gỡ bài & Gửi cảnh báo</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ====================================================
+          MODAL: GỠ BÀI VIẾT (SOFT DELETE KÈM LÝ DO RÀNG BUỘC)
+          ==================================================== */}
+      {takedownModal.isOpen && takedownModal.post && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in" onClick={() => setTakedownModal({ isOpen: false, post: null, reason: '' })}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <AlertTriangle size={16} className="text-rose-400" />
+                <span>Gỡ Bài Viết Khỏi Hệ Thống</span>
+              </h3>
+              <button 
+                onClick={() => setTakedownModal({ isOpen: false, post: null, reason: '' })} 
+                className="text-zinc-400 hover:text-white"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Thông tin bài viết */}
+            <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 text-xs space-y-1">
+              <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400">
+                <span>Tác giả: <strong className="text-white">{takedownModal.post.authorNickname || takedownModal.post.authorAccount}</strong></span>
+                <span>#{takedownModal.post.id}</span>
+              </div>
+              <p className="text-zinc-300 italic line-clamp-3 font-serif pt-1">
+                "{takedownModal.post.content || '(Tệp đính kèm)'}"
+              </p>
+            </div>
+
+            {/* Gợi ý lý do nhanh */}
+            <div>
+              <label className="text-xs text-zinc-300 font-medium mb-1.5 block">
+                Chọn mẫu lý do gỡ bài nhanh:
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  'Spam hoặc quảng cáo không phù hợp',
+                  'Nội dung phản cảm, nhạy cảm hoặc bạo lực',
+                  'Vi phạm bản quyền hoặc quyền sở hữu trí tuệ',
+                  'Quấy rối, công kích cá nhân hoặc ngôn từ thù địch'
+                ].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setTakedownModal(prev => ({ ...prev, reason: preset }))}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all text-left ${
+                      takedownModal.reason === preset 
+                        ? 'bg-rose-500/20 border-rose-500/40 text-rose-300 font-semibold' 
+                        : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:border-zinc-700'
+                    }`}
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Chi tiết lý do gửi cho tác giả */}
+            <div>
+              <label className="text-xs text-zinc-300 font-medium mb-1 block">
+                Lý do hiển thị và gửi thông báo tới tác giả (Bắt buộc) *:
+              </label>
+              <textarea
+                rows={3}
+                required
+                value={takedownModal.reason}
+                onChange={(e) => setTakedownModal(prev => ({ ...prev, reason: e.target.value }))}
+                placeholder="Nhập lý do gỡ bài cụ thể để người dùng nắm rõ điều khoản vi phạm..."
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-rose-500 font-sans resize-none"
+              />
+              <span className="text-[10px] text-zinc-500 font-mono mt-1 block">
+                Lưu ý: Bài viết sẽ được chuyển vào Thùng rác (Xóa mềm). Bạn có thể khôi phục lại bất kỳ lúc nào nếu có khiếu nại hợp lệ.
+              </span>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-800">
+              <button
+                type="button"
+                onClick={() => setTakedownModal({ isOpen: false, post: null, reason: '' })}
+                className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={() => handleAdminSoftDelete(takedownModal.post.id, takedownModal.reason)}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-md shadow-rose-950 flex items-center gap-1.5"
+              >
+                <AlertTriangle size={13} />
+                <span>Xác nhận gỡ bài</span>
               </button>
             </div>
           </div>

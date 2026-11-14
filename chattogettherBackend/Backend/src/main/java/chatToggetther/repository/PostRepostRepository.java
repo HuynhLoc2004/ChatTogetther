@@ -20,5 +20,8 @@ public interface PostRepostRepository extends JpaRepository<PostRepostEntity, Lo
     @Query("SELECT r FROM PostRepostEntity r JOIN FETCH r.post p JOIN FETCH p.user u WHERE r.user = :user ORDER BY r.createdAt DESC")
     List<PostRepostEntity> findByUserOrderByCreatedAtDesc(@Param("user") UserEntity user);
 
+    @Query("SELECT r FROM PostRepostEntity r JOIN FETCH r.post p JOIN FETCH r.user u JOIN FETCH p.user pu ORDER BY r.createdAt DESC")
+    List<PostRepostEntity> findAllRepostsForAdmin();
+
     void deleteAllByPost(PostEntity post);
 }
