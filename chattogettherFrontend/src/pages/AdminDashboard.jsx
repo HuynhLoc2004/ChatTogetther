@@ -820,17 +820,17 @@ export const AdminDashboard = () => {
   }
 
   return (
-    <div className="flex h-screen w-full bg-zinc-950 text-zinc-100 overflow-hidden font-sans antialiased">
+    <div className="flex h-screen w-full bg-[#101010] text-[#f4f4f5] overflow-hidden font-sans antialiased">
       {/* ==========================================
-          SIDEBAR QUẢN TRỊ VIÊN (ENTERPRISE SIDEBAR)
+          SIDEBAR QUẢN TRỊ VIÊN (ENTERPRISE SIDEBAR - CHARCOAL THEME)
           ========================================== */}
       <aside className={`
-        fixed inset-y-0 left-0 z-50 w-72 bg-zinc-950/95 border-r border-zinc-800/80 flex flex-col justify-between
+        fixed inset-y-0 left-0 z-50 w-72 bg-[#121212] border-r border-[#1e1e1e] flex flex-col justify-between
         transition-transform duration-300 md:static md:translate-x-0
         ${isMobileMenuOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'}
       `}>
         {/* Header Sidebar */}
-        <div className="flex flex-col border-b border-zinc-800/80 p-5">
+        <div className="flex flex-col border-b border-[#1e1e1e] p-5">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2.5">
               <TalovinLogo size={26} />
@@ -885,15 +885,15 @@ export const AdminDashboard = () => {
                       }}
                       className={`w-full px-3 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-between transition-all duration-150 ${
                         isCurrent 
-                          ? 'bg-indigo-600/15 text-indigo-300 border border-indigo-500/30 shadow-sm font-bold' 
-                          : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60'
+                          ? 'bg-[#222222] text-[#f4f4f5] border border-[#2e2e2e] shadow-sm font-bold' 
+                          : 'text-zinc-400 hover:text-zinc-200 hover:bg-[#18181b]'
                       }`}
                     >
                       <div className="flex items-center gap-2.5 truncate">
-                        <Icon size={16} className={isCurrent ? 'text-indigo-400' : 'text-zinc-400'} />
+                        <Icon size={16} className={isCurrent ? 'text-white' : 'text-zinc-400'} />
                         <span className="truncate">{item.label}</span>
                       </div>
-                      {isCurrent && <ChevronRight size={13} className="text-indigo-400" />}
+                      {isCurrent && <ChevronRight size={13} className="text-zinc-300" />}
                     </button>
                   );
                 })}
@@ -927,7 +927,7 @@ export const AdminDashboard = () => {
           ========================================== */}
       <main className="flex-1 flex flex-col h-full overflow-hidden bg-zinc-950">
         {/* Top Navbar */}
-        <header className="h-14 border-b border-zinc-800/80 px-4 sm:px-6 flex items-center justify-between bg-zinc-950/80 backdrop-blur-md flex-shrink-0 z-20">
+        <header className="h-14 border-b border-[#1e1e1e] px-4 sm:px-6 flex items-center justify-between bg-[#121212]/95 backdrop-blur-md flex-shrink-0 z-20">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setIsMobileMenuOpen(true)}

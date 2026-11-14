@@ -328,12 +328,12 @@ const ProfilePage = () => {
   return (
     <div className="profile-page-root min-h-screen bg-[#09090b] text-[#f4f4f5] font-sans pb-24">
       {/* 1. TOP STICKY BAR */}
-      <header className="sticky top-0 z-40 bg-[#09090b]/90 backdrop-blur-md border-b border-zinc-800/80 px-4 py-3 flex items-center justify-between">
+      <header className="sticky top-0 z-40 bg-[#101010]/95 backdrop-blur-md border-b border-[#1e1e1e] px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button 
             type="button" 
             onClick={() => navigate('/')}
-            className="p-2 rounded-xl bg-zinc-850 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-750 transition-all active:scale-95"
+            className="p-2 rounded-xl bg-[#18181b] hover:bg-[#242424] text-zinc-300 hover:text-white border border-[#262626] transition-all active:scale-95"
             title="Quay lại sảnh bài viết"
           >
             <ArrowLeft size={18} />
@@ -369,21 +369,18 @@ const ProfilePage = () => {
 
       {/* 2. HERO PROFILE CONTAINER */}
       <div className="max-w-4xl mx-auto px-4 pt-4 sm:pt-6">
-        <div className="relative rounded-3xl bg-gradient-to-b from-[#181c2b] to-[#12151f] border border-[#252b3d] p-5 sm:p-7 shadow-xl overflow-hidden">
-          {/* Subtle Ambient Glow */}
-          <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none"></div>
-
+        <div className="relative rounded-3xl bg-[#141414] border border-[#222222] p-5 sm:p-7 shadow-lg overflow-hidden">
           <div className="relative flex flex-col sm:flex-row items-center sm:items-start gap-5 sm:gap-6">
             {/* Avatar lớn */}
             <div className="relative flex-shrink-0 group">
-              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden border-2 border-emerald-500/40 shadow-xl bg-zinc-900 flex items-center justify-center">
+              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden border border-[#2c2c2c] shadow-md bg-[#18181b] flex items-center justify-center">
                 <UserAvatar avatar={profile?.avatar} name={profile?.nickname || profile?.account} size={112} className="w-full h-full" />
               </div>
               {isMe && (
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="absolute bottom-1 right-1 p-2 rounded-xl bg-emerald-500 text-black shadow-lg hover:bg-emerald-400 active:scale-90 transition-all cursor-pointer"
+                  className="absolute bottom-1 right-1 p-2 rounded-xl bg-[#27272a] hover:bg-[#333336] text-white border border-[#3f3f46] shadow-md active:scale-90 transition-all cursor-pointer"
                   title="Thay đổi ảnh đại diện"
                 >
                   <Camera size={14} strokeWidth={2.5} />
@@ -421,10 +418,10 @@ const ProfilePage = () => {
                     <button
                       type="button"
                       onClick={() => setIsEditing(!isEditing)}
-                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 active:scale-95 border ${
+                      className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 active:scale-95 border ${
                         isEditing 
-                          ? 'bg-zinc-800 text-zinc-200 border-zinc-700' 
-                          : 'bg-emerald-500 hover:bg-emerald-400 text-black border-emerald-400 shadow-md shadow-emerald-500/10'
+                          ? 'bg-[#1e1e1e] text-zinc-200 border-[#2a2a2a]' 
+                          : 'bg-[#f4f4f5] hover:bg-white text-[#101010] border-transparent font-bold'
                       }`}
                     >
                       <Edit3 size={14} />
@@ -447,7 +444,7 @@ const ProfilePage = () => {
                           type="button"
                           onClick={handleSendFriendRequest}
                           disabled={processingFriend}
-                          className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5"
+                          className="px-3.5 py-1.5 rounded-xl bg-[#f4f4f5] hover:bg-white text-[#101010] text-xs font-semibold transition-all active:scale-95 flex items-center gap-1.5"
                         >
                           <UserPlus size={14} />
                           <span>Kết bạn</span>
@@ -518,10 +515,10 @@ const ProfilePage = () => {
 
         {/* 3. KHU VỰC CHỈNH SỬA HỒ SƠ RIÊNG BIỆT (CHỈ MỞ KHI BẤM NÚT) */}
         {isEditing && isMe && (
-          <div className="mt-4 p-5 sm:p-6 rounded-3xl bg-[#141724] border border-[#2b334a] shadow-2xl animate-fade-in">
-            <div className="flex items-center justify-between pb-3 mb-4 border-b border-zinc-800">
+          <div className="mt-4 p-5 sm:p-6 rounded-3xl bg-[#141414] border border-[#222222] shadow-xl animate-fade-in">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#222222]">
               <div className="flex items-center gap-2">
-                <Edit3 size={16} className="text-emerald-400" />
+                <Edit3 size={16} className="text-zinc-300" />
                 <h3 className="text-sm font-bold text-white">Chỉnh sửa thông tin hồ sơ</h3>
               </div>
               <button 
@@ -541,7 +538,7 @@ const ProfilePage = () => {
                   value={editData.nickname}
                   onChange={(e) => setEditData({ ...editData, nickname: e.target.value })}
                   placeholder="Nhập biệt danh của bạn..."
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-zinc-750 text-white text-xs focus:outline-none focus:border-emerald-500 transition-colors"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#18181b] border border-[#27272a] text-[#f4f4f5] text-xs focus:outline-none focus:border-[#444444] transition-colors"
                 />
               </div>
 
@@ -553,7 +550,7 @@ const ProfilePage = () => {
                     value={editData.age}
                     onChange={(e) => setEditData({ ...editData, age: e.target.value })}
                     placeholder="VD: 22"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-zinc-750 text-white text-xs focus:outline-none focus:border-emerald-500 transition-colors"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#18181b] border border-[#27272a] text-[#f4f4f5] text-xs focus:outline-none focus:border-[#444444] transition-colors"
                   />
                 </div>
                 <div>
@@ -563,7 +560,7 @@ const ProfilePage = () => {
                     value={editData.location}
                     onChange={(e) => setEditData({ ...editData, location: e.target.value })}
                     placeholder="VD: TP. Hồ Chí Minh"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-zinc-750 text-white text-xs focus:outline-none focus:border-emerald-500 transition-colors"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#18181b] border border-[#27272a] text-[#f4f4f5] text-xs focus:outline-none focus:border-[#444444] transition-colors"
                   />
                 </div>
               </div>
@@ -575,7 +572,7 @@ const ProfilePage = () => {
                   value={editData.bio}
                   onChange={(e) => setEditData({ ...editData, bio: e.target.value })}
                   placeholder="Chia sẻ đôi dòng về công việc, sở thích âm nhạc hoặc tâm sự..."
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-zinc-750 text-white text-xs focus:outline-none focus:border-emerald-500 transition-colors"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#18181b] border border-[#27272a] text-[#f4f4f5] text-xs focus:outline-none focus:border-[#444444] transition-colors"
                 />
               </div>
 
@@ -583,7 +580,7 @@ const ProfilePage = () => {
                 <button
                   type="button"
                   onClick={() => setShowPasswordSection(!showPasswordSection)}
-                  className="text-xs font-semibold text-sky-400 hover:underline flex items-center gap-1"
+                  className="text-xs font-semibold text-zinc-400 hover:text-white flex items-center gap-1"
                 >
                   <Lock size={12} />
                   <span>{showPasswordSection ? 'Ẩn đổi mật khẩu' : 'Đổi mật khẩu tài khoản'}</span>
@@ -593,14 +590,14 @@ const ProfilePage = () => {
                   <button
                     type="button"
                     onClick={() => setIsEditing(false)}
-                    className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition-all"
+                    className="px-4 py-2 rounded-xl bg-[#1e1e1e] hover:bg-[#282828] text-zinc-300 text-xs font-semibold transition-all border border-[#2e2e2e]"
                   >
                     Hủy
                   </button>
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-bold transition-all shadow-md active:scale-95"
+                    className="px-5 py-2 rounded-xl bg-[#f4f4f5] hover:bg-white text-[#101010] text-xs font-semibold transition-all shadow-sm active:scale-95"
                   >
                     {submitting ? 'Đang lưu...' : 'Lưu thay đổi'}
                   </button>
@@ -725,7 +722,7 @@ const ProfilePage = () => {
               </div>
             ) : (
               userPosts.map(post => (
-                <article key={post.id} className="p-4 sm:p-5 rounded-2xl bg-[#141724] border border-[#23293d] hover:border-[#323a54] transition-all shadow-md">
+                <article key={post.id} className="p-4 sm:p-5 rounded-2xl bg-[#141414] border border-[#1e1e1e] hover:border-[#2a2a2a] transition-all">
                   <div className="flex items-center justify-between pb-3 mb-2.5 border-b border-zinc-800/60">
                     <div className="flex items-center gap-2.5">
                       <UserAvatar avatar={post.authorAvatar} name={post.authorNickname || post.authorAccount} size={34} />
@@ -794,7 +791,7 @@ const ProfilePage = () => {
               </div>
             ) : (
               userReposts.map(post => (
-                <article key={`repost-${post.id}`} className="p-4 sm:p-5 rounded-2xl bg-[#141724] border border-[#23293d] shadow-md">
+                <article key={`repost-${post.id}`} className="p-4 sm:p-5 rounded-2xl bg-[#141414] border border-[#1e1e1e]">
                   {/* Badge Người đăng lại */}
                   <div className="flex items-center gap-1.5 pb-2.5 mb-2.5 border-b border-zinc-800/60 text-xs text-emerald-400 font-medium">
                     <Repeat size={13} />
@@ -853,7 +850,7 @@ const ProfilePage = () => {
               </div>
             ) : (
               savedPosts.map(post => (
-                <article key={`saved-${post.id}`} className="p-4 sm:p-5 rounded-2xl bg-[#141724] border border-[#23293d] shadow-md">
+                <article key={`saved-${post.id}`} className="p-4 sm:p-5 rounded-2xl bg-[#141414] border border-[#1e1e1e]">
                   <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-zinc-800/60">
                     <div className="flex items-center gap-2.5">
                       <UserAvatar avatar={post.authorAvatar} name={post.authorNickname || post.authorAccount} size={30} />
@@ -894,7 +891,7 @@ const ProfilePage = () => {
                   <div 
                     key={friend.id}
                     onClick={() => navigate(`/profile/${friend.id}`)}
-                    className="p-3.5 rounded-2xl bg-[#141724] border border-[#23293d] hover:border-[#38425d] transition-all flex items-center justify-between cursor-pointer active:scale-98"
+                    className="p-3.5 rounded-2xl bg-[#141414] border border-[#1e1e1e] hover:border-[#2a2a2a] transition-all flex items-center justify-between cursor-pointer active:scale-98"
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <UserAvatar avatar={friend.avatar} name={friend.nickname || friend.account} size={38} />
@@ -918,3 +915,4 @@ const ProfilePage = () => {
 };
 
 export default ProfilePage;
+

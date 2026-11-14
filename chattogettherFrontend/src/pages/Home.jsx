@@ -313,6 +313,7 @@ const Home = () => {
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [editingCommentText, setEditingCommentText] = useState('');
   const [isSavingComment, setIsSavingComment] = useState(false);
+  const [selectedThreadPost, setSelectedThreadPost] = useState(null);
 
   // Thẻ chủ đề / Dấu ấn cộng đồng riêng (Sparks)
   const [selectedTags, setSelectedTags] = useState([]);
@@ -2557,8 +2558,14 @@ const Home = () => {
                         </div>
                       </div>
 
-                      {/* Nội dung bài viết */}
-                      <div className="post-body-content">
+                      {/* Nội dung bài viết: Bấm vào để mở Thread Detail View (giống Threads) */}
+                      <div 
+                        className="post-body-content cursor-pointer"
+                        onClick={() => {
+                          setSelectedThreadPost(post);
+                          fetchComments(post.id);
+                        }}
+                      >
                         <p>{post.content}</p>
 
                         {/* Hiển thị Media: Ảnh hoặc Video ngắn tự động lặp muted + Click để mở toàn màn hình (Lightbox) */}
@@ -2678,12 +2685,15 @@ const Home = () => {
                           )}
                         </div>
 
-                        {/* Nút bình luận: Mặc định ẩn, bấm vào mới mở */}
+                        {/* Nút bình luận: Mở trực tiếp Thread Detail View (chuỗi thảo luận giống Threads) */}
                         <button 
                           type="button"
-                          onClick={() => handleToggleComments(post.id)}
+                          onClick={() => {
+                            setSelectedThreadPost(post);
+                            fetchComments(post.id);
+                          }}
                           className="action-btn"
-                          title="Bình luận"
+                          title="Xem chi tiết & chuỗi thảo luận"
                         >
                           <MessageSquare size={15} strokeWidth={1.5} />
                           <span className="font-mono text-xs">{post.commentsCount || 0}</span>
@@ -3663,24 +3673,365 @@ const Home = () => {
       )}
 
       {/* ============================================================== */}
+      {/* MODAL CHI TIẾT BÀI VIẾT & CHUỖI THẢO LUẬN (THREADS DETAIL VIEW - #101010) */}
+      {/* ============================================================== */}
+      {selectedThreadPost && (
+        <div 
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
+          onClick={() => setSelectedThreadPost(null)}
+        >
+          <div 
+            className="relative w-full sm:max-w-2xl h-[100dvh] sm:h-auto sm:max-h-[92vh] bg-[#101010] border-0 sm:border border-[#222222] sm:rounded-2xl flex flex-col overflow-hidden animate-slide-up sm:animate-fade-in shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header Thread View */}
+            <div className="sticky top-0 z-30 flex items-center justify-between px-4 sm:px-5 py-3 border-b border-[#1e1e1e] bg-[#101010]/95 backdrop-blur-md flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <button 
+                  type="button"
+                  onClick={() => setSelectedThreadPost(null)}
+                  className="p-1.5 rounded-xl hover:bg-[#1e1e1e] text-zinc-300 hover:text-white transition-all active:scale-95 flex items-center gap-1.5 text-xs font-semibold"
+                  title="Quay lại sảnh"
+                >
+                  <ArrowLeft size={18} />
+                  <span>Thread</span>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button 
+                  type="button"
+                  onClick={() => setSelectedThreadPost(null)}
+                  className="w-8 h-8 rounded-full hover:bg-[#1e1e1e] text-zinc-400 hover:text-white flex items-center justify-center transition-colors"
+                  title="Đóng"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Scrollable Body: Bài viết chính + Ô nhập phản hồi + Danh sách bình luận */}
+            <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-4">
+              {/* 1. BÀI VIẾT CHÍNH (FOCUSED POST) */}
+              <div className="space-y-3">
+                {/* Header tác giả */}
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div 
+                      className="cursor-pointer flex-shrink-0"
+                      onClick={() => navigate(`/profile/${selectedThreadPost.authorId || selectedThreadPost.userId}`)}
+                    >
+                      <UserAvatar 
+                        avatar={selectedThreadPost.authorAvatar} 
+                        name={selectedThreadPost.authorNickname || selectedThreadPost.authorAccount} 
+                        size={42} 
+                      />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span 
+                          className="font-bold text-sm text-[#f3f5f7] hover:underline cursor-pointer"
+                          onClick={() => navigate(`/profile/${selectedThreadPost.authorId || selectedThreadPost.userId}`)}
+                        >
+                          {selectedThreadPost.authorNickname || selectedThreadPost.authorAccount || 'Thành viên'}
+                        </span>
+                        {selectedThreadPost.authorBadge && (
+                          <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                            {selectedThreadPost.authorBadge}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 text-xs text-[#777777] font-mono">
+                        <span>@{selectedThreadPost.authorAccount || 'user'}</span>
+                        <span>•</span>
+                        <span>{selectedThreadPost.formattedTime || TIME_FORMATTER(selectedThreadPost.createdAt)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {selectedThreadPost.vibe && (
+                    <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-[#18181b] text-zinc-400 border border-[#27272a]">
+                      {selectedThreadPost.vibe}
+                    </span>
+                  )}
+                </div>
+
+                {/* Nội dung bài viết chính (phông chữ to, thoáng đãng) */}
+                <p className="text-[15px] sm:text-base text-[#f3f5f7] leading-relaxed whitespace-pre-wrap font-sans">
+                  {selectedThreadPost.content}
+                </p>
+
+                {/* Media */}
+                {(() => {
+                  const media = parsePostMedia(selectedThreadPost.imageUrl);
+                  if (!media.mediaUrl && !media.audioUrl) return null;
+                  return (
+                    <div className="rounded-xl overflow-hidden border border-[#222222] my-3">
+                      {media.mediaType === 'video' ? (
+                        <video src={media.mediaUrl} controls autoPlay loop muted playsInline className="w-full max-h-[420px] object-cover" />
+                      ) : media.mediaUrl ? (
+                        <img src={media.mediaUrl} alt="Media" className="w-full max-h-[420px] object-cover" />
+                      ) : null}
+                    </div>
+                  );
+                })()}
+
+                {/* Hàng chỉ số tương tác (Stats Bar giống Threads) */}
+                <div className="flex items-center gap-4 py-2.5 text-xs text-[#777777] border-y border-[#1e1e1e]">
+                  <span><strong className="text-[#f3f5f7]">{selectedThreadPost.likesCount || 0}</strong> lượt thích</span>
+                  <span>•</span>
+                  <span><strong className="text-[#f3f5f7]">{selectedThreadPost.commentsCount || (commentsMap[selectedThreadPost.id]?.length || 0)}</strong> phản hồi</span>
+                  <span>•</span>
+                  <span><strong className="text-[#f3f5f7]">{selectedThreadPost.repostsCount || 0}</strong> đăng lại</span>
+                </div>
+
+                {/* Hàng nút hành động nhanh */}
+                <div className="flex items-center justify-around py-1 border-b border-[#1e1e1e] text-[#777777]">
+                  <button 
+                    type="button"
+                    onClick={() => handleReactPost(selectedThreadPost.id, 'LIKE')}
+                    className={`flex items-center gap-1.5 p-2 rounded-lg hover:text-[#f3f5f7] transition-colors ${selectedThreadPost.myReaction ? 'text-rose-500 font-semibold' : ''}`}
+                  >
+                    <Heart size={18} className={selectedThreadPost.myReaction ? 'fill-rose-500' : ''} />
+                    <span className="text-xs">Thích</span>
+                  </button>
+
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      const input = document.getElementById(`thread-modal-reply-input`);
+                      if (input) input.focus();
+                    }}
+                    className="flex items-center gap-1.5 p-2 rounded-lg hover:text-[#f3f5f7] transition-colors"
+                  >
+                    <MessageSquare size={18} />
+                    <span className="text-xs">Phản hồi</span>
+                  </button>
+
+                  <button 
+                    type="button"
+                    onClick={() => handleToggleRepost(selectedThreadPost.id)}
+                    className={`flex items-center gap-1.5 p-2 rounded-lg hover:text-[#f3f5f7] transition-colors ${selectedThreadPost.isRepostedByMe ? 'text-emerald-400 font-semibold' : ''}`}
+                  >
+                    <Repeat size={18} />
+                    <span className="text-xs">Đăng lại</span>
+                  </button>
+
+                  <button 
+                    type="button"
+                    onClick={() => setSharePost(selectedThreadPost)}
+                    className="flex items-center gap-1.5 p-2 rounded-lg hover:text-[#f3f5f7] transition-colors"
+                  >
+                    <Share2 size={18} />
+                    <span className="text-xs">Chia sẻ</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* 2. Ô NHẬP PHẢN HỒI (REPLY TO... BAR GIỐNG THREADS) */}
+              <div className="p-3 rounded-2xl bg-[#141414] border border-[#222222] flex items-center gap-3">
+                <UserAvatar avatar={currentUserAvatar} name={currentUserName} size={32} />
+                <div className="flex-1 min-w-0">
+                  {replyTargetMap[selectedThreadPost.id] && (
+                    <div className="flex items-center justify-between text-[11px] text-zinc-400 pb-1 mb-1 border-b border-[#242424]">
+                      <span>Đang trả lời <strong>@{replyTargetMap[selectedThreadPost.id].authorAccount}</strong></span>
+                      <button 
+                        type="button" 
+                        onClick={() => setReplyTargetMap(prev => ({ ...prev, [selectedThreadPost.id]: null }))}
+                        className="text-zinc-500 hover:text-white"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  )}
+                  <input 
+                    id="thread-modal-reply-input"
+                    type="text"
+                    value={commentInputs[selectedThreadPost.id] || ''}
+                    onChange={(e) => setCommentInputs(prev => ({ ...prev, [selectedThreadPost.id]: e.target.value }))}
+                    placeholder={`Trả lời @${selectedThreadPost.authorAccount || 'user'}...`}
+                    className="w-full bg-transparent border-none text-xs sm:text-sm text-[#f3f5f7] focus:outline-none placeholder-[#777777]"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleAddComment(selectedThreadPost.id);
+                    }}
+                  />
+                </div>
+                <button 
+                  type="button"
+                  onClick={() => handleAddComment(selectedThreadPost.id)}
+                  disabled={submittingComment[selectedThreadPost.id] || !commentInputs[selectedThreadPost.id]?.trim()}
+                  className="px-4 py-1.5 rounded-xl bg-[#f4f4f5] hover:bg-white text-[#101010] font-semibold text-xs transition-all disabled:opacity-40 disabled:hover:bg-[#f4f4f5] active:scale-95 flex-shrink-0"
+                >
+                  {submittingComment[selectedThreadPost.id] ? 'Gửi...' : 'Đăng'}
+                </button>
+              </div>
+
+              {/* 3. DANH SÁCH BÌNH LUẬN DẠNG PHẲNG (FLAT THREADED REPLIES) */}
+              <div className="space-y-4 pt-2">
+                <h4 className="text-xs font-semibold text-[#777777] uppercase tracking-wider px-1">
+                  Phản hồi ({selectedThreadPost.commentsCount || (commentsMap[selectedThreadPost.id]?.length || 0)})
+                </h4>
+
+                {(!commentsMap[selectedThreadPost.id] || commentsMap[selectedThreadPost.id].length === 0) ? (
+                  <p className="text-xs text-[#777777] text-center py-8">Chưa có phản hồi nào. Hãy là người đầu tiên trả lời!</p>
+                ) : (
+                  buildCommentThreads(commentsMap[selectedThreadPost.id]).map((thread) => {
+                    const renderThreadBubble = (cmt, isReply = false) => {
+                      const isCmtMe = currentUserId && cmt.authorId?.toString() === currentUserId.toString();
+                      const canDeleteCmt = isCmtMe || (currentUserId && selectedThreadPost.authorId?.toString() === currentUserId.toString());
+                      const isEditingThisCmt = editingCommentId === cmt.id;
+
+                      return (
+                        <div key={cmt.id} className={isReply ? "cmt-reply-item" : "cmt-row cmt-root-row"}>
+                          <div 
+                            className="cursor-pointer flex-shrink-0"
+                            onClick={() => navigate(`/profile/${cmt.authorId}`)}
+                            title="Xem hồ sơ cá nhân"
+                          >
+                            <UserAvatar 
+                              avatar={cmt.authorAvatar} 
+                              name={cmt.authorNickname || cmt.authorAccount} 
+                              size={isReply ? 26 : 32} 
+                            />
+                          </div>
+
+                          <div className="cmt-bubble-content flex-1 min-w-0">
+                            <div className="cmt-header-row flex items-center justify-between">
+                              <div className="cmt-author-info flex items-center gap-1.5 min-w-0">
+                                <span 
+                                  className="cmt-user-name font-semibold text-xs text-[#f3f5f7] cursor-pointer hover:underline truncate"
+                                  onClick={() => navigate(`/profile/${cmt.authorId}`)}
+                                >
+                                  {cmt.authorNickname || cmt.authorAccount || 'Thành viên'}
+                                </span>
+                                <span className="cmt-user-handle text-[11px] text-[#777777] font-mono truncate">
+                                  @{cmt.authorAccount || 'user'}
+                                </span>
+                                <span className="text-[#555555]">·</span>
+                                <span className="text-[11px] text-[#777777]">{cmt.formattedTime || 'Vừa xong'}</span>
+                              </div>
+                            </div>
+
+                            {isEditingThisCmt ? (
+                              <div className="cmt-inline-edit-box my-1">
+                                <input 
+                                  type="text" 
+                                  value={editingCommentText}
+                                  onChange={(e) => setEditingCommentText(e.target.value)}
+                                  className="w-full bg-[#18181b] border border-[#27272a] rounded-lg p-2 text-xs text-[#f3f5f7] focus:outline-none"
+                                  autoFocus
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleSaveEditComment(selectedThreadPost.id, cmt.id);
+                                    if (e.key === 'Escape') setEditingCommentId(null);
+                                  }}
+                                />
+                                <div className="flex gap-2 justify-end mt-1">
+                                  <button type="button" onClick={() => setEditingCommentId(null)} className="px-2.5 py-1 text-xs text-zinc-400 hover:text-white">Hủy</button>
+                                  <button type="button" onClick={() => handleSaveEditComment(selectedThreadPost.id, cmt.id)} className="px-3 py-1 bg-[#f4f4f5] text-[#101010] text-xs font-semibold rounded-md">Lưu</button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <p className="text-xs sm:text-[13px] text-[#e1e3e6] leading-relaxed my-1">
+                                  {cmt.replyToUser && (
+                                    <span className="text-sky-400 font-mono mr-1">@{cmt.replyToUser}</span>
+                                  )}
+                                  {cmt.content}
+                                </p>
+
+                                <div className="flex items-center gap-3 pt-1 text-[#777777]">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleLikeComment(selectedThreadPost.id, cmt.id)}
+                                    className={`flex items-center gap-1 text-[11px] hover:text-[#f3f5f7] transition-colors ${cmt.isLiked ? 'text-rose-500 font-bold' : ''}`}
+                                  >
+                                    <Heart size={12} className={cmt.isLiked ? "fill-rose-500 text-rose-500" : ""} />
+                                    {Number(cmt.likesCount || 0) > 0 && <span>{cmt.likesCount}</span>}
+                                  </button>
+
+                                  <button 
+                                    type="button" 
+                                    onClick={() => {
+                                      setReplyTargetMap(prev => ({
+                                        ...prev,
+                                        [selectedThreadPost.id]: {
+                                          commentId: cmt.id,
+                                          authorAccount: cmt.authorAccount || 'user',
+                                          authorNickname: cmt.authorNickname || cmt.authorAccount || 'Thành viên'
+                                        }
+                                      }));
+                                      const input = document.getElementById(`thread-modal-reply-input`);
+                                      if (input) input.focus();
+                                    }} 
+                                    className="flex items-center gap-1 text-[11px] hover:text-[#f3f5f7] transition-colors"
+                                  >
+                                    <CornerDownRight size={12} />
+                                    <span>Trả lời</span>
+                                  </button>
+
+                                  {isCmtMe && !isEditingThisCmt && (
+                                    <button 
+                                      type="button" 
+                                      onClick={() => handleStartEditComment(cmt)} 
+                                      className="text-[11px] hover:text-[#f3f5f7] transition-colors"
+                                    >
+                                      Sửa
+                                    </button>
+                                  )}
+                                  {canDeleteCmt && (
+                                    <button 
+                                      type="button" 
+                                      onClick={() => handleDeleteComment(selectedThreadPost.id, cmt.id)} 
+                                      className="text-[11px] hover:text-rose-400 transition-colors"
+                                    >
+                                      Xóa
+                                    </button>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    };
+
+                    return (
+                      <div key={thread.id} className="cmt-thread-group border-b border-[#18181b] pb-3">
+                        {renderThreadBubble(thread, false)}
+                        {thread.replies && thread.replies.length > 0 && (
+                          <div className="cmt-replies-branch-thread">
+                            {thread.replies.map(reply => renderThreadBubble(reply, true))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
       {/* CSS DARK ZINC TOÀN DIỆN - ANTI AI-GENERATED UI */}
       {/* ============================================================== */}
       <style dangerouslySetInnerHTML={{ __html: `
         :root {
-          --social-bg: #0b0c10; /* Clean, deep slate obsidian */
-          --sidebar-bg: #10121a; /* Defined navigation sidebar */
-          --card-bg: #151824; /* Distinct elevated surface card */
-          --card-hover: #191d2c; /* Subtle highlight on hover */
-          --card-border: #2c3246; /* Crisp, clearly visible hairline frame */
-          --card-border-hover: #434c6a; /* Distinct hover border */
-          --card-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5), 0 2px 6px -1px rgba(0, 0, 0, 0.35);
-          --card-shadow-hover: 0 10px 30px -4px rgba(0, 0, 0, 0.7), 0 4px 12px -2px rgba(0, 0, 0, 0.4);
-          --input-bg: #0d0f16;
-          --input-border: #282e42;
-          --text-main: #f8fafc; /* Crisp white for titles */
-          --text-body: #e2e8f0; /* High-contrast, very readable body */
-          --text-muted: #94a3b8; /* Slate 400 */
-          --text-subtle: #64748b; /* Slate 500 */
+          --social-bg: #101010; /* Clean, deep charcoal like Threads */
+          --sidebar-bg: #101010; /* Pure matte sidebar */
+          --card-bg: #101010; /* Seamless flat feed stream */
+          --card-hover: #141414; /* Subtle charcoal hover */
+          --card-border: #1e1e1e; /* Crisp, ultra-thin hairline border */
+          --card-border-hover: #2a2a2a; /* Subtle hairline hover */
+          --card-shadow: none;
+          --card-shadow-hover: none;
+          --input-bg: #141414;
+          --input-border: #222222;
+          --text-main: #f3f5f7; /* Soft white for titles and author names */
+          --text-body: #e1e3e6; /* High-contrast, clean body text */
+          --text-muted: #777777; /* Subtle charcoal gray for timestamps & handles */
+          --text-subtle: #555555;
         }
 
         .social-app-wrapper {
@@ -3930,12 +4281,14 @@ const Home = () => {
           color: #f87171;
         }
 
-        /* ================= CỘT 2: STREAM CHÍNH ================= */
+        /* ================= CỘT 2: STREAM CHÍNH (THREADS FLAT STREAM) ================= */
         .main-stream {
           flex: 1;
-          max-width: 780px;
-          min-width: 520px;
+          max-width: 680px;
+          min-width: 0;
+          border-left: 1px solid var(--card-border);
           border-right: 1px solid var(--card-border);
+          background: var(--social-bg);
           min-height: 100vh;
           display: flex;
           flex-direction: column;
@@ -4408,18 +4761,17 @@ const Home = () => {
           background: #27272a;
         }
 
-        /* KHU VỰC B: BỘ TẠO TÍN HIỆU ĐA PHƯƠNG TIỆN */
+        /* KHU VỰC B: BỘ TẠO BÀI VIẾT (THREADS SEAMLESS COMPOSER) */
         .post-creator-box {
-          margin: 16px 16px 18px;
-          padding: 20px;
-          border: 1px solid var(--card-border);
-          border-radius: 16px;
-          background: var(--card-bg);
-          box-shadow: var(--card-shadow);
-          transition: border-color 0.2s ease;
-        }
-        .post-creator-box:hover {
-          border-color: var(--card-border-hover);
+          margin: 0;
+          padding: 18px 20px 14px 20px;
+          border-bottom: 1px solid var(--card-border);
+          border-top: none;
+          border-left: none;
+          border-right: none;
+          border-radius: 0;
+          background: var(--social-bg);
+          box-shadow: none;
         }
         .creator-input-row {
           display: flex;
@@ -4431,24 +4783,22 @@ const Home = () => {
         }
         .creator-field-wrap textarea {
           width: 100%;
-          background: var(--input-bg);
-          border: 1px solid var(--input-border);
-          border-radius: 12px;
-          padding: 12px 14px;
-          color: #f8fafc;
-          font-size: 13.5px;
+          background: transparent;
+          border: none;
+          padding: 4px 0 8px 0;
+          color: var(--text-main);
+          font-size: 14.5px;
           font-family: inherit;
           resize: none;
           outline: none;
           line-height: 1.5;
           box-sizing: border-box;
-          transition: border-color 0.15s, background 0.15s;
         }
         .creator-field-wrap textarea:focus {
-          border-color: #4b5568;
-          background: #090a10;
+          outline: none;
+          background: transparent;
         }
-        .creator-field-wrap textarea::placeholder { color: #64748b; }
+        .creator-field-wrap textarea::placeholder { color: var(--text-muted); }
 
         /* Preview Ảnh/Video trong Composer - Tối ưu 100% Responsive */
         .composer-attached-preview {
@@ -4760,22 +5110,22 @@ const Home = () => {
           opacity: 0.6;
         }
 
-        /* ================= THẺ BÀI VIẾT (TALOVIN HIGH-CONTRAST CARD) ================= */
+        /* ================= BÀI VIẾT PHẲNG (THREADS FEED STREAM ROW) ================= */
         .post-item-card {
           background: var(--card-bg);
-          border: 1px solid var(--card-border);
-          border-radius: 16px;
-          margin: 0 16px 18px 16px;
-          padding: 20px 22px 18px 22px;
-          box-shadow: var(--card-shadow);
+          border-bottom: 1px solid var(--card-border);
+          border-top: none;
+          border-left: none;
+          border-right: none;
+          border-radius: 0;
+          margin: 0;
+          padding: 16px 20px 14px 20px;
+          box-shadow: none;
           position: relative;
-          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+          transition: background-color 0.15s ease;
         }
         .post-item-card:hover {
-          border-color: var(--card-border-hover);
           background: var(--card-hover);
-          transform: translateY(-2px);
-          box-shadow: var(--card-shadow-hover);
         }
         .post-header-row {
           display: flex;
@@ -4962,7 +5312,7 @@ const Home = () => {
         .action-btn {
           background: transparent;
           border: none;
-          color: #94a3b8;
+          color: #777777;
           font-size: 12px;
           font-weight: 500;
           padding: 5px 8px;
@@ -4974,8 +5324,8 @@ const Home = () => {
           transition: all 0.15s;
         }
         .action-btn:hover {
-          color: #ffffff;
-          background: rgba(255, 255, 255, 0.06);
+          color: #f3f5f7;
+          background: rgba(255, 255, 255, 0.04);
         }
         .action-btn.active-liked { color: #f87171; }
 
@@ -4984,10 +5334,17 @@ const Home = () => {
           position: absolute;
           bottom: calc(100% + 8px);
           left: 0;
-          background: #1c2030;
-          border: 1px solid #3b4360;
+          background: #161616;
+          border: 1px solid #262626;
           border-radius: 10px;
           padding: 5px 8px;
+          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          z-index: 50;
+          animation: fadeInReaction 0.15s ease-out;
+        }
           box-shadow: 0 20px 30px -5px rgba(0, 0, 0, 0.8);
           display: flex;
           align-items: center;
@@ -5098,11 +5455,11 @@ const Home = () => {
         /* Nhánh phản hồi con: Thụt lề và có đường kẻ dọc nối từ avatar cha */
         .cmt-replies-branch-thread {
           margin-left: 15px;
-          padding-left: 20px;
-          border-left: 2px solid #282f44;
+          padding-left: 18px;
+          border-left: 1.5px solid #262626;
           display: flex;
           flex-direction: column;
-          gap: 8px;
+          gap: 10px;
           margin-top: 8px;
           position: relative;
         }
@@ -5118,39 +5475,34 @@ const Home = () => {
         .cmt-reply-item::before {
           content: '';
           position: absolute;
-          left: -20px;
+          left: -18px;
           top: 14px;
-          width: 14px;
-          height: 2px;
-          background: #282f44;
-          border-bottom-left-radius: 4px;
+          width: 12px;
+          height: 1.5px;
+          background: #262626;
+          border-bottom-left-radius: 3px;
         }
 
-        /* Bong bóng bình luận gốc: Rõ ràng, nổi khối */
+        /* BÌNH LUẬN PHẲNG THREADS (NO BOX BUBBLE, FLAT TRANSPARENT) */
         .cmt-bubble-content {
-          border-radius: 12px;
+          border-radius: 0;
           flex: 1;
           min-width: 0;
-          transition: border-color 0.15s;
+          background: transparent !important;
+          border: none !important;
+          box-shadow: none !important;
+          padding: 0 0 4px 0 !important;
         }
-        .cmt-bubble-content.root-bubble {
-          background: #181c2a;
-          border: 1px solid #2d354d;
-          padding: 10px 14px;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-        }
-        .cmt-bubble-content.root-bubble:hover {
-          border-color: #434c6a;
-        }
-
-        /* Bong bóng phản hồi con: Thon gọn, phân tầng cấp 2 */
+        .cmt-bubble-content.root-bubble,
         .cmt-bubble-content.reply-bubble {
-          background: #131622;
-          border: 1px solid #242a3c;
-          padding: 8px 12px;
+          background: transparent !important;
+          border: none !important;
+          box-shadow: none !important;
+          padding: 0 0 4px 0 !important;
         }
+        .cmt-bubble-content.root-bubble:hover,
         .cmt-bubble-content.reply-bubble:hover {
-          border-color: #38425d;
+          border-color: transparent !important;
         }
 
         .cmt-header-row,
@@ -5293,8 +5645,8 @@ const Home = () => {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          background: #202436;
-          border: 1px solid #333a52;
+          background: #18181b;
+          border: 1px solid #27272a;
           border-radius: 8px;
           padding: 6px 12px;
           margin-bottom: 8px;

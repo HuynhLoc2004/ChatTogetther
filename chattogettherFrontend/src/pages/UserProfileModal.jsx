@@ -281,22 +281,22 @@ export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentU
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in" onClick={onClose}>
       <div 
-        className={`relative w-full ${isMe ? 'sm:max-w-xl' : 'sm:max-w-md'} h-[100dvh] sm:h-auto sm:max-h-[85vh] rounded-none sm:rounded-3xl bg-zinc-900 border-0 sm:border border-zinc-800 shadow-2xl flex flex-col overflow-hidden animate-slide-up sm:animate-fade-in`}
+        className={`relative w-full ${isMe ? 'sm:max-w-xl' : 'sm:max-w-md'} h-[100dvh] sm:h-auto sm:max-h-[85vh] rounded-none sm:rounded-3xl bg-[#121212] border-0 sm:border border-[#222222] shadow-2xl flex flex-col overflow-hidden animate-slide-up sm:animate-fade-in`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Sticky Header - Cố định trên cùng, luôn có nút Back rõ ràng trên Mobile & Desktop */}
-        <div className="sticky top-0 z-30 flex items-center justify-between px-4 sm:px-6 py-3 border-b border-zinc-800 bg-zinc-900/98 backdrop-blur-md flex-shrink-0">
+        <div className="sticky top-0 z-30 flex items-center justify-between px-4 sm:px-6 py-3 border-b border-[#222222] bg-[#121212]/98 backdrop-blur-md flex-shrink-0">
           <div className="flex items-center gap-2">
             <button 
               type="button"
               onClick={onClose} 
-              className="px-2.5 py-1.5 rounded-xl bg-zinc-800/90 hover:bg-zinc-700 text-zinc-200 hover:text-white flex items-center gap-1.5 text-xs font-semibold transition-all active:scale-95 border border-zinc-700/60"
+              className="px-2.5 py-1.5 rounded-xl bg-[#1e1e1e] hover:bg-[#282828] text-zinc-200 hover:text-white flex items-center gap-1.5 text-xs font-semibold transition-all active:scale-95 border border-[#2e2e2e]"
               title="Quay lại"
             >
               <ArrowLeft size={16} />
               <span>Quay lại</span>
             </button>
-            <div className="h-4 w-[1px] bg-zinc-800"></div>
+            <div className="h-4 w-[1px] bg-[#222222]"></div>
             <h2 className="text-zinc-100 font-bold text-xs sm:text-sm tracking-tight truncate">
               {isMe ? "Quản Lý Tài Khoản & Hồ Sơ" : "Hồ Sơ Người Dùng"}
             </h2>
@@ -316,7 +316,7 @@ export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentU
             <button 
               type="button"
               onClick={onClose} 
-              className="w-8 h-8 rounded-xl bg-zinc-800/60 hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center transition-colors"
+              className="w-8 h-8 rounded-xl bg-[#1e1e1e] hover:bg-[#282828] text-zinc-400 hover:text-white flex items-center justify-center transition-colors"
               title="Đóng"
             >
               <X size={16} />
@@ -333,15 +333,15 @@ export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentU
           <div className="flex-1 overflow-y-auto flex flex-col overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
             
             {/* HERO PROFILE SECTION */}
-            <div className="relative bg-gradient-to-b from-zinc-800/60 to-zinc-900/40 p-5 border-b border-zinc-800/80 flex-shrink-0">
+            <div className="relative bg-[#161616] p-5 border-b border-[#222222] flex-shrink-0">
               <div className="flex items-center gap-4">
                 {/* Avatar Area */}
                 <div className="relative group flex-shrink-0">
-                  <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-2xl bg-zinc-800 border-2 border-zinc-700 overflow-hidden shadow-lg flex items-center justify-center relative">
+                  <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-2xl bg-[#1c1c1c] border border-[#2a2a2a] overflow-hidden shadow-lg flex items-center justify-center relative">
                     {validAvatar ? (
                       <img src={validAvatar} alt={displayName} className="w-full h-full object-cover" />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-700 to-zinc-900 text-white font-bold text-2xl select-none">
+                      <div className="w-full h-full flex items-center justify-center bg-[#222222] text-white font-bold text-2xl select-none">
                         {getInitial(displayName)}
                       </div>
                     )}
@@ -363,7 +363,7 @@ export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentU
                     <button 
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center shadow-md transition-all active:scale-90"
+                      className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-[#2a2a2a] hover:bg-[#333333] text-white flex items-center justify-center border border-[#3e3e3e] shadow-md transition-all active:scale-90"
                       title="Tải ảnh mới từ máy"
                     >
                       <Camera size={13} />
@@ -613,7 +613,7 @@ export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentU
                         <button 
                           type="submit" 
                           disabled={submitting}
-                          className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs shadow-md transition-all disabled:opacity-50 active:scale-[0.98]"
+                          className="w-full py-3 rounded-xl bg-[#f4f4f5] hover:bg-white text-[#101010] font-semibold text-xs shadow-sm transition-all disabled:opacity-50 active:scale-[0.98]"
                         >
                           {submitting ? "Đang lưu thay đổi..." : "Lưu thay đổi hồ sơ"}
                         </button>
@@ -708,7 +708,7 @@ export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentU
                     <button 
                       type="submit" 
                       disabled={submitting}
-                      className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs shadow-md transition-all disabled:opacity-50 active:scale-[0.98]"
+                      className="w-full py-3 rounded-xl bg-[#f4f4f5] hover:bg-white text-[#101010] font-semibold text-xs shadow-sm transition-all disabled:opacity-50 active:scale-[0.98]"
                     >
                       {submitting ? "Đang lưu..." : "Cập nhật thông tin liên hệ"}
                     </button>
