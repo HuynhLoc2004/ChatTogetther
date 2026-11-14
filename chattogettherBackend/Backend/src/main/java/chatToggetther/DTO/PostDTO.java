@@ -57,4 +57,9 @@ public class PostDTO {
     private String rejectionReason;
     private Boolean isGroupPublic;
     private Boolean isMemberOfGroup;
+
+    // Đề xuất thông minh & Lý do hiển thị (Social Discovery Signals)
+    private String recommendationReason; // Ví dụ: "Bạn bè @loc112 đã bình luận", "Từ cộng đồng Âm Nhạc bạn đã tham gia", "Thịnh hành hôm nay"
+    private Boolean isFriendInteraction;
+    private String friendInteractionAccount;
 }

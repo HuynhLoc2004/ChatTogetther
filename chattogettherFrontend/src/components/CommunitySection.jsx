@@ -1304,143 +1304,187 @@ export const CommunitySection = ({
               <span>Đang tải các không gian cộng đồng...</span>
             </div>
           ) : (!Array.isArray(groups) || groups.length === 0) ? (
-            <div className="py-16 px-4 text-center rounded-3xl bg-zinc-900/40 border border-zinc-800/80">
+            <div className="py-16 px-4 text-center rounded-3xl bg-[#141414] border border-[#1e1e1e]">
               <Users size={36} className="mx-auto mb-3 text-zinc-600 opacity-60" />
               <p className="text-zinc-300 text-sm font-semibold mb-1">Chưa có cộng đồng nào phù hợp</p>
               <p className="text-zinc-500 text-xs mb-4">Hãy là người đầu tiên sáng lập một cộng đồng mới ngay hôm nay!</p>
               <button 
                 type="button"
                 onClick={() => setIsCreateOpen(true)}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold border border-zinc-700 transition-all active:scale-95"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-black text-xs font-semibold shadow-md transition-all active:scale-95"
               >
                 <Plus size={14} /> Tạo cộng đồng ngay
               </button>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {(Array.isArray(groups) ? groups : []).map(group => {
-                const isOwner = group.currentUserRole === 'OWNER';
-                const isDeputy = group.currentUserRole === 'DEPUTY';
-                const isMember = group.currentUserRole === 'MEMBER';
-                const isPending = group.currentUserRole === 'PENDING';
+          ) : (() => {
+            const allList = Array.isArray(groups) ? groups : [];
+            const myJoinedGroups = allList.filter(g => ['OWNER', 'DEPUTY', 'MEMBER'].includes(g.currentUserRole));
+            const suggestedGroups = allList.filter(g => !['OWNER', 'DEPUTY', 'MEMBER'].includes(g.currentUserRole));
 
-                // Kiểm tra xem nhóm này có phòng thoại đang mở không
-                const gNameStr = String(group?.name || '').toLowerCase().trim();
-                const hasVoiceRoom = gNameStr ? (rooms || []).some(r => 
-                  r && String(r.nameroom || '').toLowerCase().includes(gNameStr)
-                ) : false;
+            const renderGroupCard = (group, isJoined) => {
+              const isOwner = group.currentUserRole === 'OWNER';
+              const isDeputy = group.currentUserRole === 'DEPUTY';
+              const isMember = group.currentUserRole === 'MEMBER';
+              const isPending = group.currentUserRole === 'PENDING';
 
-                return (
-                  <div 
-                    key={group.id}
-                    onClick={() => handleOpenGroup(group)}
-                    className="group-card relative rounded-3xl bg-zinc-900 border border-zinc-800/90 hover:border-zinc-700 overflow-hidden cursor-pointer transition-all hover:shadow-xl hover:-translate-y-0.5 flex flex-col justify-between"
-                  >
-                    {/* Cover Banner */}
-                    <div className="h-28 relative bg-gradient-to-r from-zinc-800 via-zinc-900 to-zinc-950 overflow-hidden">
-                      {group.coverUrl ? (
-                        <img src={group.coverUrl} alt={group.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full opacity-30 bg-[radial-gradient(#52525b_1px,transparent_1px)] [background-size:14px_14px]"></div>
+              const gNameStr = String(group?.name || '').toLowerCase().trim();
+              const hasVoiceRoom = gNameStr ? (rooms || []).some(r => 
+                r && String(r.nameroom || '').toLowerCase().includes(gNameStr)
+              ) : false;
+
+              return (
+                <div 
+                  key={group.id}
+                  onClick={() => handleOpenGroup(group)}
+                  className="group-card relative rounded-3xl bg-[#141414] border border-[#1e1e1e] hover:border-[#2a2a2a] overflow-hidden cursor-pointer transition-all hover:shadow-lg flex flex-col justify-between"
+                >
+                  {/* Cover Banner */}
+                  <div className="h-24 relative bg-gradient-to-r from-zinc-900 via-zinc-800 to-zinc-900 overflow-hidden">
+                    {group.coverUrl ? (
+                      <img src={group.coverUrl} alt={group.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full opacity-20 bg-[radial-gradient(#52525b_1px,transparent_1px)] [background-size:14px_14px]"></div>
+                    )}
+                    
+                    {/* Badges on Top Right */}
+                    <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
+                      {hasVoiceRoom && (
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-950/80 backdrop-blur-md border border-emerald-500/30 text-[10px] font-mono text-emerald-400 flex items-center gap-1 font-medium">
+                          <Radio size={10} className="animate-pulse" /> Đang voice
+                        </span>
                       )}
-                      
-                      {/* Badges on Top Right */}
-                      <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
-                        {hasVoiceRoom && (
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-950/80 backdrop-blur-md border border-emerald-500/40 text-[10px] font-mono text-emerald-400 flex items-center gap-1 font-semibold">
-                            <Radio size={10} className="animate-pulse" /> Đang voice
-                          </span>
-                        )}
-                        {group.requiresApproval ? (
-                          <span className="px-2 py-0.5 rounded-full bg-zinc-950/80 backdrop-blur-md border border-amber-500/30 text-[10px] font-mono text-amber-400 flex items-center gap-1">
-                            <Lock size={9} /> Cần duyệt
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded-full bg-zinc-950/80 backdrop-blur-md border border-zinc-700 text-[10px] font-mono text-zinc-300 flex items-center gap-1">
-                            <Globe size={9} /> Công khai
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Content Body */}
-                    <div className="p-4 sm:p-5 pt-0 relative flex-1 flex flex-col justify-between">
-                      {/* Overlapping Avatar & Roles */}
-                      <div className="flex items-end justify-between -mt-7 mb-3">
-                        <GroupCollageAvatar 
-                          avatar={group.avatarUrl} 
-                          name={group.name}
-                          size={54}
-                          className="border-3 border-zinc-900 ring-2 ring-zinc-800 shadow-md rounded-2xl"
-                        />
-
-                        {/* Role Badge */}
-                        {isOwner && (
-                          <span className="px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[10px] font-bold flex items-center gap-1">
-                            <Crown size={10} /> Chủ nhóm
-                          </span>
-                        )}
-                        {isDeputy && (
-                          <span className="px-2 py-0.5 rounded-md bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-[10px] font-bold flex items-center gap-1">
-                            <Shield size={10} /> Phó nhóm
-                          </span>
-                        )}
-                        {isMember && (
-                          <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-[10px] font-medium">
-                            Đã tham gia
-                          </span>
-                        )}
-                        {isPending && (
-                          <span className="px-2 py-0.5 rounded-md bg-amber-950/40 border border-amber-500/30 text-amber-400 text-[10px] font-medium">
-                            Đang chờ duyệt
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Tên & Mô tả */}
-                      <div className="mb-3">
-                        <h3 className="text-zinc-100 font-bold text-sm mb-1 line-clamp-1">{group.name}</h3>
-                        <p className="text-zinc-400 text-xs font-sans line-clamp-2 leading-relaxed">
-                          {group.description || 'Không gian thảo luận và giao lưu dành cho các thành viên.'}
-                        </p>
-                      </div>
-
-                      {/* Footer Stats & Action CTA */}
-                      <div className="flex items-center justify-between pt-3 border-t border-zinc-800/80 text-xs">
-                        <div className="flex items-center gap-2 text-zinc-500 font-mono text-[11px]">
-                          <span className="flex items-center gap-1">
-                            <Users size={12} /> {group.membersCount || 1}
-                          </span>
-                          <span>•</span>
-                          <span className="text-zinc-400">
-                            {hasVoiceRoom ? 'Phòng thoại mở' : 'Sẵn sàng'}
-                          </span>
-                        </div>
-
-                        {isMember || isOwner || isDeputy ? (
-                          <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1 hover:text-emerald-300">
-                            Vào nhóm <ChevronRight size={14} />
-                          </span>
-                        ) : isPending ? (
-                          <span className="text-xs text-amber-400 font-medium">
-                            Chờ duyệt...
-                          </span>
-                        ) : (
-                          <button 
-                            type="button"
-                            onClick={(e) => handleJoinGroup(group.id, e)}
-                            className="px-3.5 py-1 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold border border-zinc-700 transition-all active:scale-95"
-                          >
-                            Gia nhập
-                          </button>
-                        )}
-                      </div>
+                      {group.requiresApproval ? (
+                        <span className="px-2 py-0.5 rounded-full bg-black/80 backdrop-blur-md border border-amber-500/30 text-[10px] font-mono text-amber-400 flex items-center gap-1">
+                          <Lock size={9} /> Cần duyệt
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full bg-black/80 backdrop-blur-md border border-zinc-700 text-[10px] font-mono text-zinc-300 flex items-center gap-1">
+                          <Globe size={9} /> Công khai
+                        </span>
+                      )}
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
+
+                  {/* Content Body */}
+                  <div className="p-4 sm:p-5 pt-0 relative flex-1 flex flex-col justify-between">
+                    <div className="flex items-end justify-between -mt-6 mb-3">
+                      <GroupCollageAvatar 
+                        avatar={group.avatarUrl} 
+                        name={group.name}
+                        size={52}
+                        className="border-2 border-[#141414] ring-1 ring-zinc-700 shadow-md rounded-2xl"
+                      />
+
+                      {/* Role Badge */}
+                      {isOwner && (
+                        <span className="px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[10px] font-bold flex items-center gap-1">
+                          <Crown size={10} /> Chủ nhóm
+                        </span>
+                      )}
+                      {isDeputy && (
+                        <span className="px-2 py-0.5 rounded-md bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-[10px] font-bold flex items-center gap-1">
+                          <Shield size={10} /> Phó nhóm
+                        </span>
+                      )}
+                      {isMember && (
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-[10px] font-medium">
+                          Đã tham gia
+                        </span>
+                      )}
+                      {isPending && (
+                        <span className="px-2 py-0.5 rounded-md bg-amber-950/40 border border-amber-500/30 text-amber-400 text-[10px] font-medium">
+                          Đang chờ duyệt
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="mb-3">
+                      <h3 className="text-zinc-100 font-bold text-sm mb-1 line-clamp-1">{group.name}</h3>
+                      <p className="text-zinc-400 text-xs font-sans line-clamp-2 leading-relaxed">
+                        {group.description || 'Không gian thảo luận và giao lưu dành cho các thành viên.'}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-3 border-t border-[#1e1e1e] text-xs">
+                      <div className="flex items-center gap-2 text-zinc-500 font-mono text-[11px]">
+                        <span className="flex items-center gap-1">
+                          <Users size={12} /> {group.membersCount || 1}
+                        </span>
+                        <span>•</span>
+                        <span className="text-zinc-400">
+                          {hasVoiceRoom ? 'Phòng thoại mở' : 'Sẵn sàng'}
+                        </span>
+                      </div>
+
+                      {isMember || isOwner || isDeputy ? (
+                        <span className="text-xs font-semibold text-zinc-200 flex items-center gap-1 hover:text-white">
+                          Vào nhóm <ChevronRight size={14} />
+                        </span>
+                      ) : isPending ? (
+                        <span className="text-xs text-amber-400 font-medium">
+                          Chờ duyệt...
+                        </span>
+                      ) : (
+                        <button 
+                          type="button"
+                          onClick={(e) => handleJoinGroup(group.id, e)}
+                          className="px-3.5 py-1.5 rounded-xl bg-white hover:bg-zinc-200 text-black text-xs font-semibold shadow-sm transition-all active:scale-95"
+                        >
+                          Gia nhập
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            };
+
+            return (
+              <div className="space-y-6">
+                {/* 1. CỘNG ĐỒNG CỦA BẠN (ĐÃ THAM GIA) */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-zinc-300">
+                      <CheckCircle2 size={14} className="text-emerald-400" />
+                      <span>Cộng đồng của bạn (Đã tham gia)</span>
+                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
+                        {myJoinedGroups.length}
+                      </span>
+                    </div>
+                  </div>
+
+                  {myJoinedGroups.length === 0 ? (
+                    <div className="p-4 rounded-2xl bg-[#141414]/60 border border-dashed border-[#222222] text-center text-zinc-500 text-xs">
+                      Bạn chưa tham gia cộng đồng nào. Hãy khám phá và gia nhập các cộng đồng đề xuất bên dưới!
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {myJoinedGroups.map(group => renderGroupCard(group, true))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. CỘNG ĐỒNG ĐỀ XUẤT CHO BẠN */}
+                {suggestedGroups.length > 0 && (
+                  <div className="space-y-3 pt-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-xs font-semibold text-zinc-300">
+                        <Sparkles size={14} className="text-amber-400" />
+                        <span>Khám phá & Đề xuất cộng đồng</span>
+                        <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700 font-mono">
+                          {suggestedGroups.length}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {suggestedGroups.map(group => renderGroupCard(group, false))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       )}
 

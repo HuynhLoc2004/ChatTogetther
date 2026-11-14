@@ -28,6 +28,7 @@ import chatToggetther.repository.PostReportRepository;
 import chatToggetther.repository.PostRepostRepository;
 import chatToggetther.repository.PostRepository;
 import chatToggetther.repository.UserRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
@@ -38,6 +39,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 public class PostService {
     private final PostRepository postRepository;
@@ -260,6 +262,33 @@ public class PostService {
             }
         }
 
+        // 3.1. Tín hiệu xã hội thông minh (Smart Social Graph Signals): Tìm bạn bè đã tương tác (Comment/Like) trên danh sách bài viết
+        Map<Long, String> friendCommentSignalMap = new HashMap<>();
+        Map<Long, String> friendLikeSignalMap = new HashMap<>();
+        if (currentUser != null && !friendUserIds.isEmpty()) {
+            try {
+                List<Object[]> friendComments = this.commentRepository.findFriendCommentsOnPosts(postIds, friendUserIds);
+                for (Object[] row : friendComments) {
+                    Long pId = (Long) row[0];
+                    String acc = (String) row[2];
+                    String nick = (String) row[3];
+                    String display = (nick != null && !nick.isBlank()) ? nick : ("@" + acc);
+                    friendCommentSignalMap.putIfAbsent(pId, display);
+                }
+
+                List<Object[]> friendLikes = this.postLikeRepository.findFriendLikesOnPosts(postIds, friendUserIds);
+                for (Object[] row : friendLikes) {
+                    Long pId = (Long) row[0];
+                    String acc = (String) row[2];
+                    String nick = (String) row[3];
+                    String display = (nick != null && !nick.isBlank()) ? nick : ("@" + acc);
+                    friendLikeSignalMap.putIfAbsent(pId, display);
+                }
+            } catch (Exception ex) {
+                log.warn("Không thể tải friend signals: {}", ex.getMessage());
+            }
+        }
+
         // 4. Ánh xạ trực tiếp trên bộ nhớ RAM siêu tốc & Thuật toán Đề xuất Cộng đồng Thông minh
         List<PostDTO> dtos = new ArrayList<>();
         for (PostEntity p : posts) {
@@ -321,17 +350,44 @@ public class PostService {
             // 1. Điểm tương tác cơ sở & độ phân rã thời gian tự nhiên
             double engagementScore = ((hits * 3.0) + (commentsCount * 4.0) + (likesCount * 3.0) + 1.0) / Math.pow(hoursOld + 2.0, 1.25);
             
-            // 2. Hệ số cộng hưởng cá nhân hóa (Personal Resonance Multiplier)
+            // 2. Hệ số cộng hưởng cá nhân hóa & Thuật toán Đề xuất Xã hội Thông minh (Smart Social Feed Signals)
             double resonanceMultiplier = 1.0;
+            String recoReason = null;
+            boolean isFriendInteracted = false;
+
+            // Ưu tiên 1: Tín hiệu xã hội trực tiếp từ Bạn Bè (Bình luận / Thích)
+            if (friendCommentSignalMap.containsKey(p.getId())) {
+                resonanceMultiplier += 0.60;
+                recoReason = "Bạn bè (" + friendCommentSignalMap.get(p.getId()) + ") đã bình luận bài viết này";
+                isFriendInteracted = true;
+            } else if (friendLikeSignalMap.containsKey(p.getId())) {
+                resonanceMultiplier += 0.45;
+                recoReason = "Bạn bè (" + friendLikeSignalMap.get(p.getId()) + ") đã thích bài viết này";
+                isFriendInteracted = true;
+            }
+
+            // Ưu tiên 2: Bài viết từ Cộng đồng mà user ĐÃ THAM GIA
+            if (isMemberOfThisGroup) {
+                resonanceMultiplier += 0.50;
+                if (recoReason == null) {
+                    recoReason = "Từ cộng đồng " + (grp != null ? grp.getName() : "bạn đã tham gia");
+                }
+            } else if (grp != null) {
+                // Đề xuất bài viết từ Cộng đồng công khai khác mà user CHƯA tham gia
+                resonanceMultiplier += 0.25;
+                if (recoReason == null) {
+                    recoReason = "Khám phá từ cộng đồng " + grp.getName();
+                }
+            }
 
             if (currentUser != null && author != null) {
                 // Tương thích độ tuổi (Age Affinity): Bạn cùng độ tuổi (+20% đến +40%)
                 if (currentUser.getAge() != null && author.getAge() != null) {
                     int ageDiff = Math.abs(currentUser.getAge() - author.getAge());
                     if (ageDiff <= 3) {
-                        resonanceMultiplier += 0.4;
+                        resonanceMultiplier += 0.35;
                     } else if (ageDiff <= 7) {
-                        resonanceMultiplier += 0.2;
+                        resonanceMultiplier += 0.15;
                     }
                 }
 
@@ -339,23 +395,21 @@ public class PostService {
                 if (currentUser.getLocation() != null && author.getLocation() != null 
                         && !currentUser.getLocation().trim().isEmpty() 
                         && currentUser.getLocation().equalsIgnoreCase(author.getLocation())) {
-                    resonanceMultiplier += 0.25;
+                    resonanceMultiplier += 0.20;
                 }
 
                 // Social Graph: Tác giả bài viết là Bạn Bè (+45%)
                 if (friendUserIds.contains(author.getId())) {
                     resonanceMultiplier += 0.45;
+                    if (recoReason == null) {
+                        recoReason = "Bài viết từ bạn bè " + dto.getAuthorNickname();
+                    }
                 }
 
                 // Bài viết của chính mình
                 if (author.getId().equals(currentUser.getId())) {
                     resonanceMultiplier += 0.15;
                 }
-            }
-
-            // Đề xuất bài viết từ Cộng đồng cho người CHƯA tham gia (+30% để khuyến khích khám phá kết nối mới)
-            if (grp != null && !isMemberOfThisGroup) {
-                resonanceMultiplier += 0.30;
             }
 
             // Đa phương tiện phong phú
@@ -365,6 +419,13 @@ public class PostService {
             if (p.getVibe() != null && !p.getVibe().trim().isEmpty()) {
                 resonanceMultiplier += 0.1;
             }
+
+            if (recoReason == null && engagementScore > 10.0) {
+                recoReason = "Thịnh hành được quan tâm nhiều";
+            }
+
+            dto.setRecommendationReason(recoReason);
+            dto.setIsFriendInteraction(isFriendInteracted);
 
             // 3. Phân kỳ ngẫu nhiên phi xác định cá nhân hóa (Non-deterministic Personal Jitter):
             // Đảm bảo không bị fix cứng, người dùng A và B (dù cùng là bạn của C) sẽ nhìn thấy thứ tự đa dạng, không trùng lặp 100%
