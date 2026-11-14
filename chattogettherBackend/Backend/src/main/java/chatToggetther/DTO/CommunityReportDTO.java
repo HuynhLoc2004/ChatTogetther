@@ -13,12 +13,15 @@ import java.time.LocalDateTime;
 @Setter
 public class CommunityReportDTO {
     private Long id;
+    private String targetType;
+    private Long targetId;
     private Long communityId;
     private String communityName;
     private Long reporterId;
     private String reporterName;
     private String reporterAccount;
     private Long targetPostId;
+    private String reason;
     private String reasonCode;
     private String description;
     private String status;

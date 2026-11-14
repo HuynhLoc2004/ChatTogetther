@@ -703,6 +703,7 @@ const ChatRoom = () => {
       });
 
       setIsCallActive(true);
+      setIsCallScreenOpen(true);
       setIncomingCall(null);
       if (callTimerRef.current) clearInterval(callTimerRef.current);
       callTimerRef.current = setInterval(() => {

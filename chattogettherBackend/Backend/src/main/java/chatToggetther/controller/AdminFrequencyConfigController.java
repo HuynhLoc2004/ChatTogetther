@@ -27,7 +27,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/admin/frequency-config")
+@RequestMapping({"/api/admin/frequency-config", "/api/admin/frequency"})
 public class AdminFrequencyConfigController {
 
     private final MatchIntentRepository matchIntentRepository;

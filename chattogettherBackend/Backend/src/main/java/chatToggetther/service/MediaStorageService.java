@@ -63,6 +63,33 @@ public class MediaStorageService {
         }
     }
 
+    public String storeMusicFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new AppException(400, "Tệp nhạc không được để trống", 400);
+        }
+
+        String originalFilename = StringUtils.cleanPath(file.getOriginalFilename() != null ? file.getOriginalFilename() : "track.mp3");
+        String extension = "mp3";
+        int dotIndex = originalFilename.lastIndexOf('.');
+        if (dotIndex > 0) {
+            extension = originalFilename.substring(dotIndex + 1).toLowerCase();
+        }
+
+        String uniqueFileName = String.format("track_%d_%s.%s",
+                System.currentTimeMillis(),
+                UUID.randomUUID().toString().substring(0, 8),
+                extension
+        );
+
+        try {
+            Path targetLocation = this.storageDirectory.resolve(uniqueFileName);
+            Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
+            return "/api/match/audio/" + uniqueFileName;
+        } catch (IOException e) {
+            throw new AppException(500, "Lỗi khi lưu trữ tệp nhạc: " + e.getMessage(), 500);
+        }
+    }
+
     public Resource loadAudioSampleAsResource(String fileName) {
         try {
             Path filePath = this.storageDirectory.resolve(fileName).normalize();

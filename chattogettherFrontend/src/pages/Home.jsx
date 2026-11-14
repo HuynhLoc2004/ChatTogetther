@@ -384,15 +384,22 @@ const Home = () => {
   const [activeReactionPicker, setActiveReactionPicker] = useState(null);
   const reactionTimeoutRef = useRef(null);
 
-  // Lắng nghe click bên ngoài để tự động đóng popup reactions
+  // Lắng nghe click bên ngoài và cuộn trang để đóng ngay reactions popup
   useEffect(() => {
     const handleGlobalClick = (e) => {
       if (!e.target.closest('.reaction-drop-wrapper') && !e.target.closest('.reactions-popup-menu')) {
         setActiveReactionPicker(null);
       }
     };
+    const handleGlobalScroll = () => {
+      setActiveReactionPicker(null);
+    };
     document.addEventListener('pointerdown', handleGlobalClick);
-    return () => document.removeEventListener('pointerdown', handleGlobalClick);
+    window.addEventListener('scroll', handleGlobalScroll, { passive: true });
+    return () => {
+      document.removeEventListener('pointerdown', handleGlobalClick);
+      window.removeEventListener('scroll', handleGlobalScroll);
+    };
   }, []);
 
   // Multimedia Signals State (Ảnh/Film webp + Ghi âm giọng nói 15s)
@@ -421,6 +428,17 @@ const Home = () => {
   const [editingCommentText, setEditingCommentText] = useState('');
   const [isSavingComment, setIsSavingComment] = useState(false);
   const [selectedThreadPost, setSelectedThreadPost] = useState(null);
+
+  // Khóa cuộn trang nền khi mở Modal Chi tiết bài viết trên Mobile để không bị bóp / nhảy màn hình
+  useEffect(() => {
+    if (selectedThreadPost) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [selectedThreadPost]);
 
   // Thẻ chủ đề / Dấu ấn cộng đồng riêng (Sparks)
   const [selectedTags, setSelectedTags] = useState([]);
@@ -3122,7 +3140,16 @@ const Home = () => {
                           </button>
 
                           {activeReactionPicker === post.id && (
-                            <div className="reactions-popup-menu">
+                            <div 
+                              className="reactions-popup-menu"
+                              onMouseEnter={() => {
+                                if (reactionTimeoutRef.current) clearTimeout(reactionTimeoutRef.current);
+                              }}
+                              onMouseLeave={() => {
+                                if (reactionTimeoutRef.current) clearTimeout(reactionTimeoutRef.current);
+                                setActiveReactionPicker(null);
+                              }}
+                            >
                               {REACTION_EMOJIS.map(item => (
                                 <button
                                   key={item.type}
@@ -3130,6 +3157,7 @@ const Home = () => {
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     handleReactPost(post.id, item.type);
+                                    setActiveReactionPicker(null);
                                   }}
                                   className="reaction-emoji-item"
                                   title={item.label}
@@ -4425,7 +4453,7 @@ const Home = () => {
         >
           {/* Khung Modal Container: Trên mobile là full màn hình cố định, trên PC là Dual-View 2 cột */}
           <div 
-            className="relative w-full sm:w-[940px] lg:w-[1040px] h-full sm:h-[82vh] sm:max-h-[740px] sm:min-h-[580px] bg-[#0c0d12] border-0 sm:border border-zinc-800 sm:rounded-3xl flex flex-col overflow-hidden shadow-2xl modal-card-smooth"
+            className="relative w-full sm:w-[940px] lg:w-[1040px] h-[100dvh] sm:h-[82vh] sm:max-h-[740px] sm:min-h-[580px] bg-[#0c0d12] border-0 sm:border border-zinc-800 sm:rounded-3xl flex flex-col overflow-hidden shadow-2xl modal-card-smooth"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header Modal View chung */}
@@ -4587,7 +4615,7 @@ const Home = () => {
               </div>
 
               {/* Ô nhập bình luận cố định ở đáy mobile view */}
-              <div className="p-3 bg-[#12131a] border-t border-zinc-800 flex items-center gap-2.5 flex-shrink-0">
+              <div className="p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-[#12131a] border-t border-zinc-800 flex items-center gap-2.5 flex-shrink-0">
                 <UserAvatar avatar={currentUserAvatar} name={currentUserName} size={32} />
                 <div className="flex-1 min-w-0">
                   {replyTargetMap[selectedThreadPost.id] && (
@@ -6252,6 +6280,14 @@ const Home = () => {
           z-index: 70;
           animation: slideUpReaction 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
           pointer-events: auto;
+        }
+        .reactions-popup-menu::after {
+          content: '';
+          position: absolute;
+          top: 100%;
+          left: 0;
+          right: 0;
+          height: 14px;
         }
         @keyframes slideUpReaction {
           from { opacity: 0; transform: translateY(8px) scale(0.92); }

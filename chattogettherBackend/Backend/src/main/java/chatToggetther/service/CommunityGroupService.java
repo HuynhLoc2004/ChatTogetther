@@ -412,7 +412,10 @@ public class CommunityGroupService {
         CommunityReportEntity report = new CommunityReportEntity();
         report.setCommunity(group);
         report.setReporter(currentUser);
+        report.setTargetType("COMMUNITY");
+        report.setTargetId(groupId);
         report.setTargetPostId(request.getTargetPostId());
+        report.setReason(request.getReasonCode().trim().toUpperCase());
         report.setReasonCode(request.getReasonCode().trim().toUpperCase());
         report.setDescription(request.getDescription());
         report.setStatus("PENDING");
@@ -645,6 +648,9 @@ public class CommunityGroupService {
     private CommunityReportDTO mapToReportDTO(CommunityReportEntity r) {
         CommunityReportDTO dto = new CommunityReportDTO();
         dto.setId(r.getId());
+        dto.setTargetType(r.getTargetType());
+        dto.setTargetId(r.getTargetId());
+        dto.setReason(r.getReason() != null ? r.getReason() : r.getReasonCode());
         if (r.getCommunity() != null) {
             dto.setCommunityId(r.getCommunity().getId());
             dto.setCommunityName(r.getCommunity().getName());
