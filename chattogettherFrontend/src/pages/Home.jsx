@@ -23,7 +23,7 @@ import toast from 'react-hot-toast';
 import TalovinLogo from '../components/TalovinLogo';
 import GroupCollageAvatar from '../components/GroupCollageAvatar';
 import IncomingCallModal from '../components/IncomingCallModal';
-import CommunitySection from '../components/CommunitySection';
+import CommunitySection, { validateInputSafe } from '../components/CommunitySection';
 import ResonanceMatchModal from '../components/ResonanceMatchModal';
 import ChallengeDeckModal from '../components/ChallengeDeckModal';
 
@@ -1847,16 +1847,27 @@ const Home = ({ initialTab }) => {
 
   const handleCreateRoom = async (e) => {
     e.preventDefault();
-    if (!newRoomData.name.trim()) {
-      toast.error("Vui lòng nhập tên phòng!");
+    const nameErr = validateInputSafe(newRoomData.name, "Tên phòng", 3, 60);
+    if (nameErr) {
+      toast.error(nameErr);
       return;
+    }
+    if (newRoomData.password && newRoomData.password.trim()) {
+      const passErr = validateInputSafe(newRoomData.password, "Mật khẩu phòng", 0, 30);
+      if (passErr) {
+        toast.error(passErr);
+        return;
+      }
     }
 
     try {
-      const response = await axiosClient.post('/rooms/create-room', {
+      const payload = {
+        nameRoom: newRoomData.name.trim(),
         roomName: newRoomData.name.trim(),
-        password: newRoomData.password || null
-      });
+        nameroom: newRoomData.name.trim(),
+        password: newRoomData.password ? newRoomData.password.trim() : null
+      };
+      const response = await axiosClient.post('/rooms/create', payload);
 
       if (response.data && response.data.data) {
         toast.success("Tạo phòng thành công!");
@@ -4119,44 +4130,72 @@ const Home = ({ initialTab }) => {
       )}
 
       {/* MODAL TẠO PHÒNG */}
-      {isCreateModalOpen && (
-        <div className="modal-veil" onClick={() => setIsCreateModalOpen(false)}>
-          <div className="modal-dialog-box" onClick={(e) => e.stopPropagation()}>
-            <div className="dialog-header">
-              <div className="dialog-title-flex">
-                <Radio size={16} color="#a1a1aa" />
-                <h4>Tạo Không Gian Đàm Thoại</h4>
+      <AnimatePresence>
+        {isCreateModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md" onClick={() => setIsCreateModalOpen(false)}>
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ type: "spring", damping: 25, stiffness: 350 }}
+              className="relative w-full max-w-md rounded-2xl bg-zinc-900 border border-zinc-800 p-5 sm:p-6 shadow-2xl flex flex-col space-y-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+                <div className="flex items-center gap-2">
+                  <Radio size={18} className="text-zinc-300" />
+                  <h4 className="text-zinc-100 font-bold text-sm tracking-tight">Tạo Không Gian Đàm Thoại</h4>
+                </div>
+                <button onClick={() => setIsCreateModalOpen(false)} className="text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition-colors">
+                  <X size={16} />
+                </button>
               </div>
-              <button onClick={() => setIsCreateModalOpen(false)} className="btn-close-dialog"><X size={15} /></button>
-            </div>
-            <form onSubmit={handleCreateRoom} className="dialog-form">
-              <div className="dialog-field">
-                <label>Tên phòng</label>
-                <input 
-                  type="text" 
-                  placeholder="VD: Không gian trò chuyện cuối tuần"
-                  value={newRoomData.name}
-                  onChange={(e) => setNewRoomData({ ...newRoomData, name: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="dialog-field">
-                <label>Mật khẩu (Tùy chọn)</label>
-                <input 
-                  type="password" 
-                  placeholder="Để trống nếu là phòng công khai"
-                  value={newRoomData.password}
-                  onChange={(e) => setNewRoomData({ ...newRoomData, password: e.target.value })}
-                />
-              </div>
-              <div className="dialog-actions-row">
-                <button type="button" onClick={() => setIsCreateModalOpen(false)} className="btn-dialog-back">Hủy</button>
-                <button type="submit" className="btn-dialog-primary">Tạo phòng</button>
-              </div>
-            </form>
+
+              <form onSubmit={handleCreateRoom} className="space-y-4">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-zinc-300 text-xs font-semibold">Tên phòng *</label>
+                    <span className="text-[10px] text-zinc-500 font-mono">{newRoomData.name.length}/60</span>
+                  </div>
+                  <input 
+                    type="text" 
+                    placeholder="VD: Không gian trò chuyện cuối tuần"
+                    value={newRoomData.name}
+                    onChange={(e) => setNewRoomData({ ...newRoomData, name: e.target.value })}
+                    maxLength={60}
+                    required
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-100 text-xs focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 placeholder-zinc-500 transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-zinc-300 text-xs font-semibold">Mật khẩu phòng (Tùy chọn)</label>
+                    <span className="text-[10px] text-zinc-500 font-mono">Tối đa 30 ký tự</span>
+                  </div>
+                  <input 
+                    type="password" 
+                    placeholder="Để trống nếu là phòng công khai"
+                    value={newRoomData.password}
+                    onChange={(e) => setNewRoomData({ ...newRoomData, password: e.target.value })}
+                    maxLength={30}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-100 text-xs focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 placeholder-zinc-500 transition-colors"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-zinc-800">
+                  <button type="button" onClick={() => setIsCreateModalOpen(false)} className="h-10 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium transition-all">
+                    Hủy
+                  </button>
+                  <button type="submit" className="h-10 px-5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs shadow-sm transition-all active:scale-95">
+                    Tạo phòng
+                  </button>
+                </div>
+              </form>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
       {/* MODAL THAM GIA PHÒNG CÓ MẬT KHẨU */}
       {selectedRoom && (

@@ -132,6 +132,14 @@ public class CommunityGroupService {
             throw new AppException(401, "Yêu cầu đăng nhập để tạo cộng đồng", 401);
         }
 
+        SecurityUtils.validateSafeInput(request.getName(), "Tên cộng đồng", 3, 80);
+        if (request.getDescription() != null && !request.getDescription().trim().isEmpty()) {
+            SecurityUtils.validateSafeInput(request.getDescription(), "Mô tả cộng đồng", 0, 500);
+        }
+        if (request.getRules() != null && !request.getRules().trim().isEmpty()) {
+            SecurityUtils.validateSafeInput(request.getRules(), "Nội quy cộng đồng", 0, 1000);
+        }
+
         CommunityGroupEntity group = new CommunityGroupEntity();
         group.setName(request.getName().trim());
         group.setDescription(request.getDescription());

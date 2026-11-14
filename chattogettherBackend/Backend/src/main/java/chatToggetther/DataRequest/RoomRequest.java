@@ -1,6 +1,5 @@
 package chatToggetther.DataRequest;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Null;
+
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -11,11 +10,18 @@ import lombok.Setter;
 @Getter
 @Setter
 public class RoomRequest {
-    @NotNull(message = "name room not null")
     private String nameRoom;
-    @NotNull(message = "password not null")
+    private String roomName;
+    private String nameroom;
     private String password;
     private String nickname;
     private String avatar;
     private String description;
+
+    public String getEffectiveRoomName() {
+        if (nameRoom != null && !nameRoom.trim().isEmpty()) return nameRoom.trim();
+        if (roomName != null && !roomName.trim().isEmpty()) return roomName.trim();
+        if (nameroom != null && !nameroom.trim().isEmpty()) return nameroom.trim();
+        return null;
+    }
 }

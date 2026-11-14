@@ -24,7 +24,7 @@ public class RoomController {
         this.roomService = roomService;
     }
 
-    @PostMapping("/create")
+    @PostMapping({"/create", "/create-room"})
     public ResponseEntity<ResponseData<CreateRoomResponseDTO>> createRoom(JwtAuthenticationToken jwtAuthenticationToken , @RequestBody @Valid RoomRequest roomRequest, HttpServletResponse httpServletResponse){
         return ResponseEntity.ok(this.roomService.createRoom(jwtAuthenticationToken , roomRequest, httpServletResponse));
     }

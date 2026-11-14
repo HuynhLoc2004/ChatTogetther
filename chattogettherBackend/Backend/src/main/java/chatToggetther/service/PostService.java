@@ -504,11 +504,21 @@ public class PostService {
                 new AppException(404, "Cộng đồng không tồn tại", 404)
             );
 
+            if ("PENDING".equalsIgnoreCase(grp.getStatus())) {
+                boolean isAdminGroup = currentUser.getRoles() != null && (currentUser.getRoles().contains("ROLE_ADMIN") || currentUser.getRoles().contains("ROLE_AMDIN"));
+                if (!isAdminGroup) {
+                    throw new AppException(403, "Cộng đồng đang chờ Admin phê duyệt. Chưa thể đăng bài lúc này!", 403);
+                }
+            }
+
             // Kiểm tra tư cách thành viên
             Optional<CommunityMemberEntity> memberOpt = this.memberRepository.findByGroupAndUser(grp, currentUser);
-            boolean isMember = memberOpt.isPresent() && "ACTIVE".equals(memberOpt.get().getStatus());
+            boolean isMember = memberOpt.isPresent() && "ACTIVE".equalsIgnoreCase(memberOpt.get().getStatus());
             boolean isAdmin = currentUser.getRoles() != null && (currentUser.getRoles().contains("ROLE_ADMIN") || currentUser.getRoles().contains("ROLE_AMDIN"));
             if (!isMember && !isAdmin) {
+                if (memberOpt.isPresent() && "PENDING".equalsIgnoreCase(memberOpt.get().getStatus())) {
+                    throw new AppException(403, "Yêu cầu gia nhập cộng đồng của bạn đang chờ phê duyệt. Bạn chỉ có thể đăng bài sau khi được duyệt!", 403);
+                }
                 throw new AppException(403, "Bạn cần gia nhập cộng đồng này trước khi đăng bài thảo luận!", 403);
             }
 

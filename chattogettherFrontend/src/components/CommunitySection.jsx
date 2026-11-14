@@ -1,15 +1,31 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Users, Plus, Search, Shield, Crown, CheckCircle2, XCircle, 
   Settings, LogOut, Trash2, Camera, Lock, Globe, FileText, ChevronRight, ChevronDown, X,
   ArrowLeft, MessageSquare, PhoneCall, Radio, Send, Image as ImageIcon,
   Heart, MessageCircle, Sparkles, Flame, Check, CornerDownRight, Play, Pause,
   Volume2, Share2, MoreVertical, UserPlus, Flag, Mic, Square, RotateCcw, Star,
-  Sliders, Edit3, AlertTriangle, Layers, Pin
+  Sliders, Edit3, AlertTriangle, Layers, Pin, Clock
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import GroupCollageAvatar from './GroupCollageAvatar';
 import toast from 'react-hot-toast';
+
+// Biểu thức chính quy phòng chống tấn công SQL Injection và Script Injection
+export const SQL_INJECTION_REGEX = /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|UNION|ALTER|CREATE|TRUNCATE|EXEC|DECLARE|XP_)\b|--|\/\*|\*\/|;|\bOR\b\s+['"\d\w]+\s*=\s*['"\d\w]+|<script)/i;
+
+export const validateInputSafe = (val, fieldName, min = 3, max = 80) => {
+  if (!val || !val.trim()) {
+    if (min > 0) return `${fieldName} không được để trống!`;
+    return null;
+  }
+  const trimmed = val.trim();
+  if (trimmed.length < min) return `${fieldName} phải có ít nhất ${min} ký tự!`;
+  if (trimmed.length > max) return `${fieldName} tối đa ${max} ký tự!`;
+  if (SQL_INJECTION_REGEX.test(trimmed)) return `${fieldName} chứa ký tự hoặc từ khóa không an toàn (phòng chống SQL injection)!`;
+  return null;
+};
 
 const DEFAULT_REJECT_REASONS = [
   { id: 'SPAM', label: 'Spam / Quảng cáo / Tin rác' },
@@ -497,13 +513,29 @@ export const CommunitySection = ({
     }
   };
 
-  // Tạo cộng đồng mới
+  // Tạo cộng đồng mới (Đã xác thực đầu vào & chống SQL Injection)
   const handleCreateSubmit = async (e) => {
     e.preventDefault();
-    if (!createForm.name.trim()) {
-      toast.error("Vui lòng nhập tên cộng đồng");
+    const nameErr = validateInputSafe(createForm.name, "Tên cộng đồng", 3, 80);
+    if (nameErr) {
+      toast.error(nameErr);
       return;
     }
+    if (createForm.description && createForm.description.trim()) {
+      const descErr = validateInputSafe(createForm.description, "Mô tả", 0, 500);
+      if (descErr) {
+        toast.error(descErr);
+        return;
+      }
+    }
+    if (createForm.rules && createForm.rules.trim()) {
+      const rulesErr = validateInputSafe(createForm.rules, "Nội quy", 0, 1000);
+      if (rulesErr) {
+        toast.error(rulesErr);
+        return;
+      }
+    }
+
     try {
       setIsSubmitting(true);
       const res = await axiosClient.post('/groups', createForm);
@@ -706,6 +738,20 @@ export const CommunitySection = ({
   // Mở / Tham gia phòng thoại nhóm (Audio-First)
   const handleOpenGroupVoiceRoom = async () => {
     if (!selectedGroup) return;
+    if (selectedGroup.status === 'PENDING') {
+      toast.error("Cộng đồng đang chờ Admin phê duyệt, chưa thể mở phòng thoại!");
+      return;
+    }
+    const isApproved = ['OWNER', 'DEPUTY', 'MEMBER'].includes(selectedGroup.currentUserRole);
+    if (!isApproved) {
+      if (selectedGroup.currentUserRole === 'PENDING') {
+        toast.error("Yêu cầu tham gia của bạn đang chờ phê duyệt!");
+      } else {
+        toast.error("Bạn cần gia nhập cộng đồng trước khi mở phòng thoại!");
+      }
+      return;
+    }
+
     const gNameStr = String(selectedGroup.name || '').toLowerCase().trim();
     const existingRoom = (rooms || []).find(r => 
       r && String(r.nameroom || '').toLowerCase().includes(gNameStr)
@@ -720,6 +766,8 @@ export const CommunitySection = ({
     try {
       const res = await axiosClient.post('/rooms/create', {
         nameroom: `Phòng đàm thoại • ${selectedGroup.name}`,
+        nameRoom: `Phòng đàm thoại • ${selectedGroup.name}`,
+        roomName: `Phòng đàm thoại • ${selectedGroup.name}`,
         isPrivate: false,
         theme: 'general',
         maxParticipants: 15
@@ -738,6 +786,21 @@ export const CommunitySection = ({
   // Đăng thảo luận vào cộng đồng
   const handleAddGroupPost = async (e) => {
     e.preventDefault();
+    if (!selectedGroup) return;
+    if (selectedGroup.status === 'PENDING') {
+      toast.error("Cộng đồng đang chờ Admin phê duyệt, chưa thể đăng bài!");
+      return;
+    }
+    const isApproved = ['OWNER', 'DEPUTY', 'MEMBER'].includes(selectedGroup.currentUserRole);
+    if (!isApproved) {
+      if (selectedGroup.currentUserRole === 'PENDING') {
+        toast.error("Yêu cầu tham gia của bạn đang chờ phê duyệt. Chưa thể đăng bài lúc này!");
+      } else {
+        toast.error("Bạn cần gia nhập cộng đồng trước khi đăng bài thảo luận!");
+      }
+      return;
+    }
+
     if (!groupPostText.trim() && !groupAttachedImage && !voiceBase64) {
       toast.error("Vui lòng nhập nội dung, đính kèm ảnh hoặc ghi âm 15s!");
       return;
@@ -787,7 +850,15 @@ export const CommunitySection = ({
     r && String(r.nameroom || '').toLowerCase().includes(String(selectedGroup.name || '').toLowerCase().trim())
   ) : null;
 
-  const canManage = selectedGroup && ['OWNER', 'DEPUTY'].includes(groupDetail?.currentUserRole || selectedGroup.currentUserRole);
+  const effectiveRole = groupDetail?.currentUserRole || selectedGroup?.currentUserRole;
+  const isOwner = effectiveRole === 'OWNER';
+  const isDeputy = effectiveRole === 'DEPUTY';
+  const isMember = effectiveRole === 'MEMBER';
+  const isApprovedMember = isOwner || isDeputy || isMember;
+  const isPendingMember = effectiveRole === 'PENDING';
+  const isBannedMember = effectiveRole === 'BANNED';
+  const isGuest = !effectiveRole;
+  const canManage = selectedGroup && (isOwner || isDeputy);
 
   // ==========================================
   // RENDER GIAO DIỆN CHÍNH
@@ -823,18 +894,34 @@ export const CommunitySection = ({
             </button>
 
             <div className="flex items-center gap-2">
-              {selectedGroup.currentUserRole === 'OWNER' && (
+              {isOwner && (
                 <span className="px-2.5 py-1 rounded-lg bg-zinc-800 text-zinc-200 border border-zinc-700 text-xs font-medium flex items-center gap-1.5 font-mono">
                   <Crown size={12} /> Chủ nhóm
                 </span>
               )}
-              {selectedGroup.currentUserRole === 'DEPUTY' && (
+              {isDeputy && (
                 <span className="px-2.5 py-1 rounded-lg bg-zinc-800 text-zinc-300 border border-zinc-700 text-xs font-medium flex items-center gap-1.5 font-mono">
                   <Shield size={12} /> Phó nhóm
                 </span>
               )}
+              {isPendingMember && (
+                <span className="px-2.5 py-1 rounded-lg bg-zinc-900 text-zinc-400 border border-zinc-800 text-xs font-medium flex items-center gap-1.5 font-mono">
+                  <Clock size={12} /> Chờ duyệt
+                </span>
+              )}
             </div>
           </div>
+
+          {/* CẢNH BÁO NẾU CỘNG ĐỒNG ĐANG CHỜ ADMIN PHÊ DUYỆT */}
+          {selectedGroup.status === 'PENDING' && (
+            <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 text-zinc-300 flex items-start gap-3">
+              <AlertTriangle size={18} className="text-zinc-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs font-semibold text-zinc-200">Cộng đồng đang chờ Ban Quản Trị phê duyệt</p>
+                <p className="text-[11px] text-zinc-400 mt-0.5">Không gian này đang trong hàng đợi kiểm duyệt của Admin. Tính năng đăng bài thảo luận và mở phòng thoại sẽ khả dụng ngay khi cộng đồng được duyệt chính thức.</p>
+              </div>
+            </div>
+          )}
 
           {/* ============================================================== */}
           {/* HEADER NHÓM GỌN GÀNG (LOẠI BỎ HOÀN TOÀN KHOẢNG ĐEN THỪA)       */}
@@ -866,14 +953,19 @@ export const CommunitySection = ({
                     <h1 className="text-lg sm:text-xl font-bold text-white tracking-tight truncate">
                       {selectedGroup.name}
                     </h1>
-                    {selectedGroup.currentUserRole === 'OWNER' && (
+                    {isOwner && (
                       <span className="bg-zinc-800 text-zinc-200 border border-zinc-700 text-[11px] font-medium px-2 py-0.5 rounded-md flex items-center gap-1 font-mono">
                         <Crown size={11} /> Chủ nhóm
                       </span>
                     )}
-                    {selectedGroup.currentUserRole === 'DEPUTY' && (
+                    {isDeputy && (
                       <span className="bg-zinc-800 text-zinc-300 border border-zinc-700 text-[11px] font-medium px-2 py-0.5 rounded-md flex items-center gap-1 font-mono">
                         <Shield size={11} /> Phó nhóm
+                      </span>
+                    )}
+                    {isPendingMember && (
+                      <span className="bg-zinc-900 text-zinc-400 border border-zinc-800 text-[11px] font-medium px-2 py-0.5 rounded-md flex items-center gap-1 font-mono">
+                        <Clock size={11} /> Chờ duyệt
                       </span>
                     )}
                     {selectedGroup.isFeatured && (
@@ -898,47 +990,83 @@ export const CommunitySection = ({
                 </div>
               </div>
 
-              {/* Nút hành động Desktop: ngang bên phải; Mobile: grid-cols-2 full chiều ngang */}
+              {/* Nút hành động Desktop: ngang bên phải */}
               <div className="hidden sm:flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setIsInviteFriendsOpen(true)}
-                  className="h-9 px-3.5 rounded-xl bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-200 text-xs font-medium transition-all active:scale-95 flex items-center gap-1.5"
-                >
-                  <UserPlus size={14} />
-                  <span>Mời bạn bè</span>
-                </button>
+                {isApprovedMember ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setIsInviteFriendsOpen(true)}
+                      className="h-9 px-3.5 rounded-xl bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-200 text-xs font-medium transition-all active:scale-95 flex items-center gap-1.5"
+                    >
+                      <UserPlus size={14} />
+                      <span>Mời bạn bè</span>
+                    </button>
 
-                <button
-                  type="button"
-                  onClick={handleOpenGroupVoiceRoom}
-                  className="h-9 px-3.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-medium transition-all active:scale-95 flex items-center gap-1.5 shadow-sm"
-                >
-                  <Radio size={14} className={activeGroupRoom ? "text-emerald-600 animate-pulse" : ""} />
-                  <span>{activeGroupRoom ? "Vào phòng thoại" : "Mở phòng thoại nhóm"}</span>
-                </button>
+                    <button
+                      type="button"
+                      onClick={handleOpenGroupVoiceRoom}
+                      className="h-9 px-3.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-medium transition-all active:scale-95 flex items-center gap-1.5 shadow-sm"
+                    >
+                      <Radio size={14} className={activeGroupRoom ? "text-emerald-600 animate-pulse" : ""} />
+                      <span>{activeGroupRoom ? "Vào phòng thoại" : "Mở phòng thoại nhóm"}</span>
+                    </button>
+                  </>
+                ) : isPendingMember ? (
+                  <div className="h-9 px-3.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 text-xs font-medium flex items-center gap-1.5">
+                    <Clock size={14} className="text-zinc-500" />
+                    <span>Yêu cầu tham gia chờ duyệt</span>
+                  </div>
+                ) : isGuest ? (
+                  <button
+                    type="button"
+                    onClick={(e) => handleJoinGroup(selectedGroup.id, e)}
+                    className="h-9 px-4 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-semibold flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                  >
+                    <UserPlus size={14} />
+                    <span>{selectedGroup.requiresApproval ? "Gửi yêu cầu tham gia" : "Gia nhập cộng đồng"}</span>
+                  </button>
+                ) : null}
               </div>
             </div>
 
-            {/* Hàng nút trên Mobile: xếp 2 cột full width */}
-            <div className="grid grid-cols-2 gap-2 w-full mt-3.5 sm:hidden">
-              <button
-                type="button"
-                onClick={() => setIsInviteFriendsOpen(true)}
-                className="h-9 px-3 rounded-xl bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-200 text-xs font-medium transition-all active:scale-95 flex items-center justify-center gap-1.5"
-              >
-                <UserPlus size={13} />
-                <span>Mời bạn bè</span>
-              </button>
+            {/* Hàng nút trên Mobile */}
+            <div className="w-full mt-3.5 sm:hidden">
+              {isApprovedMember ? (
+                <div className="grid grid-cols-2 gap-2 w-full">
+                  <button
+                    type="button"
+                    onClick={() => setIsInviteFriendsOpen(true)}
+                    className="h-9 px-3 rounded-xl bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-200 text-xs font-medium transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                  >
+                    <UserPlus size={13} />
+                    <span>Mời bạn bè</span>
+                  </button>
 
-              <button
-                type="button"
-                onClick={handleOpenGroupVoiceRoom}
-                className="h-9 px-3 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-medium transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-sm"
-              >
-                <Radio size={13} className={activeGroupRoom ? "text-emerald-600 animate-pulse" : ""} />
-                <span className="truncate">{activeGroupRoom ? "Vào phòng thoại" : "Mở phòng thoại"}</span>
-              </button>
+                  <button
+                    type="button"
+                    onClick={handleOpenGroupVoiceRoom}
+                    className="h-9 px-3 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-medium transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-sm"
+                  >
+                    <Radio size={13} className={activeGroupRoom ? "text-emerald-600 animate-pulse" : ""} />
+                    <span className="truncate">{activeGroupRoom ? "Vào phòng thoại" : "Mở phòng thoại"}</span>
+                  </button>
+                </div>
+              ) : isPendingMember ? (
+                <div className="w-full h-9 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 text-xs font-medium flex items-center justify-center gap-1.5">
+                  <Clock size={13} className="text-zinc-500" />
+                  <span>Yêu cầu tham gia chờ duyệt</span>
+                </div>
+              ) : isGuest ? (
+                <button
+                  type="button"
+                  onClick={(e) => handleJoinGroup(selectedGroup.id, e)}
+                  className="w-full h-9 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                >
+                  <UserPlus size={14} />
+                  <span>{selectedGroup.requiresApproval ? "Gửi yêu cầu tham gia" : "Gia nhập cộng đồng"}</span>
+                </button>
+              ) : null}
             </div>
           </div>
 
@@ -1053,10 +1181,47 @@ export const CommunitySection = ({
               )}
 
               {/* Box soạn thảo bài viết dành riêng cho nhóm (Ảnh & Ghi âm 15s) */}
-              {selectedGroup.currentUserRole === 'BANNED' ? (
+              {selectedGroup.status === 'PENDING' ? (
+                <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 text-center space-y-1">
+                  <p className="text-xs font-semibold text-zinc-300">Cộng đồng đang chờ Admin hệ thống xét duyệt</p>
+                  <p className="text-[11px] text-zinc-500">Chức năng đăng thảo luận và tương tác sẽ tự động mở khi cộng đồng được kích hoạt chính thức.</p>
+                </div>
+              ) : isBannedMember ? (
                 <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 text-center space-y-1">
                   <p className="text-xs font-semibold text-rose-400">Bạn đã bị chặn khỏi cộng đồng này</p>
                   <p className="text-[11px] text-zinc-400">Bạn chỉ có thể xem nội dung lưu trữ và không thể đăng bài thảo luận hoặc bình luận.</p>
+                </div>
+              ) : isPendingMember ? (
+                <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800/90 text-center space-y-2">
+                  <div className="w-10 h-10 rounded-xl bg-zinc-800 border border-zinc-700/80 flex items-center justify-center mx-auto text-zinc-400">
+                    <Clock size={18} />
+                  </div>
+                  <h4 className="text-sm font-semibold text-zinc-200">Yêu cầu tham gia của bạn đang chờ phê duyệt</h4>
+                  <p className="text-xs text-zinc-400 max-w-md mx-auto leading-relaxed">
+                    Chủ nhóm đang xét duyệt yêu cầu của bạn. Sau khi được duyệt, bạn sẽ có thể đăng bài thảo luận, chia sẻ ảnh, ghi âm giọng nói 15s và tham gia phòng thoại nhóm.
+                  </p>
+                </div>
+              ) : isGuest ? (
+                <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800/90 text-center space-y-3">
+                  <div className="w-10 h-10 rounded-xl bg-zinc-800 border border-zinc-700/80 flex items-center justify-center mx-auto text-zinc-400">
+                    <Lock size={18} />
+                  </div>
+                  <h4 className="text-sm font-semibold text-zinc-200">
+                    {selectedGroup.requiresApproval ? "Cộng đồng yêu cầu phê duyệt thành viên" : "Tham gia cộng đồng để đăng bài thảo luận"}
+                  </h4>
+                  <p className="text-xs text-zinc-400 max-w-md mx-auto leading-relaxed">
+                    {selectedGroup.requiresApproval 
+                      ? "Không gian này yêu cầu xét duyệt từ Ban quản trị nhóm. Hãy gửi yêu cầu tham gia để cùng kết nối và thảo luận."
+                      : "Gia nhập cộng đồng để đăng bài viết, chia sẻ bản thu âm giọng nói 15s và kết nối cùng các thành viên."}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={(e) => handleJoinGroup(selectedGroup.id, e)}
+                    className="h-9 px-4 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs shadow-sm transition-all active:scale-95 inline-flex items-center gap-1.5"
+                  >
+                    <UserPlus size={14} />
+                    <span>{selectedGroup.requiresApproval ? "Gửi yêu cầu tham gia" : "Gia nhập cộng đồng"}</span>
+                  </button>
                 </div>
               ) : (
                 <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800/90 shadow-sm">
@@ -1960,128 +2125,157 @@ export const CommunitySection = ({
       {/* ========================================================= */}
       {/* MODAL TẠO CỘNG ĐỒNG MỚI                                   */}
       {/* ========================================================= */}
-      {isCreateOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in" onClick={() => setIsCreateOpen(false)}>
-          <div 
-            className="relative w-full max-w-lg rounded-2xl bg-zinc-900 border border-zinc-800/90 p-5 sm:p-6 shadow-2xl flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-zinc-800 mb-4">
-              <div className="flex items-center gap-2">
-                <Users size={18} className="text-zinc-300" />
-                <h3 className="text-zinc-100 font-bold text-sm tracking-tight">Tạo Không Gian Cộng Đồng Mới</h3>
-              </div>
-              <button 
-                type="button" 
-                onClick={() => setIsCreateOpen(false)}
-                className="text-zinc-400 hover:text-white p-1"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateSubmit} className="space-y-3.5">
-              <div>
-                <label className="block text-zinc-300 text-xs font-semibold mb-1">Tên cộng đồng *</label>
-                <input 
-                  type="text" 
-                  placeholder="VD: Hội Yêu Thích Lo-Fi, Lập Trình Viên..."
-                  value={createForm.name}
-                  onChange={(e) => setCreateForm(prev => ({ ...prev, name: e.target.value }))}
-                  required
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-100 text-xs focus:outline-none focus:border-zinc-700 placeholder-zinc-500"
-                />
-              </div>
-
-              {/* CUSTOM DROPDOWN CHO DANH MỤC TRONG MODAL */}
-              <div className="relative">
-                <label className="block text-zinc-300 text-xs font-semibold mb-1">Danh mục chuyên biệt</label>
-                <button
-                  type="button"
-                  onClick={() => setIsCreateCategoryDropdownOpen(!isCreateCategoryDropdownOpen)}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-white flex items-center justify-between focus:outline-none focus:border-zinc-700"
-                >
-                  <span>
-                    {categories.find(c => c.slug === createForm.categoryCode || c.id === createForm.categoryId)?.name || 'Chung • Mọi chủ đề'}
-                  </span>
-                  <ChevronDown size={14} className="text-zinc-400" />
-                </button>
-                {isCreateCategoryDropdownOpen && (
-                  <div className="absolute top-full left-0 right-0 mt-1 z-30 bg-zinc-900 border border-zinc-800 rounded-xl p-1 shadow-2xl space-y-0.5 max-h-48 overflow-y-auto custom-dark-scrollbar">
-                    {categories.map(c => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => {
-                          setCreateForm(prev => ({ ...prev, categoryCode: c.slug, categoryId: c.id }));
-                          setIsCreateCategoryDropdownOpen(false);
-                        }}
-                        className={`w-full text-left px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center justify-between ${
-                          createForm.categoryCode === c.slug ? 'bg-zinc-800 text-white font-medium' : 'text-zinc-300 hover:bg-zinc-800/60'
-                        }`}
-                      >
-                        <span>{c.name}</span>
-                        {createForm.categoryCode === c.slug && <Check size={12} className="text-white" />}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-zinc-300 text-xs font-semibold mb-1">Mô tả ngắn</label>
-                <textarea 
-                  rows="2"
-                  placeholder="Mô tả mục tiêu, định hướng và chủ đề của cộng đồng..."
-                  value={createForm.description}
-                  onChange={(e) => setCreateForm(prev => ({ ...prev, description: e.target.value }))}
-                  className="w-full px-3.5 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-100 text-xs focus:outline-none focus:border-zinc-700 placeholder-zinc-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-zinc-300 text-xs font-semibold mb-1">Nội quy ban đầu</label>
-                <textarea 
-                  rows="2"
-                  placeholder="Nguyên tắc tham gia và chia sẻ..."
-                  value={createForm.rules}
-                  onChange={(e) => setCreateForm(prev => ({ ...prev, rules: e.target.value }))}
-                  className="w-full px-3.5 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-100 text-xs focus:outline-none focus:border-zinc-700 placeholder-zinc-500"
-                />
-              </div>
-
-              <div className="pt-2">
-                <label className="flex items-center gap-2 cursor-pointer text-xs text-zinc-300">
-                  <input 
-                    type="checkbox" 
-                    checked={createForm.requiresApproval}
-                    onChange={(e) => setCreateForm(prev => ({ ...prev, requiresApproval: e.target.checked }))}
-                    className="rounded bg-zinc-950 border-zinc-800 text-white focus:ring-0"
-                  />
-                  <span>Bật chế độ phê duyệt (Thành viên cần được Ban quản trị duyệt)</span>
-                </label>
-              </div>
-
-              <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-zinc-800">
+      <AnimatePresence>
+        {isCreateOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md" onClick={() => setIsCreateOpen(false)}>
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ type: "spring", damping: 25, stiffness: 350 }}
+              className="relative w-full max-w-lg rounded-2xl bg-zinc-900 border border-zinc-800 p-5 sm:p-6 shadow-2xl flex flex-col space-y-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+                <div className="flex items-center gap-2">
+                  <Users size={18} className="text-zinc-300" />
+                  <h3 className="text-zinc-100 font-bold text-sm tracking-tight">Tạo Không Gian Cộng Đồng Mới</h3>
+                </div>
                 <button 
                   type="button" 
                   onClick={() => setIsCreateOpen(false)}
-                  className="h-10 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium transition-all"
+                  className="text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition-colors"
                 >
-                  Hủy bỏ
-                </button>
-                <button 
-                  type="submit" 
-                  disabled={isSubmitting}
-                  className="h-10 px-4 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs shadow-sm transition-all active:scale-95 disabled:opacity-50"
-                >
-                  {isSubmitting ? "Đang khởi tạo..." : "Xác nhận tạo"}
+                  <X size={16} />
                 </button>
               </div>
-            </form>
+
+              <form onSubmit={handleCreateSubmit} className="space-y-3.5">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-zinc-300 text-xs font-semibold">Tên cộng đồng *</label>
+                    <span className="text-[10px] text-zinc-500 font-mono">{createForm.name.length}/80</span>
+                  </div>
+                  <input 
+                    type="text" 
+                    placeholder="VD: Hội Yêu Thích Lo-Fi, Lập Trình Viên..."
+                    value={createForm.name}
+                    onChange={(e) => setCreateForm(prev => ({ ...prev, name: e.target.value }))}
+                    maxLength={80}
+                    required
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-100 text-xs focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 placeholder-zinc-500 transition-colors"
+                  />
+                </div>
+
+                {/* CUSTOM DROPDOWN CHO DANH MỤC TRONG MODAL */}
+                <div className="relative">
+                  <label className="block text-zinc-300 text-xs font-semibold mb-1">Danh mục chuyên biệt</label>
+                  <button
+                    type="button"
+                    onClick={() => setIsCreateCategoryDropdownOpen(!isCreateCategoryDropdownOpen)}
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-white flex items-center justify-between focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 transition-colors"
+                  >
+                    <span>
+                      {categories.find(c => c.slug === createForm.categoryCode || c.id === createForm.categoryId)?.name || 'Chung • Mọi chủ đề'}
+                    </span>
+                    <ChevronDown size={14} className="text-zinc-400" />
+                  </button>
+                  {isCreateCategoryDropdownOpen && (
+                    <div className="absolute top-full left-0 right-0 mt-1 z-30 bg-zinc-900 border border-zinc-800 rounded-xl p-1 shadow-2xl space-y-0.5 max-h-48 overflow-y-auto custom-dark-scrollbar">
+                      {categories.map(c => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => {
+                            setCreateForm(prev => ({ ...prev, categoryCode: c.slug, categoryId: c.id }));
+                            setIsCreateCategoryDropdownOpen(false);
+                          }}
+                          className={`w-full text-left px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center justify-between ${
+                            createForm.categoryCode === c.slug ? 'bg-zinc-800 text-white font-medium' : 'text-zinc-300 hover:bg-zinc-800/60'
+                          }`}
+                        >
+                          <span>{c.name}</span>
+                          {createForm.categoryCode === c.slug && <Check size={12} className="text-white" />}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-zinc-300 text-xs font-semibold">Mô tả ngắn</label>
+                    <span className="text-[10px] text-zinc-500 font-mono">{createForm.description.length}/500</span>
+                  </div>
+                  <textarea 
+                    rows="2"
+                    placeholder="Mô tả mục tiêu, định hướng và chủ đề của cộng đồng..."
+                    value={createForm.description}
+                    onChange={(e) => setCreateForm(prev => ({ ...prev, description: e.target.value }))}
+                    maxLength={500}
+                    className="w-full px-3.5 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-100 text-xs focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 placeholder-zinc-500 resize-none leading-relaxed transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-zinc-300 text-xs font-semibold">Nội quy ban đầu</label>
+                    <span className="text-[10px] text-zinc-500 font-mono">{createForm.rules.length}/1000</span>
+                  </div>
+                  <textarea 
+                    rows="2"
+                    placeholder="Nguyên tắc tham gia và chia sẻ..."
+                    value={createForm.rules}
+                    onChange={(e) => setCreateForm(prev => ({ ...prev, rules: e.target.value }))}
+                    maxLength={1000}
+                    className="w-full px-3.5 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-100 text-xs focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 placeholder-zinc-500 resize-none leading-relaxed transition-colors"
+                  />
+                </div>
+
+                <div 
+                  onClick={() => setCreateForm(prev => ({ ...prev, requiresApproval: !prev.requiresApproval }))}
+                  className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between select-none ${
+                    createForm.requiresApproval 
+                      ? 'bg-zinc-950 border-zinc-700 text-white' 
+                      : 'bg-zinc-950/60 border-zinc-800/80 text-zinc-400 hover:border-zinc-700'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${
+                      createForm.requiresApproval 
+                        ? 'bg-white border-white text-zinc-950' 
+                        : 'border-zinc-700 bg-zinc-900'
+                    }`}>
+                      {createForm.requiresApproval && <Check size={12} strokeWidth={3} />}
+                    </div>
+                    <div>
+                      <span className="text-xs font-semibold text-zinc-200 block">Bật chế độ phê duyệt thành viên</span>
+                      <span className="text-[11px] text-zinc-500">Thành viên mới phải được Chủ nhóm hoặc Phó nhóm chấp thuận trước khi có thể đăng bài</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-zinc-800">
+                  <button 
+                    type="button" 
+                    onClick={() => setIsCreateOpen(false)}
+                    className="h-10 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium transition-all"
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button 
+                    type="submit" 
+                    disabled={isSubmitting}
+                    className="h-10 px-5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs shadow-sm transition-all active:scale-95 disabled:opacity-50"
+                  >
+                    {isSubmitting ? "Đang khởi tạo..." : "Xác nhận tạo"}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
       {/* ========================================================= */}
       {/* MODAL MỜI BẠN BÈ VÀO CỘNG ĐỒNG                            */}

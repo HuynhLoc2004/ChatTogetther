@@ -63,10 +63,13 @@ public class RoomService {
         String newAccessToken = this.authenticationService.genAccessToken(userEntity);
         this.authenticationService.genRefreshToken(userEntity, httpServletResponse);
 
+        String effectiveName = roomRequest.getEffectiveRoomName();
+        SecurityUtils.validateSafeInput(effectiveName, "Tên phòng đàm thoại", 3, 80);
+
         RoomEntity roomEntity = new RoomEntity();
         roomEntity.setActive(true);
-        roomEntity.setRoomName(roomRequest.getNameRoom());
-        roomEntity.setPassword(roomRequest.getPassword());
+        roomEntity.setRoomName(effectiveName);
+        roomEntity.setPassword((roomRequest.getPassword() != null && !roomRequest.getPassword().trim().isEmpty()) ? roomRequest.getPassword().trim() : null);
         roomEntity.setAvatar(roomRequest.getAvatar());
         roomEntity.setDescription(roomRequest.getDescription());
         roomEntity.setLocalDateTime(LocalDateTime.now());

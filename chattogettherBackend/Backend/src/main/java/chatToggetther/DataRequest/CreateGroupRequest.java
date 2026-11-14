@@ -13,7 +13,7 @@ import lombok.Setter;
 @Setter
 public class CreateGroupRequest {
     @NotBlank(message = "Tên cộng đồng không được để trống")
-    @Size(max = 120, message = "Tên cộng đồng tối đa 120 ký tự")
+    @Size(min = 3, max = 80, message = "Tên cộng đồng phải từ 3 đến 80 ký tự")
     private String name;
 
     @Size(max = 2000, message = "Mô tả tối đa 2000 ký tự")
