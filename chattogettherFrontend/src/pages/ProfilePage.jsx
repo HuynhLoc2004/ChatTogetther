@@ -333,9 +333,9 @@ const ProfilePage = () => {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   return (
-    <div className="profile-page-root min-h-screen bg-[#101010] text-[#f4f4f5] font-sans pb-28">
+    <div className="profile-page-root min-h-screen bg-[#13151b] text-[#f1f5f9] font-sans pb-28">
       {/* 1. TOP STICKY BAR */}
-      <header className="sticky top-0 z-40 bg-[#101010]/90 backdrop-blur-md border-b border-[#1e1e1e] px-4 py-3 flex items-center justify-between max-w-2xl mx-auto">
+      <header className="sticky top-0 z-40 bg-[#13151b]/90 backdrop-blur-md border-b border-[#232838] px-4 py-3 flex items-center justify-between max-w-2xl mx-auto">
         <div className="flex items-center gap-3">
           <button 
             type="button" 
@@ -528,7 +528,7 @@ const ProfilePage = () => {
                   value={editData.nickname}
                   onChange={(e) => setEditData({ ...editData, nickname: e.target.value })}
                   placeholder="Nhập biệt danh của bạn..."
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#101010] border border-[#222222] text-[#f4f4f5] text-xs focus:outline-none focus:border-[#444444] transition-colors"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#171a23] border border-[#242b3b] text-[#f1f5f9] text-xs focus:outline-none focus:border-[#44526d] transition-colors"
                 />
               </div>
 
@@ -540,7 +540,7 @@ const ProfilePage = () => {
                     value={editData.age}
                     onChange={(e) => setEditData({ ...editData, age: e.target.value })}
                     placeholder="VD: 22"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#101010] border border-[#222222] text-[#f4f4f5] text-xs focus:outline-none focus:border-[#444444] transition-colors"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#171a23] border border-[#242b3b] text-[#f1f5f9] text-xs focus:outline-none focus:border-[#44526d] transition-colors"
                   />
                 </div>
                 <div>
@@ -550,7 +550,7 @@ const ProfilePage = () => {
                     value={editData.location}
                     onChange={(e) => setEditData({ ...editData, location: e.target.value })}
                     placeholder="VD: TP. Hồ Chí Minh"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#101010] border border-[#222222] text-[#f4f4f5] text-xs focus:outline-none focus:border-[#444444] transition-colors"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#171a23] border border-[#242b3b] text-[#f1f5f9] text-xs focus:outline-none focus:border-[#44526d] transition-colors"
                   />
                 </div>
               </div>
@@ -562,7 +562,7 @@ const ProfilePage = () => {
                   value={editData.bio}
                   onChange={(e) => setEditData({ ...editData, bio: e.target.value })}
                   placeholder="Chia sẻ đôi dòng về công việc, sở thích âm nhạc hoặc tâm sự..."
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#101010] border border-[#222222] text-[#f4f4f5] text-xs focus:outline-none focus:border-[#444444] transition-colors"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#171a23] border border-[#242b3b] text-[#f1f5f9] text-xs focus:outline-none focus:border-[#44526d] transition-colors"
                 />
               </div>
 
@@ -580,7 +580,7 @@ const ProfilePage = () => {
                   <button
                     type="button"
                     onClick={() => setIsEditing(false)}
-                    className="px-4 py-2 rounded-xl bg-[#1e1e1e] hover:bg-[#282828] text-zinc-300 text-xs font-semibold transition-all border border-[#2e2e2e]"
+                    className="px-4 py-2 rounded-xl bg-[#1e2332] hover:bg-[#282f42] text-zinc-300 text-xs font-semibold transition-all border border-[#2e374c]"
                   >
                     Hủy
                   </button>
@@ -597,14 +597,14 @@ const ProfilePage = () => {
 
             {/* Khung đổi mật khẩu */}
             {showPasswordSection && (
-              <form onSubmit={handleChangePassword} className="mt-4 pt-4 border-t border-[#222222] space-y-3">
+              <form onSubmit={handleChangePassword} className="mt-4 pt-4 border-t border-[#242b3b] space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <input
                     type="password"
                     placeholder="Mật khẩu hiện tại"
                     value={passwordData.oldPassword}
                     onChange={(e) => setPasswordData({ ...passwordData, oldPassword: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-[#101010] border border-[#222222] text-white text-xs focus:border-[#444444] focus:outline-none"
+                    className="w-full px-3 py-2 rounded-xl bg-[#171a23] border border-[#242b3b] text-white text-xs focus:border-[#44526d] focus:outline-none"
                     required
                   />
                   <input
@@ -612,7 +612,7 @@ const ProfilePage = () => {
                     placeholder="Mật khẩu mới (>= 6 ký tự)"
                     value={passwordData.newPassword}
                     onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-[#101010] border border-[#222222] text-white text-xs focus:border-[#444444] focus:outline-none"
+                    className="w-full px-3 py-2 rounded-xl bg-[#171a23] border border-[#242b3b] text-white text-xs focus:border-[#44526d] focus:outline-none"
                     required
                   />
                   <input
@@ -620,7 +620,7 @@ const ProfilePage = () => {
                     placeholder="Xác nhận mật khẩu mới"
                     value={passwordData.confirmPassword}
                     onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-[#101010] border border-[#222222] text-white text-xs focus:border-[#444444] focus:outline-none"
+                    className="w-full px-3 py-2 rounded-xl bg-[#171a23] border border-[#242b3b] text-white text-xs focus:border-[#44526d] focus:outline-none"
                     required
                   />
                 </div>
