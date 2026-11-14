@@ -504,18 +504,19 @@ public class PostService {
                 new AppException(404, "Cộng đồng không tồn tại", 404)
             );
 
+            boolean isOwner = grp.getOwner() != null && grp.getOwner().getId().equals(currentUser.getId());
+            boolean isAdmin = currentUser.getRoles() != null && (currentUser.getRoles().contains("ROLE_ADMIN") || currentUser.getRoles().contains("ROLE_AMDIN"));
+
             if ("PENDING".equalsIgnoreCase(grp.getStatus())) {
-                boolean isAdminGroup = currentUser.getRoles() != null && (currentUser.getRoles().contains("ROLE_ADMIN") || currentUser.getRoles().contains("ROLE_AMDIN"));
-                if (!isAdminGroup) {
-                    throw new AppException(403, "Cộng đồng đang chờ Admin phê duyệt. Chưa thể đăng bài lúc này!", 403);
+                if (!isAdmin && !isOwner) {
+                    throw new AppException(403, "Cộng đồng đang chờ phê duyệt. Chưa thể đăng bài lúc này!", 403);
                 }
             }
 
             // Kiểm tra tư cách thành viên
             Optional<CommunityMemberEntity> memberOpt = this.memberRepository.findByGroupAndUser(grp, currentUser);
             boolean isMember = memberOpt.isPresent() && "ACTIVE".equalsIgnoreCase(memberOpt.get().getStatus());
-            boolean isAdmin = currentUser.getRoles() != null && (currentUser.getRoles().contains("ROLE_ADMIN") || currentUser.getRoles().contains("ROLE_AMDIN"));
-            if (!isMember && !isAdmin) {
+            if (!isOwner && !isMember && !isAdmin) {
                 if (memberOpt.isPresent() && "PENDING".equalsIgnoreCase(memberOpt.get().getStatus())) {
                     throw new AppException(403, "Yêu cầu gia nhập cộng đồng của bạn đang chờ phê duyệt. Bạn chỉ có thể đăng bài sau khi được duyệt!", 403);
                 }
@@ -527,7 +528,7 @@ public class PostService {
 
             // Phê duyệt bài viết: Nếu nhóm bật chế độ duyệt bài trước khi đăng
             if (Boolean.TRUE.equals(grp.getRequiresPostApproval())) {
-                String role = memberOpt.map(CommunityMemberEntity::getRole).orElse("MEMBER");
+                String role = isOwner ? "OWNER" : memberOpt.map(CommunityMemberEntity::getRole).orElse("MEMBER");
                 if ("OWNER".equals(role) || "DEPUTY".equals(role) || isAdmin) {
                     post.setStatus("APPROVED");
                 } else {

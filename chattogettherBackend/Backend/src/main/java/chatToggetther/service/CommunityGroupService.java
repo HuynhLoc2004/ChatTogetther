@@ -22,6 +22,7 @@ import chatToggetther.repository.CommunityCategoryRepository;
 import chatToggetther.repository.PostRepository;
 import chatToggetther.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import jakarta.annotation.PostConstruct;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -42,6 +43,56 @@ public class CommunityGroupService {
     private final CommunityCategoryRepository categoryRepository;
     private final UserRepository userRepository;
     private final PostRepository postRepository;
+
+    // ==========================================
+    // 0. SYSTEM INITIALIZATION & LEGACY SYNC
+    // ==========================================
+
+    @PostConstruct
+    @Transactional
+    public void syncLegacyCommunities() {
+        try {
+            List<CommunityGroupEntity> all = this.groupRepository.findAll();
+            for (CommunityGroupEntity g : all) {
+                boolean changed = false;
+                if (!"SUSPENDED".equalsIgnoreCase(g.getStatus()) && !"DELETED".equalsIgnoreCase(g.getStatus())) {
+                    if (!"ACTIVE".equalsIgnoreCase(g.getStatus())) {
+                        g.setStatus("ACTIVE");
+                        changed = true;
+                    }
+                }
+                if (g.getRequiresApproval() == null) {
+                    g.setRequiresApproval(false);
+                    changed = true;
+                }
+                if (changed) {
+                    this.groupRepository.save(g);
+                }
+
+                if (g.getOwner() != null) {
+                    Optional<CommunityMemberEntity> ownerMemberOpt = this.memberRepository.findByGroupAndUser(g, g.getOwner());
+                    if (ownerMemberOpt.isEmpty()) {
+                        CommunityMemberEntity mem = new CommunityMemberEntity();
+                        mem.setGroup(g);
+                        mem.setUser(g.getOwner());
+                        mem.setRole("OWNER");
+                        mem.setStatus("ACTIVE");
+                        mem.setJoinedAt(g.getCreatedAt() != null ? g.getCreatedAt() : LocalDateTime.now());
+                        this.memberRepository.save(mem);
+                    } else {
+                        CommunityMemberEntity mem = ownerMemberOpt.get();
+                        if (!"OWNER".equalsIgnoreCase(mem.getRole()) || !"ACTIVE".equalsIgnoreCase(mem.getStatus())) {
+                            mem.setRole("OWNER");
+                            mem.setStatus("ACTIVE");
+                            this.memberRepository.save(mem);
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Error syncing legacy communities: " + e.getMessage());
+        }
+    }
 
     // ==========================================
     // 1. CLIENT & GROUP OWNER APIS
@@ -88,12 +139,21 @@ public class CommunityGroupService {
 
         for (CommunityGroupEntity g : allActiveGroups) {
             CommunityGroupDTO dto = mapToGroupDTO(g, currentUser, false);
-            if (dto.getCurrentUserRole() != null) {
+            boolean isOwner = currentUser != null && g.getOwner() != null && currentUser.getId().equals(g.getOwner().getId());
+            if (isOwner || (dto.getCurrentUserRole() != null && !"BANNED".equalsIgnoreCase(dto.getCurrentUserRole()))) {
                 joined.add(dto);
             } else {
                 suggested.add(dto);
             }
         }
+
+        // Ưu tiên trạm của chủ sở hữu lên đầu
+        joined.sort((a, b) -> {
+            boolean aIsOwner = Boolean.TRUE.equals(a.getIsOwner()) || "OWNER".equalsIgnoreCase(a.getCurrentUserRole());
+            boolean bIsOwner = Boolean.TRUE.equals(b.getIsOwner()) || "OWNER".equalsIgnoreCase(b.getCurrentUserRole());
+            if (aIsOwner != bIsOwner) return bIsOwner ? 1 : -1;
+            return 0;
+        });
 
         suggested.sort((a, b) -> {
             int feat = Boolean.compare(Boolean.TRUE.equals(b.getIsFeatured()), Boolean.TRUE.equals(a.getIsFeatured()));
@@ -290,6 +350,10 @@ public class CommunityGroupService {
 
         if ("SUSPENDED".equalsIgnoreCase(group.getStatus())) {
             throw new AppException(403, "Cộng đồng này đã bị đình chỉ hoạt động!", 403);
+        }
+
+        if (group.getOwner() != null && group.getOwner().getId().equals(currentUser.getId())) {
+            return new ResponseData<>(200, "Bạn là chủ sở hữu của cộng đồng này", "ALREADY_MEMBER");
         }
 
         Optional<CommunityMemberEntity> existing = this.memberRepository.findByGroupAndUser(group, currentUser);
@@ -775,6 +839,9 @@ public class CommunityGroupService {
             : 0;
         dto.setMembersCount(activeCount > 0 ? activeCount : 1L);
 
+        boolean isOwner = currentUser != null && g.getOwner() != null && currentUser.getId().equals(g.getOwner().getId());
+        dto.setIsOwner(isOwner);
+
         if (currentUser != null && g.getMembers() != null) {
             Optional<CommunityMemberEntity> userMem = g.getMembers().stream()
                     .filter(m -> m != null && m.getUser() != null && m.getUser().getId().equals(currentUser.getId()))
@@ -786,13 +853,21 @@ public class CommunityGroupService {
                 } else if ("ACTIVE".equalsIgnoreCase(mem.getStatus()) || "APPROVED".equalsIgnoreCase(mem.getStatus())) {
                     dto.setCurrentUserRole(mem.getRole());
                 } else {
-                    dto.setCurrentUserRole("PENDING");
+                    dto.setCurrentUserRole(isOwner ? "OWNER" : "PENDING");
                 }
+            } else if (isOwner) {
+                dto.setCurrentUserRole("OWNER");
             } else {
                 dto.setCurrentUserRole(null);
             }
+        } else if (isOwner) {
+            dto.setCurrentUserRole("OWNER");
         } else {
             dto.setCurrentUserRole(null);
+        }
+
+        if (isOwner) {
+            dto.setCurrentUserRole("OWNER");
         }
 
         if (includeMembers && g.getMembers() != null) {

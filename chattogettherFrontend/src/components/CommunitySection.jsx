@@ -787,11 +787,19 @@ export const CommunitySection = ({
   const handleAddGroupPost = async (e) => {
     e.preventDefault();
     if (!selectedGroup) return;
-    if (selectedGroup.status === 'PENDING') {
-      toast.error("Cộng đồng đang chờ Admin phê duyệt, chưa thể đăng bài!");
-      return;
-    }
-    const isApproved = ['OWNER', 'DEPUTY', 'MEMBER'].includes(selectedGroup.currentUserRole);
+
+    const isGroupOwner = Boolean(
+      selectedGroup.isOwner ||
+      selectedGroup.currentUserRole === 'OWNER' ||
+      groupDetail?.isOwner ||
+      groupDetail?.currentUserRole === 'OWNER' ||
+      (currentUserId && (
+        String(selectedGroup.ownerId || '') === String(currentUserId) ||
+        String(groupDetail?.ownerId || '') === String(currentUserId)
+      ))
+    );
+
+    const isApproved = isGroupOwner || ['OWNER', 'DEPUTY', 'MEMBER'].includes(selectedGroup.currentUserRole) || ['OWNER', 'DEPUTY', 'MEMBER'].includes(groupDetail?.currentUserRole);
     if (!isApproved) {
       if (selectedGroup.currentUserRole === 'PENDING') {
         toast.error("Yêu cầu tham gia của bạn đang chờ phê duyệt. Chưa thể đăng bài lúc này!");
@@ -850,15 +858,26 @@ export const CommunitySection = ({
     r && String(r.nameroom || '').toLowerCase().includes(String(selectedGroup.name || '').toLowerCase().trim())
   ) : null;
 
-  const effectiveRole = groupDetail?.currentUserRole || selectedGroup?.currentUserRole;
-  const isOwner = effectiveRole === 'OWNER';
-  const isDeputy = effectiveRole === 'DEPUTY';
-  const isMember = effectiveRole === 'MEMBER';
+  const isActualOwner = Boolean(
+    groupDetail?.isOwner || 
+    selectedGroup?.isOwner || 
+    groupDetail?.currentUserRole === 'OWNER' ||
+    selectedGroup?.currentUserRole === 'OWNER' || 
+    (currentUserId && (
+      String(groupDetail?.ownerId || '') === String(currentUserId) ||
+      String(selectedGroup?.ownerId || '') === String(currentUserId)
+    ))
+  );
+
+  const effectiveRole = isActualOwner ? 'OWNER' : (groupDetail?.currentUserRole || selectedGroup?.currentUserRole);
+  const isOwner = isActualOwner;
+  const isDeputy = !isOwner && effectiveRole === 'DEPUTY';
+  const isMember = !isOwner && effectiveRole === 'MEMBER';
   const isApprovedMember = isOwner || isDeputy || isMember;
-  const isPendingMember = effectiveRole === 'PENDING';
+  const isPendingMember = !isOwner && effectiveRole === 'PENDING';
   const isBannedMember = effectiveRole === 'BANNED';
-  const isGuest = !effectiveRole;
-  const canManage = selectedGroup && (isOwner || isDeputy);
+  const isGuest = !isOwner && !effectiveRole;
+  const canManage = Boolean(selectedGroup && (isOwner || isDeputy));
 
   // ==========================================
   // RENDER GIAO DIỆN CHÍNH
@@ -1583,7 +1602,7 @@ export const CommunitySection = ({
                 <div className="flex items-center justify-between p-3.5 rounded-xl bg-zinc-950/70 border border-zinc-800/80">
                   <div className="pr-3">
                     <span className="text-xs font-semibold text-zinc-200 block">Duyệt thành viên tham gia</span>
-                    <span className="text-[11px] text-zinc-400 block mt-0.5">Yêu cầu quản trị viên phê duyệt trước khi vào nhóm</span>
+                    <span className="text-[11px] text-zinc-400 block mt-0.5">Yêu cầu quản trị viên phê duyệt trước khi vào cộng đồng</span>
                   </div>
                   <button
                     type="button"
@@ -1957,15 +1976,25 @@ export const CommunitySection = ({
                      (g.categoryId && String(g.categoryId) === String(activeCategory));
             });
 
-            const myJoinedGroups = filtered.filter(g => ['OWNER', 'DEPUTY', 'MEMBER'].includes(g.currentUserRole));
-            const suggestedGroups = filtered.filter(g => !['OWNER', 'DEPUTY', 'MEMBER'].includes(g.currentUserRole));
+            const isGroupOwner = (g) => {
+              if (g.currentUserRole === 'OWNER' || g.isOwner === true) return true;
+              if (currentUserId && String(g.ownerId || '') === String(currentUserId)) return true;
+              return false;
+            };
+
+            const myJoinedGroups = filtered.filter(g => 
+              isGroupOwner(g) || ['OWNER', 'DEPUTY', 'MEMBER', 'PENDING'].includes(g.currentUserRole)
+            );
+            const suggestedGroups = filtered.filter(g => 
+              !isGroupOwner(g) && !['OWNER', 'DEPUTY', 'MEMBER', 'PENDING'].includes(g.currentUserRole)
+            );
 
             // THẺ CỘNG ĐỒNG BỐ CỤC NGANG TINH GỌN (ZERO EMPTY BANNER)
             const renderGroupCard = (group) => {
-              const isOwner = group.currentUserRole === 'OWNER';
-              const isDeputy = group.currentUserRole === 'DEPUTY';
-              const isMember = group.currentUserRole === 'MEMBER';
-              const isPending = group.currentUserRole === 'PENDING';
+              const isOwner = isGroupOwner(group);
+              const isDeputy = !isOwner && group.currentUserRole === 'DEPUTY';
+              const isMember = !isOwner && group.currentUserRole === 'MEMBER';
+              const isPending = !isOwner && group.currentUserRole === 'PENDING';
 
               const gNameStr = String(group?.name || '').toLowerCase().trim();
               const hasVoiceRoom = gNameStr ? (rooms || []).some(r => 
@@ -2047,7 +2076,7 @@ export const CommunitySection = ({
                         onClick={(e) => { e.stopPropagation(); handleOpenGroup(group); }}
                         className="h-9 px-3.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 text-xs font-medium transition-all active:scale-95 flex items-center gap-1"
                       >
-                        <span>Vào nhóm</span>
+                        <span>Vào trạm</span>
                         <ChevronRight size={14} />
                       </button>
                     ) : isPending ? (
