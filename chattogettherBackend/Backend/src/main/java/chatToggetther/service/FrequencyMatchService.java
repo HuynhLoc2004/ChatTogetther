@@ -223,21 +223,24 @@ public class FrequencyMatchService {
         // 1. Lưu trữ đoạn ghi âm 3-5 giây thông qua MediaStorageService (không lưu Base64 trong RAM)
         String audioUrl = this.mediaStorageService.storeAudioSample(audioSample, currentUserId);
 
-        // 2. Tần số phát sóng: ưu tiên tần số custom hoặc personalFrequency của user
+        // 2. Tần số phát sóng: Bắt buộc nằm trong khoảng [intent.minFreq, intent.maxFreq] của băng tần
+        double minBand = intent.getFreqStart() != null ? intent.getFreqStart() : 88.0;
+        double maxBand = intent.getFreqEnd() != null ? intent.getFreqEnd() : 108.0;
         Double allocatedFrequency;
+
         if (customFrequency != null) {
-            double clamped = Math.max(88.0, Math.min(108.0, customFrequency));
+            double clamped = Math.max(minBand, Math.min(maxBand, customFrequency));
             allocatedFrequency = Math.round(clamped * 10.0) / 10.0;
-        } else if (user.getPersonalFrequency() != null) {
+        } else if (user.getPersonalFrequency() != null && user.getPersonalFrequency() >= minBand && user.getPersonalFrequency() <= maxBand) {
             allocatedFrequency = user.getPersonalFrequency();
         } else {
-            allocatedFrequency = allocateUniqueFrequency(intent.getFreqStart(), intent.getFreqEnd(), intent.getCode(), currentUserId);
+            allocatedFrequency = allocateUniqueFrequency(minBand, maxBand, intent.getCode(), currentUserId);
         }
 
-        if (user.getPersonalFrequency() == null || !user.getPersonalFrequency().equals(allocatedFrequency)) {
-            user.setPersonalFrequency(allocatedFrequency);
-            this.userRepository.save(user);
-        }
+        // Luôn đồng bộ 100% vào database để tần số trên Profile và Đài FM luôn khớp
+        user.setPersonalFrequency(allocatedFrequency);
+        user.setMatchIntentCode(intent.getCode());
+        this.userRepository.save(user);
 
         // 3. Ẩn danh tên hiển thị để tạo cảm giác bí ẩn cho trạm radio
         String rawName = (user.getNickname() != null && !user.getNickname().isEmpty()) ? user.getNickname() : user.getAccount();

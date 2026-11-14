@@ -90,8 +90,10 @@ public class AdminFrequencyConfigController {
             throw new AppException(400, "Mã băng tần (code) đã tồn tại: " + code, 400);
         }
 
-        if (request.getFreqStart() >= request.getFreqEnd()) {
-            throw new AppException(400, "Tần số bắt đầu phải nhỏ hơn tần số kết thúc", 400);
+        if (request.getFreqStart() == null || request.getFreqEnd() == null ||
+                request.getFreqStart() < 88.0 || request.getFreqEnd() > 108.0 ||
+                request.getFreqStart() >= request.getFreqEnd()) {
+            throw new AppException(400, "Dải tần số bắt buộc nằm trong khoảng 88.0 - 108.0 MHz và tần số bắt đầu phải nhỏ hơn tần số kết thúc", 400);
         }
 
         MatchIntentEntity entity = MatchIntentEntity.builder()
@@ -131,8 +133,8 @@ public class AdminFrequencyConfigController {
         if (request.getIsActive() != null) entity.setIsActive(request.getIsActive());
         if (request.getDisplayOrder() != null) entity.setDisplayOrder(request.getDisplayOrder());
 
-        if (entity.getFreqStart() >= entity.getFreqEnd()) {
-            throw new AppException(400, "Tần số bắt đầu phải nhỏ hơn tần số kết thúc", 400);
+        if (entity.getFreqStart() < 88.0 || entity.getFreqEnd() > 108.0 || entity.getFreqStart() >= entity.getFreqEnd()) {
+            throw new AppException(400, "Dải tần số bắt buộc nằm trong khoảng 88.0 - 108.0 MHz và tần số bắt đầu phải nhỏ hơn tần số kết thúc", 400);
         }
 
         MatchIntentEntity saved = this.matchIntentRepository.save(entity);

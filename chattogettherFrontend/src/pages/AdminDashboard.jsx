@@ -1185,7 +1185,8 @@ const handleAddTrack = async (e) => {
   const handleToggleIntent = async (id) => {
     try {
       const res = await axiosClient.patch(`/admin/frequency-config/intents/${id}/toggle`);
-      setAdminIntents(prev => prev.map(i => i.id === id ? res.data : i));
+      const updated = res.data?.data || res.data;
+      setAdminIntents(prev => prev.map(i => i.id === id ? updated : i));
       toast.success("Đã cập nhật trạng thái băng tần!");
     } catch (e) {
       toast.error("Không thể cập nhật trạng thái băng tần");
@@ -1238,11 +1239,13 @@ const handleAddTrack = async (e) => {
     try {
       if (editingIntent) {
         const res = await axiosClient.put(`/admin/frequency-config/intents/${editingIntent.id}`, intentFormData);
-        setAdminIntents(prev => prev.map(i => i.id === editingIntent.id ? res.data : i));
+        const updated = res.data?.data || res.data;
+        setAdminIntents(prev => prev.map(i => i.id === editingIntent.id ? updated : i));
         toast.success("Đã cập nhật băng tần thành công!");
       } else {
         const res = await axiosClient.post('/admin/frequency-config/intents', intentFormData);
-        setAdminIntents(prev => [...prev, res.data]);
+        const created = res.data?.data || res.data;
+        setAdminIntents(prev => [...prev, created]);
         toast.success("Đã thêm băng tần mới thành công!");
       }
       setIsIntentModalOpen(false);
