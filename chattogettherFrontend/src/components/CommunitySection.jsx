@@ -3,8 +3,9 @@ import {
   Users, Plus, Search, Shield, Crown, CheckCircle2, XCircle, 
   Settings, LogOut, Trash2, Camera, Lock, Globe, FileText, ChevronRight, X,
   ArrowLeft, MessageSquare, PhoneCall, Radio, Send, Image as ImageIcon,
-  Heart, MessageCircle, Sparkles, Flame, Check, CornerDownRight, Play,
-  Volume2, Share2, MoreVertical, UserPlus
+  Heart, MessageCircle, Sparkles, Flame, Check, CornerDownRight, Play, Pause,
+  Volume2, Share2, MoreVertical, UserPlus, Flag, Mic, Square, RotateCcw, Star,
+  Sliders, Edit3, AlertTriangle, Layers
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import GroupCollageAvatar from './GroupCollageAvatar';
@@ -69,6 +70,33 @@ export const CommunitySection = ({
   const [isInviteFriendsOpen, setIsInviteFriendsOpen] = useState(false);
   const [invitingFriendId, setInvitingFriendId] = useState(null);
 
+  // Ghi âm 15s giọng nói vào bài viết thảo luận (Audio-First)
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
+  const [voiceDuration, setVoiceDuration] = useState(0);
+  const [voiceBase64, setVoiceBase64] = useState(null);
+  const [isPlayingRecordedVoice, setIsPlayingRecordedVoice] = useState(false);
+  const mediaRecorderRef = React.useRef(null);
+  const voiceTimerRef = React.useRef(null);
+  const voiceChunksRef = React.useRef([]);
+  const recordedAudioRef = React.useRef(null);
+
+  // Modal Báo cáo cộng đồng vi phạm
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [reportReason, setReportReason] = useState('SPAM');
+  const [reportDescription, setReportDescription] = useState('');
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
+
+  // Tab Quản trị nhóm 2 cột
+  const [adminSubTab, setAdminSubTab] = useState('members_queue'); // 'members_queue' | 'posts_queue'
+  const [editGroupForm, setEditGroupForm] = useState({
+    name: '',
+    description: '',
+    categoryCode: 'general',
+    avatarUrl: '',
+    coverUrl: ''
+  });
+  const [isSavingGroupInfo, setIsSavingGroupInfo] = useState(false);
+
   // Soạn bài viết thảo luận trong nhóm
   const [groupPostText, setGroupPostText] = useState('');
   const [groupAttachedImage, setGroupAttachedImage] = useState(null);
@@ -123,6 +151,13 @@ export const CommunitySection = ({
     setSelectedGroup(group);
     setActiveWorkspaceTab('feed');
     fetchGroupDedicatedPosts(group.id);
+    setEditGroupForm({
+      name: group.name || '',
+      description: group.description || '',
+      categoryCode: group.categoryCode || 'general',
+      avatarUrl: group.avatarUrl || '',
+      coverUrl: group.coverUrl || ''
+    });
 
     try {
       setLoadingDetail(true);
@@ -384,11 +419,179 @@ export const CommunitySection = ({
     }
   };
 
+  // ==========================================
+  // AUDIO-FIRST: GHI ÂM 15S CHO THẢO LUẬN NHÓM
+  // ==========================================
+  const startRecordingVoice = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      voiceChunksRef.current = [];
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) voiceChunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = () => {
+        const blob = new Blob(voiceChunksRef.current, { type: 'audio/webm' });
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setVoiceBase64(reader.result);
+          toast.success("Đã ghi lại giọng nói 15s sẵn sàng đính kèm!");
+        };
+        reader.readAsDataURL(blob);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      recorder.start();
+      setIsRecordingVoice(true);
+      setVoiceDuration(0);
+
+      voiceTimerRef.current = setInterval(() => {
+        setVoiceDuration(prev => {
+          if (prev >= 14) {
+            stopRecordingVoice();
+            return 15;
+          }
+          return prev + 1;
+        });
+      }, 1000);
+    } catch (err) {
+      toast.error("Vui lòng cấp quyền Microphone để ghi âm!");
+    }
+  };
+
+  const stopRecordingVoice = () => {
+    if (voiceTimerRef.current) clearInterval(voiceTimerRef.current);
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecordingVoice(false);
+  };
+
+  const cancelRecordingVoice = () => {
+    if (voiceTimerRef.current) clearInterval(voiceTimerRef.current);
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecordingVoice(false);
+    setVoiceBase64(null);
+    setVoiceDuration(0);
+    setIsPlayingRecordedVoice(false);
+  };
+
+  const togglePlayRecordedVoice = () => {
+    if (!recordedAudioRef.current) return;
+    if (isPlayingRecordedVoice) {
+      recordedAudioRef.current.pause();
+      setIsPlayingRecordedVoice(false);
+    } else {
+      recordedAudioRef.current.currentTime = 0;
+      recordedAudioRef.current.play().then(() => {
+        setIsPlayingRecordedVoice(true);
+      }).catch(() => {});
+    }
+  };
+
+  // ==========================================
+  // BÁO CÁO VI PHẠM CỘNG ĐỒNG
+  // ==========================================
+  const handleSendCommunityReport = async () => {
+    if (!selectedGroup) return;
+    try {
+      setIsSubmittingReport(true);
+      await axiosClient.post(`/communities/${selectedGroup.id}/report`, {
+        reason: reportReason,
+        description: reportDescription.trim() || undefined
+      }).catch(() =>
+        axiosClient.post(`/groups/${selectedGroup.id}/report`, {
+          reason: reportReason,
+          description: reportDescription.trim() || undefined
+        })
+      );
+      toast.success("Báo cáo vi phạm đã được gửi tới Ban quản trị hệ thống!");
+      setIsReportModalOpen(false);
+      setReportDescription('');
+      setReportReason('SPAM');
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Không thể gửi báo cáo lúc này");
+    } finally {
+      setIsSubmittingReport(false);
+    }
+  };
+
+  // ==========================================
+  // QUẢN TRỊ VIÊN: SWITCH TOGGLES & CẬP NHẬT
+  // ==========================================
+  const handleToggleApproval = async () => {
+    if (!selectedGroup) return;
+    try {
+      const newVal = !selectedGroup.requiresApproval;
+      await axiosClient.put(`/groups/${selectedGroup.id}`, { requiresApproval: newVal });
+      setSelectedGroup(prev => ({ ...prev, requiresApproval: newVal }));
+      toast.success(newVal ? "Đã bật chế độ phê duyệt thành viên!" : "Đã chuyển sang gia nhập tự do!");
+      fetchGroups(searchKeyword);
+    } catch (e) {
+      toast.error("Không thể cập nhật chế độ phê duyệt");
+    }
+  };
+
+  const handleTogglePostApproval = async () => {
+    if (!selectedGroup) return;
+    try {
+      const newVal = !selectedGroup.requiresPostApproval;
+      await axiosClient.put(`/groups/${selectedGroup.id}`, { requiresPostApproval: newVal });
+      setSelectedGroup(prev => ({ ...prev, requiresPostApproval: newVal }));
+      toast.success(newVal ? "Đã bật kiểm duyệt bài viết trước khi xuất bản!" : "Đã cho phép đăng bài tự do!");
+      fetchGroups(searchKeyword);
+    } catch (e) {
+      toast.error("Không thể cập nhật kiểm duyệt bài viết");
+    }
+  };
+
+  const handleTogglePublicToFeed = async () => {
+    if (!selectedGroup) return;
+    try {
+      const newVal = selectedGroup.isPublicToFeed === false ? true : false;
+      await axiosClient.put(`/groups/${selectedGroup.id}`, { isPublicToFeed: newVal });
+      setSelectedGroup(prev => ({ ...prev, isPublicToFeed: newVal }));
+      toast.success(newVal ? "Đã bật đề xuất bài viết ra Feed chung!" : "Đã tắt đề xuất bài viết ra Feed chung!");
+      fetchGroups(searchKeyword);
+    } catch (e) {
+      toast.error("Không thể cập nhật đề xuất Feed");
+    }
+  };
+
+  const handleUpdateGroupInfo = async (e) => {
+    if (e) e.preventDefault();
+    if (!selectedGroup) return;
+    try {
+      setIsSavingGroupInfo(true);
+      const res = await axiosClient.put(`/groups/${selectedGroup.id}`, {
+        name: editGroupForm.name || selectedGroup.name,
+        description: editGroupForm.description,
+        categoryCode: editGroupForm.categoryCode,
+        avatarUrl: editGroupForm.avatarUrl || selectedGroup.avatarUrl,
+        coverUrl: editGroupForm.coverUrl || selectedGroup.coverUrl
+      });
+      if (res.data?.data) {
+        setSelectedGroup(res.data.data);
+        toast.success("Đã cập nhật thông tin cộng đồng!");
+        fetchGroups(searchKeyword);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Không thể lưu thông tin");
+    } finally {
+      setIsSavingGroupInfo(false);
+    }
+  };
+
   // Đăng bài thảo luận vào cộng đồng
   const handleCreateGroupPost = async (e) => {
     e.preventDefault();
-    if (!groupPostText.trim() && !groupAttachedImage) {
-      toast.error("Vui lòng nhập nội dung bài viết thảo luận!");
+    if (!groupPostText.trim() && !groupAttachedImage && !voiceBase64) {
+      toast.error("Vui lòng nhập nội dung, đính kèm ảnh hoặc ghi âm giọng nói!");
       return;
     }
 
@@ -397,7 +600,13 @@ export const CommunitySection = ({
       const groupTag = `✦ Cộng đồng: ${selectedGroup.name}`;
       
       let payloadMedia = null;
-      if (groupAttachedImage) {
+      if (voiceBase64) {
+        payloadMedia = JSON.stringify({
+          mediaUrl: voiceBase64,
+          mediaType: 'voice',
+          duration: voiceDuration
+        });
+      } else if (groupAttachedImage) {
         payloadMedia = JSON.stringify({
           mediaUrl: groupAttachedImage,
           mediaType: 'image'
@@ -419,6 +628,9 @@ export const CommunitySection = ({
         }
         setGroupPostText('');
         setGroupAttachedImage(null);
+        setVoiceBase64(null);
+        setVoiceDuration(0);
+        setIsPlayingRecordedVoice(false);
         fetchGroupDedicatedPosts(selectedGroup.id);
         if (setPosts && res.data.data.status === 'APPROVED') {
           setPosts(prev => [res.data.data, ...prev]);
@@ -513,7 +725,7 @@ export const CommunitySection = ({
       {/* ========================================================================= */}
       {/* TRƯỜNG HỢP 1: KHÔNG GIAN LÀM VIỆC CỦA CỘNG ĐỒNG ĐÃ CHỌN (COMMUNITY WORKSPACE) */}
       {/* ========================================================================= */}
-      {selectedGroup ? (
+            {selectedGroup ? (
         <div className="community-workspace space-y-5 animate-fade-in">
           
           {/* Thanh Breadcrumb / Back Bar trên cùng */}
@@ -529,99 +741,126 @@ export const CommunitySection = ({
 
             <div className="flex items-center gap-2">
               {selectedGroup.currentUserRole === 'OWNER' && (
-                <span className="px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-semibold flex items-center gap-1.5">
+                <span className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-amber-300 text-xs font-semibold flex items-center gap-1.5 font-mono">
                   <Crown size={12} /> Chủ nhóm
                 </span>
               )}
               {selectedGroup.currentUserRole === 'DEPUTY' && (
-                <span className="px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-semibold flex items-center gap-1.5">
+                <span className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-indigo-300 text-xs font-semibold flex items-center gap-1.5 font-mono">
                   <Shield size={12} /> Phó nhóm
                 </span>
-              )}
-              {selectedGroup.currentUserRole === 'MEMBER' && (
-                <button 
-                  onClick={() => handleLeaveGroup(selectedGroup.id)}
-                  className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-rose-950/40 text-zinc-400 hover:text-rose-400 border border-zinc-800 text-xs font-medium transition-all"
-                >
-                  Rời nhóm
-                </button>
-              )}
-              {!selectedGroup.currentUserRole && (
-                <button 
-                  onClick={() => handleJoinGroup(selectedGroup.id)}
-                  className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md transition-all active:scale-95"
-                >
-                  Gia nhập cộng đồng
-                </button>
               )}
             </div>
           </div>
 
-          {/* Hero Header Cộng đồng */}
+          {/* ============================================================== */}
+          {/* BANNER CỘNG ĐỒNG GỌN GÀNG & ĐỒNG BỘ MÀU SẮC (DARK ZINC)         */}
+          {/* ============================================================== */}
           <div className="rounded-3xl bg-zinc-900 border border-zinc-800 overflow-hidden shadow-xl">
-            {/* Cover Banner */}
-            <div className="h-40 sm:h-48 relative bg-gradient-to-r from-zinc-800 via-indigo-950/40 to-zinc-950 overflow-hidden">
+            {/* Banner Cover thu gọn h-28 sm:h-36 */}
+            <div className="h-28 sm:h-36 relative bg-gradient-to-r from-zinc-900 via-zinc-900/95 to-zinc-950 border-b border-zinc-800 overflow-hidden">
               {selectedGroup.coverUrl ? (
                 <img src={selectedGroup.coverUrl} alt={selectedGroup.name} className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full opacity-40 bg-[radial-gradient(#6366f1_1px,transparent_1px)] [background-size:16px_16px]"></div>
+                <div className="w-full h-full opacity-30 bg-[radial-gradient(#52525b_1px,transparent_1px)] [background-size:16px_16px]"></div>
               )}
-              <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-zinc-900/30 to-transparent"></div>
+              <div className="absolute inset-0 bg-gradient-to-t from-zinc-900/95 via-transparent to-black/30"></div>
+              
+              {/* Nút icon Báo cáo nhóm (Flag) ở góc trên banner */}
+              <button
+                type="button"
+                onClick={() => setIsReportModalOpen(true)}
+                className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-zinc-950/70 hover:bg-zinc-900 text-zinc-400 hover:text-rose-400 border border-zinc-800/80 backdrop-blur-md transition-all active:scale-95 flex items-center gap-1.5 text-xs z-10"
+                title="Báo cáo vi phạm cộng đồng"
+              >
+                <Flag size={13} />
+                <span className="hidden sm:inline">Báo cáo</span>
+              </button>
             </div>
 
-            {/* Thông tin chính & Action Bar */}
+            {/* Thông tin chính & Hàng nút hành động chuẩn quy cách */}
             <div className="px-5 sm:px-6 pb-5 pt-0 relative">
-              <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 -mt-12 mb-4">
+              <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 -mt-10 mb-4">
                 <div className="flex items-end gap-3.5">
                   <GroupCollageAvatar 
                     avatar={selectedGroup.avatarUrl} 
                     name={selectedGroup.name}
-                    size={76}
-                    className="border-4 border-zinc-900 shadow-xl ring-2 ring-zinc-800 rounded-2xl"
+                    size={72}
+                    className="border-4 border-zinc-900 shadow-xl ring-1 ring-zinc-800 rounded-2xl flex-shrink-0"
                   />
                   <div className="pb-1">
-                    <h1 className="text-zinc-100 font-bold text-lg sm:text-xl tracking-tight leading-snug">
-                      {selectedGroup.name}
-                    </h1>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h1 className="text-zinc-100 font-bold text-lg sm:text-xl tracking-tight leading-snug">
+                        {selectedGroup.name}
+                      </h1>
+                      {selectedGroup.isFeatured && (
+                        <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/30 text-[10px] font-mono flex items-center gap-1">
+                          <Star size={10} className="fill-amber-400 text-amber-400" />
+                          <span>Nổi bật</span>
+                        </span>
+                      )}
+                      {selectedGroup.categoryCode && (
+                        <span className="px-2 py-0.5 rounded-full bg-zinc-800/80 text-zinc-400 border border-zinc-700/60 text-[10px] font-mono">
+                          #{selectedGroup.categoryCode}
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2 text-xs text-zinc-400 font-mono mt-0.5">
                       <span>{selectedGroup.membersCount || groupDetail?.members?.length || 1} thành viên</span>
                       <span>•</span>
-                      <span className="text-emerald-400">
-                        {activeGroupRoom ? '● Đang có phòng thoại trực tiếp' : 'Sẵn sàng kết nối'}
+                      <span className={activeGroupRoom ? "text-emerald-400 font-semibold flex items-center gap-1" : "text-zinc-400"}>
+                        {activeGroupRoom && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>}
+                        {activeGroupRoom ? 'Đang có phòng thoại trực tiếp' : 'Sẵn sàng kết nối'}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Primary CTA Buttons */}
+                {/* Hàng nút hành động: Nút chính trắng sắc nét & Nút phụ tối viền mảnh */}
                 <div className="flex items-center gap-2 flex-wrap">
+                  {/* Nút phụ: Mời bạn bè */}
                   <button 
                     type="button"
                     onClick={() => setIsInviteFriendsOpen(true)}
-                    className="px-3.5 py-2.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 text-xs font-semibold border border-indigo-500/30 transition-all active:scale-95 flex items-center gap-1.5"
+                    className="px-3.5 h-10 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 text-xs font-medium border border-zinc-800 transition-all active:scale-95 flex items-center gap-2"
                     title="Mời bạn bè vào cộng đồng"
                   >
                     <UserPlus size={14} />
                     <span>Mời bạn bè</span>
                   </button>
 
-                  <button 
-                    type="button"
-                    onClick={handleOpenGroupVoiceRoom}
-                    className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-2 shadow-lg shadow-emerald-900/20 transition-all active:scale-95"
-                  >
-                    <Radio size={14} className="animate-pulse" />
-                    <span>{activeGroupRoom ? "Tham gia phòng thoại nhóm" : "Mở phòng thoại nhóm"}</span>
-                  </button>
+                  {/* Nút phụ: Rời nhóm (nếu là member) */}
+                  {selectedGroup.currentUserRole === 'MEMBER' && (
+                    <button 
+                      type="button"
+                      onClick={() => handleLeaveGroup(selectedGroup.id)}
+                      className="px-3.5 h-10 rounded-xl bg-zinc-900 hover:bg-rose-950/40 text-zinc-300 hover:text-rose-400 border border-zinc-800 text-xs font-medium transition-all active:scale-95 flex items-center gap-1.5"
+                    >
+                      <LogOut size={13} />
+                      <span>Rời nhóm</span>
+                    </button>
+                  )}
 
-                  <button 
-                    type="button"
-                    onClick={() => setActiveWorkspaceTab('feed')}
-                    className="px-3.5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold border border-zinc-700/80 transition-all active:scale-95 flex items-center gap-1.5"
-                  >
-                    <MessageSquare size={14} />
-                    <span>Thảo luận</span>
-                  </button>
+                  {/* Nút chính: Trắng sắc nét (bg-white text-zinc-950) */}
+                  {!selectedGroup.currentUserRole ? (
+                    <button 
+                      type="button"
+                      onClick={() => handleJoinGroup(selectedGroup.id)}
+                      className="px-4 h-10 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs sm:text-sm flex items-center gap-2 shadow-sm transition-all active:scale-95"
+                    >
+                      <Plus size={15} />
+                      <span>Gia nhập cộng đồng</span>
+                    </button>
+                  ) : (
+                    <button 
+                      type="button"
+                      onClick={handleOpenGroupVoiceRoom}
+                      className="px-4 h-10 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs sm:text-sm flex items-center gap-2 shadow-sm transition-all active:scale-95"
+                    >
+                      <Radio size={14} className={activeGroupRoom ? "text-emerald-600 animate-pulse" : "text-zinc-950"} />
+                      <span>{activeGroupRoom ? "Tham gia phòng thoại" : "Mở phòng thoại nhóm"}</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -630,15 +869,15 @@ export const CommunitySection = ({
                 {selectedGroup.description || 'Chào mừng bạn đến với cộng đồng. Cùng chia sẻ góc nhìn và tham gia các buổi đàm thoại bổ ích!'}
               </p>
 
-              {/* Segmented Workspace Tabs */}
-              <div className="flex items-center gap-1.5 pt-5 mt-4 border-t border-zinc-800/80 overflow-x-auto no-scrollbar">
+              {/* Rút gọn còn ĐÚNG 4 tab, ẩn hoàn toàn thanh cuộn ngang */}
+              <div className="flex items-center gap-1.5 pt-4 mt-3 border-t border-zinc-800/80 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 <button 
                   type="button"
                   onClick={() => setActiveWorkspaceTab('feed')}
                   className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all flex-shrink-0 ${activeWorkspaceTab === 'feed' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}
                 >
                   <MessageSquare size={14} />
-                  <span>Bảng tin thảo luận ({groupPosts.length})</span>
+                  <span>Thảo luận ({groupPosts.length})</span>
                 </button>
 
                 <button 
@@ -647,7 +886,7 @@ export const CommunitySection = ({
                   className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all flex-shrink-0 ${activeWorkspaceTab === 'voice' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}
                 >
                   <Radio size={14} />
-                  <span>Phòng đàm thoại</span>
+                  <span>Phòng thoại</span>
                   {activeGroupRoom && (
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
                   )}
@@ -662,51 +901,24 @@ export const CommunitySection = ({
                   <span>Thành viên ({groupDetail?.members?.length || selectedGroup.membersCount || 1})</span>
                 </button>
 
-                <button 
-                  type="button"
-                  onClick={() => setActiveWorkspaceTab('rules')}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all flex-shrink-0 ${activeWorkspaceTab === 'rules' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}
-                >
-                  <FileText size={14} />
-                  <span>Quy định & Nội quy</span>
-                </button>
-
                 {['OWNER', 'DEPUTY'].includes(groupDetail?.currentUserRole || selectedGroup.currentUserRole) && (
-                  <>
-                    <button 
-                      type="button"
-                      onClick={() => {
-                        setActiveWorkspaceTab('moderation');
-                        fetchPendingPosts(selectedGroup.id);
-                      }}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all flex-shrink-0 ${activeWorkspaceTab === 'moderation' ? 'bg-zinc-800 text-sky-400 shadow-sm' : 'text-zinc-400 hover:text-sky-300'}`}
-                    >
-                      <Shield size={14} />
-                      <span>Duyệt bài</span>
-                      {pendingPosts.length > 0 && (
-                        <span className="px-1.5 py-0.2 rounded-full bg-sky-500/20 text-sky-400 text-[10px] font-mono border border-sky-500/30">
-                          {pendingPosts.length}
-                        </span>
-                      )}
-                    </button>
-
-                    <button 
-                      type="button"
-                      onClick={() => {
-                        setActiveWorkspaceTab('settings');
-                        fetchPendingMembers(selectedGroup.id);
-                      }}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all flex-shrink-0 ${activeWorkspaceTab === 'settings' ? 'bg-zinc-800 text-amber-300 shadow-sm' : 'text-zinc-400 hover:text-amber-300'}`}
-                    >
-                      <Settings size={14} />
-                      <span>Quản trị</span>
-                      {pendingMembers.length > 0 && (
-                        <span className="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-400 text-[10px] font-mono border border-amber-500/30">
-                          {pendingMembers.length}
-                        </span>
-                      )}
-                    </button>
-                  </>
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      setActiveWorkspaceTab('settings');
+                      fetchPendingMembers(selectedGroup.id);
+                      fetchPendingPosts(selectedGroup.id);
+                    }}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all flex-shrink-0 ${activeWorkspaceTab === 'settings' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}
+                  >
+                    <Settings size={14} />
+                    <span>Quản trị</span>
+                    {(pendingMembers.length > 0 || pendingPosts.length > 0) && (
+                      <span className="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-mono border border-amber-500/30">
+                        {pendingMembers.length + pendingPosts.length}
+                      </span>
+                    )}
+                  </button>
                 )}
               </div>
             </div>
@@ -717,7 +929,38 @@ export const CommunitySection = ({
           {/* ========================================================= */}
           {activeWorkspaceTab === 'feed' && (
             <div className="space-y-4">
-              {/* Box soạn thảo bài viết dành riêng cho nhóm */}
+              
+              {/* Thẻ Phòng thoại nhóm đang mở (Audio-First 1-click) */}
+              {activeGroupRoom && (
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-zinc-900 via-zinc-900/90 to-zinc-950 border border-emerald-500/30 flex items-center justify-between gap-4 shadow-xl animate-fade-in">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0">
+                      <Radio size={20} className="animate-pulse" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-zinc-100">{activeGroupRoom.nameroom}</span>
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-mono border border-emerald-500/30 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                          Trực tiếp
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-zinc-400 mt-0.5 font-mono">
+                        {activeGroupRoom.soluong || (activeGroupRoom.userRoomDTOList?.length || 1)} thành viên đang kết nối âm thanh
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/room/${activeGroupRoom.id}`)}
+                    className="px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs flex items-center gap-1.5 shadow-md transition-all active:scale-95 flex-shrink-0"
+                  >
+                    <span>Vào phòng nghe ngay</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Box soạn thảo bài viết dành riêng cho nhóm (Hỗ trợ Ảnh & Ghi âm 15s) */}
               <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 shadow-sm">
                 <div className="flex items-start gap-3">
                   <div className="w-9 h-9 rounded-full bg-zinc-800 overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-xs text-white border border-zinc-700">
@@ -737,6 +980,7 @@ export const CommunitySection = ({
                       className="w-full bg-transparent text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none resize-none leading-relaxed"
                     />
 
+                    {/* Preview Ảnh đính kèm */}
                     {groupAttachedImage && (
                       <div className="relative mt-2 inline-block rounded-xl overflow-hidden border border-zinc-700 max-h-40">
                         <img src={groupAttachedImage} alt="Attached" className="max-h-40 object-cover" />
@@ -750,11 +994,58 @@ export const CommunitySection = ({
                       </div>
                     )}
 
-                    <div className="flex items-center justify-between pt-3 border-t border-zinc-800/80 mt-2">
+                    {/* Trạng thái đang ghi âm */}
+                    {isRecordingVoice && (
+                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-rose-950/30 border border-rose-500/40 mt-2 animate-pulse">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                          <span className="text-xs text-rose-300 font-mono">Đang thu âm giọng nói... {voiceDuration}s / 15s</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={stopRecordingVoice}
+                          className="px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center gap-1 active:scale-95"
+                        >
+                          <Square size={12} /> Dừng thu
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Preview Bản ghi âm 15s */}
+                    {voiceBase64 && !isRecordingVoice && (
+                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 mt-2">
+                        <div className="flex items-center gap-2.5">
+                          <button
+                            type="button"
+                            onClick={togglePlayRecordedVoice}
+                            className="w-7 h-7 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white flex items-center justify-center transition-all active:scale-95"
+                          >
+                            {isPlayingRecordedVoice ? <Pause size={12} /> : <Play size={12} className="ml-0.5" />}
+                          </button>
+                          <span className="text-xs font-mono text-emerald-400">Tín hiệu ghi âm ({voiceDuration}s)</span>
+                          <audio
+                            ref={recordedAudioRef}
+                            src={voiceBase64}
+                            onEnded={() => setIsPlayingRecordedVoice(false)}
+                            className="hidden"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={cancelRecordingVoice}
+                          className="p-1 rounded-lg text-zinc-500 hover:text-rose-400 transition-colors"
+                          title="Xóa bản ghi âm"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between pt-3 border-t border-zinc-800/80 mt-2 flex-wrap gap-2">
                       <div className="flex items-center gap-2">
                         <label className="cursor-pointer px-2.5 py-1.5 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs flex items-center gap-1.5 transition-all border border-zinc-700/60">
                           <ImageIcon size={13} />
-                          <span>Ảnh minh họa</span>
+                          <span>Ảnh</span>
                           <input 
                             type="file" 
                             accept="image/*"
@@ -768,16 +1059,30 @@ export const CommunitySection = ({
                             }}
                           />
                         </label>
+
+                        {/* Nút Ghi âm 15s */}
+                        {!isRecordingVoice && !voiceBase64 && (
+                          <button
+                            type="button"
+                            onClick={startRecordingVoice}
+                            className="px-2.5 py-1.5 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs flex items-center gap-1.5 transition-all border border-zinc-700/60"
+                            title="Ghi âm giọng nói 15s"
+                          >
+                            <Mic size={13} />
+                            <span>Ghi âm 15s</span>
+                          </button>
+                        )}
+
                         <span className="text-[11px] text-zinc-500 font-mono hidden sm:inline">
-                          Tag: ✦ Cộng đồng: {selectedGroup.name}
+                          Tag: ✦ {selectedGroup.name}
                         </span>
                       </div>
 
                       <button 
                         type="button"
                         onClick={handleCreateGroupPost}
-                        disabled={isPostingGroup || (!groupPostText.trim() && !groupAttachedImage)}
-                        className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md transition-all active:scale-95 disabled:opacity-40"
+                        disabled={isPostingGroup || (!groupPostText.trim() && !groupAttachedImage && !voiceBase64)}
+                        className="px-4 py-1.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs shadow-sm transition-all active:scale-95 disabled:opacity-40"
                       >
                         {isPostingGroup ? "Đang gửi..." : "Đăng thảo luận"}
                       </button>
@@ -798,53 +1103,91 @@ export const CommunitySection = ({
               ) : (
                 <div className="space-y-3.5">
                   {groupPosts.map(post => (
-                    <div key={post.id} className="p-4 sm:p-5 rounded-2xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700/80 transition-all shadow-sm">
-                      {/* Tác giả & Thời gian */}
-                      <div className="flex items-center justify-between mb-3">
+                    <div 
+                      key={post.id} 
+                      className="p-4 sm:p-5 rounded-2xl bg-zinc-900 border border-zinc-800/80 hover:border-zinc-700/80 transition-all space-y-3 shadow-sm"
+                    >
+                      {/* Post Header */}
+                      <div className="flex items-start justify-between">
                         <div 
-                          className="flex items-center gap-2.5 cursor-pointer"
+                          className="flex items-center gap-3 cursor-pointer"
                           onClick={() => {
-                            if (onSelectUser && post.authorId) onSelectUser(post.authorId);
+                            if (onSelectUser) onSelectUser(post.authorId || post.userId);
                           }}
                         >
-                          <div className="w-9 h-9 rounded-full bg-zinc-800 flex items-center justify-center font-bold text-xs text-white overflow-hidden border border-zinc-700">
+                          <div className="w-9 h-9 rounded-full bg-zinc-800 flex items-center justify-center font-bold text-xs text-white overflow-hidden border border-zinc-700 flex-shrink-0">
                             {post.authorAvatar ? (
-                              <img src={post.authorAvatar} alt={post.authorNickname} className="w-full h-full object-cover" />
+                              <img src={post.authorAvatar} alt="" className="w-full h-full object-cover" />
                             ) : (
-                              (post.authorNickname || post.author || 'U').charAt(0).toUpperCase()
+                              (post.authorNickname || post.authorAccount || 'U').charAt(0).toUpperCase()
                             )}
                           </div>
                           <div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-zinc-100 font-bold text-xs">{post.authorNickname || post.author}</span>
-                              <span className="text-zinc-500 font-mono text-[10px]">@{post.authorAccount || 'user'}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-semibold text-zinc-200 hover:underline">
+                                {post.authorNickname || post.authorAccount}
+                              </span>
+                              {post.authorBadge && (
+                                <span className="px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400 text-[10px] font-mono border border-zinc-700">
+                                  {post.authorBadge}
+                                </span>
+                              )}
                             </div>
-                            <span className="text-zinc-500 text-[10px] font-mono">
-                              {post.createdAt ? new Date(post.createdAt).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : 'Vừa xong'}
+                            <span className="text-[10px] font-mono text-zinc-500 block mt-0.5">
+                              {post.formattedTime || post.createdAt || 'Vừa xong'}
                             </span>
                           </div>
                         </div>
+
+                        {post.vibe && (
+                          <span className="text-[11px] font-mono text-zinc-400 bg-zinc-800/60 px-2 py-0.5 rounded-lg border border-zinc-700/50">
+                            {post.vibe}
+                          </span>
+                        )}
                       </div>
 
-                      {/* Nội dung bài viết */}
-                      <p className="text-zinc-200 text-xs sm:text-sm leading-relaxed whitespace-pre-wrap mb-3">
+                      {/* Post Content */}
+                      <p className="text-xs sm:text-sm text-zinc-200 leading-relaxed whitespace-pre-wrap">
                         {post.content}
                       </p>
 
-                      {/* Hình ảnh nếu có */}
+                      {/* Post Media (Ảnh hoặc Voice player) */}
                       {post.imageUrl && (
-                        <div className="rounded-xl overflow-hidden border border-zinc-800 max-h-80 mb-3 bg-black/40">
-                          <img src={post.imageUrl} alt="Đính kèm" className="w-full max-h-80 object-cover" />
-                        </div>
+                        (() => {
+                          try {
+                            const parsed = JSON.parse(post.imageUrl);
+                            if (parsed.mediaType === 'voice') {
+                              return (
+                                <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 max-w-sm flex items-center gap-3">
+                                  <Volume2 size={16} className="text-emerald-400 flex-shrink-0" />
+                                  <audio src={parsed.mediaUrl} controls className="w-full h-8" />
+                                </div>
+                              );
+                            }
+                            return (
+                              <div className="rounded-xl overflow-hidden border border-zinc-800 max-h-96">
+                                <img src={parsed.mediaUrl || post.imageUrl} alt="" className="w-full object-cover" />
+                              </div>
+                            );
+                          } catch {
+                            return (
+                              <div className="rounded-xl overflow-hidden border border-zinc-800 max-h-96">
+                                <img src={post.imageUrl} alt="" className="w-full object-cover" />
+                              </div>
+                            );
+                          }
+                        })()
                       )}
 
-                      {/* Phản hồi nhanh */}
-                      <div className="flex items-center gap-3 pt-2 border-t border-zinc-800/60 text-xs text-zinc-400">
-                        <span className="flex items-center gap-1 text-zinc-400">
-                          <Heart size={13} className="text-rose-500/80" /> {post.likesCount || 0}
+                      {/* Footer Actions */}
+                      <div className="flex items-center gap-4 pt-2 border-t border-zinc-800/60 text-xs text-zinc-400">
+                        <span className="flex items-center gap-1">
+                          <Heart size={14} className="text-rose-500 fill-rose-500" />
+                          <span>{post.likesCount || 0}</span>
                         </span>
-                        <span className="flex items-center gap-1 text-zinc-400">
-                          <MessageCircle size={13} /> {post.commentsCount || 0} phản hồi
+                        <span className="flex items-center gap-1">
+                          <MessageSquare size={14} />
+                          <span>{post.commentsCount || 0}</span>
                         </span>
                       </div>
                     </div>
@@ -878,7 +1221,7 @@ export const CommunitySection = ({
                     <button 
                       type="button"
                       onClick={() => navigate(`/room/${activeGroupRoom.id}`)}
-                      className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/30 transition-all active:scale-95"
+                      className="px-5 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95"
                     >
                       <Radio size={15} />
                       <span>Tham gia đàm thoại ngay</span>
@@ -895,7 +1238,7 @@ export const CommunitySection = ({
                   <button 
                     type="button"
                     onClick={handleOpenGroupVoiceRoom}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow-md transition-all active:scale-95"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs shadow-md transition-all active:scale-95"
                   >
                     <Plus size={15} />
                     <span>Mở phòng đàm thoại nhóm ngay</span>
@@ -921,7 +1264,6 @@ export const CommunitySection = ({
                   const isOwner = member.role === 'OWNER';
                   const isDeputy = member.role === 'DEPUTY';
                   const isSelf = member.userId === currentUserId;
-                  const canManage = selectedGroup.currentUserRole === 'OWNER' && !isOwner;
 
                   return (
                     <div 
@@ -945,12 +1287,12 @@ export const CommunitySection = ({
                           <div className="flex items-center gap-1.5 truncate">
                             <span className="text-zinc-100 font-semibold text-xs truncate">{member.nickname}</span>
                             {isOwner && (
-                              <span className="px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[9px] font-bold">
+                              <span className="px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[9px] font-bold font-mono">
                                 Chủ nhóm
                               </span>
                             )}
                             {isDeputy && (
-                              <span className="px-1.5 py-0.2 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-[9px] font-bold">
+                              <span className="px-1.5 py-0.2 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-[9px] font-bold font-mono">
                                 Phó nhóm
                               </span>
                             )}
@@ -959,37 +1301,16 @@ export const CommunitySection = ({
                         </div>
                       </div>
 
-                      {/* Action buttons */}
                       <div className="flex items-center gap-1.5 flex-shrink-0">
                         {!isSelf && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => handleDirectChatWithMember(member)}
-                              className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-all"
-                              title="Nhắn tin 1-1"
-                            >
-                              <MessageSquare size={13} />
-                            </button>
-                            {onStartPrivateCall && (
-                              <button
-                                type="button"
-                                onClick={() => onStartPrivateCall({ id: member.userId, nickname: member.nickname, avatar: member.avatar })}
-                                className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-emerald-400 transition-all"
-                                title="Đàm thoại 1-1"
-                              >
-                                <PhoneCall size={13} />
-                              </button>
-                            )}
-                          </>
-                        )}
-                        {canManage && (
                           <button
                             type="button"
-                            onClick={() => handleSetRole(member.userId, isDeputy ? 'MEMBER' : 'DEPUTY')}
-                            className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] font-medium transition-colors"
+                            onClick={() => handleDirectChatWithMember(member)}
+                            className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-all text-xs flex items-center gap-1"
+                            title="Nhắn tin 1-1"
                           >
-                            {isDeputy ? 'Hạ Phó nhóm' : 'Thăng Phó nhóm'}
+                            <MessageCircle size={13} />
+                            <span className="hidden sm:inline">Nhắn tin</span>
                           </button>
                         )}
                       </div>
@@ -1001,241 +1322,281 @@ export const CommunitySection = ({
           )}
 
           {/* ========================================================= */}
-          {/* TAB 4: QUY ĐỊNH & NỘI QUY */}
-          {/* ========================================================= */}
-          {activeWorkspaceTab === 'rules' && (
-            <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <FileText size={16} className="text-zinc-400" />
-                  <h3 className="text-zinc-100 font-bold text-sm">Quy Định Chung Của Cộng Đồng</h3>
-                </div>
-                {['OWNER', 'DEPUTY'].includes(groupDetail?.currentUserRole || selectedGroup.currentUserRole) && !isEditingRules && (
-                  <button 
-                    type="button"
-                    onClick={() => setIsEditingRules(true)}
-                    className="text-xs text-emerald-400 hover:underline font-medium"
-                  >
-                    Chỉnh sửa quy định
-                  </button>
-                )}
-              </div>
-
-              {isEditingRules ? (
-                <div className="space-y-3">
-                  <textarea 
-                    rows="6"
-                    value={editRulesText}
-                    onChange={(e) => setEditRulesText(e.target.value)}
-                    className="w-full p-3.5 rounded-xl bg-zinc-950 border border-zinc-700 text-zinc-200 text-xs focus:outline-none font-sans leading-relaxed"
-                    placeholder="Nhập nội quy và nguyên tắc sinh hoạt của cộng đồng..."
-                  />
-                  <div className="flex items-center justify-end gap-2">
-                    <button 
-                      type="button"
-                      onClick={() => setIsEditingRules(false)}
-                      className="px-3 py-1.5 rounded-lg bg-zinc-800 text-zinc-300 text-xs"
-                    >
-                      Hủy
-                    </button>
-                    <button 
-                      type="button"
-                      onClick={handleSaveRules}
-                      className="px-4 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold shadow-md"
-                    >
-                      Lưu quy định
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="p-4 rounded-xl bg-zinc-950/70 border border-zinc-800/80 text-zinc-300 text-xs leading-relaxed whitespace-pre-wrap font-sans">
-                  {groupDetail?.rules || selectedGroup.rules || "Chào mừng bạn! Quy tắc cơ bản là tôn trọng lẫn nhau, không chia sẻ nội dung độc hại và cùng nhau xây dựng cộng đồng văn minh."}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ========================================================= */}
-          {/* TAB: DUYỆT BÀI VIẾT (MODERATION - DÀNH CHO CHỦ / PHÓ NHÓM) */}
-          {/* ========================================================= */}
-          {activeWorkspaceTab === 'moderation' && ['OWNER', 'DEPUTY'].includes(groupDetail?.currentUserRole || selectedGroup.currentUserRole) && (
-            <div className="space-y-4">
-              <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Shield size={16} className="text-sky-400" />
-                  <h3 className="text-zinc-100 font-bold text-sm">
-                    Bài Viết Chờ Phê Duyệt ({pendingPosts.length})
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => fetchPendingPosts(selectedGroup.id)}
-                  className="text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
-                >
-                  Làm mới
-                </button>
-              </div>
-
-              {loadingPendingPosts ? (
-                <div className="py-12 text-center text-zinc-500 text-xs font-mono">
-                  Đang tải danh sách bài viết chờ duyệt...
-                </div>
-              ) : pendingPosts.length === 0 ? (
-                <div className="py-12 px-4 rounded-2xl bg-zinc-900 border border-zinc-800 text-center text-zinc-400 text-xs">
-                  <CheckCircle2 size={32} className="mx-auto text-emerald-500/60 mb-2" />
-                  Tuyệt vời! Không có bài viết nào đang chờ duyệt trong cộng đồng này.
-                </div>
-              ) : (
-                pendingPosts.map(post => (
-                  <div key={post.id} className="p-4 sm:p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-3 shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-bold text-zinc-200 overflow-hidden">
-                          {post.authorAvatar ? (
-                            <img src={post.authorAvatar} alt="" className="w-full h-full object-cover" />
-                          ) : (
-                            (post.authorNickname || 'U').charAt(0).toUpperCase()
-                          )}
-                        </div>
-                        <div>
-                          <div className="text-xs font-semibold text-zinc-200">{post.authorNickname || post.authorAccount}</div>
-                          <div className="text-[10px] text-zinc-500 font-mono">{post.formattedTime || 'Vừa xong'}</div>
-                        </div>
-                      </div>
-                      <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 text-[10px] font-mono border border-amber-500/30">
-                        Chờ duyệt
-                      </span>
-                    </div>
-
-                    <p className="text-zinc-200 text-xs leading-relaxed whitespace-pre-wrap">{post.content}</p>
-
-                    {post.imageUrl && (
-                      <div className="rounded-xl overflow-hidden max-h-60 border border-zinc-800">
-                        <img src={post.imageUrl} alt="" className="w-full object-cover" />
-                      </div>
-                    )}
-
-                    <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-800/80">
-                      <button
-                        type="button"
-                        onClick={() => handleRejectPostOpen(post)}
-                        className="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-semibold border border-rose-500/30 transition-all flex items-center gap-1 active:scale-95"
-                      >
-                        <XCircle size={13} />
-                        <span>Từ chối</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleApprovePost(post.id)}
-                        className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-all flex items-center gap-1 shadow-sm active:scale-95"
-                      >
-                        <CheckCircle2 size={13} />
-                        <span>Duyệt bài</span>
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-
-          {/* ========================================================= */}
-          {/* TAB 5: QUẢN TRỊ & THIẾT LẬP (CHỦ / PHÓ NHÓM) */}
+          {/* TAB 4: QUẢN TRỊ CỘNG ĐỒNG (GRID 2 CỘT HIỆN ĐẠI & TOGGLES) */}
           {/* ========================================================= */}
           {activeWorkspaceTab === 'settings' && ['OWNER', 'DEPUTY'].includes(groupDetail?.currentUserRole || selectedGroup.currentUserRole) && (
-            <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in">
               
-              {/* Duyệt thành viên */}
-              <div>
-                <h4 className="text-zinc-200 font-bold text-xs uppercase tracking-wider font-mono mb-3">
-                  Yêu Cầu Gia Nhập Đang Chờ Duyệt ({pendingMembers.length})
-                </h4>
-                {loadingPending ? (
-                  <div className="py-4 text-center text-zinc-500 text-xs font-mono">Đang kiểm tra yêu cầu...</div>
-                ) : pendingMembers.length === 0 ? (
-                  <div className="py-6 px-4 rounded-xl bg-zinc-950/50 border border-zinc-800/80 text-center text-zinc-400 text-xs">
-                    Hiện không có yêu cầu tham gia nào đang chờ duyệt.
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {pendingMembers.map(req => (
-                      <div key={req.id} className="flex items-center justify-between p-3 rounded-xl bg-zinc-950/80 border border-zinc-800">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center font-bold text-xs text-zinc-200 overflow-hidden">
-                            {req.avatar ? (
-                              <img src={req.avatar} alt={req.nickname} className="w-full h-full object-cover" />
-                            ) : (
-                              (req.nickname || 'U').charAt(0).toUpperCase()
-                            )}
-                          </div>
-                          <div>
-                            <span className="text-zinc-200 text-xs font-semibold block">{req.nickname}</span>
-                            <span className="text-zinc-500 font-mono text-[10px]">@{req.account}</span>
-                          </div>
-                        </div>
+              {/* THẺ 1: CẤU HÌNH PHÊ DUYỆT & ĐỀ XUẤT (SWITCH TOGGLES) */}
+              <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4">
+                <div className="flex items-center gap-2 pb-3 border-b border-zinc-800">
+                  <Sliders size={16} className="text-zinc-300" />
+                  <h3 className="text-xs font-bold text-zinc-100 uppercase tracking-wider font-mono">
+                    Cấu hình Phê duyệt & Đề xuất
+                  </h3>
+                </div>
 
-                        <div className="flex items-center gap-2">
-                          <button 
-                            type="button"
-                            onClick={() => handleApproveMember(req.userId)}
-                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md transition-all active:scale-95"
-                          >
-                            <CheckCircle2 size={13} /> Phê duyệt
-                          </button>
-                          <button 
-                            type="button"
-                            onClick={() => handleRejectMember(req.userId)}
-                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-rose-950/40 text-zinc-300 hover:text-rose-400 border border-zinc-700 text-xs transition-all"
-                          >
-                            <XCircle size={13} /> Từ chối
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                {/* Switch 1: Chế độ phê duyệt thành viên */}
+                <div className="flex items-center justify-between p-3.5 rounded-xl bg-zinc-950/70 border border-zinc-800/80">
+                  <div className="pr-3">
+                    <span className="text-xs font-semibold text-zinc-200 block">Duyệt thành viên tham gia</span>
+                    <span className="text-[11px] text-zinc-400 block mt-0.5">Yêu cầu quản trị viên phê duyệt trước khi truy cập đầy đủ</span>
                   </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={selectedGroup.requiresApproval}
+                    onClick={handleToggleApproval}
+                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${selectedGroup.requiresApproval ? 'bg-white' : 'bg-zinc-800'}`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full shadow-lg ring-0 transition duration-200 ease-in-out ${selectedGroup.requiresApproval ? 'translate-x-5 bg-zinc-950' : 'translate-x-0 bg-zinc-400'}`}
+                    />
+                  </button>
+                </div>
+
+                {/* Switch 2: Duyệt bài viết trước khi xuất bản */}
+                <div className="flex items-center justify-between p-3.5 rounded-xl bg-zinc-950/70 border border-zinc-800/80">
+                  <div className="pr-3">
+                    <span className="text-xs font-semibold text-zinc-200 block">Kiểm duyệt bài viết</span>
+                    <span className="text-[11px] text-zinc-400 block mt-0.5">Bài thảo luận cần được Chủ nhóm/Mod duyệt trước khi hiển thị</span>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={selectedGroup.requiresPostApproval}
+                    onClick={handleTogglePostApproval}
+                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${selectedGroup.requiresPostApproval ? 'bg-white' : 'bg-zinc-800'}`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full shadow-lg ring-0 transition duration-200 ease-in-out ${selectedGroup.requiresPostApproval ? 'translate-x-5 bg-zinc-950' : 'translate-x-0 bg-zinc-400'}`}
+                    />
+                  </button>
+                </div>
+
+                {/* Switch 3: Đề xuất ra Feed chung */}
+                <div className="flex items-center justify-between p-3.5 rounded-xl bg-zinc-950/70 border border-zinc-800/80">
+                  <div className="pr-3">
+                    <span className="text-xs font-semibold text-zinc-200 block">Đề xuất ra Feed chung</span>
+                    <span className="text-[11px] text-zinc-400 block mt-0.5">Cho phép bài thảo luận xuất hiện tại Sảnh trực tuyến hệ thống</span>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={selectedGroup.isPublicToFeed !== false}
+                    onClick={handleTogglePublicToFeed}
+                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${selectedGroup.isPublicToFeed !== false ? 'bg-white' : 'bg-zinc-800'}`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full shadow-lg ring-0 transition duration-200 ease-in-out ${selectedGroup.isPublicToFeed !== false ? 'translate-x-5 bg-zinc-950' : 'translate-x-0 bg-zinc-400'}`}
+                    />
+                  </button>
+                </div>
+              </div>
+
+              {/* THẺ 2: CHỈNH SỬA THÔNG TIN & DANH MỤC */}
+              <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4">
+                <div className="flex items-center gap-2 pb-3 border-b border-zinc-800">
+                  <Edit3 size={16} className="text-zinc-300" />
+                  <h3 className="text-xs font-bold text-zinc-100 uppercase tracking-wider font-mono">
+                    Thông tin & Danh mục
+                  </h3>
+                </div>
+                <form onSubmit={handleUpdateGroupInfo} className="space-y-3">
+                  <div>
+                    <label className="text-[11px] font-mono text-zinc-400 block mb-1">Tên cộng đồng</label>
+                    <input
+                      type="text"
+                      value={editGroupForm.name}
+                      onChange={(e) => setEditGroupForm(prev => ({ ...prev, name: e.target.value }))}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-zinc-500"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-mono text-zinc-400 block mb-1">Danh mục chuyên biệt</label>
+                    <select
+                      value={editGroupForm.categoryCode}
+                      onChange={(e) => setEditGroupForm(prev => ({ ...prev, categoryCode: e.target.value }))}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-zinc-500"
+                    >
+                      <option value="general">Chung • Mọi chủ đề</option>
+                      <option value="music">Âm nhạc & Lo-Fi Lounge</option>
+                      <option value="tech">Học tập & Công nghệ</option>
+                      <option value="lifestyle">Tâm sự & Lối sống</option>
+                      <option value="game">Gaming & Giải trí</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-mono text-zinc-400 block mb-1">Mô tả cộng đồng</label>
+                    <textarea
+                      rows="2"
+                      value={editGroupForm.description}
+                      onChange={(e) => setEditGroupForm(prev => ({ ...prev, description: e.target.value }))}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-zinc-500 resize-none"
+                    />
+                  </div>
+                  <div className="pt-1 flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={isSavingGroupInfo}
+                      className="px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs transition-all active:scale-95 disabled:opacity-50"
+                    >
+                      {isSavingGroupInfo ? "Đang lưu..." : "Lưu cập nhật"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* THẺ 3: HÀNG ĐỢI PHÊ DUYỆT (THÀNH VIÊN & BÀI VIẾT) */}
+              <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+                  <div className="flex items-center gap-2">
+                    <Shield size={16} className="text-zinc-300" />
+                    <h3 className="text-xs font-bold text-zinc-100 uppercase tracking-wider font-mono">
+                      Hàng đợi Phê duyệt
+                    </h3>
+                  </div>
+                  <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800 text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => setAdminSubTab('members_queue')}
+                      className={`px-2 py-0.5 rounded-md transition-all ${adminSubTab === 'members_queue' ? 'bg-zinc-800 text-white font-semibold' : 'text-zinc-400'}`}
+                    >
+                      Thành viên ({pendingMembers.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAdminSubTab('posts_queue')}
+                      className={`px-2 py-0.5 rounded-md transition-all ${adminSubTab === 'posts_queue' ? 'bg-zinc-800 text-white font-semibold' : 'text-zinc-400'}`}
+                    >
+                      Bài viết ({pendingPosts.length})
+                    </button>
+                  </div>
+                </div>
+
+                {adminSubTab === 'members_queue' ? (
+                  pendingMembers.length === 0 ? (
+                    <div className="py-8 text-center text-zinc-500 text-xs">Không có yêu cầu gia nhập nào đang chờ.</div>
+                  ) : (
+                    <div className="space-y-2 max-h-56 overflow-y-auto custom-dark-scrollbar pr-1">
+                      {pendingMembers.map(req => (
+                        <div key={req.id} className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-950 border border-zinc-800/80">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="w-7 h-7 rounded-full bg-zinc-800 flex items-center justify-center font-bold text-xs text-white flex-shrink-0 overflow-hidden">
+                              {req.avatar ? <img src={req.avatar} alt="" className="w-full h-full object-cover" /> : (req.nickname || 'U').charAt(0).toUpperCase()}
+                            </div>
+                            <span className="text-xs font-medium text-zinc-200 truncate">{req.nickname || req.account}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleApproveMember(req.userId)}
+                              className="px-2.5 py-1 rounded-lg bg-white text-zinc-950 font-medium text-xs hover:bg-zinc-200 transition-all active:scale-95"
+                            >
+                              Duyệt
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRejectMember(req.userId)}
+                              className="px-2.5 py-1 rounded-lg bg-zinc-800 text-zinc-300 text-xs hover:bg-rose-950/40 hover:text-rose-400 transition-all active:scale-95"
+                            >
+                              Từ chối
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                ) : (
+                  pendingPosts.length === 0 ? (
+                    <div className="py-8 text-center text-zinc-500 text-xs">Không có bài viết nào đang chờ duyệt.</div>
+                  ) : (
+                    <div className="space-y-2 max-h-56 overflow-y-auto custom-dark-scrollbar pr-1">
+                      {pendingPosts.map(post => (
+                        <div key={post.id} className="p-2.5 rounded-xl bg-zinc-950 border border-zinc-800/80 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold text-zinc-200">{post.authorNickname || post.authorAccount}</span>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleApprovePost(post.id)}
+                                className="px-2.5 py-1 rounded-lg bg-white text-zinc-950 font-medium text-xs hover:bg-zinc-200 transition-all active:scale-95"
+                              >
+                                Duyệt
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRejectPostOpen(post)}
+                                className="px-2.5 py-1 rounded-lg bg-zinc-800 text-zinc-300 text-xs hover:bg-rose-950/40 hover:text-rose-400 transition-all active:scale-95"
+                              >
+                                Từ chối
+                              </button>
+                            </div>
+                          </div>
+                          <p className="text-[11px] text-zinc-400 line-clamp-2 leading-relaxed">{post.content}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )
                 )}
               </div>
 
-              {/* Chế độ phê duyệt */}
-              <div className="pt-4 border-t border-zinc-800">
-                <h4 className="text-zinc-200 font-bold text-xs uppercase tracking-wider font-mono mb-2">Chế độ kiểm duyệt thành viên</h4>
-                <p className="text-zinc-400 text-xs mb-3">
-                  Khi bật, người dùng tham gia nhóm cần được sự chấp thuận của Quản trị viên trước khi truy cập đầy đủ.
-                </p>
-                <button 
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      await axiosClient.put(`/groups/${selectedGroup.id}`, {
-                        requiresApproval: !selectedGroup.requiresApproval
-                      });
-                      setSelectedGroup(prev => ({ ...prev, requiresApproval: !prev.requiresApproval }));
-                      toast.success("Đã cập nhật chế độ phê duyệt!");
-                      fetchGroups(searchKeyword);
-                    } catch (e) {
-                      toast.error("Không thể cập nhật");
-                    }
-                  }}
-                  className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${selectedGroup.requiresApproval ? 'bg-amber-500/10 border-amber-500/30 text-amber-300' : 'bg-zinc-800 border-zinc-700 text-zinc-300'}`}
-                >
-                  {selectedGroup.requiresApproval ? "✓ Đang bật chế độ cần phê duyệt" : "○ Cho phép gia nhập tự do (Công khai)"}
-                </button>
-              </div>
-
-              {/* Vùng nguy hiểm: Giải tán nhóm */}
-              {selectedGroup.currentUserRole === 'OWNER' && (
-                <div className="pt-4 border-t border-zinc-800">
-                  <h4 className="text-rose-400 font-bold text-xs uppercase tracking-wider font-mono mb-1">Vùng nguy hiểm</h4>
-                  <p className="text-zinc-500 text-xs mb-3">Giải tán cộng đồng sẽ xóa vĩnh viễn dữ liệu nhóm và toàn bộ thành viên.</p>
-                  <button 
-                    type="button"
-                    onClick={handleDeleteGroup}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/30 text-rose-300 text-xs font-semibold transition-all active:scale-95"
-                  >
-                    <Trash2 size={13} /> Giải tán cộng đồng này
-                  </button>
+              {/* THẺ 4: NỘI QUY CỘNG ĐỒNG & VÙNG NGUY HIỂM */}
+              <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4">
+                <div className="flex items-center gap-2 pb-3 border-b border-zinc-800">
+                  <FileText size={16} className="text-zinc-300" />
+                  <h3 className="text-xs font-bold text-zinc-100 uppercase tracking-wider font-mono">
+                    Nội quy & Vùng nguy hiểm
+                  </h3>
                 </div>
-              )}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[11px] font-mono text-zinc-400">Nội quy cộng đồng</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isEditingRules) {
+                          handleSaveRules();
+                        } else {
+                          setEditRulesText(selectedGroup.rules || groupDetail?.rules || '');
+                          setIsEditingRules(true);
+                        }
+                      }}
+                      className="text-[11px] text-zinc-400 hover:text-white underline font-mono"
+                    >
+                      {isEditingRules ? "Lưu quy định" : "Chỉnh sửa"}
+                    </button>
+                  </div>
+                  {isEditingRules ? (
+                    <textarea
+                      rows="3"
+                      value={editRulesText}
+                      onChange={(e) => setEditRulesText(e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-zinc-500 resize-none"
+                    />
+                  ) : (
+                    <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800/80 text-xs text-zinc-300 max-h-24 overflow-y-auto leading-relaxed whitespace-pre-wrap">
+                      {selectedGroup.rules || groupDetail?.rules || "Tôn trọng các thành viên, chia sẻ tích cực và xây dựng cộng đồng văn minh."}
+                    </div>
+                  )}
+                </div>
+
+                {selectedGroup.currentUserRole === 'OWNER' && (
+                  <div className="pt-3 border-t border-zinc-800/80">
+                    <span className="text-[11px] font-mono text-rose-400 block mb-1 uppercase font-bold">Vùng nguy hiểm</span>
+                    <p className="text-[11px] text-zinc-500 mb-2">Giải tán cộng đồng sẽ xóa vĩnh viễn toàn bộ bài viết, phòng thoại và dữ liệu nhóm.</p>
+                    <button
+                      type="button"
+                      onClick={handleDeleteGroup}
+                      className="w-full py-2 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/30 text-rose-300 text-xs font-semibold transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                    >
+                      <Trash2 size={13} />
+                      <span>Giải tán cộng đồng này</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -1782,6 +2143,78 @@ export const CommunitySection = ({
                 className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold"
               >
                 Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+          {/* ============================================================== */}
+      {/* MODAL BÁO CÁO VI PHẠM CỘNG ĐỒNG (SUPER ADMIN MODERATION)        */}
+      {/* ============================================================== */}
+      {isReportModalOpen && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl p-5 sm:p-6 space-y-4 shadow-2xl animate-scale-up">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+              <div className="flex items-center gap-2">
+                <Flag size={18} className="text-rose-400" />
+                <h3 className="text-sm font-bold text-white">Báo cáo vi phạm cộng đồng</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsReportModalOpen(false)}
+                className="w-7 h-7 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white flex items-center justify-center transition-colors"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            <p className="text-xs text-zinc-400">
+              Bạn đang báo cáo cộng đồng <strong className="text-white">{selectedGroup?.name}</strong> tới Ban quản trị hệ thống Talovin.
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-[11px] font-mono text-zinc-400 block mb-1">Lý do vi phạm</label>
+                <select
+                  value={reportReason}
+                  onChange={(e) => setReportReason(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-500"
+                >
+                  <option value="SPAM">Spam & Quảng cáo rác trái phép</option>
+                  <option value="HARASSMENT">Quấy rối & Công kích thành viên</option>
+                  <option value="HATE_SPEECH">Nội dung thù địch, độc hại</option>
+                  <option value="INAPPROPRIATE">Nội dung phản cảm, không phù hợp</option>
+                  <option value="OTHER">Vi phạm quy định khác</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-mono text-zinc-400 block mb-1">Chi tiết bổ sung (tùy chọn)</label>
+                <textarea
+                  rows="3"
+                  value={reportDescription}
+                  onChange={(e) => setReportDescription(e.target.value)}
+                  placeholder="Mô tả cụ thể hành vi vi phạm hoặc bằng chứng liên quan..."
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-500 resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-800">
+              <button
+                type="button"
+                onClick={() => setIsReportModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition-all"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={handleSendCommunityReport}
+                disabled={isSubmittingReport}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-all shadow-md active:scale-95 disabled:opacity-50"
+              >
+                {isSubmittingReport ? "Đang gửi..." : "Gửi báo cáo"}
               </button>
             </div>
           </div>

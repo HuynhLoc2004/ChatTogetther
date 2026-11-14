@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
+  Star, Ban, CheckSquare, 
   Shield, Users, MessageSquare, Radio, Music, Sparkles, Settings, 
   ArrowLeft, Plus, Trash2, Edit3, Check, X, Search, RefreshCw, 
   Lock, Unlock, Eye, EyeOff, Tag, Compass, Flame, Bookmark, Play, Pause,
@@ -143,6 +144,14 @@ export const AdminDashboard = () => {
 
   // Quản lý Cộng đồng & Danh mục Lý do Từ chối
   const [adminGroups, setAdminGroups] = useState([]);
+  const [communityAdminSubTab, setCommunityAdminSubTab] = useState('list'); // 'list' | 'reports'
+  const [communityReports, setCommunityReports] = useState([]);
+  const [loadingCommunityReports, setLoadingCommunityReports] = useState(false);
+  const [communityReportFilter, setCommunityReportFilter] = useState('ALL');
+  const [selectedCommunityReportToResolve, setSelectedCommunityReportToResolve] = useState(null);
+  const [resolveActionType, setResolveActionType] = useState('DISMISSED'); // 'DISMISSED' | 'RESOLVED_WARNED' | 'RESOLVED_SUSPENDED'
+  const [resolveAdminNoteText, setResolveAdminNoteText] = useState('');
+  const [isResolvingCommunityReport, setIsResolvingCommunityReport] = useState(false);
   const [loadingGroups, setLoadingGroups] = useState(false);
   const [rejectReasons, setRejectReasons] = useState([
     { id: 'SPAM', label: 'Spam / Quảng cáo / Tin rác' },
@@ -247,6 +256,7 @@ export const AdminDashboard = () => {
       await fetchTracks();
       await fetchUsers();
       await fetchAdminGroups();
+      await fetchCommunityReports();
       await fetchReports();
       await fetchAdminPosts();
       await fetchAdminReposts();
@@ -305,7 +315,7 @@ export const AdminDashboard = () => {
           { id: 'challenges', label: `Thẻ bài thử thách (${challenges.length})`, icon: Sparkles, permission: 'TL_PERM_CHALLENGE_MANAGE' },
           { id: 'vibes', label: `Chủ đề & Cảm xúc (${parsedVibes.length})`, icon: Tag, permission: 'TL_PERM_TOPIC_MANAGE' },
           { id: 'music', label: `Âm nhạc hệ thống (${tracks.length})`, icon: Music, permission: 'TL_PERM_MUSIC_MANAGE' },
-          { id: 'communities', label: `Cộng đồng & Nhóm (${adminGroups.length})`, icon: Globe, permission: 'TL_PERM_COMMUNITY_MANAGE' },
+          { id: 'communities', label: `Cộng đồng & Báo cáo (${adminGroups.length})`, icon: Globe, permission: 'TL_PERM_COMMUNITY_MANAGE' },
           { id: 'reports', label: `Báo cáo vi phạm (${reports.filter(r => r.status === 'PENDING').length})`, icon: AlertTriangle, permission: 'TL_PERM_COMMUNITY_MANAGE' }
         ]
       },
@@ -383,7 +393,9 @@ export const AdminDashboard = () => {
   const fetchAdminGroups = async () => {
     try {
       setLoadingGroups(true);
-      const res = await axiosClient.get('/admin/groups');
+      const res = await axiosClient.get('/admin/communities').catch(() =>
+        axiosClient.get('/admin/groups')
+      );
       if (res?.data?.data) {
         setAdminGroups(res.data.data);
       }
@@ -391,6 +403,78 @@ export const AdminDashboard = () => {
       console.warn("Không thể nạp danh sách cộng đồng admin:", e);
     } finally {
       setLoadingGroups(false);
+    }
+  };
+
+  const fetchCommunityReports = async () => {
+    try {
+      setLoadingCommunityReports(true);
+      const res = await axiosClient.get('/admin/community-reports', {
+        params: communityReportFilter !== 'ALL' ? { status: communityReportFilter } : {}
+      });
+      if (res?.data?.data) {
+        setCommunityReports(res.data.data);
+      }
+    } catch (e) {
+      console.warn("Không thể nạp danh sách báo cáo cộng đồng:", e);
+    } finally {
+      setLoadingCommunityReports(false);
+    }
+  };
+
+  const handleToggleFeaturedCommunity = async (groupId, currentFeatured) => {
+    try {
+      await axiosClient.patch(`/admin/communities/${groupId}/status`, {
+        isFeatured: !currentFeatured
+      });
+      setAdminGroups(prev => prev.map(g => g.id === groupId ? { ...g, isFeatured: !currentFeatured } : g));
+      toast.success(!currentFeatured ? "Đã ghim cộng đồng lên vị trí nổi bật!" : "Đã bỏ ghim nổi bật");
+    } catch (e) {
+      toast.error(e.response?.data?.message || "Không thể cập nhật nổi bật");
+    }
+  };
+
+  const handleToggleStatusCommunity = async (groupId, currentStatus) => {
+    const newStatus = (currentStatus === 'SUSPENDED') ? 'ACTIVE' : 'SUSPENDED';
+    try {
+      await axiosClient.patch(`/admin/communities/${groupId}/status`, {
+        status: newStatus
+      });
+      setAdminGroups(prev => prev.map(g => g.id === groupId ? { ...g, status: newStatus } : g));
+      toast.success(newStatus === 'SUSPENDED' ? "Đã đình chỉ hoạt động cộng đồng!" : "Đã mở khóa cộng đồng trở lại hoạt động!");
+    } catch (e) {
+      toast.error(e.response?.data?.message || "Không thể thay đổi trạng thái nhóm");
+    }
+  };
+
+  const handleDeleteCommunityByAdmin = async (groupId, groupName) => {
+    if (!window.confirm(`Xác nhận xóa vĩnh viễn cộng đồng "${groupName}" khỏi hệ thống? Dữ liệu không thể phục hồi.`)) return;
+    try {
+      await axiosClient.delete(`/admin/communities/${groupId}`);
+      setAdminGroups(prev => prev.filter(g => g.id !== groupId));
+      toast.success("Đã xóa vĩnh viễn cộng đồng khỏi hệ thống");
+    } catch (e) {
+      toast.error(e.response?.data?.message || "Không thể xóa cộng đồng lúc này");
+    }
+  };
+
+  const handleResolveCommunityReport = async () => {
+    if (!selectedCommunityReportToResolve) return;
+    try {
+      setIsResolvingCommunityReport(true);
+      await axiosClient.patch(`/admin/community-reports/${selectedCommunityReportToResolve.id}/resolve`, {
+        action: resolveActionType,
+        adminNote: resolveAdminNoteText.trim() || undefined
+      });
+      toast.success("Đã xử lý báo cáo vi phạm cộng đồng thành công!");
+      setSelectedCommunityReportToResolve(null);
+      setResolveAdminNoteText('');
+      fetchCommunityReports();
+      fetchAdminGroups();
+    } catch (e) {
+      toast.error(e.response?.data?.message || "Lỗi xử lý báo cáo");
+    } finally {
+      setIsResolvingCommunityReport(false);
     }
   };
 
@@ -2518,149 +2602,476 @@ export const AdminDashboard = () => {
                 ==================================================== */}
             {activeTab === 'communities' && (hasPermission('TL_PERM_COMMUNITY_MANAGE') || hasPermission('TL_PERM_USER_MANAGE')) && (
               <div className="space-y-6 animate-fade-in">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                
+                {/* Header Tiêu đề & Sub-tabs */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800">
                   <div>
-                    <h2 className="text-xl font-bold text-zinc-100 tracking-tight">Quản Trị Cộng Đồng & Nội Quy</h2>
-                    <p className="text-xs text-zinc-400 mt-0.5">Quản lý các không gian cộng đồng, toggle đề xuất ra Feed chung và cấu hình danh mục lý do từ chối bài viết</p>
+                    <h2 className="text-xl font-bold text-zinc-100 tracking-tight flex items-center gap-2">
+                      <Globe size={22} className="text-emerald-400" />
+                      <span>Quản Trị Cộng Đồng & Báo Cáo Vi Phạm</span>
+                    </h2>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      Quy mô quản trị 2 cấp: Giám sát toàn bộ cộng đồng, ghim nổi bật, đình chỉ nhóm vi phạm và xử lý báo cáo từ người dùng
+                    </p>
                   </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        fetchAdminGroups();
+                        fetchCommunityReports();
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold flex items-center gap-1.5 transition-all self-start sm:self-auto active:scale-95 shadow-sm"
+                    >
+                      <RefreshCw size={13} className={loadingGroups || loadingCommunityReports ? 'animate-spin' : ''} />
+                      <span>Làm mới dữ liệu</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Sub-tab Switcher: Danh sách Cộng đồng vs Hộp thư Báo cáo */}
+                <div className="flex items-center gap-2 p-1 bg-zinc-900 rounded-xl border border-zinc-800 w-fit">
                   <button
-                    onClick={fetchAdminGroups}
-                    className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold flex items-center gap-1.5 transition-all self-start sm:self-auto"
+                    type="button"
+                    onClick={() => setCommunityAdminSubTab('list')}
+                    className={`px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all ${
+                      communityAdminSubTab === 'list'
+                        ? 'bg-zinc-800 text-white shadow-sm'
+                        : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
                   >
-                    <RefreshCw size={13} className={loadingGroups ? 'animate-spin' : ''} />
-                    <span>Làm mới danh sách</span>
+                    <Globe size={14} />
+                    <span>Danh sách Cộng đồng ({adminGroups.length})</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCommunityAdminSubTab('reports');
+                      fetchCommunityReports();
+                    }}
+                    className={`px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all ${
+                      communityAdminSubTab === 'reports'
+                        ? 'bg-zinc-800 text-white shadow-sm'
+                        : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    <AlertTriangle size={14} className="text-amber-400" />
+                    <span>Hộp thư Báo cáo ({communityReports.filter(r => r.status === 'PENDING').length})</span>
+                    {communityReports.filter(r => r.status === 'PENDING').length > 0 && (
+                      <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
+                    )}
                   </button>
                 </div>
 
-                {/* Section 1: Danh sách cộng đồng */}
-                <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
-                      <Globe size={16} className="text-emerald-400" />
-                      Danh Sách Các Nhóm Cộng Đồng ({adminGroups.length})
-                    </h3>
-                    <span className="text-xs font-mono text-zinc-500">Đồng bộ cơ sở dữ liệu thời gian thực</span>
-                  </div>
+                {/* ==================================================== */}
+                {/* SUB-TAB 1: BẢNG DANH SÁCH CỘNG ĐỒNG                  */}
+                {/* ==================================================== */}
+                {communityAdminSubTab === 'list' && (
+                  <div className="space-y-6 animate-fade-in">
+                    <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
+                          <Layers size={16} className="text-zinc-400" />
+                          <span>Tất cả các cộng đồng trong hệ thống ({adminGroups.length})</span>
+                        </h3>
+                        <span className="text-xs font-mono text-zinc-500">Đồng bộ cơ sở dữ liệu thời gian thực</span>
+                      </div>
 
-                  {loadingGroups ? (
-                    <div className="py-8 text-center text-zinc-500 font-mono text-xs">Đang tải danh sách cộng đồng...</div>
-                  ) : adminGroups.length === 0 ? (
-                    <div className="py-8 text-center text-zinc-500 text-xs">Chưa có cộng đồng nào được tạo trong hệ thống.</div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {adminGroups.map(group => (
-                        <div key={group.id} className="p-4 rounded-xl bg-zinc-950/80 border border-zinc-800/80 flex flex-col justify-between space-y-3">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-xs text-zinc-200 overflow-hidden flex-shrink-0">
-                                {group.avatarUrl ? (
-                                  <img src={group.avatarUrl} alt="" className="w-full h-full object-cover" />
-                                ) : (
-                                  (group.name || 'G').charAt(0).toUpperCase()
-                                )}
-                              </div>
-                              <div>
-                                <h4 className="text-sm font-bold text-zinc-100 line-clamp-1">{group.name}</h4>
-                                <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-400 mt-0.5">
-                                  <span>Chủ nhóm: {group.ownerName || 'Hệ thống'}</span>
-                                  <span>•</span>
-                                  <span>{group.membersCount || 1} thành viên</span>
-                                  <span>•</span>
-                                  <span>{group.postsCount || 0} bài viết</span>
+                      {loadingGroups ? (
+                        <div className="py-12 text-center text-zinc-500 font-mono text-xs">Đang tải danh sách cộng đồng...</div>
+                      ) : adminGroups.length === 0 ? (
+                        <div className="py-12 text-center text-zinc-500 text-xs">Chưa có cộng đồng nào được tạo trong hệ thống.</div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {adminGroups.map(group => {
+                            const isSuspended = group.status === 'SUSPENDED';
+                            const isRestricted = group.status === 'RESTRICTED';
+
+                            return (
+                              <div 
+                                key={group.id} 
+                                className={`p-4 rounded-xl border flex flex-col justify-between space-y-3 transition-all ${
+                                  isSuspended 
+                                    ? 'bg-rose-950/20 border-rose-900/40' 
+                                    : 'bg-zinc-950/80 border-zinc-800/80 hover:border-zinc-700/80'
+                                }`}
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-11 h-11 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-xs text-zinc-200 overflow-hidden flex-shrink-0">
+                                      {group.avatarUrl ? (
+                                        <img src={group.avatarUrl} alt="" className="w-full h-full object-cover" />
+                                      ) : (
+                                        (group.name || 'G').charAt(0).toUpperCase()
+                                      )}
+                                    </div>
+                                    <div>
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <h4 className="text-sm font-bold text-zinc-100 line-clamp-1">{group.name}</h4>
+                                        {group.isFeatured && (
+                                          <span className="px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30 text-[9px] font-mono flex items-center gap-0.5">
+                                            <Star size={9} className="fill-amber-400 text-amber-400" />
+                                            <span>Nổi bật</span>
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-400 mt-0.5 flex-wrap">
+                                        <span>Chủ nhóm: <strong className="text-zinc-200">{group.ownerName || group.ownerAccount || 'Hệ thống'}</strong></span>
+                                        <span>•</span>
+                                        <span>{group.membersCount || 1} thành viên</span>
+                                        <span>•</span>
+                                        <span>{group.postsCount || 0} bài viết</span>
+                                        {group.categoryCode && (
+                                          <>
+                                            <span>•</span>
+                                            <span className="text-zinc-300">#{group.categoryCode}</span>
+                                          </>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Badge trạng thái */}
+                                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                                    {group.pendingReportsCount > 0 && (
+                                      <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-rose-500/20 text-rose-300 border border-rose-500/30 font-bold">
+                                        {group.pendingReportsCount} báo cáo
+                                      </span>
+                                    )}
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-mono ${
+                                      isSuspended 
+                                        ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' 
+                                        : isRestricted
+                                        ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                                        : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                                    }`}>
+                                      {group.status || 'ACTIVE'}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">
+                                  {group.description || 'Chưa cập nhật mô tả cộng đồng.'}
+                                </p>
+
+                                {/* Hàng thao tác nhanh Super Admin */}
+                                <div className="pt-3 border-t border-zinc-800/60 flex items-center justify-between text-xs gap-2 flex-wrap">
+                                  <div className="flex items-center gap-2">
+                                    {/* Nút Ghim nổi bật (Star) */}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleFeaturedCommunity(group.id, !!group.isFeatured)}
+                                      className={`p-2 rounded-xl border text-xs font-medium transition-all active:scale-95 flex items-center gap-1.5 ${
+                                        group.isFeatured 
+                                          ? 'bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20' 
+                                          : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
+                                      }`}
+                                      title={group.isFeatured ? "Bỏ ghim nổi bật" : "Ghim lên nổi bật trang khám phá"}
+                                    >
+                                      <Star size={13} className={group.isFeatured ? "fill-amber-400 text-amber-400" : ""} />
+                                      <span className="hidden sm:inline">{group.isFeatured ? "Bỏ ghim" : "Ghim"}</span>
+                                    </button>
+
+                                    {/* Nút Khóa / Mở khóa nhóm (Ban/Check) */}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleStatusCommunity(group.id, group.status)}
+                                      className={`p-2 rounded-xl border text-xs font-medium transition-all active:scale-95 flex items-center gap-1.5 ${
+                                        isSuspended 
+                                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20' 
+                                          : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-rose-400 hover:border-rose-900/50'
+                                      }`}
+                                      title={isSuspended ? "Mở khóa cộng đồng" : "Đình chỉ hoạt động cộng đồng này"}
+                                    >
+                                      {isSuspended ? <Check size={13} /> : <Ban size={13} />}
+                                      <span className="hidden sm:inline">{isSuspended ? "Mở khóa" : "Đình chỉ"}</span>
+                                    </button>
+                                  </div>
+
+                                  <div className="flex items-center gap-2">
+                                    {/* Nút Xóa vĩnh viễn (Trash) */}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteCommunityByAdmin(group.id, group.name)}
+                                      className="p-2 rounded-xl bg-zinc-900 hover:bg-rose-950/40 text-zinc-400 hover:text-rose-400 border border-zinc-800 hover:border-rose-900/50 transition-all active:scale-95 flex items-center gap-1.5 text-xs"
+                                      title="Xóa vĩnh viễn cộng đồng khỏi hệ thống"
+                                    >
+                                      <Trash2 size={13} />
+                                      <span className="hidden sm:inline">Xóa</span>
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-mono ${group.isPrivate ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'}`}>
-                              {group.isPrivate ? 'Riêng tư' : 'Công khai'}
-                            </span>
-                          </div>
-
-                          <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">
-                            {group.description || 'Chưa cập nhật mô tả cộng đồng.'}
-                          </p>
-
-                          <div className="pt-3 border-t border-zinc-800/60 flex items-center justify-between text-xs">
-                            <label className="flex items-center gap-2 cursor-pointer text-xs text-zinc-300">
-                              <input
-                                type="checkbox"
-                                checked={group.isPublicToFeed !== false}
-                                onChange={() => handleToggleGroupFeed(group.id, group.isPublicToFeed !== false)}
-                                className="accent-emerald-500 rounded"
-                              />
-                              <span className="text-[11px] text-zinc-300">Đề xuất ra Feed chung</span>
-                            </label>
-
-                            <label className="flex items-center gap-2 cursor-pointer text-xs text-zinc-300">
-                              <input
-                                type="checkbox"
-                                checked={!!group.requiresPostApproval}
-                                onChange={() => handleToggleGroupApproval(group.id, !!group.requiresPostApproval)}
-                                className="accent-sky-500 rounded"
-                              />
-                              <span className="text-[11px] text-zinc-300">Duyệt bài trước khi đăng</span>
-                            </label>
-                          </div>
+                            );
+                          })}
                         </div>
-                      ))}
+                      )}
                     </div>
-                  )}
-                </div>
 
-                {/* Section 2: Danh mục lý do từ chối bài viết mẫu */}
-                <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
-                        <Tag size={16} className="text-rose-400" />
-                        Danh Mục Lý Do Từ Chối Bài Viết (Reject Reasons)
-                      </h3>
-                      <p className="text-xs text-zinc-400 mt-0.5">
-                        Quản lý động danh mục lý do hiển thị cho Quản trị viên nhóm khi từ chối bài viết. Không fix cứng mã nguồn.
-                      </p>
+                    {/* Section 2: Danh mục lý do từ chối bài viết mẫu */}
+                    <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
+                            <Tag size={16} className="text-rose-400" />
+                            Danh Mục Lý Do Từ Chối Bài Viết (Reject Reasons)
+                          </h3>
+                          <p className="text-xs text-zinc-400 mt-0.5">
+                            Quản lý động danh mục lý do hiển thị cho Quản trị viên nhóm khi từ chối bài viết. Không fix cứng mã nguồn.
+                          </p>
+                        </div>
+                      </div>
+
+                      <form onSubmit={handleAddRejectReason} className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="Nhập lý do từ chối mẫu mới (VD: Vi phạm quy định phát ngôn, Quảng cáo trái phép...)"
+                          value={newReasonInput}
+                          onChange={(e) => setNewReasonInput(e.target.value)}
+                          className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-rose-500 placeholder-zinc-600"
+                        />
+                        <button
+                          type="submit"
+                          disabled={!newReasonInput.trim()}
+                          className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-40 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
+                        >
+                          <Plus size={14} />
+                          <span>Thêm lý do</span>
+                        </button>
+                      </form>
+
+                      <div className="space-y-2">
+                        {rejectReasons.map((reason) => (
+                          <div
+                            key={reason.id}
+                            className="flex items-center justify-between p-3 rounded-xl bg-zinc-950/80 border border-zinc-800/80"
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <span className="w-2 h-2 rounded-full bg-rose-400 flex-shrink-0"></span>
+                              <span className="text-xs font-medium text-zinc-200">{reason.label}</span>
+                              <span className="text-[10px] font-mono text-zinc-500">({reason.id})</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteRejectReason(reason.id)}
+                              className="text-zinc-500 hover:text-rose-400 p-1 transition-colors"
+                              title="Xóa lý do này"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
+                )}
 
-                  <form onSubmit={handleAddRejectReason} className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="Nhập lý do từ chối mẫu mới (VD: Vi phạm quy định phát ngôn, Quảng cáo trái phép...)"
-                      value={newReasonInput}
-                      onChange={(e) => setNewReasonInput(e.target.value)}
-                      className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-rose-500 placeholder-zinc-600"
-                    />
-                    <button
-                      type="submit"
-                      disabled={!newReasonInput.trim()}
-                      className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-40 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
-                    >
-                      <Plus size={14} />
-                      <span>Thêm lý do</span>
-                    </button>
-                  </form>
+                {/* ==================================================== */}
+                {/* SUB-TAB 2: HỘP THƯ BÁO CÁO VI PHẠM CỘNG ĐỒNG         */}
+                {/* ==================================================== */}
+                {communityAdminSubTab === 'reports' && (
+                  <div className="space-y-6 animate-fade-in">
+                    
+                    {/* Bộ lọc trạng thái báo cáo */}
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <div className="flex items-center gap-1.5 p-1 bg-zinc-900 rounded-xl border border-zinc-800 text-xs">
+                        {[
+                          { id: 'ALL', label: `Tất cả (${communityReports.length})` },
+                          { id: 'PENDING', label: `Chờ xử lý (${communityReports.filter(r => r.status === 'PENDING').length})` },
+                          { id: 'RESOLVED_SUSPENDED', label: `Đã đình chỉ (${communityReports.filter(r => r.status === 'RESOLVED_SUSPENDED').length})` },
+                          { id: 'RESOLVED_WARNED', label: `Đã cảnh cáo (${communityReports.filter(r => r.status === 'RESOLVED_WARNED').length})` },
+                          { id: 'DISMISSED', label: `Đã bỏ qua (${communityReports.filter(r => r.status === 'DISMISSED').length})` }
+                        ].map(f => (
+                          <button
+                            key={f.id}
+                            type="button"
+                            onClick={() => {
+                              setCommunityReportFilter(f.id);
+                              fetchCommunityReports();
+                            }}
+                            className={`px-3 py-1.5 rounded-lg font-semibold transition-all ${
+                              communityReportFilter === f.id
+                                ? 'bg-zinc-800 text-white shadow-sm'
+                                : 'text-zinc-400 hover:text-zinc-200'
+                            }`}
+                          >
+                            {f.label}
+                          </button>
+                        ))}
+                      </div>
 
-                  <div className="space-y-2">
-                    {rejectReasons.map((reason) => (
-                      <div
-                        key={reason.id}
-                        className="flex items-center justify-between p-3 rounded-xl bg-zinc-950/80 border border-zinc-800/80"
+                      <button
+                        type="button"
+                        onClick={fetchCommunityReports}
+                        className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-xs flex items-center gap-1.5 transition-all"
                       >
-                        <div className="flex items-center gap-2.5">
-                          <span className="w-2 h-2 rounded-full bg-rose-400 flex-shrink-0"></span>
-                          <span className="text-xs font-medium text-zinc-200">{reason.label}</span>
-                          <span className="text-[10px] font-mono text-zinc-500">({reason.id})</span>
+                        <RefreshCw size={13} className={loadingCommunityReports ? "animate-spin" : ""} />
+                        <span>Tải lại báo cáo</span>
+                      </button>
+                    </div>
+
+                    {/* Danh sách các báo cáo */}
+                    <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-3">
+                      {loadingCommunityReports ? (
+                        <div className="py-12 text-center text-zinc-500 font-mono text-xs">Đang nạp báo cáo cộng đồng...</div>
+                      ) : communityReports.length === 0 ? (
+                        <div className="py-12 text-center text-zinc-500 text-xs">
+                          Không có báo cáo vi phạm cộng đồng nào trong mục này.
                         </div>
+                      ) : (
+                        communityReports
+                          .filter(r => communityReportFilter === 'ALL' || r.status === communityReportFilter)
+                          .map(report => (
+                            <div 
+                              key={report.id}
+                              className="p-4 rounded-xl bg-zinc-950/80 border border-zinc-800/80 hover:border-zinc-700/80 transition-all space-y-3 shadow-sm"
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-xs font-bold text-zinc-100">
+                                      Cộng đồng: <strong className="text-white underline">{report.communityName || `Nhóm #${report.communityId}`}</strong>
+                                    </span>
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-rose-500/10 text-rose-300 border border-rose-500/30">
+                                      Lý do: {report.reason}
+                                    </span>
+                                  </div>
+                                  <div className="text-[11px] font-mono text-zinc-500 mt-1">
+                                    Người gửi: {report.reporterName || report.reporterAccount || 'Ẩn danh'} • {report.createdAt ? new Date(report.createdAt).toLocaleString('vi-VN') : 'Vừa xong'}
+                                  </div>
+                                </div>
+
+                                {/* Trạng thái báo cáo */}
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-mono ${
+                                  report.status === 'PENDING'
+                                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold'
+                                    : report.status === 'RESOLVED_SUSPENDED'
+                                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30 font-bold'
+                                    : 'bg-zinc-800 text-zinc-400 border border-zinc-700'
+                                }`}>
+                                  {report.status}
+                                </span>
+                              </div>
+
+                              {report.description && (
+                                <p className="text-xs text-zinc-300 bg-zinc-900/60 p-3 rounded-xl border border-zinc-800 leading-relaxed">
+                                  {report.description}
+                                </p>
+                              )}
+
+                              {report.adminNote && (
+                                <div className="text-[11px] font-mono text-zinc-400 bg-zinc-900/40 p-2 rounded-lg border border-zinc-800">
+                                  Ghi chú Admin: <span className="text-zinc-200">{report.adminNote}</span>
+                                </div>
+                              )}
+
+                              {/* Hàng nút hành động xử lý nếu còn PENDING */}
+                              {report.status === 'PENDING' && (
+                                <div className="pt-2 border-t border-zinc-800/60 flex items-center justify-end gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedCommunityReportToResolve(report);
+                                      setResolveActionType('DISMISSED');
+                                    }}
+                                    className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-xs font-medium transition-all"
+                                  >
+                                    Bỏ qua báo cáo
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedCommunityReportToResolve(report);
+                                      setResolveActionType('RESOLVED_WARNED');
+                                    }}
+                                    className="px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs font-semibold transition-all"
+                                  >
+                                    Cảnh cáo nhóm
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedCommunityReportToResolve(report);
+                                      setResolveActionType('RESOLVED_SUSPENDED');
+                                    }}
+                                    className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-all shadow-md active:scale-95"
+                                  >
+                                    Đình chỉ nhóm ngay
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          ))
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* MODAL GIẢI QUYẾT BÁO CÁO CỘNG ĐỒNG */}
+                {selectedCommunityReportToResolve && (
+                  <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+                    <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-2xl">
+                      <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+                        <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                          <ShieldAlert size={16} className="text-amber-400" />
+                          <span>Giải quyết báo cáo vi phạm</span>
+                        </h3>
                         <button
                           type="button"
-                          onClick={() => handleDeleteRejectReason(reason.id)}
-                          className="text-zinc-500 hover:text-rose-400 p-1 transition-colors"
-                          title="Xóa lý do này"
+                          onClick={() => setSelectedCommunityReportToResolve(null)}
+                          className="w-7 h-7 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white flex items-center justify-center transition-colors"
                         >
-                          <Trash2 size={13} />
+                          <X size={14} />
                         </button>
                       </div>
-                    ))}
+
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-[11px] font-mono text-zinc-400 block mb-1">Hành động xử lý</label>
+                          <select
+                            value={resolveActionType}
+                            onChange={(e) => setResolveActionType(e.target.value)}
+                            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-zinc-500"
+                          >
+                            <option value="RESOLVED_SUSPENDED">Đình chỉ cộng đồng (Khóa nhóm vĩnh viễn/tạm thời)</option>
+                            <option value="RESOLVED_WARNED">Cảnh cáo Quản trị viên nhóm</option>
+                            <option value="DISMISSED">Bỏ qua báo cáo (Không vi phạm / Báo cáo sai)</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="text-[11px] font-mono text-zinc-400 block mb-1">Ghi chú xử lý của Quản trị viên</label>
+                          <textarea
+                            rows="3"
+                            value={resolveAdminNoteText}
+                            onChange={(e) => setResolveAdminNoteText(e.target.value)}
+                            placeholder="Nhập lý do hoặc ghi chú lưu vết quyết định xử lý..."
+                            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-zinc-500 resize-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-800">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCommunityReportToResolve(null)}
+                          className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold"
+                        >
+                          Hủy bỏ
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleResolveCommunityReport}
+                          disabled={isResolvingCommunityReport}
+                          className="px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-bold transition-all shadow-md active:scale-95 disabled:opacity-50"
+                        >
+                          {isResolvingCommunityReport ? "Đang xử lý..." : "Xác nhận giải quyết"}
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             )}
 
