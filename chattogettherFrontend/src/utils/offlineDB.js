@@ -75,8 +75,13 @@ export const getMessagesOffline = async (roomId) => {
           resolve(request.result.messages || []);
         } else {
           // Thử fallback từ localStorage
-          const local = localStorage.getItem(`offline_msgs_${roomId}`);
-          resolve(local ? JSON.parse(local) : []);
+          try {
+            const local = localStorage.getItem(`offline_msgs_${roomId}`);
+            const parsed = local ? JSON.parse(local) : [];
+            resolve(Array.isArray(parsed) ? parsed : []);
+          } catch {
+            resolve([]);
+          }
         }
       };
 
@@ -117,8 +122,13 @@ export const getRoomsOffline = async () => {
   try {
     const db = await openDB();
     if (!db) {
-      const local = localStorage.getItem('offline_rooms');
-      return local ? JSON.parse(local) : [];
+      try {
+        const local = localStorage.getItem('offline_rooms');
+        const parsed = local ? JSON.parse(local) : [];
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
     }
 
     return new Promise((resolve) => {
@@ -130,8 +140,13 @@ export const getRoomsOffline = async () => {
         if (request.result && request.result.length > 0) {
           resolve(request.result);
         } else {
-          const local = localStorage.getItem('offline_rooms');
-          resolve(local ? JSON.parse(local) : []);
+          try {
+            const local = localStorage.getItem('offline_rooms');
+            const parsed = local ? JSON.parse(local) : [];
+            resolve(Array.isArray(parsed) ? parsed : []);
+          } catch {
+            resolve([]);
+          }
         }
       };
 

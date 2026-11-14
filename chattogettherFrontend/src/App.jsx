@@ -37,6 +37,9 @@ class ErrorBoundary extends Component {
   handleReload = () => {
     localStorage.removeItem('hasCheckedActiveRoom');
     localStorage.removeItem('talovin_cached_posts');
+    localStorage.removeItem('offline_rooms');
+    localStorage.removeItem('saved_post_ids');
+    localStorage.removeItem('talovin_recent_searches');
     sessionStorage.clear();
     window.location.href = '/';
   };

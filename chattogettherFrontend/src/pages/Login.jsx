@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import axiosClient from '../api/axiosClient';
@@ -9,25 +9,39 @@ const Login = () => {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [slowMessage, setSlowMessage] = useState(false);
+  const [elapsedSec, setElapsedSec] = useState(0);
+  const elapsedTimerRef = useRef(null);
   const navigate = useNavigate();
+
+  // Khởi động làm ấm máy chủ ngay khi người dùng mở trang Đăng Nhập
+  useEffect(() => {
+    // Gửi request nhẹ không yêu cầu xác thực để đánh thức Render trong lúc người dùng đang nhập tài khoản
+    axiosClient.get('/tracks').catch(() => {});
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setSubmitting(true);
     setSlowMessage(false);
+    setElapsedSec(0);
 
     const timer = setTimeout(() => {
       setSlowMessage(true);
     }, 2500);
+
+    elapsedTimerRef.current = setInterval(() => {
+      setElapsedSec(prev => prev + 1);
+    }, 1000);
     
     try {
       const response = await axiosClient.post('/auth/login', {
-        account: formData.account,
+        account: formData.account.trim(),
         password: formData.password
       });
 
       clearTimeout(timer);
+      if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
 
       if (response.status === 200) {
         const { token, roomId, refreshToken } = response.data.data;
@@ -35,6 +49,10 @@ const Login = () => {
         if (refreshToken) {
           localStorage.setItem('refreshToken', refreshToken);
         }
+
+        // Xóa cache bài viết cũ để tránh xung đột dữ liệu phiên bản mới
+        localStorage.removeItem('talovin_cached_posts');
+        localStorage.removeItem('hasCheckedActiveRoom');
 
         // Giải mã JWT để lấy user_id
         try {
@@ -50,7 +68,7 @@ const Login = () => {
           console.error("Không thể giải mã token:", decodeError);
         }
 
-        // Luôn chuyển về Trang chủ (Sảnh). Khi nào người dùng chủ động muốn vào phòng thì tự bấm vào
+        // Chuyển về Sảnh
         sessionStorage.setItem('hasCheckedActiveRoom', 'true');
         navigate('/');
       }
@@ -68,10 +86,11 @@ const Login = () => {
           setError(err.response.data?.message || 'Đã có lỗi xảy ra!');
         }
       } else {
-        setError('Không thể kết nối đến server!');
+        setError('Không thể kết nối đến server! Đang thử lại...');
       }
     } finally {
       clearTimeout(timer);
+      if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
       setSubmitting(false);
       setSlowMessage(false);
     }
@@ -119,9 +138,14 @@ const Login = () => {
           {submitting ? 'Đang Đăng Nhập...' : 'Đăng Nhập'}
         </button>
         {slowMessage && (
-          <p style={{ fontSize: '0.8rem', color: '#818cf8', textAlign: 'center', marginTop: '0.75rem', lineHeight: '1.4' }}>
-            🚀 Đang kết nối và đánh thức máy chủ Render, vui lòng đợi trong giây lát...
-          </p>
+          <div className="mt-3 p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-center space-y-1 animate-fade-in">
+            <p className="text-xs text-zinc-300 font-medium">
+              ⚡ Đang kết nối máy chủ Render ({elapsedSec}s)...
+            </p>
+            <p className="text-[11px] text-zinc-500">
+              Máy chủ đang được đánh thức từ chế độ ngủ, vui lòng giữ màn hình.
+            </p>
+          </div>
         )}
       </form>
 

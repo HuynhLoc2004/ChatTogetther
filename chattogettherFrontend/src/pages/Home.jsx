@@ -394,7 +394,9 @@ const Home = ({ initialTab }) => {
   const [showMobileSearchBar, setShowMobileSearchBar] = useState(false);
   const [recentSearches, setRecentSearches] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem('talovin_recent_searches') || '[]');
+      const raw = localStorage.getItem('talovin_recent_searches') || '[]';
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
     } catch {
       return [];
     }
@@ -491,7 +493,8 @@ const Home = ({ initialTab }) => {
   const [savedPostIds, setSavedPostIds] = useState(() => {
     try {
       const saved = localStorage.getItem('saved_post_ids');
-      return saved ? JSON.parse(saved) : [];
+      const parsed = saved ? JSON.parse(saved) : [];
+      return Array.isArray(parsed) ? parsed : [];
     } catch (e) {
       return [];
     }
@@ -729,8 +732,9 @@ const Home = ({ initialTab }) => {
       return true;
     }
     try {
-      const entered = JSON.parse(localStorage.getItem('talovin_entered_rooms') || '[]');
-      if (entered.includes(room.id)) return true;
+      const raw = localStorage.getItem('talovin_entered_rooms') || '[]';
+      const entered = JSON.parse(raw);
+      if (Array.isArray(entered) && entered.includes(room.id)) return true;
     } catch (e) {}
     return false;
   };
@@ -1490,8 +1494,10 @@ const Home = ({ initialTab }) => {
 
     // Lưu từ khóa vào lịch sử tìm kiếm gần đây trong LocalStorage
     try {
-      const current = JSON.parse(localStorage.getItem('talovin_recent_searches') || '[]');
-      const updated = [kw, ...current.filter(item => item.toLowerCase() !== kw.toLowerCase())].slice(0, 8);
+      const raw = localStorage.getItem('talovin_recent_searches') || '[]';
+      const parsed = JSON.parse(raw);
+      const current = Array.isArray(parsed) ? parsed : [];
+      const updated = [kw, ...current.filter(item => typeof item === 'string' && item.toLowerCase() !== kw.toLowerCase())].slice(0, 8);
       localStorage.setItem('talovin_recent_searches', JSON.stringify(updated));
       setRecentSearches(updated);
     } catch {}
@@ -1518,8 +1524,10 @@ const Home = ({ initialTab }) => {
 
   const handleRemoveRecentSearch = (termToRemove) => {
     try {
-      const current = JSON.parse(localStorage.getItem('talovin_recent_searches') || '[]');
-      const updated = current.filter(t => t.toLowerCase() !== termToRemove.toLowerCase());
+      const raw = localStorage.getItem('talovin_recent_searches') || '[]';
+      const parsed = JSON.parse(raw);
+      const current = Array.isArray(parsed) ? parsed : [];
+      const updated = current.filter(t => typeof t === 'string' && t.toLowerCase() !== termToRemove.toLowerCase());
       localStorage.setItem('talovin_recent_searches', JSON.stringify(updated));
       setRecentSearches(updated);
     } catch {}
@@ -1631,9 +1639,16 @@ const Home = ({ initialTab }) => {
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+
+    // Keep-alive ping định kỳ 8 phút để giữ máy chủ Render luôn thức khi người dùng đang mở web
+    const keepAliveInterval = setInterval(() => {
+      axiosClient.get('/tracks').catch(() => {});
+    }, 8 * 60 * 1000);
+
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      clearInterval(keepAliveInterval);
     };
   }, [fetchPosts]);
 
@@ -1887,7 +1902,9 @@ const Home = ({ initialTab }) => {
     // Nếu người dùng đã là thành viên hoặc đã từng tham gia phòng này -> vào thẳng không cần hỏi mật khẩu!
     if (isUserInRoom(room)) {
       try {
-        const entered = JSON.parse(localStorage.getItem('talovin_entered_rooms') || '[]');
+        const raw = localStorage.getItem('talovin_entered_rooms') || '[]';
+        const parsed = JSON.parse(raw);
+        const entered = Array.isArray(parsed) ? parsed : [];
         if (!entered.includes(room.id)) {
           entered.push(room.id);
           localStorage.setItem('talovin_entered_rooms', JSON.stringify(entered));
@@ -1903,7 +1920,9 @@ const Home = ({ initialTab }) => {
       axiosClient.post('/rooms/join-room', { roomId: room.id, password: null }, { params: { room_id: room.id, idRoom: room.id } })
         .then(() => {
           try {
-            const entered = JSON.parse(localStorage.getItem('talovin_entered_rooms') || '[]');
+            const raw = localStorage.getItem('talovin_entered_rooms') || '[]';
+            const parsed = JSON.parse(raw);
+            const entered = Array.isArray(parsed) ? parsed : [];
             if (!entered.includes(room.id)) {
               entered.push(room.id);
               localStorage.setItem('talovin_entered_rooms', JSON.stringify(entered));
@@ -2248,7 +2267,7 @@ const Home = ({ initialTab }) => {
                 onClick={() => setActiveTab('saved')}
               >
                 <Bookmark size={15} strokeWidth={1.5} />
-                <span>{dynamicMenu.saved?.label || "Đã lưu"} ({savedPostIds.length})</span>
+                <span>{dynamicMenu.saved?.label || "Đã lưu"} ({Array.isArray(savedPostIds) ? savedPostIds.length : 0})</span>
               </button>
             )}
 

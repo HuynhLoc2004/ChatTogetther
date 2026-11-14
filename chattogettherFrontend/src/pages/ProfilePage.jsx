@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, Edit3, LogOut, UserPlus, UserCheck, Clock, 
-  MapPin, Calendar, Mail, Phone, PhoneCall, Lock, Check, X, 
-  Camera, Upload, Trash2, Heart, MessageSquare, Share2, 
-  Shield, Sparkles, Loader2, Users, Radio, Headphones, 
-  Mic, Play, Pause, Square, RotateCcw, AudioLines, Volume2, 
+import {
+  ArrowLeft, Edit3, LogOut, UserPlus, UserCheck, Clock,
+  MapPin, Calendar, Mail, Phone, PhoneCall, Lock, Check, X,
+  Camera, Upload, Trash2, Heart, MessageSquare, Share2,
+  Shield, Sparkles, Loader2, Users, Radio, Headphones,
+  Mic, Play, Pause, Square, RotateCcw, AudioLines, Volume2,
   VolumeX, Music, Tag
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
@@ -18,7 +18,7 @@ const TIME_FORMATTER = (dateStr) => {
   try {
     const d = new Date(dateStr);
     return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' ' +
-           d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+      d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
   } catch (e) {
     return dateStr;
   }
@@ -104,7 +104,7 @@ const ProfilePage = () => {
           setDynamicIntents(res.data.intents || []);
           setDynamicTracks(res.data.channels || []);
         }
-      }).catch(() => {});
+      }).catch(() => { });
     });
   }, []);
 
@@ -117,7 +117,7 @@ const ProfilePage = () => {
       if (res.data?.data) {
         const data = res.data.data;
         setProfile(data);
-        
+
         setEditData({
           nickname: data.nickname || '',
           age: data.age || '',
@@ -413,7 +413,7 @@ const ProfilePage = () => {
   const userGenre = matchedTrack ? `${matchedTrack.title} • ${matchedTrack.artist || matchedTrack.genreTag || 'Lo-Fi'}` : (dynamicTracks[0] ? `${dynamicTracks[0].title} • ${dynamicTracks[0].artist || 'Lo-Fi'}` : 'Chưa chọn gu âm nhạc');
 
   const matchedIntent = dynamicIntents.find(i => i.code === (profile?.matchIntentCode || editData.matchIntentCode));
-  const userFreq = profile?.personalFrequency 
+  const userFreq = profile?.personalFrequency
     ? `${Number(profile.personalFrequency).toFixed(1)} MHz ${matchedIntent ? `• ${matchedIntent.title}` : ''}`
     : (editData.personalFrequency ? `${Number(editData.personalFrequency).toFixed(1)} MHz` : '96.4 MHz • Tần số cá nhân');
 
@@ -421,10 +421,10 @@ const ProfilePage = () => {
     <div className="min-h-screen bg-[#09090b] text-[#f4f4f5] font-sans pb-28 selection:bg-emerald-500 selection:text-black">
       {/* Audio Element cho Voice Bio */}
       {voiceBioUrl && (
-        <audio 
-          ref={voiceBioAudioRef} 
-          src={voiceBioUrl} 
-          onEnded={() => setIsPlayingVoiceBio(false)} 
+        <audio
+          ref={voiceBioAudioRef}
+          src={voiceBioUrl}
+          onEnded={() => setIsPlayingVoiceBio(false)}
         />
       )}
 
@@ -432,8 +432,8 @@ const ProfilePage = () => {
       <header className="sticky top-0 z-40 bg-[#0c0d12]/90 backdrop-blur-md border-b border-zinc-800/80 px-4 sm:px-6 py-3.5">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={() => navigate('/')}
               className="p-2 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-800 transition-all active:scale-95 flex items-center gap-2 text-xs font-medium"
               title="Quay lại sảnh chính"
@@ -476,29 +476,28 @@ const ProfilePage = () => {
       {/* BỐ CỤC 2 CỘT CHUẨN: MOBILE 1 CỘT -> DESKTOP 12 CỘT */}
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-4 sm:py-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          
+
           {/* ============================================================== */}
           {/* CỘT TRÁI (lg:col-span-4): THẺ CĂN CƯỚC TẦN SỐ (AUDIO-FIRST ID) */}
           {/* ============================================================== */}
           <aside className="lg:col-span-4 lg:sticky lg:top-20 space-y-5">
             <div className="bg-zinc-900/90 backdrop-blur-md border border-zinc-800/90 p-5 sm:p-6 rounded-2xl space-y-5 shadow-2xl">
-              
+
               {/* Header thẻ: Avatar vuông bo góc + Chấm Online + Tên */}
               <div className="flex flex-col sm:flex-row lg:flex-col items-start gap-4">
                 <div className="relative flex-shrink-0">
                   <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden border border-zinc-700/80 bg-zinc-950 shadow-lg">
-                    <UserAvatar 
-                      avatar={profile?.avatar} 
-                      name={profile?.nickname || profile?.account} 
-                      size={96} 
-                      className="w-full h-full rounded-2xl object-cover" 
+                    <UserAvatar
+                      avatar={profile?.avatar}
+                      name={profile?.nickname || profile?.account}
+                      size={96}
+                      className="w-full h-full rounded-2xl object-cover"
                     />
                   </div>
                   {/* Chấm Online / Offline */}
-                  <span 
-                    className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full ring-4 ring-zinc-900 ${
-                      isOnline ? 'bg-emerald-500' : 'bg-zinc-600'
-                    }`}
+                  <span
+                    className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full ring-4 ring-zinc-900 ${isOnline ? 'bg-emerald-500' : 'bg-zinc-600'
+                      }`}
                     title={isOnline ? 'Đang trực tuyến' : 'Ngoại tuyến'}
                   />
                   {isMe && (
@@ -534,7 +533,7 @@ const ProfilePage = () => {
                   <p className="font-mono text-xs text-zinc-400 mt-0.5">
                     @{profile?.account || 'user'}
                   </p>
-                  
+
                   {/* Tiểu sử */}
                   <p className="text-xs text-zinc-300 mt-2.5 leading-relaxed whitespace-pre-wrap">
                     {profile?.bio || (isMe ? 'Chưa cập nhật tiểu sử. Bấm nút dưới để viết đôi dòng giới thiệu.' : 'Người dùng này chưa cập nhật tiểu sử.')}
@@ -635,11 +634,10 @@ const ProfilePage = () => {
                     <button
                       type="button"
                       onClick={togglePlayVoiceBio}
-                      className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
-                        isPlayingVoiceBio 
-                          ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20' 
-                          : 'bg-white text-black hover:bg-zinc-200'
-                      }`}
+                      className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${isPlayingVoiceBio
+                        ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20'
+                        : 'bg-white text-black hover:bg-zinc-200'
+                        }`}
                       title={isPlayingVoiceBio ? "Tạm dừng" : "Phát tín hiệu"}
                     >
                       {isPlayingVoiceBio ? <Pause size={14} /> : <Play size={14} className="ml-0.5" />}
@@ -648,15 +646,14 @@ const ProfilePage = () => {
                     {/* Dải sóng âm thanh Visualizer */}
                     <div className="flex-1 flex items-center gap-1 h-6 px-1">
                       {[35, 60, 85, 45, 95, 70, 50, 90, 65, 40, 80, 55].map((h, i) => (
-                        <span 
-                          key={i} 
-                          className={`flex-1 rounded-full transition-all duration-200 ${
-                            isPlayingVoiceBio 
-                              ? 'bg-emerald-400 animate-pulse' 
-                              : 'bg-zinc-700'
-                          }`}
-                          style={{ 
-                            height: isPlayingVoiceBio ? `${Math.max(20, (h * Math.sin(i + 1)) % 100)}%` : `${h * 0.4}%` 
+                        <span
+                          key={i}
+                          className={`flex-1 rounded-full transition-all duration-200 ${isPlayingVoiceBio
+                            ? 'bg-emerald-400 animate-pulse'
+                            : 'bg-zinc-700'
+                            }`}
+                          style={{
+                            height: isPlayingVoiceBio ? `${Math.max(20, (h * Math.sin(i + 1)) % 100)}%` : `${h * 0.4}%`
                           }}
                         />
                       ))}
@@ -737,15 +734,14 @@ const ProfilePage = () => {
           {/* CỘT PHẢI (lg:col-span-8): KHOẢNH KHẮC & KẾT NỐI */}
           {/* ============================================================== */}
           <section className="lg:col-span-8 space-y-4">
-            
+
             {/* Thanh Tab dính: Đúng 2 tab tối giản có vùng chạm lớn */}
             <div className="sticky top-16 z-30 bg-[#09090b]/90 backdrop-blur-md border-b border-zinc-800 flex items-center gap-8 px-2">
               <button
                 type="button"
                 onClick={() => setActiveTab('posts')}
-                className={`py-3.5 text-sm font-medium transition-all relative flex items-center gap-2 ${
-                  activeTab === 'posts' ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'
-                }`}
+                className={`py-3.5 text-sm font-medium transition-all relative flex items-center gap-2 ${activeTab === 'posts' ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'
+                  }`}
               >
                 <span>Khoảnh khắc & Tín hiệu</span>
                 <span className="font-mono text-xs px-1.5 py-0.2 rounded-full bg-zinc-800 text-zinc-300">
@@ -759,9 +755,8 @@ const ProfilePage = () => {
               <button
                 type="button"
                 onClick={() => setActiveTab('friends')}
-                className={`py-3.5 text-sm font-medium transition-all relative flex items-center gap-2 ${
-                  activeTab === 'friends' ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'
-                }`}
+                className={`py-3.5 text-sm font-medium transition-all relative flex items-center gap-2 ${activeTab === 'friends' ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'
+                  }`}
               >
                 <span>Kết nối (Bạn bè)</span>
                 <span className="font-mono text-xs px-1.5 py-0.2 rounded-full bg-zinc-800 text-zinc-300">
@@ -790,8 +785,8 @@ const ProfilePage = () => {
                     <div>
                       <p className="text-sm font-semibold text-zinc-300">Chưa có tín hiệu nào</p>
                       <p className="text-xs text-zinc-500 max-w-sm mx-auto mt-1 leading-relaxed">
-                        {isMe 
-                          ? 'Bạn chưa đăng bài viết hoặc bản ghi âm nào lên sảnh trực tuyến. Hãy chia sẻ góc nhìn đầu tiên!' 
+                        {isMe
+                          ? 'Bạn chưa đăng bài viết hoặc bản ghi âm nào lên sảnh trực tuyến. Hãy chia sẻ góc nhìn đầu tiên!'
                           : 'Người dùng này chưa phát tín hiệu hoặc bài viết nào.'}
                       </p>
                     </div>
@@ -808,17 +803,17 @@ const ProfilePage = () => {
                 ) : (
                   /* Danh sách bài viết Dark Zinc */
                   userPosts.map(post => (
-                    <article 
-                      key={post.id} 
+                    <article
+                      key={post.id}
                       className="p-5 rounded-2xl bg-zinc-900/80 border border-zinc-800/80 hover:border-zinc-700/80 transition-all space-y-3.5 shadow-sm"
                     >
                       {/* Header tác giả */}
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <UserAvatar 
-                            avatar={post.authorAvatar || profile?.avatar} 
-                            name={post.authorNickname || profile?.nickname} 
-                            size={38} 
+                          <UserAvatar
+                            avatar={post.authorAvatar || profile?.avatar}
+                            name={post.authorNickname || profile?.nickname}
+                            size={38}
                             className="rounded-xl"
                           />
                           <div>
@@ -860,9 +855,8 @@ const ProfilePage = () => {
                           <button
                             type="button"
                             onClick={() => handleLikePost(post.id)}
-                            className={`flex items-center gap-1.5 transition-colors ${
-                              post.isLikedByMe ? 'text-rose-500 font-semibold' : 'hover:text-white'
-                            }`}
+                            className={`flex items-center gap-1.5 transition-colors ${post.isLikedByMe ? 'text-rose-500 font-semibold' : 'hover:text-white'
+                              }`}
                           >
                             <Heart size={15} className={post.isLikedByMe ? 'fill-rose-500 text-rose-500' : ''} />
                             <span>{post.likesCount || 0}</span>
@@ -904,11 +898,11 @@ const ProfilePage = () => {
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {userFriends.map(friend => (
-                      <div 
+                      <div
                         key={friend.id}
                         className="p-3.5 rounded-2xl bg-zinc-900/80 border border-zinc-800/80 hover:border-zinc-700/80 transition-all flex items-center justify-between gap-3"
                       >
-                        <div 
+                        <div
                           className="flex items-center gap-3 min-w-0 cursor-pointer"
                           onClick={() => navigate(`/profile/${friend.id}`)}
                         >
@@ -944,11 +938,11 @@ const ProfilePage = () => {
 
       {/* MODAL CẬP NHẬT TẦN SỐ CÁ NHÂN & HỒ SƠ Ở GIỮA MÀN HÌNH (MAX-W-LG) */}
       {isMe && isEditing && (
-        <div 
+        <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in"
           onClick={() => setIsEditing(false)}
         >
-          <div 
+          <div
             className="w-full max-w-lg bg-zinc-900 border border-zinc-800/90 p-5 sm:p-6 rounded-2xl space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar"
             onClick={(e) => e.stopPropagation()}
           >
@@ -957,9 +951,9 @@ const ProfilePage = () => {
                 <Edit3 size={15} className="text-zinc-300" />
                 <span>Cập nhật tần số cá nhân</span>
               </h3>
-              <button 
-                type="button" 
-                onClick={() => setIsEditing(false)} 
+              <button
+                type="button"
+                onClick={() => setIsEditing(false)}
                 className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
               >
                 <X size={16} />
@@ -969,7 +963,7 @@ const ProfilePage = () => {
             <form onSubmit={handleSaveProfile} className="space-y-4">
               <div>
                 <label className="text-[11px] text-zinc-400 font-mono block mb-1">Tên hiển thị *</label>
-                <input 
+                <input
                   type="text"
                   value={editData.nickname}
                   onChange={(e) => setEditData(prev => ({ ...prev, nickname: e.target.value }))}
@@ -980,7 +974,7 @@ const ProfilePage = () => {
 
               <div>
                 <label className="text-[11px] text-zinc-400 font-mono block mb-1">Tiểu sử</label>
-                <textarea 
+                <textarea
                   rows={3}
                   value={editData.bio}
                   onChange={(e) => setEditData(prev => ({ ...prev, bio: e.target.value }))}
@@ -992,7 +986,7 @@ const ProfilePage = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[11px] text-zinc-400 font-mono block mb-1">Tuổi</label>
-                  <input 
+                  <input
                     type="number"
                     value={editData.age}
                     onChange={(e) => setEditData(prev => ({ ...prev, age: e.target.value }))}
@@ -1001,7 +995,7 @@ const ProfilePage = () => {
                 </div>
                 <div>
                   <label className="text-[11px] text-zinc-400 font-mono block mb-1">Vị trí / Khu vực</label>
-                  <input 
+                  <input
                     type="text"
                     value={editData.location}
                     onChange={(e) => setEditData(prev => ({ ...prev, location: e.target.value }))}
@@ -1033,7 +1027,7 @@ const ProfilePage = () => {
                   </span>
                 </div>
 
-                <input 
+                <input
                   type="range"
                   min="88.0"
                   max="108.0"
@@ -1085,15 +1079,15 @@ const ProfilePage = () => {
               </div>
 
               <div className="pt-2 flex items-center justify-end gap-2 border-t border-zinc-800/80">
-                <button 
-                  type="button" 
-                  onClick={() => setIsEditing(false)} 
+                <button
+                  type="button"
+                  onClick={() => setIsEditing(false)}
                   className="h-9 px-4 rounded-xl bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-300 text-xs font-medium transition-colors"
                 >
                   Hủy
                 </button>
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   disabled={submitting}
                   className="h-9 px-4 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs transition-colors duration-150 active:scale-[0.98] disabled:opacity-50 shadow-sm"
                 >
@@ -1104,8 +1098,8 @@ const ProfilePage = () => {
 
             {/* Mở rộng đổi mật khẩu */}
             <div className="border-t border-zinc-800/80 pt-3">
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => setShowPasswordSection(!showPasswordSection)}
                 className="text-xs text-zinc-400 hover:text-white flex items-center gap-1.5 transition-colors"
               >
@@ -1115,7 +1109,7 @@ const ProfilePage = () => {
 
               {showPasswordSection && (
                 <form onSubmit={handleChangePassword} className="mt-3 space-y-2.5">
-                  <input 
+                  <input
                     type="password"
                     placeholder="Mật khẩu cũ"
                     value={passwordData.oldPassword}
@@ -1123,7 +1117,7 @@ const ProfilePage = () => {
                     className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 text-xs text-white focus:outline-none"
                     required
                   />
-                  <input 
+                  <input
                     type="password"
                     placeholder="Mật khẩu mới (tối thiểu 6 ký tự)"
                     value={passwordData.newPassword}
@@ -1131,7 +1125,7 @@ const ProfilePage = () => {
                     className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 text-xs text-white focus:outline-none"
                     required
                   />
-                  <input 
+                  <input
                     type="password"
                     placeholder="Xác nhận mật khẩu mới"
                     value={passwordData.confirmPassword}
@@ -1155,11 +1149,11 @@ const ProfilePage = () => {
 
       {/* MODAL XÁC NHẬN ĐĂNG XUẤT */}
       {showLogoutConfirm && (
-        <div 
+        <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in"
           onClick={() => setShowLogoutConfirm(false)}
         >
-          <div 
+          <div
             className="w-full max-w-sm bg-zinc-900 border border-zinc-800 p-6 rounded-2xl space-y-4 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
