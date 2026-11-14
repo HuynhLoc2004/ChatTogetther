@@ -40,10 +40,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     // Cấu hình số lượt cho phép theo từng loại API (số request / 60 giây)
-    private static final int LIMIT_AUTH = 12;         // Login, Register (chống dò mật khẩu)
-    private static final int LIMIT_POST_CREATE = 20;  // Tạo bài viết (chống spam feed)
-    private static final int LIMIT_COMMENT = 40;      // Bình luận
-    private static final int LIMIT_GENERAL = 200;     // Các API đọc thông thường
+    // Tách riêng từng nhóm (Category) để các yêu cầu duyệt bài / lướt web không làm ảnh hưởng đến lượt đăng nhập
+    private static final int LIMIT_AUTH = 30;         // Login, Register (POST /auth/login, POST /users/create)
+    private static final int LIMIT_POST_CREATE = 30;  // Tạo bài viết mới (chống spam feed)
+    private static final int LIMIT_COMMENT = 60;      // Bình luận
+    private static final int LIMIT_GENERAL = 600;     // Các API đọc thông thường (feed, rooms, notifications, music,...)
 
     private static final long WINDOW_DURATION_MILLIS = 60000L; // Cửa sổ 1 phút
 
@@ -60,10 +61,14 @@ public class RateLimitFilter extends OncePerRequestFilter {
         }
 
         String clientIp = getClientIp(request);
-        int maxAllowed = getLimitForUri(uri, method);
+        EndpointPolicy policy = resolvePolicy(uri, method);
+
+        // Khóa định danh độc lập theo cả IP và Phân loại API (IP:CATEGORY)
+        // Đảm bảo lượt đọc feed/rooms/notifications KHÔNG bao giờ làm cạn kiệt lượt đăng nhập của người dùng
+        String trackerKey = clientIp + ":" + policy.category;
 
         // Chống tràn RAM nếu có kẻ tấn công dùng hàng chục ngàn IP spoofed
-        if (clientTrackers.size() > MAX_TRACKED_IPS && !clientTrackers.containsKey(clientIp)) {
+        if (clientTrackers.size() > MAX_TRACKED_IPS && !clientTrackers.containsKey(trackerKey)) {
             evictExpiredTrackers();
             if (clientTrackers.size() > MAX_TRACKED_IPS) {
                 // Tạm thời bảo vệ bộ nhớ nếu lượng IP giả lập quá tải
@@ -73,7 +78,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
         }
 
         long now = System.currentTimeMillis();
-        ClientWindow window = clientTrackers.compute(clientIp, (key, existing) -> {
+        ClientWindow window = clientTrackers.compute(trackerKey, (key, existing) -> {
             if (existing == null || (now - existing.windowStartTime) > WINDOW_DURATION_MILLIS) {
                 return new ClientWindow(now, 1);
             }
@@ -83,38 +88,50 @@ public class RateLimitFilter extends OncePerRequestFilter {
         });
 
         // Kiểm tra xem đã vượt ngưỡng cho phép chưa
-        if (window.requestCount.get() > maxAllowed) {
+        if (window.requestCount.get() > policy.limit) {
             long retryAfterSec = Math.max(1, (WINDOW_DURATION_MILLIS - (now - window.windowStartTime)) / 1000);
             response.setHeader("Retry-After", String.valueOf(retryAfterSec));
-            response.setHeader("X-RateLimit-Limit", String.valueOf(maxAllowed));
+            response.setHeader("X-RateLimit-Limit", String.valueOf(policy.limit));
             response.setHeader("X-RateLimit-Remaining", "0");
             
-            log.warn("Rate limit exceeded for IP [{}] on [{}] - Count: {}/{}", clientIp, uri, window.requestCount.get(), maxAllowed);
+            log.warn("Rate limit exceeded for IP [{}] on category [{}] - URI [{}] - Count: {}/{}", clientIp, policy.category, uri, window.requestCount.get(), policy.limit);
             sendRateLimitResponse(response, "Bạn đang gửi yêu cầu quá nhanh. Vui lòng đợi " + retryAfterSec + " giây trước khi tiếp tục.");
             return;
         }
 
         // Đính kèm headers thông tin lượt dùng còn lại
-        response.setHeader("X-RateLimit-Limit", String.valueOf(maxAllowed));
-        response.setHeader("X-RateLimit-Remaining", String.valueOf(Math.max(0, maxAllowed - window.requestCount.get())));
+        response.setHeader("X-RateLimit-Limit", String.valueOf(policy.limit));
+        response.setHeader("X-RateLimit-Remaining", String.valueOf(Math.max(0, policy.limit - window.requestCount.get())));
 
         filterChain.doFilter(request, response);
     }
 
     /**
-     * Xác định giới hạn tối đa tùy theo endpoint và method
+     * Xác định chính sách giới hạn độc lập cho từng nhóm endpoint
      */
-    private int getLimitForUri(String uri, String method) {
-        if (uri.contains("/api/auth/login") || uri.contains("/api/users/create")) {
-            return LIMIT_AUTH;
+    private EndpointPolicy resolvePolicy(String uri, String method) {
+        // Chỉ áp dụng giới hạn chặt chẽ cho thao tác ĐĂNG NHẬP / ĐĂNG KÝ (POST) để chống dò mật khẩu
+        if (("POST".equalsIgnoreCase(method)) && 
+            (uri.contains("/auth/login") || uri.contains("/users/create") || uri.contains("/auth/register"))) {
+            return new EndpointPolicy("AUTH", LIMIT_AUTH);
         }
         if (uri.contains("/api/posts") && "POST".equalsIgnoreCase(method)) {
-            return LIMIT_POST_CREATE;
+            return new EndpointPolicy("POST_CREATE", LIMIT_POST_CREATE);
         }
-        if (uri.contains("/comments") && "POST".equalsIgnoreCase(method)) {
-            return LIMIT_COMMENT;
+        if ((uri.contains("/comments") || uri.contains("/comment")) && "POST".equalsIgnoreCase(method)) {
+            return new EndpointPolicy("COMMENT", LIMIT_COMMENT);
         }
-        return LIMIT_GENERAL;
+        return new EndpointPolicy("GENERAL", LIMIT_GENERAL);
+    }
+
+    private static class EndpointPolicy {
+        final String category;
+        final int limit;
+
+        EndpointPolicy(String category, int limit) {
+            this.category = category;
+            this.limit = limit;
+        }
     }
 
     /**

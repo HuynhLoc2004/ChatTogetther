@@ -62,8 +62,10 @@ const Login = () => {
           setError('Tài khoản hoặc mật khẩu không đúng!');
         } else if (status === 404) {
           setError('Tài khoản không tồn tại!');
+        } else if (status === 429) {
+          setError(err.response.data?.message || 'Bạn đang thao tác quá nhanh. Vui lòng đợi 30 giây rồi thử lại!');
         } else {
-          setError(err.response.data.message || 'Đã có lỗi xảy ra!');
+          setError(err.response.data?.message || 'Đã có lỗi xảy ra!');
         }
       } else {
         setError('Không thể kết nối đến server!');
