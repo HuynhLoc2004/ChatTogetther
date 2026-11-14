@@ -118,9 +118,11 @@ const ProfilePage = () => {
       const res = await axiosClient.get(`/posts/user/${effectiveUserId}`);
       if (res.data?.data) {
         setUserPosts(res.data.data);
+      } else {
+        setUserPosts([]);
       }
     } catch (e) {
-      console.warn("Lỗi tải bài viết người dùng:", e);
+      setUserPosts([]);
     } finally {
       setLoadingPosts(false);
     }
@@ -134,9 +136,11 @@ const ProfilePage = () => {
       const res = await axiosClient.get(`/posts/user/${effectiveUserId}/reposts`);
       if (res.data?.data) {
         setUserReposts(res.data.data);
+      } else {
+        setUserReposts([]);
       }
     } catch (e) {
-      console.warn("Lỗi tải bài đăng lại:", e);
+      setUserReposts([]);
     } finally {
       setLoadingReposts(false);
     }

@@ -1076,12 +1076,18 @@ public class PostService {
     @Transactional(readOnly = true)
     public ResponseData<List<PostDTO>> getUserPosts(JwtAuthenticationToken token, Long targetUserId) {
         UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
-        UserEntity targetUser = this.userRepository.findById(targetUserId).orElseThrow(() ->
-            new AppException(404, "Người dùng không tồn tại", 404)
-        );
+        if (targetUserId == null) {
+            return new ResponseData<>(200, "Danh sách bài viết trống", List.of());
+        }
+
+        UserEntity targetUser = this.userRepository.findById(targetUserId).orElse(null);
+        if (targetUser == null) {
+            // Không ném 404 để tránh lỗi giao diện profile khi user mới hoặc id không khớp
+            return new ResponseData<>(200, "Không tìm thấy người dùng", List.of());
+        }
 
         List<PostEntity> posts = this.postRepository.findAllPostsWithDetails().stream()
-                .filter(p -> p.getUser().getId().equals(targetUserId))
+                .filter(p -> p.getUser() != null && p.getUser().getId().equals(targetUserId))
                 .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
                 .collect(Collectors.toList());
 
@@ -1092,9 +1098,14 @@ public class PostService {
     @Transactional(readOnly = true)
     public ResponseData<List<PostDTO>> getUserReposts(JwtAuthenticationToken token, Long targetUserId) {
         UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
-        UserEntity targetUser = this.userRepository.findById(targetUserId).orElseThrow(() ->
-            new AppException(404, "Người dùng không tồn tại", 404)
-        );
+        if (targetUserId == null) {
+            return new ResponseData<>(200, "Danh sách bài đăng lại trống", List.of());
+        }
+
+        UserEntity targetUser = this.userRepository.findById(targetUserId).orElse(null);
+        if (targetUser == null) {
+            return new ResponseData<>(200, "Không tìm thấy người dùng", List.of());
+        }
 
         List<PostRepostEntity> reposts = this.postRepostRepository.findByUserOrderByCreatedAtDesc(targetUser);
         List<PostDTO> dtos = reposts.stream().map(r -> {

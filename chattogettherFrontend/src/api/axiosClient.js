@@ -117,9 +117,18 @@ axiosClient.interceptors.response.use(
     }
 
     if (!error.response) {
-       console.error("Network Error: Vui lòng kiểm tra Server Backend (8080) có đang chạy không?");
+      // Trường hợp Render Free tier đang ngủ (cold start) hoặc mạng chập chờn
+      if (!originalRequest._networkRetry && (originalRequest.method === 'get' || originalRequest.url.includes('/auth/login'))) {
+        originalRequest._networkRetry = true;
+        console.warn("Máy chủ Backend đang khởi động lại hoặc mạng chậm. Đang tự động kết nối lại...");
+        await new Promise(res => setTimeout(res, 2000));
+        return axiosClient(originalRequest);
+      }
+      console.warn("Lỗi kết nối máy chủ:", error.message || "Network Error");
+    } else if (error.response.status === 429) {
+      console.warn("Rate Limit (429):", error.response.data?.message || "Thao tác quá nhanh, vui lòng thử lại sau giây lát.");
     } else {
-       console.error("API Error:", error.response.status, error.response.data);
+      console.warn("API Error:", error.response.status, error.response.data?.message || error.response.statusText);
     }
     return Promise.reject(error);
   }

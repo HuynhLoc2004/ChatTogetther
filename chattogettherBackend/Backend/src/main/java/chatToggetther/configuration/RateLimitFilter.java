@@ -40,11 +40,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     // Cấu hình số lượt cho phép theo từng loại API (số request / 60 giây)
-    // Tách riêng từng nhóm (Category) để các yêu cầu duyệt bài / lướt web không làm ảnh hưởng đến lượt đăng nhập
-    private static final int LIMIT_AUTH = 30;         // Login, Register (POST /auth/login, POST /users/create)
-    private static final int LIMIT_POST_CREATE = 30;  // Tạo bài viết mới (chống spam feed)
-    private static final int LIMIT_COMMENT = 60;      // Bình luận
-    private static final int LIMIT_GENERAL = 600;     // Các API đọc thông thường (feed, rooms, notifications, music,...)
+    // Nâng ngưỡng rộng rãi để người dùng đăng nhập / đăng ký / thao tác không bao giờ bị nghẽn oan
+    private static final int LIMIT_AUTH = 120;        // Login, Register (POST /auth/login, POST /users/create)
+    private static final int LIMIT_POST_CREATE = 60;  // Tạo bài viết mới (chống spam feed)
+    private static final int LIMIT_COMMENT = 120;     // Bình luận
+    private static final int LIMIT_GENERAL = 1200;    // Các API đọc thông thường (feed, rooms, notifications, music,...)
 
     private static final long WINDOW_DURATION_MILLIS = 60000L; // Cửa sổ 1 phút
 
@@ -72,7 +72,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
             evictExpiredTrackers();
             if (clientTrackers.size() > MAX_TRACKED_IPS) {
                 // Tạm thời bảo vệ bộ nhớ nếu lượng IP giả lập quá tải
-                sendRateLimitResponse(response, "Hệ thống đang chịu tải cao, vui lòng thử lại sau giây lát.");
+                sendRateLimitResponse(request, response, "Hệ thống đang chịu tải cao, vui lòng thử lại sau giây lát.");
                 return;
             }
         }
@@ -95,7 +95,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
             response.setHeader("X-RateLimit-Remaining", "0");
             
             log.warn("Rate limit exceeded for IP [{}] on category [{}] - URI [{}] - Count: {}/{}", clientIp, policy.category, uri, window.requestCount.get(), policy.limit);
-            sendRateLimitResponse(response, "Bạn đang gửi yêu cầu quá nhanh. Vui lòng đợi " + retryAfterSec + " giây trước khi tiếp tục.");
+            sendRateLimitResponse(request, response, "Bạn đang gửi yêu cầu quá nhanh. Vui lòng đợi " + retryAfterSec + " giây trước khi tiếp tục.");
             return;
         }
 
@@ -155,7 +155,15 @@ public class RateLimitFilter extends OncePerRequestFilter {
         return (ip != null) ? ip : "127.0.0.1";
     }
 
-    private void sendRateLimitResponse(HttpServletResponse response, String message) throws IOException {
+    private void sendRateLimitResponse(HttpServletRequest request, HttpServletResponse response, String message) throws IOException {
+        String origin = request.getHeader("Origin");
+        if (origin != null && !origin.isEmpty()) {
+            response.setHeader("Access-Control-Allow-Origin", origin);
+            response.setHeader("Access-Control-Allow-Credentials", "true");
+            response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
+            response.setHeader("Access-Control-Allow-Headers", "*");
+        }
+
         response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding("UTF-8");
