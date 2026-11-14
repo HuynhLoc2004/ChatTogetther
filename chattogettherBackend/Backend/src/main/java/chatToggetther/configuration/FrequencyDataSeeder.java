@@ -201,7 +201,11 @@ public class FrequencyDataSeeder implements CommandLineRunner {
 
     private void seedSystemConfigs() {
         seedConfigIfAbsent("MAX_ROOM_MEMBERS_FREE", "6");
+        seedConfigIfAbsent("max_users_normal_room", "6");
         seedConfigIfAbsent("MAX_ROOM_MEMBERS_PRO", "20");
+        seedConfigIfAbsent("max_users_pro_room", "20");
+        seedConfigIfAbsent("ROOM_IDLE_TIMEOUT", "60");
+        seedConfigIfAbsent("idle_room_timeout_minutes", "60");
         seedConfigIfAbsent("SIGNAL_TTL_MINUTES", "15");
     }
 

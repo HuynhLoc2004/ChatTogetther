@@ -79,6 +79,12 @@ export const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
+  // State cho các Module gộp (7 Tabs chuẩn mực)
+  const [radioMusicSubTab, setRadioMusicSubTab] = useState('intents'); // 'intents' | 'music'
+  const [communitySubTab, setCommunitySubTab] = useState('groups'); // 'groups' | 'categories' | 'posts' | 'reports'
+  const [cardsVibesSubTab, setCardsVibesSubTab] = useState('challenges'); // 'challenges' | 'vibes'
+  const [usersRolesSubTab, setUsersRolesSubTab] = useState('users'); // 'users' | 'roles'
+  const [isUploadingMusic, setIsUploadingMusic] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Thống kê hệ thống
@@ -390,13 +396,14 @@ export const AdminDashboard = () => {
     setIsSavingRoomParams(true);
     try {
       await axiosClient.put('/admin/config', {
-        configs: {
-          max_users_normal_room: roomParamConfig.max_users_normal_room,
-          max_users_pro_room: roomParamConfig.max_users_pro_room,
-          idle_room_timeout_minutes: roomParamConfig.idle_room_timeout_minutes
-        }
+        MAX_ROOM_MEMBERS_FREE: String(roomParamConfig.max_users_normal_room),
+        max_users_normal_room: String(roomParamConfig.max_users_normal_room),
+        MAX_ROOM_MEMBERS_PRO: String(roomParamConfig.max_users_pro_room),
+        max_users_pro_room: String(roomParamConfig.max_users_pro_room),
+        ROOM_IDLE_TIMEOUT: String(roomParamConfig.idle_room_timeout_minutes),
+        idle_room_timeout_minutes: String(roomParamConfig.idle_room_timeout_minutes)
       });
-      toast.success('Đã lưu cấu hình tham số phòng thoại vào hệ thống!');
+      toast.success('Đã lưu cấu hình quy mô phòng thoại vào cơ sở dữ liệu!');
     } catch (e) {
       toast.error('Lỗi lưu cấu hình: ' + (e.response?.data?.message || e.message));
     } finally {
@@ -408,34 +415,29 @@ export const AdminDashboard = () => {
   const sidebarSections = useMemo(() => {
     return [
       {
-        sectionTitle: 'TỔNG QUAN & HỆ THỐNG',
+        sectionTitle: 'HỆ THỐNG & KẾT NỐI',
         items: [
-          { id: 'overview', label: 'Tổng quan & Số liệu', icon: LayoutGrid, permission: 'TL_PERM_STATS_VIEW' },
-          { id: 'rooms', label: `Quản lý Phòng thoại (${adminRooms.length})`, icon: Radio, permission: 'TL_PERM_STATS_VIEW' },
-          { id: 'branding', label: 'Menu & Thương hiệu', icon: Sliders, permission: 'TL_PERM_BRAND_MANAGE' }
+          { id: 'overview', label: 'Tổng quan & Hệ thống', icon: LayoutGrid, permission: 'TL_PERM_STATS_VIEW' },
+          { id: 'rooms', label: `Phòng thoại & Giới hạn (${adminRooms.length})`, icon: Radio, permission: 'TL_PERM_STATS_VIEW' },
+          { id: 'radio_music', label: `Băng tần FM & Kho nhạc (${adminIntents.length + tracks.length})`, icon: Headphones, permission: 'TL_PERM_MUSIC_MANAGE' }
         ]
       },
       {
-        sectionTitle: 'NỘI DUNG & TƯƠNG TÁC',
+        sectionTitle: 'NỘI DUNG & KIỂM DUYỆT',
         items: [
-          { id: 'posts_moderation', label: `Kiểm duyệt Bài viết (${adminPosts.length})`, icon: FileText, permission: 'TL_PERM_COMMUNITY_MANAGE' },
-          { id: 'frequency_management', label: `Băng tần & Đài phát FM (${adminIntents.length})`, icon: Radio, permission: 'TL_PERM_MUSIC_MANAGE' },
-          { id: 'challenges', label: `Thẻ bài thử thách (${challenges.length})`, icon: Sparkles, permission: 'TL_PERM_CHALLENGE_MANAGE' },
-          { id: 'vibes', label: `Chủ đề & Cảm xúc (${parsedVibes.length})`, icon: Tag, permission: 'TL_PERM_TOPIC_MANAGE' },
-          { id: 'music', label: `Âm nhạc hệ thống (${tracks.length})`, icon: Music, permission: 'TL_PERM_MUSIC_MANAGE' },
-          { id: 'communities', label: `Cộng đồng & Báo cáo (${adminGroups.length})`, icon: Globe, permission: 'TL_PERM_COMMUNITY_MANAGE' },
-          { id: 'reports', label: `Báo cáo vi phạm (${reports.filter(r => r.status === 'PENDING').length})`, icon: AlertTriangle, permission: 'TL_PERM_COMMUNITY_MANAGE' }
+          { id: 'community_moderation', label: `Cộng đồng & Kiểm duyệt (${adminGroups.length + reports.filter(r => r.status === 'PENDING').length})`, icon: Globe, permission: 'TL_PERM_COMMUNITY_MANAGE' },
+          { id: 'cards_vibes', label: `Thẻ bài & Cảm xúc (${challenges.length + parsedVibes.length})`, icon: Sparkles, permission: 'TL_PERM_CHALLENGE_MANAGE' }
         ]
       },
       {
-        sectionTitle: 'BẢO MẬT & PHÂN QUYỀN',
+        sectionTitle: 'GIAO DIỆN & TÀI KHOẢN',
         items: [
-          { id: 'users', label: `Tài khoản thành viên (${users.length})`, icon: Users, permission: 'TL_PERM_USER_MANAGE' },
-          { id: 'roles', label: `Vai trò & Quyền hạn (${systemRoles.length})`, icon: ShieldCheck, permission: 'TL_PERM_ROLE_MANAGE' }
+          { id: 'ui_nav', label: 'Giao diện & Điều hướng', icon: Sliders, permission: 'TL_PERM_BRAND_MANAGE' },
+          { id: 'users_roles', label: `Thành viên & Phân quyền (${users.length})`, icon: Users, permission: 'TL_PERM_USER_MANAGE' }
         ]
       }
     ];
-  }, [adminPosts.length, adminIntents.length, challenges.length, parsedVibes.length, tracks.length, adminGroups.length, reports.length, users.length, systemRoles.length, adminRooms.length]);
+  }, [adminRooms.length, adminIntents.length, tracks.length, adminGroups.length, reports, challenges.length, parsedVibes.length, users.length]);
 
   // Tự động chuyển tab nếu tab hiện tại không được phép
   useEffect(() => {
@@ -971,14 +973,60 @@ export const AdminDashboard = () => {
   // --- Âm nhạc ---
   const fetchTracks = async () => {
     try {
-      const res = await axiosClient.get('/admin/music-tracks').catch(() => axiosClient.get('/admin/tracks'));
-      if (res?.data?.data) setTracks(res.data.data);
+      const res = await axiosClient.get('/admin/music-tracks')
+        .catch(() => axiosClient.get('/admin/music'))
+        .catch(() => axiosClient.get('/admin/tracks'));
+      const rawList = res?.data?.data || (Array.isArray(res?.data) ? res.data : []);
+      if (Array.isArray(rawList)) {
+        const normalized = rawList.map(t => ({
+          ...t,
+          name: t.title || t.name,
+          title: t.title || t.name,
+          audioSrc: t.audioUrl || t.audioSrc,
+          audioUrl: t.audioUrl || t.audioSrc,
+          genre: t.genreTag || t.genre || 'Lo-Fi Chill',
+          genreTag: t.genreTag || t.genre || 'Lo-Fi Chill'
+        }));
+        setTracks(normalized);
+      }
     } catch (e) {
       console.warn("Không thể tải tracks:", e);
     }
   };
 
-  const handleAddTrack = async (e) => {
+  
+  const handleUploadMusicFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    const toastId = toast.loading('Đang tải tệp âm thanh lên máy chủ Cloudflare / Storage...');
+    setIsUploadingMusic(true);
+    try {
+      const res = await axiosClient.post('/admin/music/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      const url = res.data?.data?.audioUrl;
+      if (url) {
+        setNewTrack(prev => ({
+          ...prev,
+          audioUrl: url,
+          audioSrc: url,
+          name: prev.name || file.name.replace(/\.[^/.]+$/, ""),
+          title: prev.title || file.name.replace(/\.[^/.]+$/, "")
+        }));
+        toast.success('Tải lên tệp âm thanh thành công!', { id: toastId });
+      } else {
+        toast.error('Không nhận được đường dẫn âm thanh từ máy chủ', { id: toastId });
+      }
+    } catch (err) {
+      toast.error('Lỗi khi tải tệp âm thanh: ' + (err.response?.data?.message || err.message), { id: toastId });
+    } finally {
+      setIsUploadingMusic(false);
+    }
+  };
+
+const handleAddTrack = async (e) => {
     e.preventDefault();
     const trackName = (newTrack.name || newTrack.title || '').trim();
     const trackAudio = (newTrack.audioSrc || newTrack.audioUrl || '').trim();
@@ -1116,13 +1164,17 @@ export const AdminDashboard = () => {
     try {
       setLoadingFrequency(true);
       const [intentsRes, channelsRes, statsRes] = await Promise.all([
-        axiosClient.get('/admin/frequency-config/intents').catch(() => ({ data: [] })),
+        axiosClient.get('/admin/frequency-config/intents')
+          .catch(() => axiosClient.get('/admin/match-intents'))
+          .catch(() => ({ data: [] })),
         axiosClient.get('/admin/frequency-config/channels').catch(() => ({ data: [] })),
         axiosClient.get('/admin/frequency-config/live-stats').catch(() => ({ data: {} }))
       ]);
-      setAdminIntents(Array.isArray(intentsRes.data) ? intentsRes.data : []);
-      setAdminChannels(Array.isArray(channelsRes.data) ? channelsRes.data : []);
-      setLiveFrequencyStats(statsRes.data || { activeBroadcasters: 0, activeIntents: 0, activeChannels: 0 });
+      const listIntents = intentsRes.data?.data || (Array.isArray(intentsRes.data) ? intentsRes.data : []);
+      const listChannels = channelsRes.data?.data || (Array.isArray(channelsRes.data) ? channelsRes.data : []);
+      setAdminIntents(Array.isArray(listIntents) ? listIntents : []);
+      setAdminChannels(Array.isArray(listChannels) ? listChannels : []);
+      setLiveFrequencyStats(statsRes.data?.data || statsRes.data || { activeBroadcasters: 0, activeIntents: 0, activeChannels: 0 });
     } catch (e) {
       console.warn("Lỗi nạp cấu hình tần số:", e);
     } finally {
@@ -1455,7 +1507,7 @@ export const AdminDashboard = () => {
                   <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 hover:border-zinc-700 transition-all flex flex-col justify-between">
                     <div className="flex items-center justify-between mb-3">
                       <span className="text-xs font-medium text-zinc-400">Người dùng đăng ký</span>
-                      <div className="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
+                      <div className="w-8 h-8 rounded-lg bg-zinc-800 text-zinc-300 flex items-center justify-center">
                         <Users size={16} />
                       </div>
                     </div>
@@ -1574,7 +1626,7 @@ export const AdminDashboard = () => {
             {/* ====================================================
                 TAB 2: THƯƠNG HIỆU & MENU (BRANDING & MENU)
                 ==================================================== */}
-            {activeTab === 'branding' && hasPermission('TL_PERM_BRAND_MANAGE') && (
+            {(activeTab === 'ui_nav' || activeTab === 'branding') && hasPermission('TL_PERM_BRAND_MANAGE') && (
               <div className="space-y-6 animate-fade-in">
                 <div className="flex items-center justify-between">
                   <div>
@@ -1590,7 +1642,7 @@ export const AdminDashboard = () => {
                       public_friends: configs.public_friends || 'true'
                     })}
                     disabled={isSavingConfig}
-                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-emerald-950 transition-all"
+                    className="h-9 px-3.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs flex items-center gap-2 shadow-sm transition-all"
                   >
                     <Save size={14} />
                     <span>{isSavingConfig ? "Đang lưu..." : "Lưu tất cả thay đổi"}</span>
@@ -1686,34 +1738,17 @@ export const AdminDashboard = () => {
                   </div>
                 </div>
 
-                {/* Quản lý các tính năng hệ thống (Feature Toggles: Repost, Public Friends, v.v.) */}
+                {/* Cài đặt tính năng tương tác */}
                 <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-4">
                   <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
                     <h3 className="text-sm font-bold text-zinc-200 flex items-center gap-2">
-                      <Sliders size={15} className="text-emerald-400" />
+                      <Sliders size={15} className="text-zinc-300" />
                       Cài Đặt Tính Năng Tương Tác & Cá Nhân (Feature Controls)
                     </h3>
                     <span className="text-[11px] text-zinc-400 font-mono">Bật / Tắt theo nhu cầu vận hành</span>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div className="p-3.5 rounded-xl bg-zinc-950/70 border border-zinc-800/80 flex items-center justify-between">
-                      <div>
-                        <div className="text-xs font-bold text-zinc-200">Chức năng Đăng lại (Repost)</div>
-                        <div className="text-[11px] text-zinc-400 mt-0.5">Cho phép người dùng chia sẻ lại bài viết lên trang cá nhân</div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const current = configs.enable_repost !== 'false';
-                          setConfigs({ ...configs, enable_repost: current ? 'false' : 'true' });
-                        }}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${configs.enable_repost !== 'false' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-zinc-800 text-zinc-400 border border-zinc-700'}`}
-                      >
-                        {configs.enable_repost !== 'false' ? 'Đang bật' : 'Đã tắt'}
-                      </button>
-                    </div>
-
                     <div className="p-3.5 rounded-xl bg-zinc-950/70 border border-zinc-800/80 flex items-center justify-between">
                       <div>
                         <div className="text-xs font-bold text-zinc-200">Công khai danh sách bạn bè</div>
@@ -1725,7 +1760,7 @@ export const AdminDashboard = () => {
                           const current = configs.public_friends !== 'false';
                           setConfigs({ ...configs, public_friends: current ? 'false' : 'true' });
                         }}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${configs.public_friends !== 'false' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-zinc-800 text-zinc-400 border border-zinc-700'}`}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${configs.public_friends !== 'false' ? 'bg-white text-zinc-950 shadow-sm' : 'bg-zinc-800 text-zinc-400 border border-zinc-700'}`}
                       >
                         {configs.public_friends !== 'false' ? 'Đang bật' : 'Đã tắt'}
                       </button>
@@ -1738,8 +1773,55 @@ export const AdminDashboard = () => {
             {/* ====================================================
                 TAB: QUẢN LÝ BÀI VIẾT & ĐĂNG LẠI (POSTS MODERATION & SOFT DELETE)
                 ==================================================== */}
-            {activeTab === 'posts_moderation' && (hasPermission('TL_PERM_COMMUNITY_MANAGE') || hasPermission('TL_PERM_USER_MANAGE')) && (
+            {(activeTab === 'community_moderation' || activeTab === 'communities' || activeTab === 'posts_moderation' || activeTab === 'reports') && (hasPermission('TL_PERM_COMMUNITY_MANAGE') || hasPermission('TL_PERM_USER_MANAGE')) && communitySubTab === 'posts' && (
               <div className="space-y-6 animate-fade-in">
+                {/* SUB-TAB CHUYỂN ĐỔI: CỘNG ĐỒNG & KIỂM DUYỆT */}
+                <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-3 mb-5 overflow-x-auto">
+                  <button
+                    type="button"
+                    onClick={() => setCommunitySubTab('groups')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${
+                      communitySubTab === 'groups'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Cộng đồng ({adminGroups.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCommunitySubTab('categories')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${
+                      communitySubTab === 'categories'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Danh mục cộng đồng ({adminCommunityCategories.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCommunitySubTab('posts')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${
+                      communitySubTab === 'posts'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Kiểm duyệt Bài viết ({adminPosts.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCommunitySubTab('reports')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${
+                      communitySubTab === 'reports'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Báo cáo vi phạm ({communityReports.filter(r => r.status === 'PENDING').length + reports.filter(r => r.status === 'PENDING').length})
+                  </button>
+                </div>
                 {/* Header & Sub-tab Switcher */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
@@ -1759,7 +1841,7 @@ export const AdminDashboard = () => {
                       onClick={() => setAdminPostsSubTab('posts')}
                       className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
                         adminPostsSubTab === 'posts' 
-                          ? 'bg-emerald-600 text-white shadow-sm' 
+                          ? 'bg-white text-zinc-950 font-semibold shadow-sm' 
                           : 'text-zinc-400 hover:text-zinc-200'
                       }`}
                     >
@@ -1774,7 +1856,7 @@ export const AdminDashboard = () => {
                       }}
                       className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
                         adminPostsSubTab === 'reposts' 
-                          ? 'bg-emerald-600 text-white shadow-sm' 
+                          ? 'bg-white text-zinc-950 font-semibold shadow-sm' 
                           : 'text-zinc-400 hover:text-zinc-200'
                       }`}
                     >
@@ -1964,7 +2046,7 @@ export const AdminDashboard = () => {
                                         <button
                                           type="button"
                                           onClick={() => handleAdminRestorePost(post.id)}
-                                          className="px-3 py-1.5 rounded-xl bg-emerald-600/15 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all"
+                                          className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all"
                                           title="Khôi phục lại bài viết này lên Bảng tin công khai"
                                         >
                                           <RotateCcw size={13} />
@@ -1973,7 +2055,7 @@ export const AdminDashboard = () => {
                                         <button
                                           type="button"
                                           onClick={() => handleAdminHardDelete(post.id)}
-                                          className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
+                                          className="px-3 py-1.5 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
                                           title="Xóa triệt để khỏi cơ sở dữ liệu"
                                         >
                                           <Trash2 size={13} />
@@ -2103,8 +2185,33 @@ export const AdminDashboard = () => {
             {/* ====================================================
                 TAB 3: THẺ BÀI THỬ THÁCH (CHALLENGES - DYNAMIC CATEGORIES)
                 ==================================================== */}
-            {activeTab === 'challenges' && hasPermission('TL_PERM_CHALLENGE_MANAGE') && (
+            {(activeTab === 'cards_vibes' || activeTab === 'challenges' || activeTab === 'vibes') && (hasPermission('TL_PERM_CHALLENGE_MANAGE') || hasPermission('TL_PERM_TOPIC_MANAGE')) && cardsVibesSubTab === 'challenges' && (
               <div className="space-y-6 animate-fade-in">
+                {/* SUB-TAB CHUYỂN ĐỔI: THẺ BÀI & CẢM XÚC */}
+                <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-3 mb-5">
+                  <button
+                    type="button"
+                    onClick={() => setCardsVibesSubTab('challenges')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all ${
+                      cardsVibesSubTab === 'challenges'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Câu hỏi Thử thách ({challenges.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCardsVibesSubTab('vibes')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all ${
+                      cardsVibesSubTab === 'vibes'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Thẻ Cảm Xúc Sảnh ({parsedVibes.length})
+                  </button>
+                </div>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <h2 className="text-xl font-bold text-zinc-100 tracking-tight">Quản Lý Thẻ Bài Thử Thách</h2>
@@ -2120,7 +2227,7 @@ export const AdminDashboard = () => {
                     </button>
                     <button
                       onClick={handleOpenAddChallenge}
-                      className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-950 transition-all"
+                      className="h-9 px-3.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs flex items-center gap-1.5 shadow-sm transition-all"
                     >
                       <Plus size={14} />
                       <span>Thêm câu hỏi mới</span>
@@ -2242,8 +2349,33 @@ export const AdminDashboard = () => {
             {/* ====================================================
                 TAB 4: CHỦ ĐỀ & CẢM XÚC (VIBE TAGS)
                 ==================================================== */}
-            {activeTab === 'vibes' && hasPermission('TL_PERM_TOPIC_MANAGE') && (
+            {(activeTab === 'cards_vibes' || activeTab === 'challenges' || activeTab === 'vibes') && (hasPermission('TL_PERM_CHALLENGE_MANAGE') || hasPermission('TL_PERM_TOPIC_MANAGE')) && cardsVibesSubTab === 'vibes' && (
               <div className="space-y-6 animate-fade-in">
+                {/* SUB-TAB CHUYỂN ĐỔI: THẺ BÀI & CẢM XÚC */}
+                <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-3 mb-5">
+                  <button
+                    type="button"
+                    onClick={() => setCardsVibesSubTab('challenges')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all ${
+                      cardsVibesSubTab === 'challenges'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Câu hỏi Thử thách ({challenges.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCardsVibesSubTab('vibes')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all ${
+                      cardsVibesSubTab === 'vibes'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Thẻ Cảm Xúc Sảnh ({parsedVibes.length})
+                  </button>
+                </div>
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className="text-xl font-bold text-zinc-100 tracking-tight">Chủ Đề & Thẻ Cảm Xúc (Vibes)</h2>
@@ -2252,7 +2384,7 @@ export const AdminDashboard = () => {
                   <button
                     onClick={() => saveConfigToBackend({ vibe_options: JSON.stringify(parsedVibes) }, "Đã lưu danh sách thẻ cảm xúc!")}
                     disabled={isSavingConfig}
-                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-emerald-950 transition-all"
+                    className="h-9 px-3.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs flex items-center gap-2 shadow-sm transition-all"
                   >
                     <Save size={14} />
                     <span>Lưu Thẻ Cảm Xúc</span>
@@ -2284,7 +2416,7 @@ export const AdminDashboard = () => {
                         setParsedVibes([...parsedVibes, newVibeInput.trim()]);
                         setNewVibeInput('');
                       }}
-                      className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm"
+                      className="h-9 px-3.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs flex items-center gap-1.5 shadow-sm"
                     >
                       <Plus size={14} />
                       <span>Thêm Thẻ</span>
@@ -2322,8 +2454,33 @@ export const AdminDashboard = () => {
             {/* ====================================================
                 TAB: QUẢN LÝ BĂNG TẦN & ĐÀI NHẠC FM (FREQUENCY & AUDIO CHANNELS)
                 ==================================================== */}
-            {activeTab === 'frequency_management' && (hasPermission('TL_PERM_MUSIC_MANAGE') || hasPermission('TL_PERM_BRAND_MANAGE')) && (
+            {(activeTab === 'radio_music' || activeTab === 'frequency_management' || activeTab === 'music') && (hasPermission('TL_PERM_MUSIC_MANAGE') || hasPermission('TL_PERM_STATS_VIEW')) && radioMusicSubTab === 'intents' && (
               <div className="space-y-6 animate-fade-in">
+                {/* SUB-TAB CHUYỂN ĐỔI: BĂNG TẦN FM & KHO NHẠC */}
+                <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-3 mb-5">
+                  <button
+                    type="button"
+                    onClick={() => setRadioMusicSubTab('intents')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all ${
+                      radioMusicSubTab === 'intents'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Băng tần FM ({adminIntents.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRadioMusicSubTab('music')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all ${
+                      radioMusicSubTab === 'music'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Kho nhạc nền & Đài phát Lo-Fi ({tracks.length})
+                  </button>
+                </div>
                 {/* Header */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
@@ -2369,7 +2526,7 @@ export const AdminDashboard = () => {
                   </div>
 
                   <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800 flex items-center gap-3.5">
-                    <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-300 flex items-center justify-center">
                       <Disc3 size={20} />
                     </div>
                     <div>
@@ -2388,7 +2545,7 @@ export const AdminDashboard = () => {
                     </div>
                     <button
                       onClick={handleOpenAddIntent}
-                      className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5 transition-all shadow-sm"
+                      className="h-9 px-3.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs flex items-center gap-1.5 transition-all shadow-sm"
                     >
                       <Plus size={13} />
                       <span>Thêm băng tần</span>
@@ -2465,7 +2622,7 @@ export const AdminDashboard = () => {
                     </div>
                     <button
                       onClick={handleOpenAddChannel}
-                      className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs flex items-center gap-1.5 transition-all shadow-sm"
+                      className="h-9 px-3.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs flex items-center gap-1.5 transition-all shadow-sm"
                     >
                       <Plus size={13} />
                       <span>Thêm luồng radio</span>
@@ -2538,8 +2695,33 @@ export const AdminDashboard = () => {
             {/* ====================================================
                 TAB 5: ÂM NHẠC HỆ THỐNG (MUSIC)
                 ==================================================== */}
-            {activeTab === 'music' && hasPermission('TL_PERM_MUSIC_MANAGE') && (
+            {(activeTab === 'radio_music' || activeTab === 'frequency_management' || activeTab === 'music') && (hasPermission('TL_PERM_MUSIC_MANAGE') || hasPermission('TL_PERM_STATS_VIEW')) && radioMusicSubTab === 'music' && (
               <div className="space-y-6 animate-fade-in">
+                {/* SUB-TAB CHUYỂN ĐỔI: BĂNG TẦN FM & KHO NHẠC */}
+                <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-3 mb-5">
+                  <button
+                    type="button"
+                    onClick={() => setRadioMusicSubTab('intents')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all ${
+                      radioMusicSubTab === 'intents'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Băng tần FM ({adminIntents.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRadioMusicSubTab('music')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all ${
+                      radioMusicSubTab === 'music'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Kho nhạc nền & Đài phát Lo-Fi ({tracks.length})
+                  </button>
+                </div>
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className="text-xl font-bold text-zinc-100 tracking-tight">Âm Nhạc Hệ Thống</h2>
@@ -2547,7 +2729,7 @@ export const AdminDashboard = () => {
                   </div>
                   <button
                     onClick={() => setIsAddTrackOpen(true)}
-                    className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-950 transition-all"
+                    className="h-9 px-3.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs flex items-center gap-1.5 shadow-sm transition-all"
                   >
                     <Plus size={14} />
                     <span>Thêm bản nhạc mới</span>
@@ -2570,7 +2752,7 @@ export const AdminDashboard = () => {
                             onClick={() => handleTogglePlayAudio(t)}
                             className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
                               playingTrackId === t.id 
-                                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900' 
+                                ? 'bg-white text-zinc-950 shadow-sm' 
                                 : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
                             }`}
                           >
@@ -2604,8 +2786,33 @@ export const AdminDashboard = () => {
             {/* ====================================================
                 TAB 6: QUẢN LÝ THÀNH VIÊN (USERS & ROLE ASSIGNMENT)
                 ==================================================== */}
-            {activeTab === 'users' && hasPermission('TL_PERM_USER_MANAGE') && (
+            {(activeTab === 'users_roles' || activeTab === 'users' || activeTab === 'roles') && (hasPermission('TL_PERM_USER_MANAGE') || hasPermission('TL_PERM_ROLE_MANAGE')) && usersRolesSubTab === 'users' && (
               <div className="space-y-6 animate-fade-in">
+                {/* SUB-TAB CHUYỂN ĐỔI: THÀNH VIÊN & PHÂN QUYỀN */}
+                <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-3 mb-5">
+                  <button
+                    type="button"
+                    onClick={() => setUsersRolesSubTab('users')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all ${
+                      usersRolesSubTab === 'users'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Tài khoản Thành viên ({users.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUsersRolesSubTab('roles')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all ${
+                      usersRolesSubTab === 'roles'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Vai trò & Phân quyền ({systemRoles.length})
+                  </button>
+                </div>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <h2 className="text-xl font-bold text-zinc-100 tracking-tight">Quản Lý Thành Viên & Phân Quyền Hạt Mịn</h2>
@@ -2673,7 +2880,7 @@ export const AdminDashboard = () => {
                                   Super Admin
                                 </span>
                               ) : isMod ? (
-                                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-zinc-800 text-zinc-300 border border-indigo-500/20">
                                   Quản trị bộ phận
                                 </span>
                               ) : (
@@ -2695,7 +2902,7 @@ export const AdminDashboard = () => {
                           {hasPermission('TL_PERM_ROLE_MANAGE') && (
                             <button
                               onClick={() => handleOpenRoleModal(u)}
-                              className="px-3 py-1.5 rounded-lg bg-indigo-600/15 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all"
+                              className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-indigo-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all"
                             >
                               <ShieldCheck size={13} />
                               <span>Phân quyền</span>
@@ -2724,8 +2931,33 @@ export const AdminDashboard = () => {
             {/* ====================================================
                 TAB 7: VAI TRÒ & QUYỀN HẠN (SYSTEM ROLES MATRIX)
                 ==================================================== */}
-            {activeTab === 'roles' && hasPermission('TL_PERM_ROLE_MANAGE') && (
+            {(activeTab === 'users_roles' || activeTab === 'users' || activeTab === 'roles') && (hasPermission('TL_PERM_USER_MANAGE') || hasPermission('TL_PERM_ROLE_MANAGE')) && usersRolesSubTab === 'roles' && (
               <div className="space-y-6 animate-fade-in">
+                {/* SUB-TAB CHUYỂN ĐỔI: THÀNH VIÊN & PHÂN QUYỀN */}
+                <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-3 mb-5">
+                  <button
+                    type="button"
+                    onClick={() => setUsersRolesSubTab('users')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all ${
+                      usersRolesSubTab === 'users'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Tài khoản Thành viên ({users.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUsersRolesSubTab('roles')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all ${
+                      usersRolesSubTab === 'roles'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Vai trò & Phân quyền ({systemRoles.length})
+                  </button>
+                </div>
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className="text-xl font-bold text-zinc-100 tracking-tight">Quản Lý Vai Trò & Ma Trận Phân Quyền</h2>
@@ -2742,7 +2974,7 @@ export const AdminDashboard = () => {
                       });
                       setIsAddRoleModalOpen(true);
                     }}
-                    className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-indigo-950 transition-all"
+                    className="h-9 px-3.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs flex items-center gap-1.5 shadow-sm transition-all"
                   >
                     <ShieldPlus size={14} />
                     <span>Tạo vai trò mới</span>
@@ -2808,8 +3040,55 @@ export const AdminDashboard = () => {
             {/* ====================================================
                 TAB 8: QUẢN TRỊ CỘNG ĐỒNG & LÝ DO TỪ CHỐI BÀI VIẾT
                 ==================================================== */}
-            {activeTab === 'communities' && (hasPermission('TL_PERM_COMMUNITY_MANAGE') || hasPermission('TL_PERM_USER_MANAGE')) && (
+            {(activeTab === 'community_moderation' || activeTab === 'communities' || activeTab === 'posts_moderation' || activeTab === 'reports') && (hasPermission('TL_PERM_COMMUNITY_MANAGE') || hasPermission('TL_PERM_USER_MANAGE')) && (communitySubTab === 'groups' || communitySubTab === 'categories') && (
               <div className="space-y-6 animate-fade-in">
+                {/* SUB-TAB CHUYỂN ĐỔI: CỘNG ĐỒNG & KIỂM DUYỆT */}
+                <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-3 mb-5 overflow-x-auto">
+                  <button
+                    type="button"
+                    onClick={() => setCommunitySubTab('groups')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${
+                      communitySubTab === 'groups'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Cộng đồng ({adminGroups.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCommunitySubTab('categories')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${
+                      communitySubTab === 'categories'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Danh mục cộng đồng ({adminCommunityCategories.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCommunitySubTab('posts')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${
+                      communitySubTab === 'posts'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Kiểm duyệt Bài viết ({adminPosts.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCommunitySubTab('reports')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${
+                      communitySubTab === 'reports'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Báo cáo vi phạm ({communityReports.filter(r => r.status === 'PENDING').length + reports.filter(r => r.status === 'PENDING').length})
+                  </button>
+                </div>
                 
                 {/* Header Tiêu đề & Sub-tabs */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800">
@@ -3058,7 +3337,7 @@ export const AdminDashboard = () => {
                         <button
                           type="submit"
                           disabled={!newReasonInput.trim()}
-                          className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-40 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
+                          className="h-9 px-3.5 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 disabled:opacity-40 text-xs font-medium transition-all shadow-sm flex items-center gap-1.5"
                         >
                           <Plus size={14} />
                           <span>Thêm lý do</span>
@@ -3219,7 +3498,7 @@ export const AdminDashboard = () => {
                                       setSelectedCommunityReportToResolve(report);
                                       setResolveActionType('RESOLVED_SUSPENDED');
                                     }}
-                                    className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-all shadow-md active:scale-95"
+                                    className="h-9 px-3.5 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 text-xs font-medium transition-all shadow-sm active:scale-95"
                                   >
                                     Đình chỉ nhóm ngay
                                   </button>
@@ -3781,8 +4060,55 @@ export const AdminDashboard = () => {
             {/* ====================================================
                 TAB 8: QUẢN TRỊ BÁO CÁO VI PHẠM & KIỂM DUYỆT (POST REPORTS)
                 ==================================================== */}
-            {activeTab === 'reports' && hasPermission('TL_PERM_COMMUNITY_MANAGE') && (
+            {(activeTab === 'community_moderation' || activeTab === 'communities' || activeTab === 'posts_moderation' || activeTab === 'reports') && (hasPermission('TL_PERM_COMMUNITY_MANAGE') || hasPermission('TL_PERM_USER_MANAGE')) && communitySubTab === 'reports' && (
               <div className="space-y-6 animate-fade-in">
+                {/* SUB-TAB CHUYỂN ĐỔI: CỘNG ĐỒNG & KIỂM DUYỆT */}
+                <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-3 mb-5 overflow-x-auto">
+                  <button
+                    type="button"
+                    onClick={() => setCommunitySubTab('groups')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${
+                      communitySubTab === 'groups'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Cộng đồng ({adminGroups.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCommunitySubTab('categories')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${
+                      communitySubTab === 'categories'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Danh mục cộng đồng ({adminCommunityCategories.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCommunitySubTab('posts')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${
+                      communitySubTab === 'posts'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Kiểm duyệt Bài viết ({adminPosts.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCommunitySubTab('reports')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${
+                      communitySubTab === 'reports'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Báo cáo vi phạm ({communityReports.filter(r => r.status === 'PENDING').length + reports.filter(r => r.status === 'PENDING').length})
+                  </button>
+                </div>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <h2 className="text-xl font-bold text-zinc-100 tracking-tight flex items-center gap-2">
@@ -3934,7 +4260,7 @@ export const AdminDashboard = () => {
                                   action: 'TAKEDOWN',
                                   note: `Vi phạm quy chuẩn: ${reasonLabel}`
                                 })}
-                                className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-all shadow-md shadow-rose-950/30 flex items-center gap-1.5 active:scale-95"
+                                className="h-9 px-3.5 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 text-xs font-medium transition-all shadow-sm flex items-center gap-1.5 active:scale-95"
                               >
                                 <Trash2 size={13} />
                                 <span>Gỡ bài vi phạm & Báo tác giả</span>
@@ -3978,7 +4304,7 @@ export const AdminDashboard = () => {
                     <button
                       type="button"
                       onClick={() => setIsAddReportReasonOpen(true)}
-                      className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 transition-all self-start sm:self-auto shadow-sm"
+                      className="px-3 py-1.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs font-bold flex items-center gap-1.5 transition-all self-start sm:self-auto shadow-sm"
                     >
                       <Plus size={14} />
                       <span>Thêm lý do mới</span>
@@ -4020,7 +4346,7 @@ export const AdminDashboard = () => {
                         </button>
                         <button
                           type="submit"
-                          className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-sm"
+                          className="px-4 py-1.5 rounded-lg bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs font-bold shadow-sm"
                         >
                           Lưu vào hệ thống
                         </button>
@@ -4123,7 +4449,7 @@ export const AdminDashboard = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-950"
+                  className="px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs font-bold shadow-md shadow-sm"
                 >
                   {editingChallengeItem ? "Cập nhật" : "Lưu câu hỏi"}
                 </button>
@@ -4189,7 +4515,7 @@ export const AdminDashboard = () => {
                   <button
                     type="button"
                     onClick={handleSaveCategory}
-                    className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs"
+                    className="px-3.5 py-1.5 rounded-lg bg-white hover:bg-zinc-200 text-zinc-950 font-medium font-bold text-xs"
                   >
                     Lưu Thể Loại
                   </button>
@@ -4274,14 +4600,32 @@ export const AdminDashboard = () => {
               </div>
 
               <div>
-                <label className="text-xs text-zinc-400 font-mono mb-1 block">Đường dẫn file âm thanh (.mp3) *</label>
+                <label className="text-xs text-zinc-300 font-mono mb-1.5 block">Tải tệp âm thanh trực tiếp (.mp3, .wav, .webm)</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    accept="audio/*,.mp3,.wav,.ogg,.m4a,.webm"
+                    onChange={handleUploadMusicFile}
+                    disabled={isUploadingMusic}
+                    className="block w-full text-xs text-zinc-400 file:mr-3 file:py-2 file:px-3.5 file:rounded-xl file:border-0 file:text-xs file:font-medium file:bg-zinc-800 file:text-zinc-200 hover:file:bg-zinc-700 cursor-pointer bg-zinc-950 border border-zinc-800 rounded-xl"
+                  />
+                  {isUploadingMusic && (
+                    <span className="text-xs text-zinc-400 font-mono flex items-center gap-1 shrink-0 animate-pulse">
+                      <RefreshCw size={12} className="animate-spin" /> Đang tải...
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs text-zinc-400 font-mono mb-1 block">Hoặc dán URL âm thanh trực tiếp (Cloudflare R2 / CDN .mp3) *</label>
                 <input
-                  type="url"
+                  type="text"
                   required
-                  placeholder="https://.../song.mp3"
-                  value={newTrack.audioSrc}
-                  onChange={(e) => setNewTrack({ ...newTrack, audioSrc: e.target.value })}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
+                  placeholder="https://.../song.mp3 hoặc /api/match/audio/..."
+                  value={newTrack.audioUrl || newTrack.audioSrc}
+                  onChange={(e) => setNewTrack({ ...newTrack, audioUrl: e.target.value, audioSrc: e.target.value })}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-zinc-500 font-mono"
                 />
               </div>
 
@@ -4295,7 +4639,7 @@ export const AdminDashboard = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-950"
+                  className="px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs font-bold shadow-md shadow-sm"
                 >
                   Thêm bản nhạc
                 </button>
@@ -4416,7 +4760,7 @@ export const AdminDashboard = () => {
               <button
                 type="button"
                 onClick={handleSaveUserRoles}
-                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-950"
+                className="px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs font-bold shadow-md shadow-sm"
               >
                 Lưu Phân Quyền
               </button>
@@ -4517,7 +4861,7 @@ export const AdminDashboard = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-950"
+                  className="px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs font-bold shadow-md shadow-sm"
                 >
                   Lưu Vai Trò
                 </button>
@@ -4581,7 +4925,7 @@ export const AdminDashboard = () => {
               <button
                 type="button"
                 onClick={() => handleResolveReport(reportActionModal.report.id, 'TAKEDOWN', reportActionModal.note)}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-md shadow-rose-950 flex items-center gap-1.5"
+                className="h-9 px-3.5 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 text-xs font-medium flex items-center gap-1.5"
               >
                 <Trash2 size={13} />
                 <span>Xác nhận gỡ bài & Gửi cảnh báo</span>
@@ -4708,7 +5052,7 @@ export const AdminDashboard = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-950 flex items-center gap-1.5"
+                  className="px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs font-bold shadow-md shadow-sm flex items-center gap-1.5"
                 >
                   <Save size={13} />
                   <span>Lưu băng tần</span>
@@ -4782,7 +5126,7 @@ export const AdminDashboard = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold shadow-md shadow-purple-950 flex items-center gap-1.5"
+                  className="px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs font-bold shadow-md shadow-sm flex items-center gap-1.5"
                 >
                   <Save size={13} />
                   <span>Lưu đài phát</span>
@@ -4880,7 +5224,7 @@ export const AdminDashboard = () => {
               <button
                 type="button"
                 onClick={() => handleAdminSoftDelete(takedownModal.post.id, takedownModal.reason)}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-md shadow-rose-950 flex items-center gap-1.5"
+                className="h-9 px-3.5 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 text-xs font-medium flex items-center gap-1.5"
               >
                 <AlertTriangle size={13} />
                 <span>Xác nhận gỡ bài</span>

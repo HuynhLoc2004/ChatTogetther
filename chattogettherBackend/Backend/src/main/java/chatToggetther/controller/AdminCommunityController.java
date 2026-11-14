@@ -12,8 +12,8 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/admin/communities")
-@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AMDIN')")
+@RequestMapping({"/api/admin/communities", "/api/admin/groups"})
+@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AMDIN', 'TL_SYS_SUPERADMIN', 'TL_PERM_ALL', 'ADMIN') or hasRole('ADMIN')")
 public class AdminCommunityController {
 
     private final CommunityGroupService communityGroupService;

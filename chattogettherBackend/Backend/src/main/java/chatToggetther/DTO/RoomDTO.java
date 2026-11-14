@@ -23,4 +23,8 @@ public class RoomDTO {
     private Boolean active;
     private Boolean isPrivate;
     private java.time.LocalDateTime createdAt;
+    private Long ownerId;
+    private String ownerName;
+    private String ownerAccount;
+    private String ownerAvatar;
 }

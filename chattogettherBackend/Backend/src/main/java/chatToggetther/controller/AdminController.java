@@ -90,7 +90,7 @@ public class AdminController {
     @PutMapping("/config")
     public ResponseEntity<ResponseData<Boolean>> updateSystemConfig(
             JwtAuthenticationToken token,
-            @RequestBody Map<String, String> configs
+            @RequestBody Map<String, Object> configs
     ) {
         return ResponseEntity.ok(this.adminService.updateSystemConfig(token, configs));
     }
@@ -181,7 +181,7 @@ public class AdminController {
         return ResponseEntity.ok(this.adminService.getAdminRooms());
     }
 
-    @PostMapping("/rooms/{id}/close")
+    @RequestMapping(value = "/rooms/{id}/close", method = {RequestMethod.POST, RequestMethod.PATCH})
     public ResponseEntity<ResponseData<Boolean>> forceCloseRoom(@PathVariable("id") Long roomId) {
         return ResponseEntity.ok(this.adminService.forceCloseRoom(roomId));
     }

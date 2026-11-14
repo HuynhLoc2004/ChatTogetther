@@ -14,8 +14,8 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/admin/community-categories")
-@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AMDIN')")
+@RequestMapping({"/api/admin/community-categories", "/api/admin/categories"})
+@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AMDIN', 'TL_SYS_SUPERADMIN', 'TL_PERM_ALL', 'ADMIN') or hasRole('ADMIN')")
 @RequiredArgsConstructor
 public class AdminCommunityCategoryController {
 

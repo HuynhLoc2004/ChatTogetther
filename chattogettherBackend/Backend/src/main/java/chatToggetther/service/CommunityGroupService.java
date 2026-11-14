@@ -704,7 +704,14 @@ public class CommunityGroupService {
     }
 
     private void checkSuperAdminRole(UserEntity user) {
-        if (user == null || user.getRoles() == null || !user.getRoles().contains("ROLE_ADMIN")) {
+        if (user == null || user.getRoles() == null) {
+            throw new AppException(403, "Yêu cầu quyền Quản trị viên hệ thống (Super Admin)!", 403);
+        }
+        boolean isAdmin = user.getRoles().stream().anyMatch(r -> {
+            String u = String.valueOf(r).toUpperCase();
+            return u.contains("ADMIN") || u.contains("AMDIN") || u.startsWith("TL_") || u.startsWith("PERM_");
+        });
+        if (!isAdmin) {
             throw new AppException(403, "Yêu cầu quyền Quản trị viên hệ thống (Super Admin)!", 403);
         }
     }

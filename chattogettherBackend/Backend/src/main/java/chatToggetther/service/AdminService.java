@@ -319,24 +319,55 @@ public class AdminService {
     }
 
     @Transactional
-    public ResponseData<Boolean> updateSystemConfig(JwtAuthenticationToken token, Map<String, String> configs) {
+    public ResponseData<Boolean> updateSystemConfig(JwtAuthenticationToken token, Map<String, Object> configs) {
         verifyAdmin(token);
 
         if (configs != null) {
-            for (Map.Entry<String, String> entry : configs.entrySet()) {
+            Map<String, Object> targetMap = configs;
+            if (configs.containsKey("configs") && configs.get("configs") instanceof Map) {
+                targetMap = (Map<String, Object>) configs.get("configs");
+            }
+            for (Map.Entry<String, Object> entry : targetMap.entrySet()) {
                 if (entry.getKey() != null && entry.getValue() != null) {
-                    SystemConfigEntity entity = systemConfigRepository.findById(entry.getKey())
+                    String key = entry.getKey();
+                    String val = String.valueOf(entry.getValue());
+                    SystemConfigEntity entity = systemConfigRepository.findById(key)
                             .orElse(SystemConfigEntity.builder()
-                                    .configKey(entry.getKey())
+                                    .configKey(key)
                                     .build());
-                    entity.setConfigValue(entry.getValue());
+                    entity.setConfigValue(val);
                     entity.setUpdatedAt(LocalDateTime.now());
                     systemConfigRepository.save(entity);
+
+                    // Đồng bộ thêm bí danh chuẩn cho tham số quy mô phòng
+                    if ("max_users_normal_room".equalsIgnoreCase(key)) {
+                        saveSystemConfigAlias("MAX_ROOM_MEMBERS_FREE", val);
+                    } else if ("MAX_ROOM_MEMBERS_FREE".equalsIgnoreCase(key)) {
+                        saveSystemConfigAlias("max_users_normal_room", val);
+                    } else if ("max_users_pro_room".equalsIgnoreCase(key)) {
+                        saveSystemConfigAlias("MAX_ROOM_MEMBERS_PRO", val);
+                    } else if ("MAX_ROOM_MEMBERS_PRO".equalsIgnoreCase(key)) {
+                        saveSystemConfigAlias("max_users_pro_room", val);
+                    } else if ("idle_room_timeout_minutes".equalsIgnoreCase(key)) {
+                        saveSystemConfigAlias("ROOM_IDLE_TIMEOUT", val);
+                    } else if ("ROOM_IDLE_TIMEOUT".equalsIgnoreCase(key)) {
+                        saveSystemConfigAlias("idle_room_timeout_minutes", val);
+                    }
                 }
             }
         }
 
         return new ResponseData<>(200, "Cập nhật cấu hình hệ thống thành công", true);
+    }
+
+    private void saveSystemConfigAlias(String aliasKey, String val) {
+        SystemConfigEntity entity = systemConfigRepository.findById(aliasKey)
+                .orElse(SystemConfigEntity.builder()
+                        .configKey(aliasKey)
+                        .build());
+        entity.setConfigValue(val);
+        entity.setUpdatedAt(LocalDateTime.now());
+        systemConfigRepository.save(entity);
     }
 
     // ==========================================
@@ -545,6 +576,7 @@ public class AdminService {
             dto.setId(room.getId());
             dto.setNameroom(room.getRoomName());
             dto.setAvatar(room.getAvatar());
+            dto.setDescription(room.getDescription());
             dto.setActive(Boolean.TRUE.equals(room.getActive()));
             dto.setHasPassword(room.getPassword() != null && !room.getPassword().trim().isEmpty() && !room.getPassword().equalsIgnoreCase("null") && !room.getPassword().equals("0"));
             dto.setIsPrivate(dto.getHasPassword());
@@ -552,6 +584,18 @@ public class AdminService {
             long activeMembers = room.getUserRoomEntityList() == null ? 0 : 
                     room.getUserRoomEntityList().stream().filter(ur -> Boolean.TRUE.equals(ur.getActive())).count();
             dto.setSoluong(activeMembers);
+
+            if (room.getUserRoomEntityList() != null) {
+                room.getUserRoomEntityList().stream()
+                        .filter(ur -> Boolean.TRUE.equals(ur.getIsAdmin()) && ur.getUserEntity() != null)
+                        .findFirst()
+                        .ifPresent(ownerUr -> {
+                            dto.setOwnerId(ownerUr.getUserEntity().getId());
+                            dto.setOwnerName(ownerUr.getUserEntity().getNickname() != null ? ownerUr.getUserEntity().getNickname() : ownerUr.getUserEntity().getAccount());
+                            dto.setOwnerAccount(ownerUr.getUserEntity().getAccount());
+                            dto.setOwnerAvatar(ownerUr.getUserEntity().getAvatar());
+                        });
+            }
             return dto;
         }).sorted((a, b) -> Long.compare(b.getId(), a.getId())).collect(Collectors.toList());
         return new ResponseData<>(200, "Lấy danh sách phòng thành công", result);

@@ -13,8 +13,8 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/admin/community-reports")
-@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AMDIN')")
+@RequestMapping({"/api/admin/community-reports", "/api/admin/reports/communities"})
+@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AMDIN', 'TL_SYS_SUPERADMIN', 'TL_PERM_ALL', 'ADMIN') or hasRole('ADMIN')")
 public class AdminCommunityReportController {
 
     private final CommunityGroupService communityGroupService;

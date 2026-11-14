@@ -50,25 +50,24 @@ public class AdminMusicTrackController {
                 new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "Người dùng không tồn tại!", 404)
         );
 
-        boolean isAdmin = user.getRoles() != null && (
-                user.getRoles().contains("ROLE_ADMIN") ||
-                user.getRoles().contains("ROLE_AMDIN") ||
-                user.getRoles().contains("ADMIN")
-        );
+        boolean isAdmin = user.getRoles() != null && user.getRoles().stream().anyMatch(r -> {
+            String u = String.valueOf(r).toUpperCase();
+            return u.contains("ADMIN") || u.contains("AMDIN") || u.startsWith("TL_") || u.startsWith("PERM_");
+        });
 
         if (!isAdmin) {
             throw new AppException(ErrorCode.UNAUTHORIZED.getCode(), "Bạn không có quyền quản trị viên!", 403);
         }
     }
 
-    @GetMapping("/music-tracks")
+    @GetMapping({"/music-tracks", "/music"})
     public ResponseEntity<ResponseData<List<MusicTrackEntity>>> getAllMusicTracks(JwtAuthenticationToken token) {
         checkAdminPermission(token);
         List<MusicTrackEntity> tracks = this.musicTrackRepository.findAllByOrderByIdDesc();
         return ResponseEntity.ok(new ResponseData<>(200, "Lấy danh sách bản nhạc thành công!", tracks));
     }
 
-    @PostMapping("/music-tracks")
+    @PostMapping({"/music-tracks", "/music"})
     public ResponseEntity<ResponseData<MusicTrackEntity>> createMusicTrack(
             JwtAuthenticationToken token,
             @Valid @RequestBody CreateMusicTrackRequest request
@@ -89,7 +88,7 @@ public class AdminMusicTrackController {
         return ResponseEntity.ok(new ResponseData<>(200, "Thêm bản nhạc mới thành công!", saved));
     }
 
-    @PutMapping("/music-tracks/{id}")
+    @PutMapping({"/music-tracks/{id}", "/music/{id}"})
     public ResponseEntity<ResponseData<MusicTrackEntity>> updateMusicTrack(
             JwtAuthenticationToken token,
             @PathVariable("id") Long id,
@@ -113,7 +112,7 @@ public class AdminMusicTrackController {
         return ResponseEntity.ok(new ResponseData<>(200, "Cập nhật bản nhạc thành công!", updated));
     }
 
-    @PatchMapping("/music-tracks/{id}/toggle")
+    @PatchMapping({"/music-tracks/{id}/toggle", "/music/{id}/toggle"})
     public ResponseEntity<ResponseData<MusicTrackEntity>> toggleMusicTrack(
             JwtAuthenticationToken token,
             @PathVariable("id") Long id,
@@ -135,7 +134,7 @@ public class AdminMusicTrackController {
         return ResponseEntity.ok(new ResponseData<>(200, "Chuyển trạng thái bản nhạc thành công!", updated));
     }
 
-    @DeleteMapping("/music-tracks/{id}")
+    @DeleteMapping({"/music-tracks/{id}", "/music/{id}"})
     public ResponseEntity<ResponseData<Boolean>> deleteMusicTrack(
             JwtAuthenticationToken token,
             @PathVariable("id") Long id

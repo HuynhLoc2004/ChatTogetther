@@ -27,7 +27,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping({"/api/admin/frequency-config", "/api/admin/frequency"})
+@RequestMapping({"/api/admin/frequency-config", "/api/admin/frequency", "/api/admin/match-intents"})
 public class AdminFrequencyConfigController {
 
     private final MatchIntentRepository matchIntentRepository;
@@ -55,11 +55,10 @@ public class AdminFrequencyConfigController {
                 new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "Người dùng không tồn tại", 404)
         );
 
-        boolean isAdmin = user.getRoles() != null && (
-                user.getRoles().contains("ROLE_ADMIN") ||
-                user.getRoles().contains("ROLE_AMDIN") ||
-                user.getRoles().contains("TL_SYS_SUPERADMIN")
-        );
+        boolean isAdmin = user.getRoles() != null && user.getRoles().stream().anyMatch(r -> {
+            String u = String.valueOf(r).toUpperCase();
+            return u.contains("ADMIN") || u.contains("AMDIN") || u.startsWith("TL_") || u.startsWith("PERM_");
+        });
 
         if (!isAdmin) {
             throw new AppException(ErrorCode.UNAUTHORIZED.getCode(), "Bạn không có quyền quản trị viên hệ thống!", 403);
@@ -70,7 +69,7 @@ public class AdminFrequencyConfigController {
     // 1. MATCH INTENT (BĂNG TẦN FM) CRUD
     // =========================================================================
 
-    @GetMapping("/intents")
+    @GetMapping({"/intents", ""})
     public ResponseEntity<ResponseData<List<MatchIntentDTO>>> getAllIntents(JwtAuthenticationToken token) {
         checkAdminPermission(token);
         List<MatchIntentDTO> list = this.matchIntentRepository.findAllByOrderByDisplayOrderAsc().stream()
@@ -79,7 +78,7 @@ public class AdminFrequencyConfigController {
         return ResponseEntity.ok(new ResponseData<>(200, "Lấy danh sách băng tần thành công", list));
     }
 
-    @PostMapping("/intents")
+    @PostMapping({"/intents", ""})
     public ResponseEntity<ResponseData<MatchIntentDTO>> createIntent(
             JwtAuthenticationToken token,
             @RequestBody @Valid CreateMatchIntentRequest request
@@ -110,7 +109,7 @@ public class AdminFrequencyConfigController {
         return ResponseEntity.ok(new ResponseData<>(200, "Thêm mới băng tần thành công", mapToIntentDTO(saved)));
     }
 
-    @PutMapping("/intents/{id}")
+    @PutMapping({"/intents/{id}", "/{id}"})
     public ResponseEntity<ResponseData<MatchIntentDTO>> updateIntent(
             JwtAuthenticationToken token,
             @PathVariable("id") Long id,
@@ -140,7 +139,7 @@ public class AdminFrequencyConfigController {
         return ResponseEntity.ok(new ResponseData<>(200, "Cập nhật băng tần thành công", mapToIntentDTO(saved)));
     }
 
-    @PatchMapping("/intents/{id}/toggle")
+    @PatchMapping({"/intents/{id}/toggle", "/{id}/toggle"})
     public ResponseEntity<ResponseData<MatchIntentDTO>> toggleIntent(
             JwtAuthenticationToken token,
             @PathVariable("id") Long id
@@ -156,7 +155,7 @@ public class AdminFrequencyConfigController {
         return ResponseEntity.ok(new ResponseData<>(200, "Chuyển trạng thái băng tần thành công", mapToIntentDTO(saved)));
     }
 
-    @DeleteMapping("/intents/{id}")
+    @DeleteMapping({"/intents/{id}", "/{id}"})
     public ResponseEntity<ResponseData<Boolean>> deleteIntent(
             JwtAuthenticationToken token,
             @PathVariable("id") Long id
