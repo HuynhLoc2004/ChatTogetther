@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Send, Users, LogOut, MessageCircle, Hash, Radio,
@@ -78,6 +78,10 @@ const ChatRoom = () => {
   const [selectedProfileUserId, setSelectedProfileUserId] = useState(null);
   const [isFriendsModalOpen, setIsFriendsModalOpen] = useState(false);
 
+  // Quản lý trạng thái trực tuyến thực tế (Real-time Presence)
+  const [onlineUserIds, setOnlineUserIds] = useState(new Set());
+  const presenceIntervalRef = useRef(null);
+
   // Trạng thái cuộc gọi thoại & Video WebRTC
   const [isCallActive, setIsCallActive] = useState(false);
   const [isVideoCall, setIsVideoCall] = useState(false);
@@ -136,6 +140,23 @@ const ChatRoom = () => {
 
   const currentUserId = getUserId();
   const messageIdsRef = useRef(new Set());
+
+  // Lọc và phân loại thành viên trực tuyến / ngoại tuyến chuẩn xác theo thời gian thực
+  const { onlineMembers, offlineMembers } = useMemo(() => {
+    const list = roomInfo?.userRoomDTOList || [];
+    const online = [];
+    const offline = [];
+    list.forEach(ur => {
+      const uId = ur.userDTO?.id?.toString();
+      const isOnline = (currentUserId && uId === currentUserId) || (uId && onlineUserIds.has(uId));
+      if (isOnline) {
+        online.push(ur);
+      } else {
+        offline.push(ur);
+      }
+    });
+    return { onlineMembers: online, offlineMembers: offline };
+  }, [roomInfo?.userRoomDTOList, onlineUserIds, currentUserId]);
 
   const scrollToBottom = (behavior = "auto") => {
     messagesEndRef.current?.scrollIntoView({ behavior });
@@ -613,6 +634,16 @@ const ChatRoom = () => {
       await fetchRoomDetail();
       await fetchHistory();
 
+      // Nạp danh sách trực tuyến ban đầu từ server
+      try {
+        const presRes = await axiosClient.get(`/rooms/${roomId}/online-users`);
+        if (presRes?.data?.data && Array.isArray(presRes.data.data) && isMounted) {
+          setOnlineUserIds(new Set(presRes.data.data.map(String)));
+        }
+      } catch (err) {
+        console.warn("Không thể tải online users ban đầu:", err);
+      }
+
       // 2. Kết nối STOMP
       const socket = new SockJS(`${BACKEND_URL}/ws-gs-guide`);
       const client = Stomp.over(socket);
@@ -621,6 +652,30 @@ const ChatRoom = () => {
 
       client.connect({}, () => {
         if (!isMounted) return;
+
+        // Sub kênh hiện diện thực tế (Real-time Presence) của phòng
+        client.subscribe(`/topic/room/${roomId}/presence`, (message) => {
+          try {
+            const list = JSON.parse(message.body);
+            if (Array.isArray(list)) {
+              setOnlineUserIds(new Set(list.map(String)));
+            }
+          } catch (e) {
+            console.error("Lỗi cập nhật presence:", e);
+          }
+        });
+
+        // Báo hiệu đã vào phòng và bắt đầu gửi heartbeat
+        if (currentUserId) {
+          client.send(`/app/room/${roomId}/presence/join`, {}, JSON.stringify({ userId: currentUserId }));
+          
+          if (presenceIntervalRef.current) clearInterval(presenceIntervalRef.current);
+          presenceIntervalRef.current = setInterval(() => {
+            if (stompClient.current && stompClient.current.connected) {
+              stompClient.current.send(`/app/room/${roomId}/presence/heartbeat`, {}, JSON.stringify({ userId: currentUserId }));
+            }
+          }, 15000);
+        }
 
         // Sub kênh tín hiệu cuộc gọi
         client.subscribe(`/topic/call/${roomId}`, (message) => {
@@ -720,7 +775,16 @@ const ChatRoom = () => {
     return () => {
       isMounted = false;
       cleanupCall();
+      if (presenceIntervalRef.current) {
+        clearInterval(presenceIntervalRef.current);
+        presenceIntervalRef.current = null;
+      }
       if (stompClient.current && stompClient.current.connected) {
+        if (currentUserId) {
+          try {
+            stompClient.current.send(`/app/room/${roomId}/presence/leave`, {}, JSON.stringify({ userId: currentUserId }));
+          } catch (e) {}
+        }
         stompClient.current.disconnect();
         stompClient.current = null;
       }
@@ -1103,44 +1167,103 @@ const ChatRoom = () => {
           <div className="section-title">
              <Users size={14} />
              <span>Thành viên ({roomInfo?.userRoomDTOList?.length || 0})</span>
+             {onlineMembers.length > 0 && (
+               <span className="online-badge-count">{onlineMembers.length} online</span>
+             )}
           </div>
           
           <div className="member-list">
-            {roomInfo?.userRoomDTOList?.map((ur, idx) => (
-              <div 
-                key={idx} 
-                className={`member-item ${ur.userDTO?.id?.toString() === currentUserId ? 'is-me' : ''}`}
-                onClick={() => setSelectedProfileUserId(ur.userDTO?.id)}
-                title="Nhấp để xem thông tin cá nhân & kết bạn"
-              >
-                <div className="member-avatar">
-                   {ur.userDTO?.nickname?.charAt(0).toUpperCase() || "U"}
-                   <span className="online-indicator"></span>
-                </div>
-                <div className="member-info">
-                   <span className="name">{ur.userDTO?.nickname || "User"}</span>
-                   {ur.isAdmin && <Crown size={14} className="crown-icon" title="Chủ phòng" />}
-                </div>
-                
-                {isAdminOfThisRoom && ur.userDTO?.id?.toString() !== currentUserId && (
-                  <div className="member-actions" onClick={(e) => e.stopPropagation()}>
-                    <button onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === idx ? null : idx); }} className="dots-btn">
-                       <MoreVertical size={14} />
-                    </button>
-                    {activeMenu === idx && (
-                      <div className="member-dropdown">
-                        <button onClick={() => handleDelegateAdmin(ur.userDTO.id, ur.userDTO.nickname)} className="action-item">
-                           <Crown size={14} /> Trao quyền
-                        </button>
-                        <button onClick={() => handleRemoveUser(ur.userDTO.id, ur.userDTO.nickname)} className="action-item kick-item">
-                           <UserX size={14} /> Kick
-                        </button>
+            {onlineMembers.length > 0 && (
+              <div className="member-subgroup">
+                <div className="member-subgroup-title">Trực tuyến — {onlineMembers.length}</div>
+                {onlineMembers.map((ur, idx) => {
+                  const memberId = ur.userDTO?.id?.toString();
+                  const isMe = memberId === currentUserId;
+                  const menuKey = `on-${ur.userDTO?.id || idx}`;
+                  return (
+                    <div 
+                      key={menuKey} 
+                      className={`member-item ${isMe ? 'is-me' : ''}`}
+                      onClick={() => setSelectedProfileUserId(ur.userDTO?.id)}
+                      title="Đang trực tuyến - Nhấp để xem hồ sơ & kết bạn"
+                    >
+                      <div className="member-avatar">
+                         {ur.userDTO?.nickname?.charAt(0).toUpperCase() || "U"}
+                         <span className="online-indicator" title="Đang trực tuyến"></span>
                       </div>
-                    )}
-                  </div>
-                )}
+                      <div className="member-info">
+                         <span className="name">{ur.userDTO?.nickname || "User"}{isMe ? " (Bạn)" : ""}</span>
+                         {ur.isAdmin && <Crown size={14} className="crown-icon" title="Chủ phòng" />}
+                      </div>
+                      
+                      {isAdminOfThisRoom && !isMe && (
+                        <div className="member-actions" onClick={(e) => e.stopPropagation()}>
+                          <button onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === menuKey ? null : menuKey); }} className="dots-btn">
+                             <MoreVertical size={14} />
+                          </button>
+                          {activeMenu === menuKey && (
+                            <div className="member-dropdown">
+                              <button onClick={() => handleDelegateAdmin(ur.userDTO.id, ur.userDTO.nickname)} className="action-item">
+                                 <Crown size={14} /> Trao quyền
+                              </button>
+                              <button onClick={() => handleRemoveUser(ur.userDTO.id, ur.userDTO.nickname)} className="action-item kick-item">
+                                 <UserX size={14} /> Kick
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-            ))}
+            )}
+
+            {offlineMembers.length > 0 && (
+              <div className="member-subgroup">
+                <div className="member-subgroup-title">Ngoại tuyến — {offlineMembers.length}</div>
+                {offlineMembers.map((ur, idx) => {
+                  const memberId = ur.userDTO?.id?.toString();
+                  const isMe = memberId === currentUserId;
+                  const menuKey = `off-${ur.userDTO?.id || idx}`;
+                  return (
+                    <div 
+                      key={menuKey} 
+                      className={`member-item is-offline ${isMe ? 'is-me' : ''}`}
+                      onClick={() => setSelectedProfileUserId(ur.userDTO?.id)}
+                      title="Ngoại tuyến - Nhấp để xem hồ sơ & kết bạn"
+                    >
+                      <div className="member-avatar">
+                         {ur.userDTO?.nickname?.charAt(0).toUpperCase() || "U"}
+                         <span className="offline-indicator" title="Ngoại tuyến"></span>
+                      </div>
+                      <div className="member-info">
+                         <span className="name">{ur.userDTO?.nickname || "User"}{isMe ? " (Bạn)" : ""}</span>
+                         {ur.isAdmin && <Crown size={14} className="crown-icon" title="Chủ phòng" />}
+                      </div>
+                      
+                      {isAdminOfThisRoom && !isMe && (
+                        <div className="member-actions" onClick={(e) => e.stopPropagation()}>
+                          <button onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === menuKey ? null : menuKey); }} className="dots-btn">
+                             <MoreVertical size={14} />
+                          </button>
+                          {activeMenu === menuKey && (
+                            <div className="member-dropdown">
+                              <button onClick={() => handleDelegateAdmin(ur.userDTO.id, ur.userDTO.nickname)} className="action-item">
+                                 <Crown size={14} /> Trao quyền
+                              </button>
+                              <button onClick={() => handleRemoveUser(ur.userDTO.id, ur.userDTO.nickname)} className="action-item kick-item">
+                                 <UserX size={14} /> Kick
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
@@ -1256,7 +1379,7 @@ const ChatRoom = () => {
                  />
                  <div className="flex flex-col leading-tight min-w-0">
                    <h2 className="room-title-text">{roomInfo?.nameroom || `Phòng ${roomId}`}</h2>
-                   <span className="header-room-id font-mono">#{roomId}</span>
+                   <span className="header-room-id font-mono">#{roomId} • {onlineMembers.length} trực tuyến</span>
                  </div>
               </div>
            </div>
@@ -1831,6 +1954,43 @@ const ChatRoom = () => {
           border-radius: 50%;
           background: #10b981;
           border: 1.5px solid #18181b;
+          box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+        }
+        .offline-indicator {
+          position: absolute;
+          bottom: 0;
+          right: 0;
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: #52525b;
+          border: 1.5px solid #18181b;
+        }
+        .member-item.is-offline {
+          opacity: 0.6;
+        }
+        .member-item.is-offline:hover {
+          opacity: 0.95;
+        }
+        .member-subgroup {
+          margin-bottom: 12px;
+        }
+        .member-subgroup-title {
+          font-size: 10px;
+          font-weight: 700;
+          color: #71717a;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          padding: 6px 10px 4px 10px;
+        }
+        .online-badge-count {
+          margin-left: auto;
+          font-size: 11px;
+          background: rgba(16, 185, 129, 0.15);
+          color: #34d399;
+          padding: 1px 7px;
+          border-radius: 9999px;
+          font-weight: 600;
         }
         .member-info {
           flex: 1;

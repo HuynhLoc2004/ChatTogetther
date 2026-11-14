@@ -113,27 +113,6 @@ public class ChatService {
             throw new AppException(ErrorCode.ROOM_NOT_FOUND.getCode(), "Phòng không tồn tại", ErrorCode.ROOM_NOT_FOUND.getStatusCode().value());
         });
 
-        // Tự động đảm bảo thành viên có thể đọc lịch sử phòng
-        UserEntity userEntity = this.userRepository.findById(userId).orElse(null);
-        if (userEntity != null) {
-            UserRoomEntity myUr = roomEntity.getUserRoomEntityList().stream()
-                    .filter(ur -> ur.getUserEntity() != null && ur.getUserEntity().getId().equals(userId))
-                    .findFirst()
-                    .orElse(null);
-
-            if (myUr == null) {
-                myUr = new UserRoomEntity();
-                myUr.setRoomEntity(roomEntity);
-                myUr.setUserEntity(userEntity);
-                myUr.setActive(true);
-                roomEntity.getUserRoomEntityList().add(myUr);
-                this.roomRepository.save(roomEntity);
-            } else if (!Boolean.TRUE.equals(myUr.getActive())) {
-                myUr.setActive(true);
-                this.roomRepository.save(roomEntity);
-            }
-        }
-
         int pageSize = (size != null && size > 0 && size <= 100) ? size : 30;
         List<MessageEntity> messages = this.messageRepository.findMessagesBeforeId(roomId, beforeId, PageRequest.of(0, pageSize));
         
