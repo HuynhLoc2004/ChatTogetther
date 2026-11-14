@@ -17,6 +17,7 @@ import chatToggetther.modelEntity.PostEntity;
 import chatToggetther.modelEntity.PostLikeEntity;
 import chatToggetther.modelEntity.PostReportEntity;
 import chatToggetther.modelEntity.PostRepostEntity;
+import chatToggetther.modelEntity.SearchTermEntity;
 import chatToggetther.modelEntity.UserEntity;
 import chatToggetther.repository.CommentLikeRepository;
 import chatToggetther.repository.CommentRepository;
@@ -27,6 +28,7 @@ import chatToggetther.repository.PostLikeRepository;
 import chatToggetther.repository.PostReportRepository;
 import chatToggetther.repository.PostRepostRepository;
 import chatToggetther.repository.PostRepository;
+import chatToggetther.repository.SearchTermRepository;
 import chatToggetther.repository.UserRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -53,6 +55,12 @@ public class PostService {
     private final PostReportRepository postReportRepository;
     private final CommentLikeRepository commentLikeRepository;
     private final PostRepostRepository postRepostRepository;
+    private final SearchTermRepository searchTermRepository;
+
+    // Cache danh sách tìm kiếm thịnh hành trong RAM để truy xuất siêu tốc <1ms
+    private final List<java.util.Map<String, Object>> hotSearchesCache = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private volatile long lastHotSearchesCacheTime = 0;
+    private static final long HOT_SEARCHES_CACHE_TTL = 60_000; // 1 phút
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm dd/MM");
 
@@ -67,7 +75,8 @@ public class PostService {
             FriendshipRepository friendshipRepository,
             PostReportRepository postReportRepository,
             CommentLikeRepository commentLikeRepository,
-            PostRepostRepository postRepostRepository
+            PostRepostRepository postRepostRepository,
+            SearchTermRepository searchTermRepository
     ) {
         this.postRepository = postRepository;
         this.postLikeRepository = postLikeRepository;
@@ -80,6 +89,7 @@ public class PostService {
         this.postReportRepository = postReportRepository;
         this.commentLikeRepository = commentLikeRepository;
         this.postRepostRepository = postRepostRepository;
+        this.searchTermRepository = searchTermRepository;
     }
 
     private PostDTO mapToPostDTO(PostEntity post, UserEntity currentUser) {
@@ -776,22 +786,131 @@ public class PostService {
         return new ResponseData<>(200, "Bình luận thành công", mapToCommentDTO(comment));
     }
 
+    private static class ScoredPost {
+        final PostEntity post;
+        final double score;
+        final boolean isRecommendation;
+        final String recommendReason;
+
+        ScoredPost(PostEntity post, double score, boolean isRecommendation, String recommendReason) {
+            this.post = post;
+            this.score = score;
+            this.isRecommendation = isRecommendation;
+            this.recommendReason = recommendReason;
+        }
+    }
+
     @Transactional
     public ResponseData<List<PostDTO>> searchPosts(JwtAuthenticationToken token, String keyword) {
         UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
 
         String kw = keyword != null ? keyword.trim() : "";
-        List<PostEntity> posts = this.postRepository.searchPosts(kw);
-        if (kw.length() >= 2 && !posts.isEmpty()) {
-            for (PostEntity p : posts) {
-                p.setSearchHits((p.getSearchHits() != null ? p.getSearchHits() : 0L) + 1);
-            }
-            this.postRepository.saveAll(posts);
+        if (kw.isEmpty()) {
+            return new ResponseData<>(200, "Vui lòng nhập từ khóa tìm kiếm", Collections.emptyList());
         }
 
-        List<PostDTO> dtos = posts.stream()
-                .map(p -> mapToPostDTO(p, currentUser))
-                .collect(Collectors.toList());
+        // Tự động học & ghi nhận từ khóa tìm kiếm
+        trackSearch(kw);
+
+        // Lấy danh sách bài viết hợp lệ để tính điểm phân tích ngữ nghĩa (Elastic-like relevance ranking)
+        List<PostEntity> allPosts = this.postRepository.findAllPostsWithDetails();
+        String kwLower = kw.toLowerCase();
+        String[] tokens = kwLower.split("\\s+");
+
+        List<ScoredPost> scoredList = new ArrayList<>();
+        List<PostEntity> potentialRecommendations = new ArrayList<>();
+
+        for (PostEntity post : allPosts) {
+            String content = post.getContent() != null ? post.getContent().toLowerCase() : "";
+            String vibe = post.getVibe() != null ? post.getVibe().toLowerCase() : "";
+            String authorNick = post.getUser() != null && post.getUser().getNickname() != null ? post.getUser().getNickname().toLowerCase() : "";
+            String authorAccount = post.getUser() != null && post.getUser().getAccount() != null ? post.getUser().getAccount().toLowerCase() : "";
+            String groupName = post.getGroupName() != null ? post.getGroupName().toLowerCase() : "";
+
+            double score = 0.0;
+
+            // 1. Khớp nguyên cụm từ khóa (Exact phrase match)
+            if (content.contains(kwLower)) {
+                score += 50.0;
+                if (content.startsWith(kwLower)) score += 20.0;
+            }
+            if (vibe.contains(kwLower)) score += 40.0;
+            if (authorNick.contains(kwLower) || authorAccount.contains(kwLower)) score += 35.0;
+            if (groupName.contains(kwLower)) score += 25.0;
+
+            // 2. Khớp từng từ đơn / token (Tokenized multi-field match)
+            for (String t : tokens) {
+                if (t.length() < 2) continue;
+                if (content.contains(t)) score += 15.0;
+                if (vibe.contains(t)) score += 15.0;
+                if (authorNick.contains(t) || authorAccount.contains(t)) score += 12.0;
+                if (groupName.contains(t)) score += 10.0;
+            }
+
+            // 3. Tăng điểm dựa trên mức độ tương tác cộng đồng (Engagement Signals)
+            int likes = post.getLikes() != null ? post.getLikes().size() : 0;
+            int comments = post.getComments() != null ? post.getComments().size() : 0;
+            long searchHits = post.getSearchHits() != null ? post.getSearchHits() : 0L;
+            score += (likes * 1.5) + (comments * 2.5) + (searchHits * 0.5);
+
+            if (score > 0.0) {
+                scoredList.add(new ScoredPost(post, score, false, null));
+            } else {
+                potentialRecommendations.add(post);
+            }
+        }
+
+        // Sắp xếp bài viết khớp trực tiếp theo điểm liên quan giảm dần
+        scoredList.sort((a, b) -> Double.compare(b.score, a.score));
+
+        // Tăng searchHits cho các bài viết khớp hàng đầu
+        if (!scoredList.isEmpty()) {
+            List<PostEntity> toUpdateHits = new ArrayList<>();
+            for (int i = 0; i < Math.min(scoredList.size(), 10); i++) {
+                PostEntity p = scoredList.get(i).post;
+                p.setSearchHits((p.getSearchHits() != null ? p.getSearchHits() : 0L) + 1);
+                toUpdateHits.add(p);
+            }
+            this.postRepository.saveAll(toUpdateHits);
+        }
+
+        // 4. Thuật toán mở rộng đề xuất chủ đề liên quan (Deep Semantic & Related Topic Expansion)
+        // Nếu kết quả trực tiếp ít hơn 6 bài: Gợi ý thêm các bài cùng chủ đề hoặc thịnh hành để người dùng lướt phong phú
+        if (scoredList.size() < 6 && !potentialRecommendations.isEmpty()) {
+            Set<String> matchedVibes = scoredList.stream()
+                    .map(sp -> sp.post.getVibe())
+                    .filter(v -> v != null && !v.trim().isEmpty())
+                    .collect(Collectors.toSet());
+
+            List<ScoredPost> recommendedList = new ArrayList<>();
+            for (PostEntity recPost : potentialRecommendations) {
+                boolean hasSameVibe = recPost.getVibe() != null && matchedVibes.contains(recPost.getVibe());
+                int likes = recPost.getLikes() != null ? recPost.getLikes().size() : 0;
+                int comments = recPost.getComments() != null ? recPost.getComments().size() : 0;
+                double engagementScore = (likes * 2.0) + (comments * 3.0);
+
+                if (hasSameVibe) {
+                    recommendedList.add(new ScoredPost(recPost, engagementScore + 100.0, true, "Gợi ý chủ đề liên quan: #" + recPost.getVibe()));
+                } else if (engagementScore > 0) {
+                    recommendedList.add(new ScoredPost(recPost, engagementScore, true, "Đề xuất sôi nổi trong sảnh"));
+                }
+            }
+
+            recommendedList.sort((a, b) -> Double.compare(b.score, a.score));
+
+            int needed = Math.max(0, 8 - scoredList.size());
+            for (int i = 0; i < Math.min(needed, recommendedList.size()); i++) {
+                scoredList.add(recommendedList.get(i));
+            }
+        }
+
+        List<PostDTO> dtos = scoredList.stream().map(sp -> {
+            PostDTO dto = mapToPostDTO(sp.post, currentUser);
+            if (sp.isRecommendation && sp.recommendReason != null) {
+                dto.setRecommendationReason(sp.recommendReason);
+            }
+            return dto;
+        }).collect(Collectors.toList());
 
         return new ResponseData<>(200, "Tìm kiếm bài viết thành công", dtos);
     }
@@ -813,13 +932,60 @@ public class PostService {
     @Transactional
     public void trackSearch(String keyword) {
         if (keyword == null || keyword.trim().length() < 2) return;
-        List<PostEntity> matched = this.postRepository.searchPosts(keyword.trim());
-        if (!matched.isEmpty()) {
-            for (PostEntity p : matched) {
-                p.setSearchHits((p.getSearchHits() != null ? p.getSearchHits() : 0L) + 1);
+        String termClean = keyword.trim().toLowerCase();
+        if (termClean.length() > 80) termClean = termClean.substring(0, 80);
+
+        try {
+            Optional<SearchTermEntity> opt = this.searchTermRepository.findByTermIgnoreCase(termClean);
+            if (opt.isPresent()) {
+                SearchTermEntity entity = opt.get();
+                entity.setSearchCount(entity.getSearchCount() + 1);
+                entity.setLastSearchedAt(LocalDateTime.now());
+                this.searchTermRepository.save(entity);
+            } else {
+                SearchTermEntity entity = SearchTermEntity.builder()
+                        .term(termClean)
+                        .searchCount(1L)
+                        .lastSearchedAt(LocalDateTime.now())
+                        .build();
+                this.searchTermRepository.save(entity);
             }
-            this.postRepository.saveAll(matched);
+            // Invalidate cache để cập nhật ngay từ khóa hot
+            this.lastHotSearchesCacheTime = 0;
+        } catch (Exception ignored) {}
+    }
+
+    public ResponseData<List<java.util.Map<String, Object>>> getHotSearches() {
+        long now = System.currentTimeMillis();
+        if (!hotSearchesCache.isEmpty() && (now - lastHotSearchesCacheTime < HOT_SEARCHES_CACHE_TTL)) {
+            return new ResponseData<>(200, "Lấy danh sách tìm kiếm hot từ cache thành công", hotSearchesCache);
         }
+
+        List<SearchTermEntity> terms = this.searchTermRepository.findTopHotSearches();
+        List<java.util.Map<String, Object>> result = new ArrayList<>();
+
+        if (terms.isEmpty()) {
+            String[] defaultHot = {"Thư giãn", "Âm nhạc", "Tâm sự", "Công nghệ", "Tìm bạn", "Đời sống"};
+            for (String kw : defaultHot) {
+                java.util.Map<String, Object> map = new java.util.HashMap<>();
+                map.put("term", kw);
+                map.put("count", 1L);
+                result.add(map);
+            }
+        } else {
+            for (SearchTermEntity st : terms) {
+                java.util.Map<String, Object> map = new java.util.HashMap<>();
+                map.put("term", st.getTerm());
+                map.put("count", st.getSearchCount());
+                result.add(map);
+            }
+        }
+
+        hotSearchesCache.clear();
+        hotSearchesCache.addAll(result);
+        lastHotSearchesCacheTime = now;
+
+        return new ResponseData<>(200, "Lấy danh sách tìm kiếm hot thành công", result);
     }
 
     @Transactional

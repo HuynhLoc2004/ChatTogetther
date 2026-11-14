@@ -11,7 +11,7 @@ import {
   Mic, Headphones, Moon, Gamepad2, Film, Square,
   Flag, AlertTriangle, UserCheck,
   ChevronDown, Menu, Globe, Layers, SlidersHorizontal, Repeat, Sun, Smile,
-  ArrowLeft, RefreshCw
+  ArrowLeft, RefreshCw, Clock, Loader2
 } from 'lucide-react';
 import axiosClient, { BACKEND_URL } from '../api/axiosClient';
 import { saveRoomsOffline, getRoomsOffline } from '../utils/offlineDB';
@@ -312,7 +312,20 @@ const Home = () => {
   const [postImageUrl, setPostImageUrl] = useState('');
   const [showImageInput, setShowImageInput] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
-  const [searchKeyword, setSearchKeyword] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [activeSearchQuery, setActiveSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
+  const [showMobileSearchBar, setShowMobileSearchBar] = useState(false);
+  const [recentSearches, setRecentSearches] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('talovin_recent_searches') || '[]');
+    } catch {
+      return [];
+    }
+  });
+  const [hotSearches, setHotSearches] = useState([]);
   const [activeReactionPicker, setActiveReactionPicker] = useState(null);
 
   // Multimedia Signals State (Ảnh/Film webp + Ghi âm giọng nói 15s)
@@ -1240,9 +1253,76 @@ const Home = () => {
     });
   };
 
-  // Tìm kiếm bài viết & phòng
-  const handleSearch = (e) => {
-    setSearchKeyword(e.target.value);
+  // Tải danh sách các từ khóa tìm kiếm hot từ cache backend
+  const fetchHotSearches = async () => {
+    try {
+      const res = await axiosClient.get('/posts/hot-searches');
+      if (res.data?.data) {
+        setHotSearches(res.data.data);
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    fetchHotSearches();
+  }, []);
+
+  // Thực thi tìm kiếm thông minh (Elastic-style) - CHỈ KÍCH HOẠT KHI ENTER / BẤM ICON / MOBILE GO
+  const executeSearch = async (rawKw) => {
+    const kw = (rawKw || '').trim();
+    setIsSearchDropdownOpen(false);
+    setShowMobileSearchBar(false);
+
+    if (!kw) {
+      setActiveSearchQuery('');
+      setSearchResults(null);
+      return;
+    }
+
+    setActiveSearchQuery(kw);
+    setSearchInput(kw);
+    setIsSearching(true);
+
+    // Lưu từ khóa vào lịch sử tìm kiếm gần đây trong LocalStorage
+    try {
+      const current = JSON.parse(localStorage.getItem('talovin_recent_searches') || '[]');
+      const updated = [kw, ...current.filter(item => item.toLowerCase() !== kw.toLowerCase())].slice(0, 8);
+      localStorage.setItem('talovin_recent_searches', JSON.stringify(updated));
+      setRecentSearches(updated);
+    } catch {}
+
+    try {
+      const res = await axiosClient.get('/posts/search', { params: { keyword: kw } });
+      setSearchResults(res.data?.data || []);
+      // Tải lại danh sách hot searches để cập nhật thứ hạng từ khóa
+      fetchHotSearches();
+    } catch (err) {
+      toast.error("Không thể kết nối tìm kiếm lúc này");
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const clearSearch = () => {
+    setSearchInput('');
+    setActiveSearchQuery('');
+    setSearchResults(null);
+    setIsSearchDropdownOpen(false);
+  };
+
+  const handleRemoveRecentSearch = (termToRemove) => {
+    try {
+      const current = JSON.parse(localStorage.getItem('talovin_recent_searches') || '[]');
+      const updated = current.filter(t => t.toLowerCase() !== termToRemove.toLowerCase());
+      localStorage.setItem('talovin_recent_searches', JSON.stringify(updated));
+      setRecentSearches(updated);
+    } catch {}
+  };
+
+  const handleClearAllRecentSearches = () => {
+    localStorage.removeItem('talovin_recent_searches');
+    setRecentSearches([]);
   };
 
   // Lo-Fi Radio
@@ -1558,21 +1638,16 @@ const Home = () => {
     }
   };
 
-  // Ghi nhận truy vấn tìm kiếm cho Thuật toán Thịnh hành AI (Debounced 600ms)
-  useEffect(() => {
-    const kw = searchKeyword.trim();
-    if (kw.length < 2) return;
-    const timer = setTimeout(() => {
-      axiosClient.post(`/posts/track-search?keyword=${encodeURIComponent(kw)}`).catch(() => {});
-    }, 600);
-    return () => clearTimeout(timer);
-  }, [searchKeyword]);
-
   const safePosts = Array.isArray(posts) ? posts.filter(Boolean) : [];
   const safeRooms = Array.isArray(rooms) ? rooms.filter(Boolean) : [];
   const safeFriends = Array.isArray(friends) ? friends.filter(Boolean) : [];
 
-  const displayedPosts = safePosts
+  // Nguồn cấp bài viết: Nếu người dùng đã Enter tìm kiếm thì nạp kết quả server (Elastic-like), ngược lại dùng feed bình thường
+  const basePostsList = (activeSearchQuery && Array.isArray(searchResults)) 
+    ? searchResults 
+    : safePosts;
+
+  const displayedPosts = basePostsList
     .filter(p => {
       if (!p) return false;
       if (activeFilterTag) {
@@ -1585,20 +1660,15 @@ const Home = () => {
       if (activeTab === 'saved') {
         return Array.isArray(savedPostIds) && savedPostIds.includes(p.id);
       }
-      if (searchKeyword && searchKeyword.trim()) {
-        const kw = searchKeyword.toLowerCase();
-        const matchContent = (p.content || '').toLowerCase().includes(kw);
-        const matchAuthor = (p.authorNickname || p.authorAccount || '').toLowerCase().includes(kw);
-        const matchVibe = (p.vibe || '').toLowerCase().includes(kw);
-        return matchContent || matchAuthor || matchVibe;
-      }
       return true;
     })
     .sort((a, b) => {
       if (!a || !b) return 0;
+      // Khi đang xem kết quả tìm kiếm đã xếp hạng độ tương đồng từ server: Giữ nguyên thứ tự Elastic Relevance Score
+      if (activeSearchQuery && Array.isArray(searchResults)) {
+        return 0;
+      }
       if (activeTab === 'trending') {
-        // Thuật toán AI Tính điểm Thịnh hành (Search Frequency Dominance Algorithm):
-        // Xếp hạng dựa trên: Lượt tìm kiếm bài viết (Search hits * 10) + Thảo luận (Comments * 3) + Cảm xúc (Likes * 1)
         const scoreA = (typeof a.trendingScore === 'number') 
           ? a.trendingScore 
           : (((a.searchHits || 0) * 10.0) + ((a.commentsCount || 0) * 3.0) + ((a.likesCount || 0) * 1.0));
@@ -1827,6 +1897,14 @@ const Home = () => {
             </div>
             <div className="m-actions">
               <button 
+                type="button"
+                onClick={() => setShowMobileSearchBar(!showMobileSearchBar)}
+                className={`w-7 h-7 rounded-xl flex items-center justify-center transition-all ${showMobileSearchBar || activeSearchQuery ? 'bg-white text-black' : 'bg-[#181818] text-zinc-300'}`}
+                title="Tìm kiếm bài viết, chủ đề"
+              >
+                <Search size={14} />
+              </button>
+              <button 
                 onClick={togglePlayRadio} 
                 className={`m-radio-pill ${isPlayingRadio ? 'active' : ''}`}
               >
@@ -1839,6 +1917,41 @@ const Home = () => {
               </button>
             </div>
           </header>
+
+          {/* Thanh Search di động mở rộng (khi bấm kính lúp trên Mobile) */}
+          {showMobileSearchBar && (
+            <div className="sm:hidden px-3 py-2 bg-[#101010] border-b border-[#1e1e1e] animate-slide-up">
+              <form 
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  executeSearch(searchInput);
+                }}
+                className="flex items-center gap-2 p-1.5 rounded-xl bg-[#181818] border border-[#282828]"
+              >
+                <Search size={14} className="text-zinc-500 ml-1.5 flex-shrink-0" />
+                <input 
+                  type="text" 
+                  placeholder="Tìm kiếm nội dung, chủ đề..."
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  className="bg-transparent text-xs text-white placeholder-zinc-500 w-full focus:outline-none"
+                  enterKeyHint="search"
+                  autoFocus
+                />
+                {searchInput && (
+                  <button type="button" onClick={clearSearch} className="text-zinc-500 hover:text-white p-1">
+                    <X size={13} />
+                  </button>
+                )}
+                <button 
+                  type="submit"
+                  className="px-3 py-1 rounded-lg bg-white text-black text-xs font-semibold flex-shrink-0"
+                >
+                  Tìm
+                </button>
+              </form>
+            </div>
+          )}
 
           {/* Thanh Tab điều hướng Sảnh (Đồng bộ, tối giản cho cả PC & Mobile - Dùng Icon có màu sắc dịu nhẹ) */}
           <div className="stream-header">
@@ -2496,7 +2609,37 @@ const Home = () => {
           {/* ============================================================== */}
           {(activeTab === 'feed' || activeTab === 'trending' || activeTab === 'saved') && (
             <div className="posts-stream-container">
-              {loadingPosts ? (
+              {/* BANNER KẾT QUẢ TÌM KIẾM THÔNG MINH */}
+              {activeSearchQuery && (
+                <div className="search-status-banner flex items-center justify-between p-3.5 mb-3 rounded-2xl bg-[#141414] border border-[#222222] shadow-sm animate-fade-in">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Search size={14} className="text-sky-400 flex-shrink-0" />
+                    <span className="text-xs text-zinc-300 truncate">
+                      Kết quả tìm kiếm: <strong className="text-white">"{activeSearchQuery}"</strong>
+                      <span className="text-zinc-500 font-mono text-[11px] ml-1.5">
+                        ({isSearching ? 'Đang phân tích...' : `${searchResults?.length || 0} bài viết`})
+                      </span>
+                    </span>
+                  </div>
+                  <button 
+                    type="button" 
+                    onClick={clearSearch}
+                    className="flex-shrink-0 text-xs text-zinc-400 hover:text-white flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#1c1c1c] hover:bg-[#252525] border border-[#2e2e2e] transition-all"
+                  >
+                    <X size={12} />
+                    <span>Đặt lại</span>
+                  </button>
+                </div>
+              )}
+
+              {/* TRẠNG THÁI ĐANG TÌM KIẾM */}
+              {isSearching ? (
+                <div className="py-14 text-center text-zinc-400 font-mono">
+                  <Loader2 size={24} className="animate-spin text-sky-400 mx-auto mb-2.5" />
+                  <p className="text-xs text-zinc-300">Đang tìm kiếm & phân tích chủ đề liên quan...</p>
+                  <p className="text-[11px] text-zinc-600 mt-1">Áp dụng thuật toán đối soát ngữ nghĩa & xếp hạng tương tác</p>
+                </div>
+              ) : loadingPosts ? (
                 <div className="feed-status-box font-mono">
                   <div className="feed-spinner"></div>
                   <p>Đang tải bài viết...</p>
@@ -2504,7 +2647,16 @@ const Home = () => {
               ) : displayedPosts.length === 0 ? (
                 <div className="feed-status-box">
                   <MessageSquare size={28} className="text-zinc-600 mb-2 mx-auto" />
-                  <p className="text-zinc-400 text-sm">Chưa có bài viết nào ở chế độ xem này.</p>
+                  <p className="text-zinc-400 text-sm">{activeSearchQuery ? `Không tìm thấy bài viết nào cho "${activeSearchQuery}".` : 'Chưa có bài viết nào ở chế độ xem này.'}</p>
+                  {activeSearchQuery && (
+                    <button 
+                      type="button" 
+                      onClick={clearSearch} 
+                      className="mt-3 px-3.5 py-1.5 rounded-xl bg-[#1c1c1c] hover:bg-[#252525] text-xs text-zinc-300 border border-[#2e2e2e] hover:text-white transition-colors"
+                    >
+                      Quay lại dòng thời gian
+                    </button>
+                  )}
                 </div>
               ) : (
                 displayedPosts.map((post) => {
@@ -3293,17 +3445,119 @@ const Home = () => {
         {/* ============================================================== */}
         <aside className="widgets-sidebar">
           
-          {/* Ô Tìm Kiếm Gọn Gàng */}
-          <div className="search-input-wrap">
-            <Search size={14} strokeWidth={1.5} className="search-icon-muted" />
-            <input 
-              type="text" 
-              placeholder="Tìm kiếm nội dung, chủ đề..."
-              value={searchKeyword}
-              onChange={handleSearch}
-            />
-            {searchKeyword && (
-              <button onClick={() => setSearchKeyword('')} className="btn-clear-kw"><X size={12} /></button>
+          {/* Ô Tìm Kiếm Gọn Gàng (Chỉ tìm khi Enter / Bấm Icon / Mobile Go - Có Dropdown Lịch Sử & Xu Hướng Hot) */}
+          <div className="search-section-container relative">
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault();
+                executeSearch(searchInput);
+              }}
+              className="search-input-wrap relative flex items-center"
+            >
+              <button 
+                type="submit" 
+                className="search-icon-btn p-1 text-zinc-500 hover:text-white transition-colors cursor-pointer"
+                title="Bấm để tìm kiếm"
+              >
+                <Search size={14} strokeWidth={1.5} className={isSearching ? "animate-spin text-sky-400" : "search-icon-muted"} />
+              </button>
+              <input 
+                type="text" 
+                placeholder="Tìm kiếm nội dung, chủ đề..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                onFocus={() => setIsSearchDropdownOpen(true)}
+                enterKeyHint="search"
+              />
+              {searchInput && (
+                <button 
+                  type="button" 
+                  onClick={clearSearch} 
+                  className="btn-clear-kw"
+                  title="Xóa tìm kiếm"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </form>
+
+            {/* POPUP GỢI Ý: TÌM KIẾM GẦN ĐÂY & XU HƯỚNG TÌM KIẾM HOT */}
+            {isSearchDropdownOpen && (
+              <>
+                <div 
+                  className="fixed inset-0 z-40" 
+                  onClick={() => setIsSearchDropdownOpen(false)} 
+                />
+                <div className="absolute top-[calc(100%+8px)] left-0 right-0 z-50 p-3.5 rounded-2xl bg-[#141414] border border-[#222222] shadow-2xl space-y-3 animate-fade-in">
+                  {/* Mục 1: Tìm kiếm gần đây */}
+                  {recentSearches.length > 0 && (
+                    <div>
+                      <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-[#1e1e1e]">
+                        <span className="text-[11px] font-semibold text-zinc-400 flex items-center gap-1.5">
+                          <Clock size={12} className="text-zinc-500" /> Tìm kiếm gần đây
+                        </span>
+                        <button 
+                          type="button" 
+                          onClick={handleClearAllRecentSearches}
+                          className="text-[10px] text-zinc-500 hover:text-rose-400 transition-colors font-mono"
+                        >
+                          Xóa hết
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {recentSearches.map((term, idx) => (
+                          <div 
+                            key={`recent-${idx}`}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#1a1a1a] hover:bg-[#222222] text-zinc-300 text-xs border border-[#262626] transition-all cursor-pointer group"
+                            onClick={() => executeSearch(term)}
+                          >
+                            <span className="truncate max-w-[130px]">{term}</span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemoveRecentSearch(term);
+                              }}
+                              className="text-zinc-600 hover:text-rose-400 p-0.5 rounded transition-colors"
+                              title="Xóa mục này"
+                            >
+                              <X size={10} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Mục 2: Xu hướng tìm kiếm Hot */}
+                  <div>
+                    <div className="flex items-center gap-1.5 pb-1.5 mb-1.5 border-b border-[#1e1e1e]">
+                      <Flame size={12} className="text-amber-400" />
+                      <span className="text-[11px] font-semibold text-zinc-400">Xu hướng tìm kiếm (Hot)</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {hotSearches.slice(0, 8).map((hotItem, idx) => {
+                        const termStr = typeof hotItem === 'string' ? hotItem : (hotItem.term || hotItem.keyword);
+                        const countStr = typeof hotItem === 'object' && hotItem.count ? `${hotItem.count}` : null;
+                        return (
+                          <button
+                            key={`hot-${idx}`}
+                            type="button"
+                            onClick={() => executeSearch(termStr)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#181818] hover:bg-[#222222] text-zinc-200 text-xs border border-[#2a2a2a] hover:border-[#383838] transition-all active:scale-95"
+                          >
+                            <span className="text-amber-400 text-[10px]">#{idx + 1}</span>
+                            <span>{termStr}</span>
+                            {countStr && (
+                              <span className="text-[9.5px] font-mono text-zinc-500 ml-0.5">({countStr})</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </>
             )}
           </div>
 
@@ -5981,6 +6235,15 @@ const Home = () => {
           border-color: #475569;
         }
         .search-icon-muted { color: #64748b; }
+        .search-icon-btn {
+          background: transparent;
+          border: none;
+          padding: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+        }
         .search-input-wrap input {
           flex: 1;
           background: transparent;

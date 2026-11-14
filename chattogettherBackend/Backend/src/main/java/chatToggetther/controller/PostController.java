@@ -147,6 +147,11 @@ public class PostController {
         return ResponseEntity.ok(this.postService.searchPosts(token, keyword));
     }
 
+    @GetMapping("/hot-searches")
+    public ResponseEntity<ResponseData<List<java.util.Map<String, Object>>>> getHotSearches() {
+        return ResponseEntity.ok(this.postService.getHotSearches());
+    }
+
     @GetMapping("/trending")
     public ResponseEntity<ResponseData<List<PostDTO>>> getTrendingPosts(JwtAuthenticationToken token) {
         return ResponseEntity.ok(this.postService.getTrendingPosts(token));
