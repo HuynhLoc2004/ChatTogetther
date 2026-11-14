@@ -54,6 +54,23 @@ public class UserEntity {
     @Column(name = "permissions_user", nullable = false, columnDefinition = "TEXT[]")
     @JdbcTypeCode(SqlTypes.ARRAY)
     private List<String> permissions = new ArrayList<>();
+
+    @Column(name = "personal_frequency")
+    private Double personalFrequency;
+
+    @Column(name = "favorite_music_id")
+    private Long favoriteMusicId;
+
+    @Column(name = "match_intent_code", columnDefinition = "TEXT")
+    private String matchIntentCode;
+
+    @PrePersist
+    public void prePersistFrequency() {
+        if (this.personalFrequency == null) {
+            this.personalFrequency = Math.round((88.0 + Math.random() * 20.0) * 10.0) / 10.0;
+        }
+    }
+
     @OneToOne(mappedBy = "userEntity" , fetch = FetchType.LAZY , cascade =  CascadeType.ALL)
     private UserRoomEntity userRoomEntity;
     @OneToMany(fetch = FetchType.LAZY , mappedBy = "userEntity")

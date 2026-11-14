@@ -24,6 +24,19 @@ public class UserController {
         return ResponseEntity.ok(this.userService.getActiveRoom(jwtAuthenticationToken));
     }
 
+    @GetMapping("/me")
+    public ResponseEntity<ResponseData<UserDTO>> getMe(JwtAuthenticationToken jwtAuthenticationToken) {
+        return ResponseEntity.ok(this.userService.getUserProfile(jwtAuthenticationToken, null));
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<ResponseData<UserDTO>> getUserById(
+            JwtAuthenticationToken jwtAuthenticationToken,
+            @PathVariable("id") Long id
+    ) {
+        return ResponseEntity.ok(this.userService.getUserProfile(jwtAuthenticationToken, id));
+    }
+
     @GetMapping("/profile")
     public ResponseEntity<ResponseData<UserDTO>> getProfile(
             JwtAuthenticationToken jwtAuthenticationToken,

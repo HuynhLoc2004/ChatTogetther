@@ -31,4 +31,9 @@ public class UserDTO {
     private Integer level;
     private Integer streakDays;
     private Boolean isVerified;
+
+    // Tần số cá nhân FM & Gu âm nhạc
+    private Double personalFrequency;
+    private Long favoriteMusicId;
+    private String matchIntentCode;
 }

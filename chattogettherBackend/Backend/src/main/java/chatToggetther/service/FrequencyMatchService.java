@@ -46,6 +46,7 @@ public class FrequencyMatchService {
         public String account;
         public String nickname;
         public String avatar;
+        public String bio;
         public String displayNameMasked;
         public Double frequency;
         public String audioUrl;
@@ -54,13 +55,14 @@ public class FrequencyMatchService {
         public String genreTag;
         public long broadcastAt;
 
-        public StationRecord(Long userId, String account, String nickname, String avatar,
+        public StationRecord(Long userId, String account, String nickname, String avatar, String bio,
                              String displayNameMasked, Double frequency, String audioUrl,
                              String intentCode, String intentTitle, String genreTag) {
             this.userId = userId;
             this.account = account;
             this.nickname = nickname;
             this.avatar = avatar;
+            this.bio = bio;
             this.displayNameMasked = displayNameMasked;
             this.frequency = frequency;
             this.audioUrl = audioUrl;
@@ -136,6 +138,10 @@ public class FrequencyMatchService {
      * 2. Bắt đầu phát sóng (Broadcast FM): upload giọng nói, cấp phát tần số riêng, đăng ký trạm
      */
     public ResponseData<BroadcastStationDTO> broadcast(JwtAuthenticationToken token, String intentCode, MultipartFile audioSample) {
+        return broadcast(token, intentCode, audioSample, null);
+    }
+
+    public ResponseData<BroadcastStationDTO> broadcast(JwtAuthenticationToken token, String intentCode, MultipartFile audioSample, Double customFrequency) {
         Long currentUserId = SecurityUtils.extractUserId(token);
         if (currentUserId == null) {
             throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
@@ -145,23 +151,36 @@ public class FrequencyMatchService {
                 new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "Người dùng không tồn tại", 404)
         );
 
-        if (intentCode == null || intentCode.trim().isEmpty()) {
-            throw new AppException(400, "Mục đích kết nối (intentCode) không được để trống", 400);
+        String effectiveIntentCode = intentCode;
+        if (effectiveIntentCode == null || effectiveIntentCode.trim().isEmpty()) {
+            effectiveIntentCode = user.getMatchIntentCode() != null ? user.getMatchIntentCode() : "NIGHT_OWL";
         }
 
-        MatchIntentEntity intent = this.matchIntentRepository.findByCode(intentCode.trim().toUpperCase()).orElseThrow(() ->
-                new AppException(404, "Không tìm thấy băng tần cho mục đích: " + intentCode, 404)
-        );
+        MatchIntentEntity intent = this.matchIntentRepository.findByCode(effectiveIntentCode.trim().toUpperCase())
+                .orElseGet(() -> this.matchIntentRepository.findAll().stream().findFirst().orElse(null));
 
-        if (!Boolean.TRUE.equals(intent.getIsActive())) {
-            throw new AppException(400, "Băng tần này hiện đang tạm dừng hoạt động", 400);
+        if (intent == null) {
+            throw new AppException(404, "Không tìm thấy băng tần phù hợp", 404);
         }
 
         // 1. Lưu trữ đoạn ghi âm 3-5 giây thông qua MediaStorageService (không lưu Base64 trong RAM)
         String audioUrl = this.mediaStorageService.storeAudioSample(audioSample, currentUserId);
 
-        // 2. Thuật toán cấp phát tần số ngẫu nhiên không trùng lặp (cách các trạm khác ít nhất 0.8 MHz)
-        Double allocatedFrequency = allocateUniqueFrequency(intent.getFreqStart(), intent.getFreqEnd(), intent.getCode(), currentUserId);
+        // 2. Tần số phát sóng: ưu tiên tần số custom hoặc personalFrequency của user
+        Double allocatedFrequency;
+        if (customFrequency != null) {
+            double clamped = Math.max(88.0, Math.min(108.0, customFrequency));
+            allocatedFrequency = Math.round(clamped * 10.0) / 10.0;
+        } else if (user.getPersonalFrequency() != null) {
+            allocatedFrequency = user.getPersonalFrequency();
+        } else {
+            allocatedFrequency = allocateUniqueFrequency(intent.getFreqStart(), intent.getFreqEnd(), intent.getCode(), currentUserId);
+        }
+
+        if (user.getPersonalFrequency() == null || !user.getPersonalFrequency().equals(allocatedFrequency)) {
+            user.setPersonalFrequency(allocatedFrequency);
+            this.userRepository.save(user);
+        }
 
         // 3. Ẩn danh tên hiển thị để tạo cảm giác bí ẩn cho trạm radio
         String rawName = (user.getNickname() != null && !user.getNickname().isEmpty()) ? user.getNickname() : user.getAccount();
@@ -173,6 +192,7 @@ public class FrequencyMatchService {
                 user.getAccount(),
                 user.getNickname(),
                 user.getAvatar(),
+                user.getBio(),
                 maskedName,
                 allocatedFrequency,
                 audioUrl,
@@ -460,6 +480,10 @@ public class FrequencyMatchService {
     private BroadcastStationDTO mapToStationDTO(StationRecord record) {
         return BroadcastStationDTO.builder()
                 .userId(record.userId)
+                .username(record.account)
+                .displayName(record.nickname != null && !record.nickname.isEmpty() ? record.nickname : record.account)
+                .avatarUrl(record.avatar)
+                .bio(record.bio)
                 .displayNameMasked(record.displayNameMasked)
                 .frequency(record.frequency)
                 .audioUrl(record.audioUrl)
@@ -468,5 +492,20 @@ public class FrequencyMatchService {
                 .genreTag(record.genreTag)
                 .broadcastAt(record.broadcastAt)
                 .build();
+    }
+
+    /**
+     * Lấy toàn bộ trạm phát sóng đang hoạt động (loại trừ chính mình nếu đang login)
+     */
+    public ResponseData<List<BroadcastStationDTO>> getAllActiveStations(JwtAuthenticationToken token) {
+        Long currentUserId = SecurityUtils.extractUserId(token);
+        long now = System.currentTimeMillis();
+        List<BroadcastStationDTO> list = ACTIVE_STATIONS.values().stream()
+                .filter(s -> (now - s.broadcastAt) <= STATION_TTL_MS)
+                .filter(s -> currentUserId == null || !s.userId.equals(currentUserId))
+                .sorted(Comparator.comparingDouble(s -> s.frequency))
+                .map(this::mapToStationDTO)
+                .collect(Collectors.toList());
+        return new ResponseData<>(200, "Danh sách trạm phát sóng trực tuyến", list);
     }
 }

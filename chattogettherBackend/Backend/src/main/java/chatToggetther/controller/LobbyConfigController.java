@@ -45,6 +45,7 @@ public class LobbyConfigController {
         Map<String, Object> data = new HashMap<>();
         data.put("intents", intents);
         data.put("tracks", tracks);
+        data.put("musicTracks", tracks);
         data.put("systemConfigs", configs);
 
         return ResponseEntity.ok(new ResponseData<>(200, "Lấy cấu hình sảnh trực tuyến thành công!", data));

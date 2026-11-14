@@ -40,15 +40,26 @@ public class FrequencyMatchController {
     }
 
     /**
-     * Mở sóng phát thanh FM cá nhân: nhận intentCode và đoạn ghi âm audioSample (3-5s)
+     * Lấy danh sách các trạm sóng FM trực tuyến (loại trừ chính user hiện tại)
+     */
+    @GetMapping("/stations")
+    public ResponseEntity<ResponseData<List<BroadcastStationDTO>>> getStations(JwtAuthenticationToken token) {
+        return ResponseEntity.ok(this.frequencyMatchService.getAllActiveStations(token));
+    }
+
+    /**
+     * Mở sóng phát thanh FM cá nhân: nhận audio, intentCode và frequency (hoặc dùng personalFrequency)
      */
     @PostMapping(value = "/broadcast", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ResponseData<BroadcastStationDTO>> broadcastStation(
             JwtAuthenticationToken token,
-            @RequestParam("intentCode") String intentCode,
-            @RequestParam("audioSample") MultipartFile audioSample
+            @RequestParam(value = "intentCode", required = false) String intentCode,
+            @RequestParam(value = "audioSample", required = false) MultipartFile audioSample,
+            @RequestParam(value = "audio", required = false) MultipartFile audio,
+            @RequestParam(value = "frequency", required = false) Double frequency
     ) {
-        return ResponseEntity.ok(this.frequencyMatchService.broadcast(token, intentCode, audioSample));
+        MultipartFile effectiveAudio = audioSample != null ? audioSample : audio;
+        return ResponseEntity.ok(this.frequencyMatchService.broadcast(token, intentCode, effectiveAudio, frequency));
     }
 
     /**

@@ -2,9 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Headphones, Laptop, MessageCircle, Sparkles, Radio, Mic, MicOff, 
   Volume2, VolumeX, Play, Pause, RefreshCw, PhoneCall, ArrowLeft, 
-  X, Check, AlertCircle, Signal, Disc3, ShieldCheck
+  X, Check, AlertCircle, Signal, Disc3, ShieldCheck, ChevronLeft, ChevronRight, Square
 } from 'lucide-react';
-import { UserAvatar } from '../pages/Home';
 import axiosClient, { BACKEND_URL } from '../api/axiosClient';
 import toast from 'react-hot-toast';
 import SockJS from 'sockjs-client';
@@ -27,192 +26,326 @@ export const ResonanceMatchModal = ({
   currentUserName,
   navigate
 }) => {
-  // Screen: 'select' (Màn 1) | 'broadcast' (Màn 2) | 'scan' (Màn 3)
-  const [screen, setScreen] = useState('select');
-
-  // Config từ backend GET /api/match/config
+  // Dữ liệu từ Server
+  const [stations, setStations] = useState([]);
   const [intents, setIntents] = useState([]);
-  const [audioChannels, setAudioChannels] = useState([]);
-  const [loadingConfig, setLoadingConfig] = useState(true);
-  const [selectedIntent, setSelectedIntent] = useState(null);
+  const [musicTracks, setMusicTracks] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [userPersonalFrequency, setUserPersonalFrequency] = useState(96.4);
 
-  // Màn 2: Broadcast State
+  // Trạng thái Tần số FM hiện tại (88.0 - 108.0 MHz)
+  const [frequency, setFrequency] = useState(96.4);
+  const [selectedIntentFilter, setSelectedIntentFilter] = useState('ALL');
+  const [isMuted, setIsMuted] = useState(false);
+  const [isLocking, setIsLocking] = useState(false);
+
+  // Trạng thái Phát sóng cá nhân (Broadcast 5s)
+  const [showBroadcastDrawer, setShowBroadcastDrawer] = useState(false);
+  const [isBroadcasting, setIsBroadcasting] = useState(false);
+  const [broadcastInfo, setBroadcastInfo] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordProgress, setRecordProgress] = useState(0);
   const [recordedBlob, setRecordedBlob] = useState(null);
   const [audioPreviewUrl, setAudioPreviewUrl] = useState(null);
   const [isPlayingPreview, setIsPlayingPreview] = useState(false);
-  const [bioInput, setBioInput] = useState('');
-  const [musicTasteInput, setMusicTasteInput] = useState('');
-  const [isBroadcasting, setIsBroadcasting] = useState(false);
-  const [broadcastInfo, setBroadcastInfo] = useState(null); // { frequency, intentCode, ... }
+  const [broadcastIntentCode, setBroadcastIntentCode] = useState('DEEP_TALK');
+  const [broadcastFreqInput, setBroadcastFreqInput] = useState(96.4);
   const [isSubmittingBroadcast, setIsSubmittingBroadcast] = useState(false);
 
-  // Màn 3: Scanner State
-  const [stations, setStations] = useState([]);
-  const [loadingScan, setLoadingScan] = useState(false);
-  const [currentFrequency, setCurrentFrequency] = useState(88.0);
-  const [activeStation, setActiveStation] = useState(null);
-  const [seenUserIds, setSeenUserIds] = useState(new Set());
-  const [isLocking, setIsLocking] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-
-  // Refs cho Audio & Recording
+  // Audio References
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const recordIntervalRef = useRef(null);
   const previewAudioRef = useRef(null);
   const stationAudioRef = useRef(null);
 
-  // Web Audio API Static Noise
+  // Web Audio API White/Pink Noise Radio Static
   const audioContextRef = useRef(null);
-  const noiseNodeRef = useRef(null);
-  const noiseGainNodeRef = useRef(null);
-  const isAudioInitializedRef = useRef(false);
+  const noiseSourceRef = useRef(null);
+  const noiseGainRef = useRef(null);
+  const isAudioReadyRef = useRef(false);
 
-  // Stomp Ref cho Broadcast Listener
+  // Fetch guard ref (ngăn chặn vòng lặp gọi API vô tận)
+  const hasFetchedRef = useRef(false);
   const stompClientRef = useRef(null);
-  const hasLoadedConfigRef = useRef(false);
 
-  // 1. Tải cấu hình Băng tần & Kênh nhạc từ Backend đúng 1 lần duy nhất
-  const loadConfig = useCallback(async () => {
+  // Thước đo vạch vĩ mô
+  const rulerRef = useRef(null);
+  const isDraggingRulerRef = useRef(false);
+  const dragStartXRef = useRef(0);
+  const dragStartFreqRef = useRef(96.4);
+
+  // 1. Tải dữ liệu trạm sóng & cấu hình song song đúng 1 lần khi mở Modal
+  const fetchData = useCallback(async () => {
     try {
-      setLoadingConfig(true);
-      const res = await axiosClient.get('/match/config');
-      if (res.data) {
-        const fetchedIntents = res.data.intents || [];
-        const fetchedChannels = res.data.channels || [];
-        setIntents(fetchedIntents);
-        setAudioChannels(fetchedChannels);
-        if (fetchedIntents.length > 0) {
-          setSelectedIntent(fetchedIntents[0]);
-          setCurrentFrequency(fetchedIntents[0].freqStart || 88.0);
+      setIsLoading(true);
+      const [stationsRes, configRes, meRes] = await Promise.allSettled([
+        axiosClient.get('/match/stations'),
+        axiosClient.get('/public/lobby-config'),
+        axiosClient.get('/users/profile')
+      ]);
+
+      // Nạp trạm sóng online
+      if (stationsRes.status === 'fulfilled' && stationsRes.value?.data) {
+        const raw = stationsRes.value.data;
+        const list = Array.isArray(raw.data) ? raw.data : (Array.isArray(raw) ? raw : []);
+        setStations(list);
+      } else {
+        setStations([]);
+      }
+
+      // Nạp danh mục Băng tần & Kênh nhạc
+      if (configRes.status === 'fulfilled' && configRes.value?.data?.data) {
+        const cfg = configRes.value.data.data;
+        setIntents(cfg.intents || []);
+        setMusicTracks(cfg.tracks || cfg.musicTracks || []);
+        if (cfg.intents && cfg.intents.length > 0) {
+          setBroadcastIntentCode(cfg.intents[0].code);
+        }
+      }
+
+      // Nạp tần số cá nhân của user
+      if (meRes.status === 'fulfilled' && meRes.value?.data?.data) {
+        const me = meRes.value.data.data;
+        if (me.personalFrequency) {
+          const pf = Number(me.personalFrequency);
+          setUserPersonalFrequency(pf);
+          setFrequency(pf);
+          setBroadcastFreqInput(pf);
+        }
+        if (me.matchIntentCode) {
+          setBroadcastIntentCode(me.matchIntentCode);
         }
       }
     } catch (err) {
-      console.warn("Lỗi tải cấu hình tần số:", err);
-      // Fallback an toàn nếu chưa có cấu hình từ Admin
-      const fallback = [
-        { code: 'CHILL_MUSIC', title: 'Nghe nhạc & Chill', subtitle: 'Thưởng thức Lo-Fi, xả stress', iconName: 'Headphones', freqStart: 88.0, freqEnd: 92.9 },
-        { code: 'DEADLINE_SPRINT', title: 'Cùng chạy deadline', subtitle: 'Co-working tập trung, học tập', iconName: 'Laptop', freqStart: 93.0, freqEnd: 97.9 },
-        { code: 'DEEP_TALK', title: 'Tâm sự đêm muộn', subtitle: 'Trò chuyện cởi mở, lắng nghe chân thành', iconName: 'MessageCircle', freqStart: 98.0, freqEnd: 102.9 },
-        { code: 'FREE_CONNECT', title: 'Kết nối tự do', subtitle: 'Gặp gỡ ngẫu nhiên người có chung năng lượng', iconName: 'Sparkles', freqStart: 103.0, freqEnd: 108.0 }
-      ];
-      setIntents(fallback);
-      setSelectedIntent(fallback[0]);
-      setCurrentFrequency(fallback[0].freqStart);
+      console.warn("Lỗi tải dữ liệu đài Radio FM:", err);
     } finally {
-      setLoadingConfig(false);
+      setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    if (!isOpen) {
-      hasLoadedConfigRef.current = false;
-      return;
-    }
-    if (hasLoadedConfigRef.current) return;
-    hasLoadedConfigRef.current = true;
-
-    // Safety timeout tối đa 2.5s luôn giải phóng loading để chống treo/khóa giao diện
-    const safetyTimer = setTimeout(() => {
-      setLoadingConfig(false);
-    }, 2500);
-
-    loadConfig().finally(() => {
-      clearTimeout(safetyTimer);
-      setLoadingConfig(false);
-    });
-  }, [isOpen, loadConfig]);
-
-  // Khởi tạo Web Audio Noise Generator (Pink / White noise nhẹ)
-  const initWebAudioNoise = () => {
-    if (isAudioInitializedRef.current && audioContextRef.current) {
-      if (audioContextRef.current.state === 'suspended') {
-        audioContextRef.current.resume();
+    if (isOpen) {
+      if (!hasFetchedRef.current) {
+        hasFetchedRef.current = true;
+        fetchData();
+        initWebAudioNoise();
       }
-      return;
+    } else {
+      hasFetchedRef.current = false;
+      stopWebAudioNoise();
+      if (stationAudioRef.current) {
+        stationAudioRef.current.pause();
+      }
     }
-    try {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-      audioContextRef.current = ctx;
+  }, [isOpen, fetchData]);
 
-      // Tạo White Noise Buffer (2 giây lặp)
+  // Phím ESC đóng modal & Phím Mũi tên trái/phải tinh chỉnh tần số
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        handleModalClose();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        setFrequency(prev => Math.max(88.0, Number((prev - 0.1).toFixed(1))));
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        setFrequency(prev => Math.min(108.0, Number((prev + 0.1).toFixed(1))));
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
+
+  // 2. Khởi tạo Web Audio API giả lập tiếng rè Radio tĩnh điện
+  const initWebAudioNoise = () => {
+    try {
+      if (!audioContextRef.current) {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        audioContextRef.current = new AudioCtx();
+      }
+
+      const ctx = audioContextRef.current;
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+
+      if (noiseSourceRef.current) {
+        try { noiseSourceRef.current.stop(); } catch (e) {}
+      }
+
+      // Tạo buffer 2 giây tiếng rè tĩnh điện
       const bufferSize = ctx.sampleRate * 2;
       const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
       const output = noiseBuffer.getChannelData(0);
-      let b0 = 0, b1 = 0, b2 = 0; // Filter mô phỏng Pink Noise dịu hơn
       for (let i = 0; i < bufferSize; i++) {
-        const white = Math.random() * 2 - 1;
-        b0 = 0.99886 * b0 + white * 0.0555179;
-        b1 = 0.99332 * b1 + white * 0.0750759;
-        b2 = 0.96900 * b2 + white * 0.1538520;
-        output[i] = (b0 + b1 + b2 + white * 0.5362) * 0.08;
+        output[i] = (Math.random() * 2 - 1) * 0.12;
       }
 
-      const whiteNoiseSource = ctx.createBufferSource();
-      whiteNoiseSource.buffer = noiseBuffer;
-      whiteNoiseSource.loop = true;
+      const whiteNoise = ctx.createBufferSource();
+      whiteNoise.buffer = noiseBuffer;
+      whiteNoise.loop = true;
+
+      // Bộ lọc Low-Pass 2200Hz để âm rè ấm áp, dịu tai (như đài radio bán dẫn xưa)
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(2200, ctx.currentTime);
+      filter.Q.setValueAtTime(1.2, ctx.currentTime);
 
       const gainNode = ctx.createGain();
-      gainNode.gain.setValueAtTime(0.025, ctx.currentTime);
+      gainNode.gain.setValueAtTime(isMuted ? 0 : 0.018, ctx.currentTime);
 
-      whiteNoiseSource.connect(gainNode);
+      whiteNoise.connect(filter);
+      filter.connect(gainNode);
       gainNode.connect(ctx.destination);
-      whiteNoiseSource.start(0);
 
-      noiseNodeRef.current = whiteNoiseSource;
-      noiseGainNodeRef.current = gainNode;
-      isAudioInitializedRef.current = true;
-    } catch (e) {
-      console.warn("Web Audio API không được hỗ trợ hoặc bị chặn:", e);
+      whiteNoise.start();
+      noiseSourceRef.current = whiteNoise;
+      noiseGainRef.current = gainNode;
+      isAudioReadyRef.current = true;
+    } catch (err) {
+      console.warn("Web Audio API không được hỗ trợ hoặc bị chặn autoplay:", err);
     }
   };
 
   const stopWebAudioNoise = () => {
-    if (noiseGainNodeRef.current && audioContextRef.current) {
-      try {
-        noiseGainNodeRef.current.gain.setValueAtTime(0, audioContextRef.current.currentTime);
-      } catch (e) {}
+    if (noiseSourceRef.current) {
+      try { noiseSourceRef.current.stop(); } catch (e) {}
+      noiseSourceRef.current = null;
     }
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      try { audioContextRef.current.suspend(); } catch (e) {}
+    }
+    isAudioReadyRef.current = false;
   };
 
-  // Reset và dọn dẹp khi đóng modal
-  const handleModalClose = () => {
-    // Nếu đang phát sóng, hủy broadcast trên server
-    if (isBroadcasting) {
-      axiosClient.delete('/match/broadcast').catch(() => {});
+  // 3. Tương tác dò sóng: kiểm tra tần số khớp trạm online trong khoảng ±0.1 MHz
+  const matchedStation = stations.find(s => {
+    if (!s || s.frequency == null) return false;
+    const diff = Math.abs(Number(s.frequency) - frequency);
+    return diff <= 0.12;
+  });
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    if (matchedStation) {
+      // Khi kim chạm đúng trạm: ngắt tiếng rè, tự động phát audio của trạm đó
+      if (noiseGainRef.current && audioContextRef.current) {
+        noiseGainRef.current.gain.setTargetAtTime(0, audioContextRef.current.currentTime, 0.05);
+      }
+
+      if (stationAudioRef.current && matchedStation.audioUrl) {
+        const fullUrl = matchedStation.audioUrl.startsWith('http')
+          ? matchedStation.audioUrl
+          : `${BACKEND_URL || ''}${matchedStation.audioUrl}`;
+
+        if (stationAudioRef.current.src !== fullUrl) {
+          stationAudioRef.current.src = fullUrl;
+          stationAudioRef.current.volume = isMuted ? 0 : 1;
+          stationAudioRef.current.play().catch(() => {});
+        }
+      }
+    } else {
+      // Khi kim ở tần số trống: trả lại tiếng rè FM nhẹ nhàng
+      if (noiseGainRef.current && audioContextRef.current) {
+        const targetVol = isMuted ? 0 : 0.018;
+        noiseGainRef.current.gain.setTargetAtTime(targetVol, audioContextRef.current.currentTime, 0.08);
+      }
+
+      if (stationAudioRef.current) {
+        stationAudioRef.current.pause();
+      }
     }
-    // Dừng âm thanh & noise
-    stopWebAudioNoise();
-    if (previewAudioRef.current) {
-      previewAudioRef.current.pause();
+  }, [frequency, matchedStation, isOpen, isMuted]);
+
+  // Cập nhật âm lượng khi toggle Mute
+  useEffect(() => {
+    if (noiseGainRef.current && audioContextRef.current) {
+      const vol = isMuted ? 0 : (matchedStation ? 0 : 0.018);
+      noiseGainRef.current.gain.setValueAtTime(vol, audioContextRef.current.currentTime);
     }
     if (stationAudioRef.current) {
-      stationAudioRef.current.pause();
+      stationAudioRef.current.volume = isMuted ? 0 : 1;
     }
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
-    }
-    if (stompClientRef.current) {
-      try {
-        stompClientRef.current.disconnect();
-      } catch (e) {}
-    }
-    setScreen('select');
-    setIsBroadcasting(false);
-    setBroadcastInfo(null);
-    setRecordedBlob(null);
-    setAudioPreviewUrl(null);
-    onClose();
+  }, [isMuted, matchedStation]);
+
+  // 4. Kéo vuốt trên Thước chia vạch (Mouse Drag & Touch Swipe)
+  const handleRulerMouseDown = (e) => {
+    isDraggingRulerRef.current = true;
+    dragStartXRef.current = e.clientX;
+    dragStartFreqRef.current = frequency;
   };
 
-  // ==========================================
-  // LOGIC MÀN 2: THU ÂM & PHÁT SÓNG TRẠM FM
-  // ==========================================
-  const startRecording = async () => {
+  const handleRulerMouseMove = (e) => {
+    if (!isDraggingRulerRef.current) return;
+    const deltaX = dragStartXRef.current - e.clientX; // Kéo sang trái -> tăng tần số
+    const deltaFreq = (deltaX / 14) * 0.1; // Mỗi 14px tương ứng 0.1 MHz
+    const nextFreq = Math.min(108.0, Math.max(88.0, Number((dragStartFreqRef.current + deltaFreq).toFixed(1))));
+    setFrequency(nextFreq);
+  };
+
+  const handleRulerMouseUp = () => {
+    isDraggingRulerRef.current = false;
+  };
+
+  const handleRulerTouchStart = (e) => {
+    if (e.touches && e.touches[0]) {
+      isDraggingRulerRef.current = true;
+      dragStartXRef.current = e.touches[0].clientX;
+      dragStartFreqRef.current = frequency;
+    }
+  };
+
+  const handleRulerTouchMove = (e) => {
+    if (!isDraggingRulerRef.current || !e.touches || !e.touches[0]) return;
+    const deltaX = dragStartXRef.current - e.touches[0].clientX;
+    const deltaFreq = (deltaX / 14) * 0.1;
+    const nextFreq = Math.min(108.0, Math.max(88.0, Number((dragStartFreqRef.current + deltaFreq).toFixed(1))));
+    setFrequency(nextFreq);
+  };
+
+  const handleRulerTouchEnd = () => {
+    isDraggingRulerRef.current = false;
+  };
+
+  const handleRulerWheel = (e) => {
+    e.preventDefault();
+    const delta = e.deltaY < 0 ? -0.1 : 0.1;
+    setFrequency(prev => Math.min(108.0, Math.max(88.0, Number((prev + delta).toFixed(1)))));
+  };
+
+  // 5. Kết nối Call 1-1 với trạm bắt sóng được
+  const handleConnectCall = async (station) => {
+    if (!station) return;
+    try {
+      setIsLocking(true);
+      const res = await axiosClient.post('/match/lock', {
+        targetUserId: station.userId,
+        frequency: station.frequency
+      });
+
+      handleModalClose();
+      if (res.data?.data?.roomId) {
+        toast.success(`Đã kết nối tần số ${station.frequency} MHz! Đang vào phòng thoại 1-1...`);
+        navigate(`/call/room/${res.data.data.roomId}?type=audio`);
+      } else {
+        navigate(`/call/direct/${station.userId}?type=audio`);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Không thể kết nối trạm này. Đang quét lại...");
+      fetchData();
+    } finally {
+      setIsLocking(false);
+    }
+  };
+
+  // 6. Ghi âm 5s và Phát sóng cá nhân
+  const startRecording5s = async () => {
     try {
       if (audioPreviewUrl) {
         URL.revokeObjectURL(audioPreviewUrl);
@@ -250,72 +383,53 @@ export const ResonanceMatchModal = ({
       setIsRecording(true);
       setRecordProgress(0);
 
-      // Đếm ngược tối đa 5 giây (5000ms / 50 bước = 100ms)
-      let elapsedMs = 0;
+      let elapsed = 0;
       recordIntervalRef.current = setInterval(() => {
-        elapsedMs += 100;
-        setRecordProgress(Math.min(100, (elapsedMs / 5000) * 100));
-        if (elapsedMs >= 5000) {
+        elapsed += 100;
+        setRecordProgress(Math.min(100, (elapsed / 5000) * 100));
+        if (elapsed >= 5000) {
           if (recorder.state === 'recording') {
             recorder.stop();
           }
         }
       }, 100);
     } catch (err) {
-      toast.error("Không thể truy cập Microphone! Vui lòng cấp quyền ghi âm.");
-      console.error(err);
+      toast.error("Không thể mở Microphone thiết bị! Vui lòng cấp quyền.");
     }
   };
 
-  const stopRecording = () => {
+  const stopRecording5s = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.stop();
     }
   };
 
-  const togglePlayPreview = () => {
-    if (!previewAudioRef.current) return;
-    if (isPlayingPreview) {
-      previewAudioRef.current.pause();
-      setIsPlayingPreview(false);
-    } else {
-      previewAudioRef.current.play();
-      setIsPlayingPreview(true);
-    }
-  };
-
-  // Gửi phát sóng lên server
   const handlePublishBroadcast = async () => {
     if (!recordedBlob) {
-      toast.error("Vui lòng ghi âm giọng nói 5 giây trước khi phát sóng!");
-      return;
-    }
-    if (!selectedIntent) {
-      toast.error("Vui lòng chọn băng tần mục đích phát sóng!");
+      toast.error("Vui lòng ghi âm 5 giây giọng nói của bạn trước khi phát sóng!");
       return;
     }
     try {
       setIsSubmittingBroadcast(true);
       const formData = new FormData();
-      formData.append('voiceSample', recordedBlob, 'voice_sample.webm');
-      formData.append('intentCode', selectedIntent.code);
-      formData.append('bio', bioInput.trim() || 'Chào bạn, mình đang mở đài phát sóng lắng nghe!');
-      formData.append('musicTaste', musicTasteInput.trim() || 'Lo-Fi Chill & Acoustic');
+      formData.append('audioSample', recordedBlob, 'voice_signal.webm');
+      formData.append('intentCode', broadcastIntentCode || 'DEEP_TALK');
+      formData.append('frequency', broadcastFreqInput || frequency);
 
       const res = await axiosClient.post('/match/broadcast', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
-      if (res.data) {
-        setBroadcastInfo(res.data);
+      if (res.data?.data) {
+        const b = res.data.data;
+        setBroadcastInfo(b);
         setIsBroadcasting(true);
-        toast.success(`Đài phát sóng đã kích hoạt ở tần số ${res.data.frequency} MHz!`);
-
-        // Kết nối WebSocket lắng nghe có người khóa sóng để vào phòng
-        connectBroadcastWebSocket(currentUserId);
+        setShowBroadcastDrawer(false);
+        toast.success(`Đã phát sóng giọng nói lên tần số ${b.frequency} MHz!`);
+        fetchData(); // Cập nhật danh sách trạm
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || "Lỗi phát sóng đài FM!");
+      toast.error(err.response?.data?.message || "Không thể phát sóng lúc này!");
     } finally {
       setIsSubmittingBroadcast(false);
     }
@@ -324,719 +438,482 @@ export const ResonanceMatchModal = ({
   const handleStopBroadcast = async () => {
     try {
       await axiosClient.delete('/match/broadcast');
-      toast.success("Đã dừng trạm phát sóng FM.");
+      toast.success("Đã dừng trạm phát sóng FM cá nhân.");
     } catch (e) {}
     setIsBroadcasting(false);
     setBroadcastInfo(null);
-    if (stompClientRef.current) {
-      try { stompClientRef.current.disconnect(); } catch (e) {}
-    }
+    fetchData();
   };
 
-  const connectBroadcastWebSocket = (myUserId) => {
-    try {
-      const socketUrl = BACKEND_URL ? `${BACKEND_URL}/ws-gs-guide` : '/ws-gs-guide';
-      const socket = new SockJS(socketUrl);
-      const stomp = Stomp.over(socket);
-      stomp.debug = () => {};
-      stomp.connect({}, () => {
-        stomp.subscribe(`/topic/match-locked/${myUserId}`, (msg) => {
-          try {
-            const data = JSON.parse(msg.body);
-            toast.success(`Đã có thính giả bắt sóng trên tần số ${data.frequency} MHz! Đang chuyển vào phòng...`);
-            handleModalClose();
-            if (data.roomId) {
-              navigate(`/call/room/${data.roomId}?video=false`);
-            }
-          } catch (e) {
-            console.error("Lỗi parse match event:", e);
-          }
-        });
-      });
-      stompClientRef.current = stomp;
-    } catch (e) {
-      console.warn("WebSocket kết nối thất bại:", e);
+  const handleModalClose = () => {
+    stopWebAudioNoise();
+    if (stationAudioRef.current) {
+      stationAudioRef.current.pause();
     }
-  };
-
-  // ==========================================
-  // LOGIC MÀN 3: DÒ SÓNG TẦN SỐ FM (TUNER SCANNER)
-  // ==========================================
-  const handleStartScan = async (intentToScan) => {
-    const targetIntent = intentToScan || selectedIntent;
-    if (!targetIntent) return;
-    setSelectedIntent(targetIntent);
-    setScreen('scan');
-    initWebAudioNoise();
-
-    try {
-      setLoadingScan(true);
-      const res = await axiosClient.post('/match/scan', {
-        intentCode: targetIntent.code,
-        excludedUserIds: Array.from(seenUserIds)
-      });
-      const stationList = Array.isArray(res.data) ? res.data : [];
-      setStations(stationList);
-
-      // Nếu có trạm phát, đặt kim ngay gần trạm phát đầu tiên để người dùng dễ bắt sóng
-      if (stationList.length > 0) {
-        setCurrentFrequency(stationList[0].frequency);
-      } else {
-        setCurrentFrequency(targetIntent.freqStart || 88.0);
-      }
-    } catch (err) {
-      console.warn("Lỗi quét trạm FM:", err);
-      toast.error("Không thể quét dải tần lúc này.");
-    } finally {
-      setLoadingScan(false);
-    }
-  };
-
-  // Hiệu ứng dò sóng: Khi currentFrequency thay đổi, kiểm tra trạm phát gần nhất
-  useEffect(() => {
-    if (screen !== 'scan') return;
-
-    // Tìm trạm trong bán kính ±0.3 MHz
-    const match = stations.find(s => Math.abs(s.frequency - currentFrequency) <= 0.3);
-    
-    if (match) {
-      setActiveStation(match);
-      setSeenUserIds(prev => new Set(prev).add(match.userId));
-
-      // Giảm dần hoặc tắt Noise gain
-      if (noiseGainNodeRef.current && audioContextRef.current) {
-        const dist = Math.abs(match.frequency - currentFrequency);
-        // Càng gần (dist=0) noise càng về 0, dist=0.3 noise bắt đầu tăng
-        const noiseLevel = isMuted ? 0 : (dist / 0.3) * 0.015;
-        noiseGainNodeRef.current.gain.setValueAtTime(noiseLevel, audioContextRef.current.currentTime);
-      }
-
-      // Phát voice sample của trạm đó
-      if (stationAudioRef.current && match.audioUrl) {
-        const fullAudioUrl = match.audioUrl.startsWith('http') 
-          ? match.audioUrl 
-          : `${BACKEND_URL || ''}${match.audioUrl}`;
-        
-        if (stationAudioRef.current.src !== fullAudioUrl) {
-          stationAudioRef.current.src = fullAudioUrl;
-          stationAudioRef.current.volume = isMuted ? 0 : 1;
-          stationAudioRef.current.play().catch(() => {});
-        }
-      }
-    } else {
-      setActiveStation(null);
-
-      // Trả lại tiếng rè White Noise ở vùng trống
-      if (noiseGainNodeRef.current && audioContextRef.current) {
-        noiseGainNodeRef.current.gain.setValueAtTime(isMuted ? 0 : 0.025, audioContextRef.current.currentTime);
-      }
-
-      // Tắt voice trạm
-      if (stationAudioRef.current) {
-        stationAudioRef.current.pause();
-      }
-    }
-  }, [currentFrequency, stations, screen, isMuted]);
-
-  // Điều khiển phím mũi tên Trái / Phải & Enter khi đang ở Màn Dò Sóng
-  useEffect(() => {
-    if (screen !== 'scan' || !isOpen) return;
-
-    const handleKeyDown = (e) => {
-      const minFreq = selectedIntent?.freqStart || 88.0;
-      const maxFreq = selectedIntent?.freqEnd || 108.0;
-
-      if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        setCurrentFrequency(prev => Math.max(minFreq, Number((prev - 0.1).toFixed(1))));
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        setCurrentFrequency(prev => Math.min(maxFreq, Number((prev + 0.1).toFixed(1))));
-      } else if (e.key === 'Enter' && activeStation && !isLocking) {
-        e.preventDefault();
-        handleLockStation(activeStation);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [screen, isOpen, selectedIntent, activeStation, isLocking]);
-
-  // Cuộn chuột trên thước đo tần số
-  const handleWheelFrequency = (e) => {
-    e.preventDefault();
-    const minFreq = selectedIntent?.freqStart || 88.0;
-    const maxFreq = selectedIntent?.freqEnd || 108.0;
-    const delta = e.deltaY < 0 ? 0.1 : -0.1;
-    setCurrentFrequency(prev => {
-      const next = Number((prev + delta).toFixed(1));
-      return Math.min(maxFreq, Math.max(minFreq, next));
-    });
-  };
-
-  // Khóa tần số & Tạo phòng đàm thoại 1-1
-  const handleLockStation = async (station) => {
-    if (!station) return;
-    try {
-      setIsLocking(true);
-      const res = await axiosClient.post('/match/lock', {
-        targetUserId: station.userId,
-        frequency: station.frequency
-      });
-
-      if (res.data && res.data.roomId) {
-        toast.success(`Đã khóa thành công tần số ${station.frequency} MHz! Đang vào phòng thoại 1-1...`);
-        handleModalClose();
-        navigate(`/call/room/${res.data.roomId}?video=false`);
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Không thể khóa tần số này!");
-      // Quét lại trạm mới
-      handleStartScan(selectedIntent);
-    } finally {
-      setIsLocking(false);
-    }
+    setShowBroadcastDrawer(false);
+    onClose();
   };
 
   if (!isOpen) return null;
 
-  const minFreq = selectedIntent?.freqStart || 88.0;
-  const maxFreq = selectedIntent?.freqEnd || 108.0;
-  const totalTicks = Math.round((maxFreq - minFreq) * 10);
+  // Lọc danh sách trạm hiển thị theo intent nếu có
+  const filteredStations = selectedIntentFilter === 'ALL'
+    ? stations
+    : stations.filter(s => s.intentCode === selectedIntentFilter);
+
+  // Tính toán vị trí dịch chuyển của dải vạch thước (Ruler Strip)
+  // Dải tần 88.0 đến 108.0 MHz (tổng 20 MHz, mỗi 0.1 MHz là 1 tick = 14px)
+  const totalOffsetPx = (frequency - 88.0) * 140;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-fade-in font-sans">
-      {/* Audio tags ẩn để xử lý phát âm */}
-      <audio ref={previewAudioRef} onEnded={() => setIsPlayingPreview(false)} className="hidden" />
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in font-sans"
+      onClick={handleModalClose}
+    >
+      {/* Audio Element ẩn phát voice trạm bắt được */}
       <audio ref={stationAudioRef} loop className="hidden" />
+      <audio ref={previewAudioRef} onEnded={() => setIsPlayingPreview(false)} className="hidden" />
 
-      <div className="relative w-full max-w-2xl bg-[#09090b] border border-zinc-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col text-zinc-100 max-h-[92vh]">
-        
-        {/* HEADER MODAL */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800/80 bg-zinc-950/60">
-          <div className="flex items-center gap-3">
-            {screen !== 'select' && (
-              <button 
-                type="button"
-                onClick={() => {
-                  stopWebAudioNoise();
-                  if (stationAudioRef.current) stationAudioRef.current.pause();
-                  setScreen('select');
-                }}
-                className="p-1.5 -ml-1 text-zinc-400 hover:text-white rounded-xl hover:bg-zinc-800 transition-colors"
-                title="Quay lại chọn băng tần"
-              >
-                <ArrowLeft size={17} />
-              </button>
-            )}
-            <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
-              <Radio size={17} />
+      <div 
+        className="w-full max-w-xl bg-zinc-900 border border-zinc-800/90 rounded-3xl shadow-2xl overflow-hidden flex flex-col text-zinc-100 max-h-[92vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* HEADER MODAL ĐƠN SẮC DARK ZINC */}
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-zinc-800 bg-zinc-950/70">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-200">
+              <Radio size={16} />
             </div>
             <div>
-              <h3 className="font-semibold text-sm tracking-wide flex items-center gap-2">
-                Trạm Dò Sóng FM Thời Gian Thực
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                  LIVE TUNER
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-sm text-white tracking-tight">Trạm Dò Sóng FM</h3>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 border border-zinc-700">
+                  {stations.length} trạm online
                 </span>
-              </h3>
-              <p className="text-[11px] text-zinc-400">Khám phá giọng nói & tần số đồng điệu trên nền tảng Talovin</p>
+              </div>
+              <p className="text-[11px] text-zinc-400">Rà kim tần số để bắt sóng giọng nói người lạ ngẫu nhiên</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {screen === 'scan' && (
-              <button 
-                type="button"
-                onClick={() => setIsMuted(!isMuted)}
-                className={`p-2 rounded-xl border transition-colors ${
-                  isMuted 
-                    ? 'bg-rose-500/10 border-rose-500/30 text-rose-400' 
-                    : 'bg-zinc-850 border-zinc-750 text-zinc-300 hover:text-white'
-                }`}
-                title={isMuted ? "Bật âm thanh rè FM" : "Tắt âm thanh rè FM"}
-              >
-                {isMuted ? <VolumeX size={15} /> : <Volume2 size={15} />}
-              </button>
-            )}
-            <button 
-              type="button" 
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setIsMuted(!isMuted)}
+              className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+              title={isMuted ? "Bật tiếng rè radio" : "Tắt tiếng rè radio"}
+            >
+              {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+            </button>
+            <button
+              type="button"
               onClick={handleModalClose}
-              className="p-2 text-zinc-400 hover:text-white rounded-xl hover:bg-zinc-850 transition-colors"
-              title="Đóng modal"
+              className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+              title="Đóng (ESC)"
             >
               <X size={18} />
             </button>
           </div>
         </div>
 
-        {/* ============================================================== */}
-        {/* MÀN 1: CHỌN BĂNG TẦN & MỤC TIÊU PHÁT SÓNG */}
-        {/* ============================================================== */}
-        {screen === 'select' && (
-          <div className="p-6 overflow-y-auto space-y-6">
-            <div>
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-1">
-                1. Chọn dải băng tần kết nối
-              </h4>
-              <p className="text-xs text-zinc-500">Mỗi mục đích được cấp một khoảng tần số FM riêng để lọc nhiễu tự nhiên.</p>
-            </div>
+        {/* THÂN MODAL DÒ SÓNG */}
+        <div className="p-5 sm:p-6 space-y-5 overflow-y-auto custom-scrollbar">
 
-            {loadingConfig ? (
-              <div className="py-12 flex flex-col items-center justify-center text-zinc-400 gap-3">
-                <RefreshCw size={22} className="animate-spin text-emerald-400" />
-                <span className="text-xs font-mono">Đang đồng bộ dải tần phát sóng...</span>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {intents.map((intent) => {
-                  const IconComp = ICON_MAP[intent.iconName] || Radio;
-                  const isSelected = selectedIntent?.code === intent.code;
-                  return (
-                    <div 
-                      key={intent.code}
-                      onClick={() => setSelectedIntent(intent)}
-                      className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${
-                        isSelected 
-                          ? 'bg-emerald-500/10 border-emerald-500/40 shadow-sm ring-1 ring-emerald-500/30' 
-                          : 'bg-zinc-900/60 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3 mb-3">
-                        <div className={`p-2.5 rounded-xl ${
-                          isSelected ? 'bg-emerald-500/20 text-emerald-400' : 'bg-zinc-800 text-zinc-400'
-                        }`}>
-                          <IconComp size={18} />
-                        </div>
-                        <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-zinc-800/80 border border-zinc-700/60 text-zinc-300">
-                          {intent.freqStart?.toFixed(1)} - {intent.freqEnd?.toFixed(1)} MHz
-                        </span>
-                      </div>
-                      <div>
-                        <h5 className="font-semibold text-sm text-zinc-100 mb-0.5">{intent.title}</h5>
-                        <p className="text-xs text-zinc-400 line-clamp-2">{intent.subtitle}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* ACTION BUTTONS */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-              <button 
-                type="button"
-                onClick={() => handleStartScan(selectedIntent)}
-                disabled={!selectedIntent || loadingConfig}
-                className="py-3 px-4 rounded-2xl bg-zinc-100 hover:bg-white text-zinc-950 font-semibold text-sm flex items-center justify-center gap-2 transition-all shadow-md active:scale-[0.98] disabled:opacity-50"
-              >
-                <Signal size={16} />
-                <span>Dò sóng tìm người ({selectedIntent ? `${selectedIntent.freqStart?.toFixed(1)} - ${selectedIntent.freqEnd?.toFixed(1)} MHz` : '...'})</span>
-              </button>
-
-              <button 
-                type="button"
-                onClick={() => {
-                  setScreen('broadcast');
-                }}
-                disabled={!selectedIntent || loadingConfig}
-                className="py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm flex items-center justify-center gap-2 transition-all shadow-md active:scale-[0.98] disabled:opacity-50"
-              >
-                <Mic size={16} />
-                <span>Thu âm 5s & Tự phát sóng</span>
-              </button>
-            </div>
-
-            {/* KÊNH NHẠC NỀN HOẠT ĐỘNG */}
-            {audioChannels.length > 0 && (
-              <div className="pt-3 border-t border-zinc-800/80">
-                <div className="flex items-center gap-2 text-xs font-semibold text-zinc-400 mb-2">
-                  <Disc3 size={14} className="text-emerald-400 animate-spin" />
-                  <span>Kênh radio nền đang hoạt động trong sảnh:</span>
-                </div>
-                <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-1">
-                  {audioChannels.map(ch => (
-                    <span 
-                      key={ch.id} 
-                      className="px-2.5 py-1 rounded-xl bg-zinc-900 border border-zinc-800 text-[11px] font-mono text-zinc-300 flex-shrink-0 flex items-center gap-1.5"
-                    >
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                      {ch.name} <span className="text-zinc-500">({ch.genreTag})</span>
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ============================================================== */}
-        {/* MÀN 2: CHẾ ĐỘ THU ÂM & PHÁT SÓNG LÊN DẢI TẦN */}
-        {/* ============================================================== */}
-        {screen === 'broadcast' && (
-          <div className="p-6 overflow-y-auto space-y-5">
-            {!isBroadcasting ? (
-              <>
-                <div className="text-center max-w-md mx-auto space-y-1">
-                  <h4 className="font-semibold text-base text-zinc-100">
-                    Thu âm 5 giây giọng nói của bạn
-                  </h4>
-                  <p className="text-xs text-zinc-400">
-                    Hãy chào hỏi, ngân nga một câu hát hoặc chia sẻ tâm trạng để làm tín hiệu phát thanh độc bản.
-                  </p>
-                </div>
-
-                {/* VÒNG TRÒN GHI ÂM TƯƠNG TÁC */}
-                <div className="flex flex-col items-center justify-center py-6 gap-4">
-                  <div className="relative flex items-center justify-center">
-                    {/* Vòng tròn đếm ngược */}
-                    <svg className="w-32 h-32 -rotate-90">
-                      <circle
-                        cx="64"
-                        cy="64"
-                        r="58"
-                        stroke="#27272a"
-                        strokeWidth="5"
-                        fill="transparent"
-                      />
-                      <circle
-                        cx="64"
-                        cy="64"
-                        r="58"
-                        stroke="#10b981"
-                        strokeWidth="5"
-                        fill="transparent"
-                        strokeDasharray={364.4}
-                        strokeDashoffset={364.4 - (364.4 * recordProgress) / 100}
-                        strokeLinecap="round"
-                        className="transition-all duration-100"
-                      />
-                    </svg>
-
-                    <button 
-                      type="button"
-                      onClick={isRecording ? stopRecording : startRecording}
-                      className={`absolute w-24 h-24 rounded-full flex flex-col items-center justify-center transition-all shadow-lg active:scale-95 ${
-                        isRecording 
-                          ? 'bg-rose-500 text-white animate-pulse' 
-                          : 'bg-zinc-800 hover:bg-zinc-750 text-emerald-400 border border-zinc-700'
-                      }`}
-                    >
-                      {isRecording ? <MicOff size={26} /> : <Mic size={26} />}
-                      <span className="text-[10px] font-mono font-semibold mt-1">
-                        {isRecording ? 'Đang thu' : (recordedBlob ? 'Thu lại' : 'Bấm thu')}
-                      </span>
-                    </button>
-                  </div>
-
-                  <span className="text-xs font-mono text-zinc-400">
-                    {isRecording ? `00:0${Math.floor((5000 * recordProgress / 100) / 1000)} / 00:05` : (recordedBlob ? '✓ Đã thu xong 5 giây' : 'Thời lượng tối đa 5 giây')}
-                  </span>
-                </div>
-
-                {/* NÚT NGHE LẠI AUDIO ĐÃ THU */}
-                {audioPreviewUrl && (
-                  <div className="flex items-center justify-between p-3.5 rounded-2xl bg-zinc-900 border border-zinc-800 max-w-md mx-auto">
-                    <div className="flex items-center gap-3">
-                      <button 
-                        type="button"
-                        onClick={togglePlayPreview}
-                        className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center hover:bg-emerald-500/30 transition-colors"
-                      >
-                        {isPlayingPreview ? <Pause size={16} /> : <Play size={16} />}
-                      </button>
-                      <div>
-                        <span className="text-xs font-semibold text-zinc-200">Bản thu mẫu của bạn</span>
-                        <p className="text-[11px] text-zinc-500 font-mono">Định dạng Audio/Opus</p>
-                      </div>
-                    </div>
-                    <span className="text-xs font-mono text-emerald-400 flex items-center gap-1">
-                      <Check size={13} /> Sẵn sàng
-                    </span>
-                  </div>
-                )}
-
-                {/* FORM BỔ SUNG */}
-                <div className="space-y-3 max-w-md mx-auto pt-2">
-                  <div>
-                    <label className="block text-xs font-medium text-zinc-400 mb-1">
-                      Lời chào / Lời nhắn trạm phát
-                    </label>
-                    <input 
-                      type="text" 
-                      placeholder="VD: Đang nghe Lo-Fi, ghé qua đàm đạo nhé!"
-                      value={bioInput}
-                      onChange={(e) => setBioInput(e.target.value)}
-                      maxLength={120}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 focus:outline-none focus:border-emerald-500/60 placeholder:text-zinc-600"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-zinc-400 mb-1">
-                      Gu âm nhạc / Vibe hôm nay
-                    </label>
-                    <input 
-                      type="text" 
-                      placeholder="VD: Lo-Fi, Acoustic, Indie, Jazz..."
-                      value={musicTasteInput}
-                      onChange={(e) => setMusicTasteInput(e.target.value)}
-                      maxLength={60}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 focus:outline-none focus:border-emerald-500/60 placeholder:text-zinc-600"
-                    />
-                  </div>
-                </div>
-
-                {/* NÚT PHÁT SÓNG */}
-                <div className="max-w-md mx-auto pt-3">
-                  <button 
-                    type="button"
-                    onClick={handlePublishBroadcast}
-                    disabled={!recordedBlob || isSubmittingBroadcast}
-                    className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm flex items-center justify-center gap-2 transition-all shadow-lg active:scale-[0.98] disabled:opacity-50"
-                  >
-                    <Radio size={16} />
-                    <span>{isSubmittingBroadcast ? 'Đang cấp tần số...' : 'Phát sóng lên dải tần'}</span>
-                  </button>
-                </div>
-              </>
-            ) : (
-              /* TRẠM ĐANG PHÁT SÓNG TRỰC TIẾP */
-              <div className="flex flex-col items-center justify-center py-8 space-y-6 text-center max-w-md mx-auto">
-                <div className="relative flex items-center justify-center">
-                  <div className="w-28 h-28 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center animate-ping"></div>
-                  <div className="absolute w-20 h-20 rounded-full bg-emerald-500/20 border border-emerald-500/50 flex flex-col items-center justify-center text-emerald-400 shadow-xl">
-                    <Radio size={28} />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <span className="text-[11px] font-mono px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                    ĐANG PHÁT SÓNG TRỰC TIẾP
-                  </span>
-                  <h4 className="text-2xl font-bold font-mono tracking-tight text-white">
-                    {broadcastInfo?.frequency?.toFixed(1) || '94.5'} MHz
-                  </h4>
-                  <p className="text-xs text-zinc-400 max-w-sm">
-                    Tín hiệu của bạn đang được phát rộng rãi trên dải tần {selectedIntent?.title}. Khi có người dò đúng tần số này, hệ thống sẽ tự động ghép nối cuộc gọi 1-1 ngay tức thì!
-                  </p>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 text-left w-full space-y-2 text-xs">
-                  <div className="flex items-center justify-between text-zinc-400">
-                    <span>Trạm phát:</span>
-                    <strong className="text-zinc-200">{currentUserName || currentUserAccount}</strong>
-                  </div>
-                  <div className="flex items-center justify-between text-zinc-400">
-                    <span>Mục tiêu:</span>
-                    <span className="text-emerald-400 font-medium">{selectedIntent?.title}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-zinc-400">
-                    <span>Thời gian duy trì TTL:</span>
-                    <span className="font-mono text-zinc-300">15 phút</span>
-                  </div>
-                </div>
-
-                <button 
+          {/* DẢI CHIP LỌC NHANH THEO BĂNG TẦN / INTENTS */}
+          <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden py-0.5">
+            <button
+              type="button"
+              onClick={() => setSelectedIntentFilter('ALL')}
+              className={`px-3 py-1 rounded-xl text-xs font-mono whitespace-nowrap transition-all border ${
+                selectedIntentFilter === 'ALL'
+                  ? 'bg-white text-zinc-950 font-medium border-white'
+                  : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-white hover:border-zinc-700'
+              }`}
+            >
+              Tất cả (88 - 108 MHz)
+            </button>
+            {intents.map(it => {
+              const isSelected = selectedIntentFilter === it.code;
+              return (
+                <button
+                  key={it.code}
                   type="button"
-                  onClick={handleStopBroadcast}
-                  className="py-2.5 px-6 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white font-medium text-xs transition-colors border border-zinc-700/60"
+                  onClick={() => {
+                    setSelectedIntentFilter(it.code);
+                    if (it.freqStart) {
+                      setFrequency(Number(it.freqStart.toFixed(1)));
+                    }
+                  }}
+                  className={`px-3 py-1 rounded-xl text-xs font-mono whitespace-nowrap transition-all border ${
+                    isSelected
+                      ? 'bg-white text-zinc-950 font-medium border-white'
+                      : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-white hover:border-zinc-700'
+                  }`}
                 >
-                  Tắt trạm phát sóng
+                  {it.title} ({it.freqStart?.toFixed(0)}-{it.freqEnd?.toFixed(0)})
                 </button>
-              </div>
-            )}
+              );
+            })}
           </div>
-        )}
 
-        {/* ============================================================== */}
-        {/* MÀN 3: MÁY THU SÓNG FM TRỰC QUAN (TUNER SCANNER) */}
-        {/* ============================================================== */}
-        {screen === 'scan' && (
-          <div className="p-6 overflow-y-auto space-y-6">
+          {/* MẶT ĐỒNG HỒ TẦN SỐ CỠ LỚN */}
+          <div className="p-6 rounded-3xl bg-zinc-950 border border-zinc-800/90 text-center relative shadow-inner space-y-3">
             
-            {/* MÀN HÌNH TẦN SỐ ĐIỆN TỬ */}
-            <div className="p-5 rounded-2xl bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 shadow-inner flex flex-col items-center justify-center relative overflow-hidden">
-              <div className="flex items-center justify-between w-full mb-3 text-xs text-zinc-500 font-mono">
-                <span className="flex items-center gap-1.5">
-                  <span className={`w-2 h-2 rounded-full ${activeStation ? 'bg-emerald-400 animate-ping' : 'bg-zinc-600'}`}></span>
-                  {activeStation ? 'TÍN HIỆU RÕ RÀNG' : 'TIẾNG ỒN DẢI TẦN TRỐNG (STATIC NOISE)'}
+            {/* Tín hiệu bắt sóng */}
+            <div className="flex items-center justify-center">
+              {matchedStation ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-900 text-zinc-200 border border-zinc-700 text-xs font-mono shadow-sm">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                  <span>Đã bắt được sóng: <strong>{matchedStation.displayName || matchedStation.username}</strong></span>
                 </span>
-                <span>{selectedIntent?.title}</span>
-              </div>
-
-              {/* TẦN SỐ HIỂN THỊ CHÍNH */}
-              <div className="flex items-baseline gap-2 my-2">
-                <span className="text-5xl font-mono font-bold tracking-wider text-emerald-400 drop-shadow-[0_0_15px_rgba(16,185,129,0.3)]">
-                  {currentFrequency.toFixed(1)}
-                </span>
-                <span className="text-lg font-mono text-zinc-400 font-semibold">MHz</span>
-              </div>
-
-              {/* THÔNG TIN TRẠM ĐANG BẮT ĐƯỢC */}
-              {activeStation ? (
-                <div className="flex items-center gap-3 mt-3 px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 animate-fade-in">
-                  <UserAvatar avatar={activeStation.avatar} name={activeStation.displayName || activeStation.username} size={28} />
-                  <div className="text-left">
-                    <span className="text-xs font-semibold text-white block">
-                      {activeStation.displayName || activeStation.username}
-                    </span>
-                    <span className="text-[11px] text-zinc-300 line-clamp-1">
-                      "{activeStation.bio || 'Chào bạn!'}"
-                    </span>
-                  </div>
-                </div>
               ) : (
-                <p className="text-[11px] text-zinc-500 mt-2 font-mono">
-                  Kéo thước, lăn chuột hoặc dùng phím ← → để dò đài
-                </p>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-900/60 text-zinc-500 border border-zinc-800/80 text-xs font-mono">
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
+                  <span>Tần số tĩnh • Kéo kim để rà sóng</span>
+                </span>
               )}
             </div>
 
-            {/* THƯỚC ĐO TẦN SỐ FM CHUYÊN NGHIỆP */}
-            <div 
-              className="relative py-8 px-4 bg-zinc-950 rounded-2xl border border-zinc-800 select-none overflow-hidden cursor-ew-resize"
-              onWheel={handleWheelFrequency}
-            >
-              {/* ĐIỂM SÁNG EMERALD ĐÁNH DẤU TRẠM CÓ NGƯỜI PHÁT */}
-              {stations.map(st => {
-                const leftPercent = Math.max(0, Math.min(100, ((st.frequency - minFreq) / (maxFreq - minFreq)) * 100));
-                return (
-                  <div 
-                    key={st.userId}
-                    style={{ left: `${leftPercent}%` }}
-                    className="absolute top-2 -translate-x-1/2 flex flex-col items-center cursor-pointer group"
-                    onClick={() => setCurrentFrequency(st.frequency)}
-                    title={`Trạm ${st.displayName || st.username} (${st.frequency.toFixed(1)} MHz)`}
-                  >
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 ring-4 ring-emerald-500/20 group-hover:scale-125 transition-transform animate-pulse"></span>
-                    <span className="text-[9px] font-mono text-emerald-400 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {st.frequency.toFixed(1)}
-                    </span>
-                  </div>
-                );
-              })}
+            {/* Con số Tần số lớn chuẩn JetBrains Mono tabular-nums */}
+            <div className="flex items-baseline justify-center gap-2">
+              <span className="text-5xl sm:text-6xl font-mono font-extrabold text-white tracking-tight tabular-nums select-none">
+                {frequency.toFixed(1)}
+              </span>
+              <span className="text-xl sm:text-2xl font-mono text-zinc-500 font-semibold">
+                MHz
+              </span>
+            </div>
 
-              {/* VẠCH CHIA THƯỚC FM */}
-              <div className="relative h-12 flex items-end justify-between border-b border-zinc-800 px-2">
-                {Array.from({ length: totalTicks + 1 }).map((_, idx) => {
-                  const tickFreq = minFreq + idx * 0.1;
+            {/* THƯỚC CHIA VẠCH NGANG (ANALOG FREQUENCY RULER) */}
+            <div 
+              ref={rulerRef}
+              onMouseDown={handleRulerMouseDown}
+              onMouseMove={handleRulerMouseMove}
+              onMouseUp={handleRulerMouseUp}
+              onMouseLeave={handleRulerMouseUp}
+              onTouchStart={handleRulerTouchStart}
+              onTouchMove={handleRulerTouchMove}
+              onTouchEnd={handleRulerTouchEnd}
+              onWheel={handleRulerWheel}
+              className="relative h-20 bg-zinc-900/90 border border-zinc-800 rounded-2xl overflow-hidden cursor-ew-resize select-none touch-none shadow-inner"
+            >
+              {/* KIM CHỈ ĐỎ / TRẮNG NẰM CHÍNH GIỮA */}
+              <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-rose-500 -translate-x-1/2 z-20 pointer-events-none shadow-[0_0_8px_rgba(244,63,94,0.9)]">
+                <div className="w-2 h-2 bg-rose-500 rotate-45 -translate-x-[3px] -translate-y-1 mx-auto" />
+              </div>
+
+              {/* Dải vạch thước trượt theo tần số (Center aligned: 50% - totalOffsetPx) */}
+              <div 
+                className="absolute top-0 bottom-0 flex items-end pb-2.5 transition-transform duration-75 will-change-transform"
+                style={{
+                  transform: `translateX(calc(50% - ${totalOffsetPx}px))`
+                }}
+              >
+                {Array.from({ length: 201 }).map((_, idx) => {
+                  const tickFreq = Number((88.0 + idx * 0.1).toFixed(1));
                   const isMajor = idx % 10 === 0;
-                  const isMedium = idx % 5 === 0 && !isMajor;
+                  const isHalf = idx % 5 === 0 && !isMajor;
+
+                  // Kiểm tra có trạm online nào ở tần số này không
+                  const hasStationHere = stations.some(s => Math.abs(Number(s.frequency) - tickFreq) < 0.05);
 
                   return (
                     <div 
-                      key={idx} 
-                      className="flex flex-col items-center flex-1 justify-end"
-                      onClick={() => setCurrentFrequency(Number(tickFreq.toFixed(1)))}
+                      key={idx}
+                      className="flex flex-col items-center justify-end relative"
+                      style={{ width: '14px', flexShrink: 0 }}
                     >
+                      {/* Chấm sáng biểu thị trạm sóng online */}
+                      {hasStationHere && (
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 absolute top-1 shadow-[0_0_6px_rgba(52,211,153,0.8)] animate-pulse" />
+                      )}
+
+                      {/* Vạch chia */}
+                      <div 
+                        className={`rounded-full transition-colors ${
+                          isMajor 
+                            ? 'w-[2px] h-7 bg-zinc-300' 
+                            : isHalf 
+                            ? 'w-[1.5px] h-4 bg-zinc-500' 
+                            : 'w-[1px] h-2 bg-zinc-700'
+                        }`} 
+                      />
+
+                      {/* Nhãn số ở mỗi vạch 1.0 MHz */}
                       {isMajor && (
-                        <span className="text-[10px] font-mono text-zinc-500 mb-1">
+                        <span className="text-[10px] font-mono text-zinc-400 mt-1 select-none pointer-events-none">
                           {tickFreq.toFixed(0)}
                         </span>
                       )}
-                      <span className={`w-px ${
-                        isMajor 
-                          ? 'h-6 bg-zinc-400' 
-                          : (isMedium ? 'h-3.5 bg-zinc-600' : 'h-2 bg-zinc-800')
-                      }`} />
                     </div>
                   );
                 })}
               </div>
-
-              {/* KIM CHỈ TẦN SỐ (NEEDLE INDICATOR) MÀU TRẮNG / EMERALD */}
-              <div 
-                style={{ 
-                  left: `${Math.max(0, Math.min(100, ((currentFrequency - minFreq) / (maxFreq - minFreq)) * 100))}%` 
-                }}
-                className="absolute top-0 bottom-0 w-0.5 bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)] pointer-events-none transition-all duration-75 flex flex-col items-center justify-between"
-              >
-                <div className="w-2 h-2 rounded-full bg-rose-500 -mt-1 shadow-sm"></div>
-                <div className="w-2 h-2 rounded-full bg-rose-500 -mb-1 shadow-sm"></div>
-              </div>
-
-              {/* RANGE SLIDER ẨN ĐỂ HỖ TRỢ KÉO THẢ BẰNG TAY HOẶC TOUCH TRÊN ĐIỆN THOẠI */}
-              <input 
-                type="range"
-                min={minFreq}
-                max={maxFreq}
-                step={0.1}
-                value={currentFrequency}
-                onChange={(e) => setCurrentFrequency(parseFloat(e.target.value))}
-                className="absolute inset-0 opacity-0 cursor-ew-resize w-full h-full"
-                aria-label="Điều chỉnh tần số FM"
-              />
             </div>
 
-            {/* THẺ BẮT SÓNG & NÚT KHÓA TẦN SỐ CALL 1-1 */}
-            {activeStation ? (
-              <div className="p-4 rounded-2xl bg-zinc-900 border border-emerald-500/40 shadow-lg space-y-3 animate-fade-in">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <UserAvatar 
-                      avatar={activeStation.avatar} 
-                      name={activeStation.displayName || activeStation.username} 
-                      size={44} 
-                    />
-                    <div>
-                      <h5 className="font-semibold text-sm text-white flex items-center gap-2">
-                        {activeStation.displayName || activeStation.username}
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
-                          {activeStation.frequency.toFixed(1)} MHz
-                        </span>
-                      </h5>
-                      <p className="text-xs text-zinc-400 mt-0.5">{activeStation.bio}</p>
+            {/* THANH TRƯỢT RANGE PHỤ TRỢ & NÚT TINH CHỈNH +/- 0.1 MHz */}
+            <div className="flex items-center gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => setFrequency(prev => Math.max(88.0, Number((prev - 0.1).toFixed(1))))}
+                className="h-8 px-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 text-xs font-mono transition-colors active:scale-95 flex items-center gap-1"
+                title="Giảm 0.1 MHz"
+              >
+                <ChevronLeft size={14} /> -0.1
+              </button>
+
+              <input 
+                type="range"
+                min="88.0"
+                max="108.0"
+                step="0.1"
+                value={frequency}
+                onChange={(e) => setFrequency(Number(e.target.value))}
+                className="flex-1 accent-white h-1.5 bg-zinc-800 rounded-lg cursor-pointer"
+              />
+
+              <button
+                type="button"
+                onClick={() => setFrequency(prev => Math.min(108.0, Number((prev + 0.1).toFixed(1))))}
+                className="h-8 px-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 text-xs font-mono transition-colors active:scale-95 flex items-center gap-1"
+                title="Tăng 0.1 MHz"
+              >
+                +0.1 <ChevronRight size={14} />
+              </button>
+            </div>
+
+          </div>
+
+          {/* THẺ TRẠM SÓNG BẮT ĐƯỢC (HIỂN THỊ KHI KIM TRÚNG ±0.1 MHz) */}
+          {matchedStation ? (
+            <div className="p-4 sm:p-5 rounded-2xl bg-zinc-950 border border-zinc-800 space-y-3.5 shadow-lg animate-fade-in">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-12 h-12 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-base text-zinc-100 overflow-hidden shrink-0 shadow-inner">
+                    {matchedStation.avatarUrl ? (
+                      <img src={matchedStation.avatarUrl} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <span>{(matchedStation.displayName || matchedStation.username || 'U').charAt(0).toUpperCase()}</span>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-bold text-sm text-white truncate">
+                        {matchedStation.displayName || matchedStation.username}
+                      </h4>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-300 border border-zinc-700">
+                        {Number(matchedStation.frequency).toFixed(1)} MHz
+                      </span>
                     </div>
+                    <span className="text-xs text-zinc-400 block font-sans truncate">
+                      @{matchedStation.username || 'user'} • {matchedStation.intentTitle || 'Tâm sự đêm muộn'}
+                    </span>
                   </div>
                 </div>
 
-                {activeStation.musicTaste && (
-                  <div className="text-[11px] font-mono text-zinc-400 flex items-center gap-1.5 pt-1 border-t border-zinc-800">
-                    <Disc3 size={13} className="text-emerald-400" />
-                    <span>Gu âm nhạc: <strong className="text-zinc-200">{activeStation.musicTaste}</strong></span>
-                  </div>
-                )}
-
-                <div className="pt-2 flex items-center gap-3">
-                  <button 
-                    type="button"
-                    onClick={() => handleLockStation(activeStation)}
-                    disabled={isLocking}
-                    className="flex-1 h-11 px-4 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-sm flex items-center justify-center gap-2 transition-colors active:scale-[0.98] disabled:opacity-50"
-                  >
-                    <PhoneCall size={16} />
-                    <span>{isLocking ? 'Đang kết nối đàm thoại...' : 'Khóa tần số & Call 1-1 (Enter)'}</span>
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="p-4 rounded-2xl bg-zinc-900/50 border border-zinc-800/80 text-center space-y-2">
-                <p className="text-xs text-zinc-400">
-                  {stations.length === 0 
-                    ? 'Chưa có trạm phát nào trên dải tần này.' 
-                    : `Đã tìm thấy ${stations.length} trạm phát trên dải tần. Hãy xoay kim vào các điểm sáng xanh để nghe thử!`}
-                </p>
-                <button 
+                {/* NÚT KẾT NỐI CALL 1-1 */}
+                <button
                   type="button"
-                  onClick={() => handleStartScan(selectedIntent)}
-                  disabled={loadingScan}
-                  className="py-1.5 px-3 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-mono inline-flex items-center gap-1.5 transition-colors"
+                  onClick={() => handleConnectCall(matchedStation)}
+                  disabled={isLocking}
+                  className="h-10 px-4 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs sm:text-sm flex items-center gap-1.5 shadow-md transition-all active:scale-95 shrink-0"
                 >
-                  <RefreshCw size={12} className={loadingScan ? 'animate-spin' : ''} />
-                  <span>Quét dải tần mới</span>
+                  <PhoneCall size={14} />
+                  <span>{isLocking ? "Đang kết nối..." : "Kết nối Call 1-1"}</span>
                 </button>
               </div>
-            )}
-          </div>
-        )}
 
-        {/* FOOTER METADATA ĐƠN SẮC */}
-        <div className="px-6 py-3 border-t border-zinc-800/80 bg-zinc-950/80 flex items-center justify-between text-[11px] text-zinc-500 font-mono">
-          <span className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-            <span>Trạm dò sóng trực tuyến</span>
-          </span>
-          <span className="tabular-nums">Dải tần: 88.0 - 108.0 MHz</span>
+              {matchedStation.bio && (
+                <p className="text-xs text-zinc-400 bg-zinc-900/60 p-2.5 rounded-xl border border-zinc-800/80 leading-relaxed font-sans">
+                  "{matchedStation.bio}"
+                </p>
+              )}
+
+              {/* Tín hiệu giọng nói đang phát */}
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-mono text-zinc-300">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>Đang phát tín hiệu giọng nói 5s...</span>
+                </div>
+                <span className="text-[11px] text-zinc-500">Tự động lặp</span>
+              </div>
+            </div>
+          ) : (
+            <div className="p-4 rounded-2xl bg-zinc-950/40 border border-dashed border-zinc-800 text-center space-y-1">
+              <p className="text-xs text-zinc-400">Không có tín hiệu người phát tại tần số <strong>{frequency.toFixed(1)} MHz</strong>.</p>
+              <p className="text-[11px] text-zinc-500">Hãy trượt kim sang các tần số có chấm sáng xanh hoặc bấm nút bên dưới để tự phát sóng!</p>
+            </div>
+          )}
+
+          {/* KHU VỰC PHÁT SÓNG CÁ NHÂN (DRAWER / FORM GHI ÂM 5S) */}
+          {showBroadcastDrawer ? (
+            <div className="p-4 sm:p-5 rounded-2xl bg-zinc-950 border border-zinc-800 space-y-4 animate-fade-in">
+              <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <Mic size={16} className="text-zinc-300" />
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
+                    Thu âm 5s & Phát sóng lên đài FM
+                  </h4>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowBroadcastDrawer(false)}
+                  className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+
+              {/* Chọn Băng tần & Tần số phát sóng */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] text-zinc-400 font-mono block mb-1">Mục đích phát sóng</label>
+                  <select
+                    value={broadcastIntentCode}
+                    onChange={(e) => setBroadcastIntentCode(e.target.value)}
+                    className="w-full h-9 bg-zinc-900 border border-zinc-800 rounded-xl px-2.5 text-xs text-white focus:outline-none focus:border-zinc-600 font-mono"
+                  >
+                    {intents.map(it => (
+                      <option key={it.code} value={it.code} className="bg-zinc-900 text-white">
+                        {it.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] text-zinc-400 font-mono block mb-1">Tần số phát (MHz)</label>
+                  <input 
+                    type="number"
+                    step="0.1"
+                    min="88.0"
+                    max="108.0"
+                    value={broadcastFreqInput}
+                    onChange={(e) => setBroadcastFreqInput(Number(e.target.value))}
+                    className="w-full h-9 bg-zinc-900 border border-zinc-800 rounded-xl px-2.5 text-xs text-white focus:outline-none focus:border-zinc-600 font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* KHUNG GHI ÂM 5S */}
+              <div className="p-4 rounded-xl bg-zinc-900/80 border border-zinc-800 text-center space-y-3">
+                {isRecording ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-center gap-2 text-rose-400 text-xs font-mono">
+                      <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+                      <span>Đang ghi âm tín hiệu giọng nói... {((5000 * (100 - recordProgress)) / 100000).toFixed(1)}s</span>
+                    </div>
+                    {/* Thanh tiến trình ghi âm */}
+                    <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-rose-500 transition-all duration-100" 
+                        style={{ width: `${recordProgress}%` }}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={stopRecording5s}
+                      className="px-4 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center gap-1.5 mx-auto active:scale-95"
+                    >
+                      <Square size={13} /> Dừng thu
+                    </button>
+                  </div>
+                ) : recordedBlob ? (
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-zinc-950 border border-zinc-800">
+                    <div className="flex items-center gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!previewAudioRef.current) return;
+                          if (isPlayingPreview) {
+                            previewAudioRef.current.pause();
+                            setIsPlayingPreview(false);
+                          } else {
+                            previewAudioRef.current.src = audioPreviewUrl;
+                            previewAudioRef.current.play();
+                            setIsPlayingPreview(true);
+                          }
+                        }}
+                        className="w-8 h-8 rounded-full bg-zinc-800 hover:bg-zinc-700 text-white flex items-center justify-center transition-colors"
+                      >
+                        {isPlayingPreview ? <Pause size={14} /> : <Play size={14} />}
+                      </button>
+                      <span className="text-xs font-mono text-zinc-300">Đoạn thu âm 5 giây sẵn sàng</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={startRecording5s}
+                      className="text-xs font-mono text-zinc-400 hover:text-white underline px-2"
+                    >
+                      Ghi lại
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-xs text-zinc-400">Ghi lại một lời chào 5 giây để phát lên đài FM</p>
+                    <button
+                      type="button"
+                      onClick={startRecording5s}
+                      className="px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-medium flex items-center gap-1.5 mx-auto active:scale-95 shadow-sm"
+                    >
+                      <Mic size={14} />
+                      <span>Bấm để bắt đầu thu âm 5s</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Nút Submit Phát sóng */}
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowBroadcastDrawer(false)}
+                  className="h-9 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-medium border border-zinc-800 transition-colors"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePublishBroadcast}
+                  disabled={!recordedBlob || isSubmittingBroadcast}
+                  className="h-9 px-4 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-medium disabled:opacity-50 transition-all active:scale-95 shadow-sm"
+                >
+                  {isSubmittingBroadcast ? "Đang phát sóng..." : "Kích hoạt phát sóng"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* HÀNG NÚT DƯỚI CÙNG */
+            <div className="flex items-center justify-between gap-3 pt-2">
+              {isBroadcasting ? (
+                <div className="flex items-center justify-between w-full p-3 rounded-2xl bg-zinc-950 border border-zinc-800">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="text-xs font-mono text-zinc-200">
+                      Đang phát sóng tại: <strong>{broadcastInfo?.frequency || userPersonalFrequency} MHz</strong>
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleStopBroadcast}
+                    className="h-8 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 text-xs font-mono transition-colors active:scale-95"
+                  >
+                    Dừng phát
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowBroadcastDrawer(true)}
+                  className="w-full py-3 px-4 rounded-2xl bg-zinc-950 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 hover:border-zinc-700 text-xs sm:text-sm font-medium flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-sm"
+                >
+                  <Mic size={15} />
+                  <span>Phát sóng giọng nói (5s) lên tần số riêng</span>
+                </button>
+              )}
+            </div>
+          )}
+
         </div>
 
       </div>

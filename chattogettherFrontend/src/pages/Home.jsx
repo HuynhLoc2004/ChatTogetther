@@ -3799,7 +3799,7 @@ const Home = ({ initialTab }) => {
           <div className="widget-box-card">
             {/* Widget 1: Trạm Dò Sóng FM Thời Gian Thực (FM Frequency Tuner) */}
             <div className="widget-card-title">
-              <Radio size={14} className="text-emerald-400" />
+              <Radio size={14} className="text-zinc-300" />
               <span>Trạm Dò Sóng FM Thời Gian Thực</span>
             </div>
             <p className="widget-card-desc">

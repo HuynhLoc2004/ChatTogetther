@@ -74,8 +74,9 @@ const ProfilePage = () => {
     age: '',
     location: '',
     bio: '',
-    favoriteGenre: '',
-    favoriteFreq: '',
+    personalFrequency: '96.4',
+    favoriteMusicId: '',
+    matchIntentCode: '',
     avatar: ''
   });
 
@@ -116,16 +117,15 @@ const ProfilePage = () => {
       if (res.data?.data) {
         const data = res.data.data;
         setProfile(data);
-        const storedGenre = localStorage.getItem(`user_genre_${effectiveUserId}`) || '';
-        const storedFreq = localStorage.getItem(`user_freq_${effectiveUserId}`) || '';
         
         setEditData({
           nickname: data.nickname || '',
           age: data.age || '',
           location: data.location || '',
           bio: data.bio || '',
-          favoriteGenre: data.favoriteGenre || storedGenre,
-          favoriteFreq: data.favoriteFreq || storedFreq,
+          personalFrequency: data.personalFrequency ? Number(data.personalFrequency).toFixed(1) : '96.4',
+          favoriteMusicId: data.favoriteMusicId ? String(data.favoriteMusicId) : '',
+          matchIntentCode: data.matchIntentCode || '',
           avatar: data.avatar || ''
         });
       }
@@ -240,22 +240,21 @@ const ProfilePage = () => {
         age: editData.age ? parseInt(editData.age, 10) : null,
         location: editData.location?.trim() || null,
         bio: editData.bio?.trim() || null,
-        avatar: editData.avatar || null
+        avatar: editData.avatar || null,
+        personalFrequency: editData.personalFrequency ? parseFloat(Number(editData.personalFrequency).toFixed(1)) : null,
+        favoriteMusicId: editData.favoriteMusicId ? Number(editData.favoriteMusicId) : null,
+        matchIntentCode: editData.matchIntentCode || null
       };
 
       const res = await axiosClient.put('/users/profile', payload);
       if (res.data?.data) {
         setProfile(prev => ({
           ...prev,
-          ...res.data.data,
-          favoriteGenre: editData.favoriteGenre,
-          favoriteFreq: editData.favoriteFreq
+          ...res.data.data
         }));
         if (payload.nickname) localStorage.setItem('nickname', payload.nickname);
         if (payload.avatar) localStorage.setItem('user_avatar', payload.avatar);
       }
-      localStorage.setItem(`user_genre_${effectiveUserId}`, editData.favoriteGenre);
-      localStorage.setItem(`user_freq_${effectiveUserId}`, editData.favoriteFreq);
 
       toast.success("Đã lưu tần số & hồ sơ cá nhân!");
       setIsEditing(false);
@@ -410,8 +409,13 @@ const ProfilePage = () => {
   };
 
   const isOnline = Boolean(profile?.isOnline ?? true);
-  const userGenre = editData.favoriteGenre || (dynamicTracks[0] ? `${dynamicTracks[0].title} • ${dynamicTracks[0].artist || dynamicTracks[0].genreTag || 'Lo-Fi'}` : 'Chưa chọn gu âm nhạc');
-  const userFreq = editData.favoriteFreq || (dynamicIntents[0] ? `${dynamicIntents[0].freqStart?.toFixed(1)} - ${dynamicIntents[0].freqEnd?.toFixed(1)} MHz • ${dynamicIntents[0].title}` : 'Chưa chọn băng tần');
+  const matchedTrack = dynamicTracks.find(t => String(t.id) === String(profile?.favoriteMusicId || editData.favoriteMusicId));
+  const userGenre = matchedTrack ? `${matchedTrack.title} • ${matchedTrack.artist || matchedTrack.genreTag || 'Lo-Fi'}` : (dynamicTracks[0] ? `${dynamicTracks[0].title} • ${dynamicTracks[0].artist || 'Lo-Fi'}` : 'Chưa chọn gu âm nhạc');
+
+  const matchedIntent = dynamicIntents.find(i => i.code === (profile?.matchIntentCode || editData.matchIntentCode));
+  const userFreq = profile?.personalFrequency 
+    ? `${Number(profile.personalFrequency).toFixed(1)} MHz ${matchedIntent ? `• ${matchedIntent.title}` : ''}`
+    : (editData.personalFrequency ? `${Number(editData.personalFrequency).toFixed(1)} MHz` : '96.4 MHz • Tần số cá nhân');
 
   return (
     <div className="min-h-screen bg-[#09090b] text-[#f4f4f5] font-sans pb-28 selection:bg-emerald-500 selection:text-black">
@@ -438,7 +442,7 @@ const ProfilePage = () => {
               <span className="hidden sm:inline">Quay lại sảnh</span>
             </button>
             <div className="flex items-center gap-2">
-              <Radio size={16} className="text-emerald-400" />
+              <Radio size={16} className="text-zinc-300" />
               <span className="text-sm font-bold text-white tracking-tight">Trạm Tần Số Cá Nhân</span>
             </div>
           </div>
@@ -703,13 +707,13 @@ const ProfilePage = () => {
                   Băng Tần & Gu Âm Nhạc
                 </span>
 
-                <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800/80 space-y-2">
+                <div className="p-3.5 rounded-2xl bg-zinc-950/80 border border-zinc-800/80 space-y-2">
                   <div className="flex items-center gap-2 text-xs text-zinc-300">
-                    <Headphones size={13} className="text-emerald-400 flex-shrink-0" />
+                    <Headphones size={13} className="text-zinc-400 flex-shrink-0" />
                     <span className="truncate">{userGenre}</span>
                   </div>
-                  <div className="flex items-center gap-2 text-xs font-mono text-emerald-400">
-                    <Radio size={13} className="text-emerald-400 flex-shrink-0" />
+                  <div className="flex items-center gap-2 text-xs font-mono text-zinc-200">
+                    <Radio size={13} className="text-zinc-400 flex-shrink-0" />
                     <span className="truncate">{userFreq}</span>
                   </div>
                 </div>
@@ -996,47 +1000,76 @@ const ProfilePage = () => {
                 </div>
               </div>
 
+              {/* THANH KÉO CHỌN TẦN SỐ ĐỊNH DANH FM (88.0 - 108.0 MHz) */}
+              <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] text-zinc-400 font-mono">Tần số định danh FM riêng</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const rand = (88.0 + Math.random() * 20.0).toFixed(1);
+                      setEditData(prev => ({ ...prev, personalFrequency: rand }));
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 text-[11px] font-mono transition-colors active:scale-95"
+                  >
+                    Ngẫu nhiên
+                  </button>
+                </div>
+
+                <div className="text-center py-1">
+                  <span className="text-3xl font-mono font-bold tabular-nums text-white tracking-tight">
+                    {editData.personalFrequency || '96.4'} <span className="text-sm text-zinc-400 font-normal">MHz</span>
+                  </span>
+                </div>
+
+                <input 
+                  type="range"
+                  min="88.0"
+                  max="108.0"
+                  step="0.1"
+                  value={editData.personalFrequency || '96.4'}
+                  onChange={(e) => setEditData(prev => ({ ...prev, personalFrequency: e.target.value }))}
+                  className="w-full accent-white h-2 bg-zinc-800 rounded-lg cursor-pointer"
+                />
+
+                <div className="flex justify-between text-[10px] font-mono text-zinc-500">
+                  <span>88.0 MHz</span>
+                  <span>98.0 MHz</span>
+                  <span>108.0 MHz</span>
+                </div>
+              </div>
+
+              {/* GU KẾT NỐI (matchIntentCode) */}
               <div>
-                <label className="text-[11px] text-zinc-400 font-mono block mb-1">Kênh nhạc Lo-Fi yêu thích</label>
+                <label className="text-[11px] text-zinc-400 font-mono block mb-1">Gu kết nối (Băng tần mục tiêu)</label>
                 <select
-                  value={editData.favoriteGenre}
-                  onChange={(e) => setEditData(prev => ({ ...prev, favoriteGenre: e.target.value }))}
-                  className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-xl px-3 text-xs text-white focus:outline-none focus:border-zinc-600"
+                  value={editData.matchIntentCode || ''}
+                  onChange={(e) => setEditData(prev => ({ ...prev, matchIntentCode: e.target.value }))}
+                  className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-xl px-3 text-xs text-white focus:outline-none focus:border-zinc-600 font-mono"
                 >
-                  {dynamicTracks.length > 0 ? (
-                    dynamicTracks.map((tr) => {
-                      const val = `${tr.title} • ${tr.artist || tr.genreTag || 'Lo-Fi'}`;
-                      return (
-                        <option key={tr.id || tr.title} value={val} className="bg-zinc-900 text-white">
-                          {val}
-                        </option>
-                      );
-                    })
-                  ) : (
-                    <option value="" className="bg-zinc-900 text-zinc-500">Chưa có kênh nhạc từ hệ thống</option>
-                  )}
+                  <option value="" className="bg-zinc-900 text-zinc-500">-- Chọn gu kết nối --</option>
+                  {dynamicIntents.map(it => (
+                    <option key={it.code} value={it.code} className="bg-zinc-900 text-white">
+                      {it.title} ({it.freqStart?.toFixed(1)} - {it.freqEnd?.toFixed(1)} MHz)
+                    </option>
+                  ))}
                 </select>
               </div>
 
+              {/* KÊNH NHẠC LO-FI (favoriteMusicId) */}
               <div>
-                <label className="text-[11px] text-zinc-400 font-mono block mb-1">Băng tần thường tham gia</label>
+                <label className="text-[11px] text-zinc-400 font-mono block mb-1">Kênh nhạc Lo-Fi yêu thích</label>
                 <select
-                  value={editData.favoriteFreq}
-                  onChange={(e) => setEditData(prev => ({ ...prev, favoriteFreq: e.target.value }))}
-                  className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-xl px-3 text-xs text-white focus:outline-none focus:border-zinc-600 font-mono"
+                  value={editData.favoriteMusicId || ''}
+                  onChange={(e) => setEditData(prev => ({ ...prev, favoriteMusicId: e.target.value }))}
+                  className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-xl px-3 text-xs text-white focus:outline-none focus:border-zinc-600 font-sans"
                 >
-                  {dynamicIntents.length > 0 ? (
-                    dynamicIntents.map((it) => {
-                      const val = `${it.freqStart?.toFixed(1)} - ${it.freqEnd?.toFixed(1)} MHz • ${it.title}`;
-                      return (
-                        <option key={it.id || it.code} value={val} className="bg-zinc-900 text-white">
-                          {val}
-                        </option>
-                      );
-                    })
-                  ) : (
-                    <option value="" className="bg-zinc-900 text-zinc-500">Chưa có băng tần từ hệ thống</option>
-                  )}
+                  <option value="" className="bg-zinc-900 text-zinc-500">-- Chọn kênh nhạc Lo-Fi --</option>
+                  {dynamicTracks.map(tr => (
+                    <option key={tr.id} value={tr.id} className="bg-zinc-900 text-white">
+                      {tr.title} • {tr.artist || tr.genreTag || 'Lo-Fi'}
+                    </option>
+                  ))}
                 </select>
               </div>
 

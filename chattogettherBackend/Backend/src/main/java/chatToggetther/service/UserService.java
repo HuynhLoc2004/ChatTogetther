@@ -86,6 +86,17 @@ public class UserService {
         dto.setActive(targetUser.getActive());
         dto.setRoles(targetUser.getRoles());
 
+        // Đồng bộ Tần số FM cá nhân & Gu kết nối
+        Double freq = targetUser.getPersonalFrequency();
+        if (freq == null) {
+            freq = Math.round((88.0 + Math.random() * 20.0) * 10.0) / 10.0;
+            targetUser.setPersonalFrequency(freq);
+            this.userRepository.save(targetUser);
+        }
+        dto.setPersonalFrequency(freq);
+        dto.setFavoriteMusicId(targetUser.getFavoriteMusicId());
+        dto.setMatchIntentCode(targetUser.getMatchIntentCode());
+
         // Phân quyền thực tế (không mock dữ liệu ảo)
         boolean isAdmin = targetUser.getRoles() != null && (targetUser.getRoles().contains("ROLE_AMDIN") || targetUser.getRoles().contains("ROLE_ADMIN"));
         dto.setIsVerified(isAdmin);
@@ -156,6 +167,16 @@ public class UserService {
         }
         if (request.getPhone() != null) {
             currentUser.setPhone(request.getPhone().trim());
+        }
+        if (request.getPersonalFrequency() != null) {
+            double clamped = Math.max(88.0, Math.min(108.0, request.getPersonalFrequency()));
+            currentUser.setPersonalFrequency(Math.round(clamped * 10.0) / 10.0);
+        }
+        if (request.getFavoriteMusicId() != null) {
+            currentUser.setFavoriteMusicId(request.getFavoriteMusicId());
+        }
+        if (request.getMatchIntentCode() != null) {
+            currentUser.setMatchIntentCode(request.getMatchIntentCode().trim());
         }
 
         this.userRepository.save(currentUser);
