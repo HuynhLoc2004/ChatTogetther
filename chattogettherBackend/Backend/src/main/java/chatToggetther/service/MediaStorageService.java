@@ -21,12 +21,23 @@ public class MediaStorageService {
     private final Path storageDirectory;
 
     public MediaStorageService() {
-        this.storageDirectory = Paths.get("uploads", "voice-samples").toAbsolutePath().normalize();
+        Path targetDir = Paths.get("uploads", "voice-samples").toAbsolutePath().normalize();
+        Path effectiveDir;
         try {
-            Files.createDirectories(this.storageDirectory);
-        } catch (IOException e) {
-            throw new RuntimeException("Không thể tạo thư mục lưu trữ âm thanh: " + this.storageDirectory, e);
+            Files.createDirectories(targetDir);
+            effectiveDir = targetDir;
+        } catch (Exception e) {
+            System.err.println("Không thể tạo thư mục lưu trữ mặc định: " + targetDir + ". Chuyển sang thư mục tạm: " + e.getMessage());
+            try {
+                Path tmpDir = Paths.get(System.getProperty("java.io.tmpdir"), "uploads", "voice-samples").toAbsolutePath().normalize();
+                Files.createDirectories(tmpDir);
+                effectiveDir = tmpDir;
+            } catch (Exception ex) {
+                System.err.println("Cảnh báo: Không thể tạo thư mục lưu trữ âm thanh: " + ex.getMessage());
+                effectiveDir = Paths.get(System.getProperty("java.io.tmpdir")).toAbsolutePath().normalize();
+            }
         }
+        this.storageDirectory = effectiveDir;
     }
 
     public String storeAudioSample(MultipartFile file, Long userId) {

@@ -14,12 +14,15 @@ RUN mvn clean package -DskipTests
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
-# Tạo non-root user để tăng tính bảo mật
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-USER appuser
+# Tạo non-root user và cấp quyền đầy đủ cho /app và thư mục uploads
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup \
+    && mkdir -p /app/uploads/voice-samples \
+    && chown -R appuser:appgroup /app
 
-# Copy file jar đã build từ Stage 1
-COPY --from=build /app/target/*.jar app.jar
+# Copy file jar đã build từ Stage 1 với quyền appuser
+COPY --from=build --chown=appuser:appgroup /app/target/*.jar app.jar
+
+USER appuser
 
 # Render tự động gán biến PORT (mặc định 8080 nếu chạy local)
 ENV PORT=8080
