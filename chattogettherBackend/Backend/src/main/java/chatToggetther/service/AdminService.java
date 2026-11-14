@@ -53,6 +53,10 @@ public class AdminService {
     }
 
     private void verifyAdmin(JwtAuthenticationToken token) {
+        verifyAdmin(token, null);
+    }
+
+    private void verifyAdmin(JwtAuthenticationToken token, String requiredPermission) {
         Long userId = SecurityUtils.extractUserId(token);
         if (userId == null) {
             throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập tài khoản quản trị", 401);
@@ -60,16 +64,73 @@ public class AdminService {
         UserEntity user = userRepository.findById(userId).orElseThrow(() ->
                 new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "Người dùng không tồn tại", 404)
         );
-        boolean isAdmin = user.getRoles() != null && 
-                (user.getRoles().contains("ROLE_ADMIN") || user.getRoles().contains("ROLE_AMDIN"));
-        if (!isAdmin) {
+        List<String> roles = user.getRoles();
+        if (roles == null || roles.isEmpty()) {
+            throw new AppException(403, "Bạn không có quyền quản trị hệ thống", 403);
+        }
+
+        // 1. Quản trị viên tối cao: Super Admin có toàn bộ quyền
+        boolean isSuperAdmin = roles.contains("ROLE_ADMIN") || 
+                              roles.contains("ROLE_AMDIN") || 
+                              roles.contains("TL_SYS_SUPERADMIN") ||
+                              roles.contains("TL_PERM_ALL");
+        if (isSuperAdmin) {
+            return;
+        }
+
+        // 2. Nếu có yêu cầu permission cụ thể, kiểm tra permission trực tiếp hoặc thông qua Vai trò gán
+        if (requiredPermission != null) {
+            if (roles.contains(requiredPermission)) {
+                return;
+            }
+            if (hasPermissionInRoles(roles, requiredPermission)) {
+                return;
+            }
+            throw new AppException(403, "Bạn không có quyền thực hiện thao tác này (" + requiredPermission + ")", 403);
+        }
+
+        // 3. Quyền truy cập Dashboard cơ bản: Cần ít nhất 1 role hoặc permission bắt đầu bằng TL_ hoặc PERM_ hoặc ADMIN
+        boolean hasAnyAdminPrivilege = roles.stream().anyMatch(r -> 
+            r.startsWith("TL_") || r.startsWith("PERM_") || r.contains("ADMIN")
+        );
+        if (!hasAnyAdminPrivilege) {
             throw new AppException(403, "Bạn không có quyền quản trị hệ thống", 403);
         }
     }
 
+    private boolean hasPermissionInRoles(List<String> userRoles, String requiredPermission) {
+        Map<String, List<String>> rolePermMap = Map.of(
+            "TL_ROLE_CONTENT_EDITOR", List.of("TL_PERM_STATS_VIEW", "TL_PERM_CHALLENGE_MANAGE", "TL_PERM_TOPIC_MANAGE"),
+            "TL_ROLE_COMMUNITY_MOD", List.of("TL_PERM_STATS_VIEW", "TL_PERM_USER_MANAGE"),
+            "TL_ROLE_BRAND_MANAGER", List.of("TL_PERM_STATS_VIEW", "TL_PERM_BRAND_MANAGE"),
+            "TL_ROLE_MEDIA_CURATOR", List.of("TL_PERM_STATS_VIEW", "TL_PERM_MUSIC_MANAGE")
+        );
+
+        for (String r : userRoles) {
+            List<String> perms = rolePermMap.get(r);
+            if (perms != null && perms.contains(requiredPermission)) {
+                return true;
+            }
+        }
+
+        try {
+            Optional<SystemConfigEntity> cfg = systemConfigRepository.findById("system_roles");
+            if (cfg.isPresent() && cfg.get().getConfigValue() != null) {
+                String val = cfg.get().getConfigValue();
+                for (String r : userRoles) {
+                    if (val.contains(r) && val.contains(requiredPermission)) {
+                        return true;
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+
+        return false;
+    }
+
     @Transactional(readOnly = true)
     public ResponseData<Map<String, Object>> getSystemStats(JwtAuthenticationToken token) {
-        verifyAdmin(token);
+        verifyAdmin(token, "TL_PERM_STATS_VIEW");
 
         long totalUsers = userRepository.count();
         long totalPosts = postRepository.count();
@@ -90,7 +151,7 @@ public class AdminService {
 
     @Transactional(readOnly = true)
     public ResponseData<List<UserDTO>> getAllUsers(JwtAuthenticationToken token) {
-        verifyAdmin(token);
+        verifyAdmin(token, "TL_PERM_USER_MANAGE");
 
         List<UserEntity> users = userRepository.findAll();
         List<UserDTO> dtoList = users.stream().map(u -> {
@@ -106,10 +167,15 @@ public class AdminService {
             dto.setBio(u.getBio());
             dto.setActive(u.getActive());
             dto.setRoles(u.getRoles());
-            boolean isAdmin = u.getRoles() != null && (u.getRoles().contains("ROLE_ADMIN") || u.getRoles().contains("ROLE_AMDIN"));
+            boolean isAdmin = u.getRoles() != null && (
+                u.getRoles().contains("ROLE_ADMIN") || 
+                u.getRoles().contains("ROLE_AMDIN") || 
+                u.getRoles().contains("TL_SYS_SUPERADMIN") ||
+                u.getRoles().stream().anyMatch(r -> r.startsWith("TL_ROLE_") || r.startsWith("TL_PERM_"))
+            );
             dto.setIsVerified(isAdmin);
-            dto.setVipTier(isAdmin ? "ADMIN" : "MEMBER");
-            dto.setCustomTitle(isAdmin ? "Quản trị viên" : "Thành viên");
+            dto.setVipTier(isAdmin ? (u.getRoles().contains("TL_SYS_SUPERADMIN") || u.getRoles().contains("ROLE_ADMIN") ? "SUPERADMIN" : "ADMIN") : "MEMBER");
+            dto.setCustomTitle(isAdmin ? (u.getRoles().contains("TL_SYS_SUPERADMIN") ? "Quản trị viên tối cao" : "Quản trị viên") : "Thành viên");
             return dto;
         }).collect(Collectors.toList());
 
@@ -118,7 +184,7 @@ public class AdminService {
 
     @Transactional
     public ResponseData<Boolean> updateUserStatus(JwtAuthenticationToken token, Long targetUserId, Boolean active) {
-        verifyAdmin(token);
+        verifyAdmin(token, "TL_PERM_USER_MANAGE");
 
         UserEntity user = userRepository.findById(targetUserId).orElseThrow(() ->
                 new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "Người dùng không tồn tại", 404)
@@ -131,7 +197,7 @@ public class AdminService {
 
     @Transactional
     public ResponseData<Boolean> updateUserRoles(JwtAuthenticationToken token, Long targetUserId, List<String> roles) {
-        verifyAdmin(token);
+        verifyAdmin(token, "TL_PERM_ROLE_MANAGE");
 
         UserEntity user = userRepository.findById(targetUserId).orElseThrow(() ->
                 new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "Người dùng không tồn tại", 404)
@@ -144,7 +210,7 @@ public class AdminService {
 
     @Transactional
     public ResponseData<Boolean> deletePostByAdmin(JwtAuthenticationToken token, Long postId) {
-        verifyAdmin(token);
+        verifyAdmin(token, "TL_PERM_USER_MANAGE");
 
         PostEntity post = postRepository.findById(postId).orElseThrow(() ->
                 new AppException(404, "Bài viết không tồn tại", 404)
@@ -156,7 +222,7 @@ public class AdminService {
 
     @Transactional
     public ResponseData<TrackEntity> addTrack(JwtAuthenticationToken token, TrackEntity track) {
-        verifyAdmin(token);
+        verifyAdmin(token, "TL_PERM_MUSIC_MANAGE");
 
         if (track.getName() == null || track.getName().trim().isEmpty()) {
             throw new AppException(400, "Tên bản nhạc không được để trống", 400);
@@ -178,7 +244,7 @@ public class AdminService {
 
     @Transactional
     public ResponseData<Boolean> deleteTrack(JwtAuthenticationToken token, Long trackId) {
-        verifyAdmin(token);
+        verifyAdmin(token, "TL_PERM_MUSIC_MANAGE");
 
         TrackEntity track = trackRepository.findById(trackId).orElseThrow(() ->
                 new AppException(404, "Bản nhạc không tồn tại", 404)
@@ -190,7 +256,7 @@ public class AdminService {
 
     @Transactional(readOnly = true)
     public ResponseData<List<TrackEntity>> getAllTracks(JwtAuthenticationToken token) {
-        verifyAdmin(token);
+        verifyAdmin(token, "TL_PERM_MUSIC_MANAGE");
         return new ResponseData<>(200, "Lấy danh sách bản nhạc thành công", trackRepository.findAll());
     }
 
@@ -219,6 +285,12 @@ public class AdminService {
         }
         if (!map.containsKey("feature_toggles")) {
             map.put("feature_toggles", "{\"enableRadio\":true,\"enableSpeedMatch\":true,\"enableChallengeDeck\":true,\"enableCommunity\":true}");
+        }
+        if (!map.containsKey("challenge_categories")) {
+            map.put("challenge_categories", "[{\"id\":\"DEEP_TALK\",\"name\":\"Tâm sự sâu lắng\",\"color\":\"#818cf8\"},{\"id\":\"TRUTH\",\"name\":\"Thú nhận (Truth)\",\"color\":\"#f43f5e\"},{\"id\":\"DARE\",\"name\":\"Thử thách vui (Dare)\",\"color\":\"#eab308\"},{\"id\":\"MUSIC\",\"name\":\"Gu âm nhạc\",\"color\":\"#06b6d4\"},{\"id\":\"LIFE\",\"name\":\"Góc nhìn cuộc sống\",\"color\":\"#10b981\"}]");
+        }
+        if (!map.containsKey("system_roles")) {
+            map.put("system_roles", "[{\"id\":\"TL_SYS_SUPERADMIN\",\"name\":\"Quản trị viên tối cao\",\"description\":\"Toàn quyền kiểm soát toàn bộ hệ thống\",\"permissions\":[\"TL_PERM_ALL\"],\"badgeColor\":\"#ef4444\"},{\"id\":\"TL_ROLE_CONTENT_EDITOR\",\"name\":\"Biên tập viên nội dung\",\"description\":\"Quản lý thẻ bài thử thách và chủ đề cảm xúc\",\"permissions\":[\"TL_PERM_STATS_VIEW\",\"TL_PERM_CHALLENGE_MANAGE\",\"TL_PERM_TOPIC_MANAGE\"],\"badgeColor\":\"#818cf8\"},{\"id\":\"TL_ROLE_COMMUNITY_MOD\",\"name\":\"Kiểm duyệt viên cộng đồng\",\"description\":\"Quản lý và kiểm duyệt tài khoản thành viên\",\"permissions\":[\"TL_PERM_STATS_VIEW\",\"TL_PERM_USER_MANAGE\"],\"badgeColor\":\"#10b981\"},{\"id\":\"TL_ROLE_BRAND_MANAGER\",\"name\":\"Quản lý thương hiệu\",\"description\":\"Quản lý menu, logo và thương hiệu ứng dụng\",\"permissions\":[\"TL_PERM_STATS_VIEW\",\"TL_PERM_BRAND_MANAGE\"],\"badgeColor\":\"#f59e0b\"},{\"id\":\"TL_ROLE_MEDIA_CURATOR\",\"name\":\"Điều phối âm nhạc\",\"description\":\"Quản lý danh sách bài hát và nhạc nền\",\"permissions\":[\"TL_PERM_STATS_VIEW\",\"TL_PERM_MUSIC_MANAGE\"],\"badgeColor\":\"#ec4899\"}]");
         }
 
         return new ResponseData<>(200, "Lấy cấu hình hệ thống thành công", map);
@@ -251,13 +323,13 @@ public class AdminService {
 
     @Transactional(readOnly = true)
     public ResponseData<List<ChallengeEntity>> getAllChallenges(JwtAuthenticationToken token) {
-        verifyAdmin(token);
+        verifyAdmin(token, "TL_PERM_CHALLENGE_MANAGE");
         return new ResponseData<>(200, "Lấy danh sách câu hỏi thử thách thành công", challengeRepository.findAll());
     }
 
     @Transactional
     public ResponseData<ChallengeEntity> addChallenge(JwtAuthenticationToken token, ChallengeEntity challenge) {
-        verifyAdmin(token);
+        verifyAdmin(token, "TL_PERM_CHALLENGE_MANAGE");
 
         if (challenge.getQuestion() == null || challenge.getQuestion().trim().isEmpty()) {
             throw new AppException(400, "Nội dung câu hỏi không được để trống", 400);
@@ -282,7 +354,7 @@ public class AdminService {
 
     @Transactional
     public ResponseData<ChallengeEntity> updateChallenge(JwtAuthenticationToken token, Long id, ChallengeEntity updated) {
-        verifyAdmin(token);
+        verifyAdmin(token, "TL_PERM_CHALLENGE_MANAGE");
 
         ChallengeEntity existing = challengeRepository.findById(id).orElseThrow(() ->
                 new AppException(404, "Câu hỏi không tồn tại", 404)
@@ -302,7 +374,7 @@ public class AdminService {
 
     @Transactional
     public ResponseData<Boolean> deleteChallenge(JwtAuthenticationToken token, Long id) {
-        verifyAdmin(token);
+        verifyAdmin(token, "TL_PERM_CHALLENGE_MANAGE");
 
         ChallengeEntity existing = challengeRepository.findById(id).orElseThrow(() ->
                 new AppException(404, "Câu hỏi không tồn tại", 404)

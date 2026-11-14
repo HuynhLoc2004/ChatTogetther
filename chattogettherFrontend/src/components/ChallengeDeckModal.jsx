@@ -284,13 +284,13 @@ export const ChallengeDeckModal = ({ isOpen, onClose, onShareToFeed }) => {
                 <select
                   value={newQuestionCategory}
                   onChange={(e) => setNewQuestionCategory(e.target.value)}
-                  className="px-2.5 py-1.5 text-xs bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-300 focus:outline-none focus:border-indigo-500"
+                  className="px-2.5 py-1.5 text-xs bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-300 focus:outline-none focus:border-indigo-500 font-medium"
                 >
-                  <option value="TRUTH">Thú nhận (Truth)</option>
-                  <option value="DARE">Thử thách vui (Dare)</option>
-                  <option value="DEEP_TALK">Tâm sự sâu lắng (Deep Talk)</option>
-                  <option value="MUSIC">Gu âm nhạc & Vibe</option>
-                  <option value="PHILOSOPHY">Góc nhìn cuộc sống</option>
+                  {categories.filter(c => c.key !== 'ALL').map((c) => (
+                    <option key={c.key} value={c.key}>
+                      {c.label}
+                    </option>
+                  ))}
                 </select>
 
                 <button

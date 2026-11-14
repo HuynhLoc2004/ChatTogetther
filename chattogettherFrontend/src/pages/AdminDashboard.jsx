@@ -1,29 +1,94 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Shield, Users, MessageSquare, Radio, Music, Sparkles, Settings, 
   ArrowLeft, Plus, Trash2, Edit3, Check, X, Search, RefreshCw, 
   Lock, Unlock, Eye, EyeOff, Tag, Compass, Flame, Bookmark, Play, Pause,
-  AlertTriangle, CheckCircle2, ChevronRight, Sliders, LayoutGrid
+  AlertTriangle, CheckCircle2, ChevronRight, Sliders, LayoutGrid,
+  ShieldCheck, ShieldAlert, KeyRound, Palette, ExternalLink, Layers,
+  FolderCog, Save, UserCheck, ShieldPlus, LogOut, Menu
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
+import TalovinLogo from '../components/TalovinLogo';
+
+// ==========================================
+// ĐỊNH NGHĨA HỆ THỐNG QUYỀN HẠN & VAI TRÒ CHUẨN (RBAC)
+// ==========================================
+export const SYSTEM_PERMISSIONS = [
+  { id: 'TL_PERM_STATS_VIEW', name: 'Xem Tổng quan & Số liệu', module: 'Hệ thống', description: 'Xem các chỉ số thời gian thực và thống kê hệ thống' },
+  { id: 'TL_PERM_BRAND_MANAGE', name: 'Quản lý Menu & Thương hiệu', module: 'Hệ thống', description: 'Chỉnh sửa Tên app, Slogan, Logo và cấu hình ẩn/hiện Menu điều hướng' },
+  { id: 'TL_PERM_CHALLENGE_MANAGE', name: 'Quản lý Thẻ bài & Thể loại', module: 'Nội dung', description: 'Toàn quyền thêm, sửa, xóa thẻ bài thử thách và danh mục thể loại' },
+  { id: 'TL_PERM_TOPIC_MANAGE', name: 'Quản lý Chủ đề & Cảm xúc', module: 'Nội dung', description: 'Cấu hình các thẻ cảm xúc (Vibes) và chủ đề sảnh trực tuyến' },
+  { id: 'TL_PERM_MUSIC_MANAGE', name: 'Quản lý Âm nhạc hệ thống', module: 'Nội dung', description: 'Thêm, phát thử nghiệm và xóa các bản nhạc nền thư giãn' },
+  { id: 'TL_PERM_USER_MANAGE', name: 'Quản lý Tài khoản & Kiểm duyệt', module: 'Bảo mật', description: 'Tìm kiếm, xem hồ sơ thành viên và khóa/mở khóa tài khoản' },
+  { id: 'TL_PERM_ROLE_MANAGE', name: 'Quản lý Vai trò & Phân quyền', module: 'Bảo mật', description: 'Tạo vai trò tùy biến mới và cấp phát quyền hạn chi tiết cho từng người' }
+];
+
+export const DEFAULT_ROLES = [
+  { 
+    id: 'TL_SYS_SUPERADMIN', 
+    name: 'Quản trị viên tối cao', 
+    description: 'Toàn quyền quản trị và vận hành toàn bộ hệ thống Talovin', 
+    permissions: ['TL_PERM_ALL'], 
+    badgeColor: '#ef4444' 
+  },
+  { 
+    id: 'TL_ROLE_CONTENT_EDITOR', 
+    name: 'Biên tập viên nội dung', 
+    description: 'Quản lý thẻ bài thử thách và các chủ đề thảo luận', 
+    permissions: ['TL_PERM_STATS_VIEW', 'TL_PERM_CHALLENGE_MANAGE', 'TL_PERM_TOPIC_MANAGE'], 
+    badgeColor: '#818cf8' 
+  },
+  { 
+    id: 'TL_ROLE_COMMUNITY_MOD', 
+    name: 'Kiểm duyệt viên cộng đồng', 
+    description: 'Quản lý thành viên, kiểm tra và xử lý vi phạm', 
+    permissions: ['TL_PERM_STATS_VIEW', 'TL_PERM_USER_MANAGE'], 
+    badgeColor: '#10b981' 
+  },
+  { 
+    id: 'TL_ROLE_BRAND_MANAGER', 
+    name: 'Quản lý thương hiệu & Menu', 
+    description: 'Cấu hình menu, tên ứng dụng và logo nhận diện', 
+    permissions: ['TL_PERM_STATS_VIEW', 'TL_PERM_BRAND_MANAGE'], 
+    badgeColor: '#f59e0b' 
+  },
+  { 
+    id: 'TL_ROLE_MEDIA_CURATOR', 
+    name: 'Điều phối viên âm nhạc', 
+    description: 'Quản lý danh sách bài hát và kho nhạc nền sảnh', 
+    permissions: ['TL_PERM_STATS_VIEW', 'TL_PERM_MUSIC_MANAGE'], 
+    badgeColor: '#ec4899' 
+  }
+];
+
+export const DEFAULT_CHALLENGE_CATEGORIES = [
+  { id: 'DEEP_TALK', name: 'Tâm sự sâu lắng', color: '#818cf8' },
+  { id: 'TRUTH', name: 'Thú nhận (Truth)', color: '#f43f5e' },
+  { id: 'DARE', name: 'Thử thách vui (Dare)', color: '#eab308' },
+  { id: 'MUSIC', name: 'Gu âm nhạc', color: '#06b6d4' },
+  { id: 'LIFE', name: 'Góc nhìn cuộc sống', color: '#10b981' }
+];
 
 export const AdminDashboard = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'branding' | 'challenges' | 'vibes' | 'music' | 'users'
   const [loading, setLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [activeTab, setActiveTab] = useState('overview');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Dữ liệu thống kê
+  // Thống kê hệ thống
   const [stats, setStats] = useState(null);
 
-  // Dữ liệu cấu hình hệ thống
+  // Cấu hình hệ thống (System Config)
   const [configs, setConfigs] = useState({
     brand_name: 'Talovin',
     brand_slogan: 'Social Lounge',
     menu_items: '[]',
     vibe_options: '[]',
+    challenge_categories: '[]',
+    system_roles: '[]',
     feature_toggles: '{}'
   });
   const [parsedMenuItems, setParsedMenuItems] = useState([]);
@@ -31,1032 +96,1833 @@ export const AdminDashboard = () => {
   const [newVibeInput, setNewVibeInput] = useState('');
   const [isSavingConfig, setIsSavingConfig] = useState(false);
 
-  // Dữ liệu Thẻ bài thử thách
+  // Thể loại thẻ bài động (Dynamic Challenge Categories)
+  const [challengeCategories, setChallengeCategories] = useState(DEFAULT_CHALLENGE_CATEGORIES);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState({ id: '', name: '', color: '#818cf8' });
+
+  // Thẻ bài thử thách (Challenges)
   const [challenges, setChallenges] = useState([]);
   const [challengeFilter, setChallengeFilter] = useState('ALL');
+  const [challengeSearch, setChallengeSearch] = useState('');
   const [isAddChallengeOpen, setIsAddChallengeOpen] = useState(false);
-  const [newChallenge, setNewChallenge] = useState({
+  const [editingChallengeItem, setEditingChallengeItem] = useState(null);
+  const [challengeFormData, setChallengeFormData] = useState({
     question: '',
     category: 'DEEP_TALK',
     categoryName: 'Tâm sự sâu lắng',
     badgeColor: '#818cf8'
   });
 
-  // Dữ liệu Âm nhạc
+  // Âm nhạc
   const [tracks, setTracks] = useState([]);
   const [isAddTrackOpen, setIsAddTrackOpen] = useState(false);
-  const [newTrack, setNewTrack] = useState({
-    name: '',
-    artist: '',
-    genre: 'Lo-Fi Chill',
-    audioSrc: ''
-  });
+  const [newTrack, setNewTrack] = useState({ name: '', artist: '', genre: 'Lo-Fi Chill', audioSrc: '' });
   const [playingTrackId, setPlayingTrackId] = useState(null);
   const [audioPlayer, setAudioPlayer] = useState(null);
 
-  // Dữ liệu Người dùng
+  // Người dùng & Phân quyền (Users & Roles)
   const [users, setUsers] = useState([]);
   const [userSearch, setUserSearch] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState('ALL');
+  const [selectedUserForRoles, setSelectedUserForRoles] = useState(null);
+  const [userRolesEditList, setUserRolesEditList] = useState([]);
 
-  // Kiểm tra quyền Admin khi vào trang
+  // Vai trò tùy biến (System Roles Matrix)
+  const [systemRoles, setSystemRoles] = useState(DEFAULT_ROLES);
+  const [isAddRoleModalOpen, setIsAddRoleModalOpen] = useState(false);
+  const [roleFormData, setRoleFormData] = useState({
+    id: '',
+    name: '',
+    description: '',
+    permissions: ['TL_PERM_STATS_VIEW'],
+    badgeColor: '#6366f1'
+  });
+
+  // ==========================================
+  // KHỞI TẠO & PHÂN QUYỀN TRUY CẬP (RBAC RESOLVER)
+  // ==========================================
   useEffect(() => {
-    checkAdminRole();
+    initAdminSession();
+    return () => {
+      if (audioPlayer) audioPlayer.pause();
+    };
   }, []);
 
-  const checkAdminRole = async () => {
+  const initAdminSession = async () => {
     try {
       setLoading(true);
-      // Gọi thử endpoint admin stats để kiểm tra token & quyền admin
-      const res = await axiosClient.get('/admin/stats');
-      if (res.data && res.data.data) {
-        setIsAdmin(true);
-        setStats(res.data.data);
-        fetchAllData();
+      // 1. Tải thông tin người dùng hiện tại
+      const profileRes = await axiosClient.get('/users/profile');
+      const user = profileRes?.data?.data;
+      if (!user) throw new Error("Chưa đăng nhập");
+      setCurrentUser(user);
+
+      // 2. Xác thực quyền Admin / Moderator
+      const userRoles = user.roles || [];
+      const hasAnyAdminPrivilege = userRoles.some(r => 
+        r.includes('ADMIN') || r.startsWith('TL_') || r.startsWith('PERM_')
+      );
+
+      if (!hasAnyAdminPrivilege) {
+        toast.error("Bạn không có quyền truy cập trung tâm quản trị!");
+        navigate('/');
+        return;
       }
+
+      // 3. Nạp toàn bộ dữ liệu cấu hình ban đầu
+      await fetchConfigs();
+      await fetchStats();
+      await fetchChallenges();
+      await fetchTracks();
+      await fetchUsers();
     } catch (err) {
-      setIsAdmin(false);
-      toast.error("Bạn không có quyền truy cập trang Quản trị!");
+      console.error("Lỗi xác thực quyền:", err);
+      toast.error("Phiên làm việc hết hạn hoặc không có quyền quản trị");
       navigate('/');
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchAllData = async () => {
-    fetchConfigs();
-    fetchChallenges();
-    fetchTracks();
-    fetchUsers();
+  // Tính toán danh sách quyền của người dùng hiện tại
+  const currentUserPermissions = useMemo(() => {
+    if (!currentUser) return new Set();
+    const roles = currentUser.roles || [];
+    const isSuper = roles.includes('ROLE_ADMIN') || roles.includes('ROLE_AMDIN') || 
+                    roles.includes('TL_SYS_SUPERADMIN') || roles.includes('TL_PERM_ALL');
+    
+    if (isSuper) {
+      return new Set(['TL_PERM_ALL', ...SYSTEM_PERMISSIONS.map(p => p.id)]);
+    }
+
+    const perms = new Set();
+    roles.forEach(r => {
+      if (r.startsWith('TL_PERM_')) perms.add(r);
+      const roleDef = systemRoles.find(def => def.id === r);
+      if (roleDef && roleDef.permissions) {
+        roleDef.permissions.forEach(p => perms.add(p));
+      }
+    });
+    return perms;
+  }, [currentUser, systemRoles]);
+
+  const hasPermission = (permId) => {
+    if (currentUserPermissions.has('TL_PERM_ALL')) return true;
+    return currentUserPermissions.has(permId);
   };
 
-  // Nạp cấu hình hệ thống
-  const fetchConfigs = async () => {
-    try {
-      const res = await axiosClient.get('/admin/config');
-      if (res.data && res.data.data) {
-        const data = res.data.data;
-        setConfigs(data);
-        try {
-          setParsedMenuItems(JSON.parse(data.menu_items || '[]'));
-        } catch {
-          setParsedMenuItems([]);
-        }
-        try {
-          setParsedVibes(JSON.parse(data.vibe_options || '[]'));
-        } catch {
-          setParsedVibes([]);
-        }
+  // Định nghĩa các Menu Sidebar theo nhóm rõ ràng
+  const sidebarSections = useMemo(() => {
+    return [
+      {
+        sectionTitle: 'TỔNG QUAN & HỆ THỐNG',
+        items: [
+          { id: 'overview', label: 'Tổng quan & Số liệu', icon: LayoutGrid, permission: 'TL_PERM_STATS_VIEW' },
+          { id: 'branding', label: 'Menu & Thương hiệu', icon: Sliders, permission: 'TL_PERM_BRAND_MANAGE' }
+        ]
+      },
+      {
+        sectionTitle: 'NỘI DUNG & TƯƠNG TÁC',
+        items: [
+          { id: 'challenges', label: `Thẻ bài thử thách (${challenges.length})`, icon: Sparkles, permission: 'TL_PERM_CHALLENGE_MANAGE' },
+          { id: 'vibes', label: `Chủ đề & Cảm xúc (${parsedVibes.length})`, icon: Tag, permission: 'TL_PERM_TOPIC_MANAGE' },
+          { id: 'music', label: `Âm nhạc hệ thống (${tracks.length})`, icon: Music, permission: 'TL_PERM_MUSIC_MANAGE' }
+        ]
+      },
+      {
+        sectionTitle: 'BẢO MẬT & PHÂN QUYỀN',
+        items: [
+          { id: 'users', label: `Tài khoản thành viên (${users.length})`, icon: Users, permission: 'TL_PERM_USER_MANAGE' },
+          { id: 'roles', label: `Vai trò & Quyền hạn (${systemRoles.length})`, icon: ShieldCheck, permission: 'TL_PERM_ROLE_MANAGE' }
+        ]
       }
-    } catch (err) {
-      console.error("Lỗi nạp cấu hình hệ thống:", err);
+    ];
+  }, [challenges.length, parsedVibes.length, tracks.length, users.length, systemRoles.length]);
+
+  // Tự động chuyển tab nếu tab hiện tại không được phép
+  useEffect(() => {
+    const currentItem = sidebarSections.flatMap(s => s.items).find(i => i.id === activeTab);
+    if (currentItem && !hasPermission(currentItem.permission)) {
+      const firstAllowed = sidebarSections.flatMap(s => s.items).find(i => hasPermission(i.permission));
+      if (firstAllowed) {
+        setActiveTab(firstAllowed.id);
+      }
+    }
+  }, [activeTab, currentUserPermissions, sidebarSections]);
+
+  // ==========================================
+  // CÁC HÀM TẢI & THAO TÁC DỮ LIỆU
+  // ==========================================
+  const fetchStats = async () => {
+    try {
+      const res = await axiosClient.get('/admin/stats');
+      if (res?.data?.data) setStats(res.data.data);
+    } catch (e) {
+      console.warn("Không thể tải thống kê:", e);
     }
   };
 
-  // Lưu cấu hình hệ thống
-  const handleSaveConfigs = async () => {
+  const fetchConfigs = async () => {
+    try {
+      const res = await axiosClient.get('/admin/config');
+      if (res?.data?.data) {
+        const d = res.data.data;
+        setConfigs(d);
+        try { setParsedMenuItems(JSON.parse(d.menu_items || '[]')); } catch { setParsedMenuItems([]); }
+        try { setParsedVibes(JSON.parse(d.vibe_options || '[]')); } catch { setParsedVibes([]); }
+        try { 
+          if (d.challenge_categories) {
+            const parsedCats = JSON.parse(d.challenge_categories);
+            if (Array.isArray(parsedCats) && parsedCats.length > 0) setChallengeCategories(parsedCats);
+          }
+        } catch {}
+        try {
+          if (d.system_roles) {
+            const parsedRoles = JSON.parse(d.system_roles);
+            if (Array.isArray(parsedRoles) && parsedRoles.length > 0) setSystemRoles(parsedRoles);
+          }
+        } catch {}
+      }
+    } catch (e) {
+      console.error("Lỗi nạp cấu hình hệ thống:", e);
+    }
+  };
+
+  const saveConfigToBackend = async (partialConfigs, successMsg = "Đã lưu cấu hình thành công!") => {
     try {
       setIsSavingConfig(true);
-      const payload = {
-        brand_name: configs.brand_name || 'Talovin',
-        brand_slogan: configs.brand_slogan || 'Social Lounge',
-        menu_items: JSON.stringify(parsedMenuItems),
-        vibe_options: JSON.stringify(parsedVibes),
-        feature_toggles: configs.feature_toggles || '{}'
-      };
-
-      await axiosClient.put('/admin/config', payload);
-      toast.success("Đã cập nhật cấu hình hệ thống thành công!");
+      const updated = { ...configs, ...partialConfigs };
+      await axiosClient.put('/admin/config', updated);
+      setConfigs(updated);
+      toast.success(successMsg);
       fetchConfigs();
     } catch (err) {
-      toast.error(err.response?.data?.message || "Không thể lưu cấu hình");
+      toast.error(err.response?.data?.message || "Không thể cập nhật cấu hình");
     } finally {
       setIsSavingConfig(false);
     }
   };
 
-  // Nạp câu hỏi thử thách
+  // --- Thẻ bài thử thách ---
   const fetchChallenges = async () => {
     try {
       const res = await axiosClient.get('/admin/challenges');
-      if (res.data && res.data.data) {
-        setChallenges(res.data.data);
-      }
-    } catch (err) {
-      console.error("Lỗi nạp câu hỏi thử thách:", err);
+      if (res?.data?.data) setChallenges(res.data.data);
+    } catch (e) {
+      console.warn("Không thể tải thử thách:", e);
     }
   };
 
-  // Thêm câu hỏi thử thách
-  const handleAddChallenge = async (e) => {
+  const handleOpenAddChallenge = () => {
+    const firstCat = challengeCategories[0] || { id: 'DEEP_TALK', name: 'Tâm sự sâu lắng', color: '#818cf8' };
+    setChallengeFormData({
+      question: '',
+      category: firstCat.id,
+      categoryName: firstCat.name,
+      badgeColor: firstCat.color
+    });
+    setEditingChallengeItem(null);
+    setIsAddChallengeOpen(true);
+  };
+
+  const handleOpenEditChallenge = (item) => {
+    setChallengeFormData({
+      question: item.question || '',
+      category: item.category || 'DEEP_TALK',
+      categoryName: item.categoryName || 'Tâm sự sâu lắng',
+      badgeColor: item.badgeColor || '#818cf8'
+    });
+    setEditingChallengeItem(item);
+    setIsAddChallengeOpen(true);
+  };
+
+  const handleSaveChallengeForm = async (e) => {
     e.preventDefault();
-    if (!newChallenge.question.trim()) {
+    if (!challengeFormData.question.trim()) {
       toast.error("Vui lòng nhập nội dung câu hỏi!");
       return;
     }
+
     try {
-      await axiosClient.post('/admin/challenges', newChallenge);
-      toast.success("Đã thêm câu hỏi thử thách mới!");
+      if (editingChallengeItem) {
+        await axiosClient.put(`/admin/challenges/${editingChallengeItem.id}`, challengeFormData);
+        toast.success("Đã cập nhật câu hỏi thử thách!");
+      } else {
+        await axiosClient.post('/admin/challenges', challengeFormData);
+        toast.success("Đã thêm câu hỏi thử thách mới!");
+      }
       setIsAddChallengeOpen(false);
-      setNewChallenge({
-        question: '',
-        category: 'DEEP_TALK',
-        categoryName: 'Tâm sự sâu lắng',
-        badgeColor: '#818cf8'
-      });
       fetchChallenges();
     } catch (err) {
-      toast.error(err.response?.data?.message || "Lỗi khi thêm câu hỏi");
+      toast.error(err.response?.data?.message || "Lỗi lưu câu hỏi");
     }
   };
 
-  // Xóa câu hỏi thử thách
   const handleDeleteChallenge = async (id) => {
+    if (!window.confirm("Bạn có chắc chắn muốn xóa câu hỏi này?")) return;
     try {
       await axiosClient.delete(`/admin/challenges/${id}`);
       toast.success("Đã xóa câu hỏi");
       fetchChallenges();
-    } catch (err) {
+    } catch {
       toast.error("Không thể xóa câu hỏi");
     }
   };
 
-  // Bật/tắt câu hỏi
   const handleToggleChallenge = async (item) => {
     try {
-      await axiosClient.put(`/admin/challenges/${item.id}`, {
-        active: !item.active
-      });
+      await axiosClient.put(`/admin/challenges/${item.id}`, { active: !item.active });
       toast.success(`Đã ${item.active ? 'ẩn' : 'kích hoạt'} câu hỏi!`);
       fetchChallenges();
-    } catch (err) {
-      toast.error("Không thể cập nhật trạng thái câu hỏi");
+    } catch {
+      toast.error("Không thể cập nhật trạng thái");
     }
   };
 
-  // Nạp âm nhạc
+  // Quản lý Thể loại Thử thách Động (Dynamic Categories)
+  const handleSaveCategory = async () => {
+    if (!editingCategory.id.trim() || !editingCategory.name.trim()) {
+      toast.error("Mã thể loại và tên hiển thị không được để trống!");
+      return;
+    }
+    const cleanId = editingCategory.id.trim().toUpperCase().replace(/\s+/g, '_');
+    const existingIndex = challengeCategories.findIndex(c => c.id === cleanId);
+    let updated;
+    if (existingIndex >= 0) {
+      updated = [...challengeCategories];
+      updated[existingIndex] = { ...editingCategory, id: cleanId };
+    } else {
+      updated = [...challengeCategories, { ...editingCategory, id: cleanId }];
+    }
+    setChallengeCategories(updated);
+    await saveConfigToBackend({ challenge_categories: JSON.stringify(updated) }, "Đã cập nhật danh mục thể loại!");
+    setEditingCategory({ id: '', name: '', color: '#818cf8' });
+  };
+
+  const handleDeleteCategory = async (catId) => {
+    if (challengeCategories.length <= 1) {
+      toast.error("Hệ thống phải có ít nhất 1 thể loại!");
+      return;
+    }
+    if (!window.confirm(`Bạn có chắc muốn xóa thể loại "${catId}"? Các câu hỏi thuộc thể loại này sẽ vẫn được lưu.`)) return;
+    const updated = challengeCategories.filter(c => c.id !== catId);
+    setChallengeCategories(updated);
+    await saveConfigToBackend({ challenge_categories: JSON.stringify(updated) }, "Đã xóa thể loại thử thách!");
+  };
+
+  // --- Âm nhạc ---
   const fetchTracks = async () => {
     try {
       const res = await axiosClient.get('/admin/tracks');
-      if (res.data && res.data.data) {
-        setTracks(res.data.data);
-      }
-    } catch (err) {
-      console.error("Lỗi nạp danh sách nhạc:", err);
+      if (res?.data?.data) setTracks(res.data.data);
+    } catch (e) {
+      console.warn("Không thể tải tracks:", e);
     }
   };
 
-  // Thêm bản nhạc mới
   const handleAddTrack = async (e) => {
     e.preventDefault();
     if (!newTrack.name.trim() || !newTrack.audioSrc.trim()) {
-      toast.error("Vui lòng nhập đầy đủ tên và đường dẫn nhạc!");
+      toast.error("Vui lòng nhập tên và link nhạc hợp lệ!");
       return;
     }
     try {
       await axiosClient.post('/admin/tracks', newTrack);
-      toast.success("Đã thêm bản nhạc mới vào hệ thống!");
+      toast.success("Đã thêm bài hát vào hệ thống!");
       setIsAddTrackOpen(false);
-      setNewTrack({
-        name: '',
-        artist: '',
-        genre: 'Lo-Fi Chill',
-        audioSrc: ''
-      });
+      setNewTrack({ name: '', artist: '', genre: 'Lo-Fi Chill', audioSrc: '' });
       fetchTracks();
     } catch (err) {
-      toast.error(err.response?.data?.message || "Lỗi khi thêm nhạc");
+      toast.error(err.response?.data?.message || "Lỗi thêm bài hát");
     }
   };
 
-  // Xóa bản nhạc
   const handleDeleteTrack = async (id) => {
+    if (!window.confirm("Bạn có chắc chắn muốn xóa bài hát này?")) return;
     try {
       await axiosClient.delete(`/admin/tracks/${id}`);
-      toast.success("Đã xóa bản nhạc");
+      toast.success("Đã xóa bài hát");
       if (playingTrackId === id && audioPlayer) {
         audioPlayer.pause();
         setPlayingTrackId(null);
       }
       fetchTracks();
-    } catch (err) {
-      toast.error("Không thể xóa bản nhạc");
+    } catch {
+      toast.error("Không thể xóa bài hát");
     }
   };
 
-  // Thử phát nhạc
   const handleTogglePlayAudio = (track) => {
     if (playingTrackId === track.id) {
-      if (audioPlayer) {
-        audioPlayer.pause();
-      }
+      if (audioPlayer) audioPlayer.pause();
       setPlayingTrackId(null);
     } else {
-      if (audioPlayer) {
-        audioPlayer.pause();
-      }
+      if (audioPlayer) audioPlayer.pause();
       const audio = new Audio(track.audioSrc);
-      audio.play().catch(() => toast.error("Không thể phát file âm thanh này"));
+      audio.play().catch(() => toast.error("Không thể phát URL âm thanh này"));
       audio.onended = () => setPlayingTrackId(null);
       setAudioPlayer(audio);
       setPlayingTrackId(track.id);
     }
   };
 
-  // Nạp người dùng
+  // --- Người dùng & Phân quyền ---
   const fetchUsers = async () => {
     try {
       const res = await axiosClient.get('/admin/users');
-      if (res.data && res.data.data) {
-        setUsers(res.data.data);
-      }
-    } catch (err) {
-      console.error("Lỗi nạp người dùng:", err);
+      if (res?.data?.data) setUsers(res.data.data);
+    } catch (e) {
+      console.warn("Không thể tải người dùng:", e);
     }
   };
 
-  // Khóa / Mở khóa tài khoản
   const handleToggleUserStatus = async (user) => {
+    const newStatus = !user.active;
     try {
-      const newStatus = !user.active;
-      await axiosClient.put(`/admin/users/${user.id}/status`, null, {
-        params: { active: newStatus }
-      });
+      await axiosClient.put(`/admin/users/${user.id}/status`, null, { params: { active: newStatus } });
       toast.success(`Đã ${newStatus ? 'mở khóa' : 'khóa'} tài khoản ${user.nickname || user.account}!`);
       fetchUsers();
-    } catch (err) {
+    } catch {
       toast.error("Không thể thay đổi trạng thái tài khoản");
     }
   };
 
-  // Thăng cấp / Hạ cấp Admin
-  const handleToggleUserAdminRole = async (user) => {
+  const handleOpenRoleModal = (user) => {
+    setSelectedUserForRoles(user);
+    setUserRolesEditList([...(user.roles || ['ROLE_USER'])]);
+  };
+
+  const handleSaveUserRoles = async () => {
+    if (!selectedUserForRoles) return;
     try {
-      const isUserAdmin = user.roles && (user.roles.includes('ROLE_ADMIN') || user.roles.includes('ROLE_AMDIN'));
-      const newRoles = isUserAdmin ? ['ROLE_USER'] : ['ROLE_USER', 'ROLE_ADMIN'];
-      
-      await axiosClient.put(`/admin/users/${user.id}/roles`, newRoles);
-      toast.success(`Đã cập nhật quyền của ${user.nickname || user.account} thành: ${isUserAdmin ? 'Thành viên' : 'Quản trị viên'}!`);
+      await axiosClient.put(`/admin/users/${selectedUserForRoles.id}/roles`, userRolesEditList);
+      toast.success(`Đã cập nhật quyền hạn cho ${selectedUserForRoles.nickname || selectedUserForRoles.account}!`);
+      setSelectedUserForRoles(null);
       fetchUsers();
     } catch (err) {
-      toast.error("Không thể thay đổi quyền quản trị");
+      toast.error(err.response?.data?.message || "Không thể cập nhật quyền hạn");
     }
   };
 
-  // Thêm chip vibe mới
-  const handleAddVibe = () => {
-    if (!newVibeInput.trim()) return;
-    if (parsedVibes.includes(newVibeInput.trim())) {
-      toast.error("Chủ đề này đã tồn tại!");
+  // --- Quản lý Vai trò tùy biến (System Roles) ---
+  const handleSaveRole = async (e) => {
+    e.preventDefault();
+    if (!roleFormData.id.trim() || !roleFormData.name.trim()) {
+      toast.error("Mã vai trò và tên vai trò không được để trống!");
       return;
     }
-    setParsedVibes(prev => [...prev, newVibeInput.trim()]);
-    setNewVibeInput('');
+    const cleanId = roleFormData.id.trim().toUpperCase().replace(/\s+/g, '_');
+    const existingIndex = systemRoles.findIndex(r => r.id === cleanId);
+    let updated;
+    if (existingIndex >= 0) {
+      updated = [...systemRoles];
+      updated[existingIndex] = { ...roleFormData, id: cleanId };
+    } else {
+      updated = [...systemRoles, { ...roleFormData, id: cleanId }];
+    }
+    setSystemRoles(updated);
+    await saveConfigToBackend({ system_roles: JSON.stringify(updated) }, "Đã lưu vai trò thành công!");
+    setIsAddRoleModalOpen(false);
+    setRoleFormData({
+      id: '',
+      name: '',
+      description: '',
+      permissions: ['TL_PERM_STATS_VIEW'],
+      badgeColor: '#6366f1'
+    });
   };
 
-  // Xóa chip vibe
-  const handleRemoveVibe = (vibe) => {
-    setParsedVibes(prev => prev.filter(v => v !== vibe));
+  const handleDeleteRole = async (roleId) => {
+    if (roleId === 'TL_SYS_SUPERADMIN') {
+      toast.error("Không thể xóa vai trò Quản trị viên tối cao!");
+      return;
+    }
+    if (!window.confirm(`Bạn có chắc muốn xóa vai trò "${roleId}"?`)) return;
+    const updated = systemRoles.filter(r => r.id !== roleId);
+    setSystemRoles(updated);
+    await saveConfigToBackend({ system_roles: JSON.stringify(updated) }, "Đã xóa vai trò!");
   };
 
-  // Toggle ẩn/hiện menu item
-  const handleToggleMenuItem = (id) => {
-    setParsedMenuItems(prev => prev.map(item => 
-      item.id === id ? { ...item, visible: !item.visible } : item
-    ));
-  };
+  // --- Lọc dữ liệu hiển thị ---
+  const filteredChallenges = useMemo(() => {
+    return challenges.filter(c => {
+      const matchCat = challengeFilter === 'ALL' || c.category === challengeFilter;
+      const matchSearch = !challengeSearch.trim() || (c.question || '').toLowerCase().includes(challengeSearch.toLowerCase());
+      return matchCat && matchSearch;
+    });
+  }, [challenges, challengeFilter, challengeSearch]);
 
-  // Đổi tên nhãn menu item
-  const handleRenameMenuItem = (id, newLabel) => {
-    setParsedMenuItems(prev => prev.map(item => 
-      item.id === id ? { ...item, label: newLabel } : item
-    ));
-  };
-
-  // Lọc câu hỏi thử thách
-  const filteredChallenges = challenges.filter(c => {
-    if (challengeFilter === 'ALL') return true;
-    return c.category === challengeFilter;
-  });
-
-  // Lọc người dùng
-  const filteredUsers = users.filter(u => {
-    const q = userSearch.toLowerCase().trim();
-    if (!q) return true;
-    return (u.account || '').toLowerCase().includes(q) || 
-           (u.nickname || '').toLowerCase().includes(q) || 
-           (u.email || '').toLowerCase().includes(q);
-  });
+  const filteredUsers = useMemo(() => {
+    return users.filter(u => {
+      const q = userSearch.toLowerCase().trim();
+      const matchSearch = !q || (u.account || '').toLowerCase().includes(q) || 
+                                (u.nickname || '').toLowerCase().includes(q) || 
+                                (u.email || '').toLowerCase().includes(q);
+      const roles = u.roles || [];
+      const matchRole = userRoleFilter === 'ALL' || 
+                        (userRoleFilter === 'ADMIN' && (roles.includes('ROLE_ADMIN') || roles.includes('TL_SYS_SUPERADMIN') || roles.some(r => r.startsWith('TL_ROLE_')))) ||
+                        (userRoleFilter === 'MEMBER' && !roles.some(r => r.includes('ADMIN') || r.startsWith('TL_')));
+      return matchSearch && matchRole;
+    });
+  }, [users, userSearch, userRoleFilter]);
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center text-zinc-400 font-mono text-xs gap-3">
-        <div className="w-8 h-8 border-2 border-zinc-700 border-t-emerald-400 rounded-full animate-spin"></div>
-        <span>Đang xác thực quyền Quản trị viên...</span>
+      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center text-zinc-400 gap-3 font-mono">
+        <RefreshCw size={26} className="animate-spin text-indigo-500" />
+        <span className="text-sm">Đang tải trung tâm quản trị Talovin...</span>
       </div>
     );
   }
 
-  if (!isAdmin) return null;
-
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans">
-      
-      {/* TOP HEADER */}
-      <header className="sticky top-0 z-40 bg-zinc-900/95 backdrop-blur-md border-b border-zinc-800 px-4 sm:px-8 py-3.5 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <button 
-            type="button"
-            onClick={() => navigate('/')}
-            className="px-3 py-1.5 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs font-semibold flex items-center gap-2 border border-zinc-700/60 transition-all active:scale-95"
-            title="Quay lại sảnh"
-          >
-            <ArrowLeft size={16} />
-            <span className="hidden sm:inline">Quay lại Sảnh</span>
-          </button>
-          
-          <div className="h-4 w-[1px] bg-zinc-800 hidden sm:block"></div>
-
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
-              <Shield size={17} />
+    <div className="flex h-screen w-full bg-zinc-950 text-zinc-100 overflow-hidden font-sans antialiased">
+      {/* ==========================================
+          SIDEBAR QUẢN TRỊ VIÊN (ENTERPRISE SIDEBAR)
+          ========================================== */}
+      <aside className={`
+        fixed inset-y-0 left-0 z-50 w-72 bg-zinc-950/95 border-r border-zinc-800/80 flex flex-col justify-between
+        transition-transform duration-300 md:static md:translate-x-0
+        ${isMobileMenuOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'}
+      `}>
+        {/* Header Sidebar */}
+        <div className="flex flex-col border-b border-zinc-800/80 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2.5">
+              <TalovinLogo size={26} />
+              <div className="flex flex-col leading-none">
+                <span className="font-extrabold text-base tracking-tight text-white">{configs.brand_name || "Talovin"}</span>
+                <span className="text-[10px] font-mono text-indigo-400 tracking-wider uppercase font-semibold mt-0.5">Admin Console</span>
+              </div>
             </div>
-            <div>
-              <h1 className="text-zinc-100 font-bold text-sm tracking-tight flex items-center gap-1.5">
-                <span>Trung Tâm Quản Trị Hệ Thống</span>
-                <span className="px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20 text-[9px] font-mono font-bold uppercase">
-                  Admin
-                </span>
-              </h1>
-              <p className="text-zinc-500 font-mono text-[10px]">Talovin Control Hub & Dynamic Scaling</p>
+            <button 
+              onClick={() => setIsMobileMenuOpen(false)} 
+              className="md:hidden text-zinc-400 hover:text-white p-1"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Admin User Mini Card */}
+          <div className="flex items-center gap-3 p-2.5 rounded-xl bg-zinc-900/60 border border-zinc-800/60">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center font-bold text-white shadow-sm flex-shrink-0">
+              {(currentUser?.nickname || currentUser?.account || 'A').charAt(0).toUpperCase()}
+            </div>
+            <div className="flex flex-col min-w-0">
+              <span className="text-xs font-bold text-zinc-200 truncate">{currentUser?.nickname || currentUser?.account}</span>
+              <span className="text-[10px] font-mono text-zinc-400 truncate">@{currentUser?.account}</span>
+              <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-emerald-400 mt-0.5">
+                <ShieldCheck size={10} /> {currentUserPermissions.has('TL_PERM_ALL') ? 'Toàn quyền' : 'Phân quyền riêng'}
+              </span>
             </div>
           </div>
         </div>
 
-        <button 
-          type="button"
-          onClick={fetchAllData}
-          className="p-2 rounded-xl bg-zinc-800/60 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-all border border-zinc-800"
-          title="Làm mới dữ liệu"
-        >
-          <RefreshCw size={15} />
-        </button>
-      </header>
+        {/* Menu Navigation Sections */}
+        <div className="flex-1 overflow-y-auto px-3.5 py-4 space-y-6 custom-scrollbar">
+          {sidebarSections.map((sec, secIdx) => {
+            const allowedItems = sec.items.filter(item => hasPermission(item.permission));
+            if (allowedItems.length === 0) return null;
 
-      {/* MAIN CONTAINER */}
-      <div className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-8 flex flex-col md:flex-row gap-6">
-        
-        {/* SIDEBAR TABS DOCK */}
-        <div className="w-full md:w-64 flex-shrink-0">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-2 space-y-1 sticky top-20 shadow-md">
-            
-            <button 
-              type="button"
-              onClick={() => setActiveTab('overview')}
-              className={`w-full px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2.5 transition-all ${activeTab === 'overview' ? 'bg-zinc-800 text-white shadow-sm font-bold' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40'}`}
-            >
-              <LayoutGrid size={15} className="text-emerald-400" />
-              <span>Tổng quan & Số liệu</span>
-            </button>
-
-            <button 
-              type="button"
-              onClick={() => setActiveTab('branding')}
-              className={`w-full px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2.5 transition-all ${activeTab === 'branding' ? 'bg-zinc-800 text-white shadow-sm font-bold' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40'}`}
-            >
-              <Sliders size={15} className="text-indigo-400" />
-              <span>Menu, Logo & Thương hiệu</span>
-            </button>
-
-            <button 
-              type="button"
-              onClick={() => setActiveTab('challenges')}
-              className={`w-full px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2.5 transition-all ${activeTab === 'challenges' ? 'bg-zinc-800 text-white shadow-sm font-bold' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40'}`}
-            >
-              <Sparkles size={15} className="text-amber-400" />
-              <span>Thẻ bài thử thách ({challenges.length})</span>
-            </button>
-
-            <button 
-              type="button"
-              onClick={() => setActiveTab('vibes')}
-              className={`w-full px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2.5 transition-all ${activeTab === 'vibes' ? 'bg-zinc-800 text-white shadow-sm font-bold' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40'}`}
-            >
-              <Tag size={15} className="text-pink-400" />
-              <span>Chủ đề & Thẻ cảm xúc</span>
-            </button>
-
-            <button 
-              type="button"
-              onClick={() => setActiveTab('music')}
-              className={`w-full px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2.5 transition-all ${activeTab === 'music' ? 'bg-zinc-800 text-white shadow-sm font-bold' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40'}`}
-            >
-              <Music size={15} className="text-sky-400" />
-              <span>Âm nhạc hệ thống ({tracks.length})</span>
-            </button>
-
-            <button 
-              type="button"
-              onClick={() => setActiveTab('users')}
-              className={`w-full px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2.5 transition-all ${activeTab === 'users' ? 'bg-zinc-800 text-white shadow-sm font-bold' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40'}`}
-            >
-              <Users size={15} className="text-purple-400" />
-              <span>Thành viên & Phân quyền ({users.length})</span>
-            </button>
-          </div>
-        </div>
-
-        {/* WORKSPACE CONTENT AREA */}
-        <div className="flex-1 min-w-0">
-          
-          {/* ========================================================= */}
-          {/* TAB 1: TỔNG QUAN & SỐ LIỆU */}
-          {/* ========================================================= */}
-          {activeTab === 'overview' && (
-            <div className="space-y-6">
-              <div>
-                <h2 className="text-zinc-100 font-bold text-lg mb-1">Tổng Quan Hệ Thống</h2>
-                <p className="text-zinc-400 text-xs">Các chỉ số hoạt động thời gian thực của ứng dụng Talovin</p>
-              </div>
-
-              {/* Stat Cards */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800">
-                  <div className="flex items-center justify-between text-zinc-500 mb-2">
-                    <span className="text-xs font-semibold">Người dùng</span>
-                    <Users size={16} className="text-purple-400" />
-                  </div>
-                  <div className="text-2xl font-bold font-mono text-zinc-100">{stats?.totalUsers || users.length}</div>
-                  <span className="text-[10px] text-zinc-500 font-mono mt-1 block">Tài khoản đã đăng ký</span>
+            return (
+              <div key={secIdx} className="space-y-1">
+                <div className="px-3 text-[10px] font-mono font-bold tracking-wider text-zinc-400 uppercase mb-2">
+                  {sec.sectionTitle}
                 </div>
-
-                <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800">
-                  <div className="flex items-center justify-between text-zinc-500 mb-2">
-                    <span className="text-xs font-semibold">Bài viết sảnh</span>
-                    <MessageSquare size={16} className="text-emerald-400" />
-                  </div>
-                  <div className="text-2xl font-bold font-mono text-zinc-100">{stats?.totalPosts || 0}</div>
-                  <span className="text-[10px] text-zinc-500 font-mono mt-1 block">Tín hiệu / khoảnh khắc</span>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800">
-                  <div className="flex items-center justify-between text-zinc-500 mb-2">
-                    <span className="text-xs font-semibold">Phòng thoại</span>
-                    <Radio size={16} className="text-sky-400" />
-                  </div>
-                  <div className="text-2xl font-bold font-mono text-zinc-100">{stats?.totalRooms || 0}</div>
-                  <span className="text-[10px] text-zinc-500 font-mono mt-1 block">Không gian đàm thoại</span>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800">
-                  <div className="flex items-center justify-between text-zinc-500 mb-2">
-                    <span className="text-xs font-semibold">Thử thách</span>
-                    <Sparkles size={16} className="text-amber-400" />
-                  </div>
-                  <div className="text-2xl font-bold font-mono text-zinc-100">{challenges.length}</div>
-                  <span className="text-[10px] text-zinc-500 font-mono mt-1 block">Câu hỏi tương tác thực</span>
-                </div>
-              </div>
-
-              {/* Status Banner */}
-              <div className="p-5 rounded-2xl bg-gradient-to-r from-emerald-950/40 via-zinc-900 to-zinc-900 border border-emerald-500/30">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0">
-                    <CheckCircle2 size={20} />
-                  </div>
-                  <div>
-                    <h3 className="text-zinc-100 font-bold text-sm">Hệ Thống Đang Vận Hành Ổn Định</h3>
-                    <p className="text-zinc-400 text-xs mt-0.5">
-                      Toàn bộ các tham số menu, logo, câu hỏi thử thách và danh sách nhạc hiện được quản trị động qua cơ sở dữ liệu.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ========================================================= */}
-          {/* TAB 2: MENU, LOGO & THƯƠNG HIỆU (BRAND & NAVIGATION)      */}
-          {/* ========================================================= */}
-          {activeTab === 'branding' && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-zinc-100 font-bold text-lg mb-1">Menu & Cấu Hình Thương Hiệu</h2>
-                  <p className="text-zinc-400 text-xs">Quản lý tên ứng dụng, logo và cấu hình động các mục trên thanh điều hướng</p>
-                </div>
-                <button 
-                  type="button"
-                  onClick={handleSaveConfigs}
-                  disabled={isSavingConfig}
-                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow-md transition-all active:scale-95 disabled:opacity-50"
-                >
-                  {isSavingConfig ? "Đang lưu..." : "Lưu tất cả thay đổi"}
-                </button>
-              </div>
-
-              {/* Brand Name & Slogan */}
-              <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4">
-                <h3 className="text-zinc-200 font-bold text-xs uppercase tracking-wider font-mono">Nhận diện thương hiệu (Logo)</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-zinc-300 text-xs font-medium mb-1">Tên ứng dụng / Logo text *</label>
-                    <input 
-                      type="text" 
-                      value={configs.brand_name || ''}
-                      onChange={(e) => setConfigs(prev => ({ ...prev, brand_name: e.target.value }))}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-700 text-zinc-100 text-xs focus:outline-none focus:border-zinc-500 font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-zinc-300 text-xs font-medium mb-1">Slogan / Phụ đề</label>
-                    <input 
-                      type="text" 
-                      value={configs.brand_slogan || ''}
-                      onChange={(e) => setConfigs(prev => ({ ...prev, brand_slogan: e.target.value }))}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-700 text-zinc-100 text-xs focus:outline-none focus:border-zinc-500"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Dynamic Menu Items Manager */}
-              <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-zinc-200 font-bold text-xs uppercase tracking-wider font-mono">
-                    Danh Sách Các Mục Menu Sidebar ({parsedMenuItems.length})
-                  </h3>
-                  <span className="text-[11px] text-zinc-500 font-mono">Admin có thể đổi nhãn hoặc ẩn/hiện mục menu</span>
-                </div>
-
-                <div className="space-y-2">
-                  {parsedMenuItems.map((item, index) => (
-                    <div key={item.id} className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800/80 flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <span className="text-zinc-600 font-mono text-xs w-5 text-center">#{index + 1}</span>
-                        <div className="min-w-0 flex-1">
-                          <input 
-                            type="text" 
-                            value={item.label}
-                            onChange={(e) => handleRenameMenuItem(item.id, e.target.value)}
-                            className="bg-transparent border-b border-zinc-800 focus:border-zinc-500 text-zinc-100 text-xs font-semibold py-1 px-1 focus:outline-none w-full max-w-xs"
-                          />
-                          <span className="text-[10px] text-zinc-500 font-mono block mt-0.5">Mã: {item.id}</span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <button 
-                          type="button"
-                          onClick={() => handleToggleMenuItem(item.id)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all ${item.visible !== false ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20' : 'bg-zinc-800 text-zinc-500 border border-zinc-700'}`}
-                        >
-                          {item.visible !== false ? <Eye size={12} /> : <EyeOff size={12} />}
-                          <span>{item.visible !== false ? "Đang hiện" : "Đã ẩn"}</span>
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ========================================================= */}
-          {/* TAB 3: THẺ BÀI THỬ THÁCH (CHALLENGE DECKS)                */}
-          {/* ========================================================= */}
-          {activeTab === 'challenges' && (
-            <div className="space-y-5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-zinc-100 font-bold text-lg mb-1">Quản Lý Thẻ Bài Thử Thách</h2>
-                  <p className="text-zinc-400 text-xs">Thêm, sửa, xóa hoặc ẩn các câu hỏi tương tác thực tế</p>
-                </div>
-                <button 
-                  type="button"
-                  onClick={() => setIsAddChallengeOpen(true)}
-                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-2 shadow-md transition-all active:scale-95"
-                >
-                  <Plus size={15} />
-                  <span>Thêm câu hỏi mới</span>
-                </button>
-              </div>
-
-              {/* Category Filter Pills */}
-              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-                {[
-                  { id: 'ALL', label: 'Tất cả' },
-                  { id: 'TRUTH', label: 'Thú nhận' },
-                  { id: 'DARE', label: 'Thử thách vui' },
-                  { id: 'DEEP_TALK', label: 'Tâm sự sâu lắng' },
-                  { id: 'MUSIC', label: 'Gu âm nhạc' },
-                  { id: 'PHILOSOPHY', label: 'Góc nhìn cuộc sống' }
-                ].map(cat => (
-                  <button 
-                    key={cat.id}
-                    type="button"
-                    onClick={() => setChallengeFilter(cat.id)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border ${challengeFilter === cat.id ? 'bg-zinc-800 text-white border-zinc-600 shadow-sm' : 'bg-zinc-900/60 text-zinc-400 border-zinc-800/80 hover:text-zinc-200'}`}
-                  >
-                    {cat.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* List of Questions */}
-              <div className="space-y-2.5">
-                {filteredChallenges.length === 0 ? (
-                  <div className="py-12 text-center text-zinc-500 text-xs">Không có câu hỏi nào trong danh mục này.</div>
-                ) : (
-                  filteredChallenges.map(item => (
-                    <div key={item.id} className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 transition-all flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 mb-1.5">
-                          <span 
-                            className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider"
-                            style={{ 
-                              background: `${item.badgeColor || '#818cf8'}20`,
-                              color: item.badgeColor || '#818cf8',
-                              border: `1px solid ${item.badgeColor || '#818cf8'}40`
-                            }}
-                          >
-                            {item.categoryName || item.category}
-                          </span>
-                          <span className="text-[10px] text-zinc-500 font-mono">
-                            Đã bốc {item.usageCount || 0} lần
-                          </span>
-                          {!item.active && (
-                            <span className="px-1.5 py-0.2 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[9px] font-mono">
-                              Đã tắt
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-zinc-200 text-xs sm:text-sm font-medium leading-relaxed">
-                          "{item.question}"
-                        </p>
-                      </div>
-
-                      <div className="flex items-center gap-1.5 flex-shrink-0 pt-1">
-                        <button 
-                          type="button"
-                          onClick={() => handleToggleChallenge(item)}
-                          className={`p-1.5 rounded-lg text-xs transition-all ${item.active ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300' : 'bg-amber-500/10 text-amber-400'}`}
-                          title={item.active ? "Ẩn câu hỏi" : "Bật câu hỏi"}
-                        >
-                          {item.active ? <Eye size={14} /> : <EyeOff size={14} />}
-                        </button>
-                        <button 
-                          type="button"
-                          onClick={() => handleDeleteChallenge(item.id)}
-                          className="p-1.5 rounded-lg bg-zinc-800 hover:bg-rose-950/40 text-zinc-400 hover:text-rose-400 transition-all"
-                          title="Xóa câu hỏi"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ========================================================= */}
-          {/* TAB 4: CHỦ ĐỀ & THẺ CẢM XÚC (VIBE OPTIONS)                 */}
-          {/* ========================================================= */}
-          {activeTab === 'vibes' && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-zinc-100 font-bold text-lg mb-1">Quản Lý Thẻ Chủ Đề & Cảm Xúc</h2>
-                  <p className="text-zinc-400 text-xs">Các thẻ hiển thị trên thanh đăng bài để người dùng phân loại tâm trạng</p>
-                </div>
-                <button 
-                  type="button"
-                  onClick={handleSaveConfigs}
-                  disabled={isSavingConfig}
-                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow-md transition-all active:scale-95 disabled:opacity-50"
-                >
-                  {isSavingConfig ? "Đang lưu..." : "Lưu chủ đề"}
-                </button>
-              </div>
-
-              {/* Thêm Vibe mới */}
-              <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4">
-                <h3 className="text-zinc-200 font-bold text-xs uppercase tracking-wider font-mono">Thêm thẻ mới</h3>
-                <div className="flex items-center gap-2 max-w-md">
-                  <input 
-                    type="text" 
-                    placeholder="VD: Học tập, Thư giãn, Trà sữa..."
-                    value={newVibeInput}
-                    onChange={(e) => setNewVibeInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddVibe()}
-                    className="flex-1 px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-700 text-zinc-100 text-xs focus:outline-none focus:border-zinc-500"
-                  />
-                  <button 
-                    type="button"
-                    onClick={handleAddVibe}
-                    className="px-4 py-2.5 rounded-xl bg-zinc-100 hover:bg-white text-zinc-950 font-bold text-xs shadow-md transition-all active:scale-95 flex-shrink-0"
-                  >
-                    Thêm
-                  </button>
-                </div>
-              </div>
-
-              {/* Danh sách Vibe hiện tại */}
-              <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-3">
-                <h3 className="text-zinc-200 font-bold text-xs uppercase tracking-wider font-mono">
-                  Các thẻ đang hoạt động ({parsedVibes.length})
-                </h3>
-                <div className="flex items-center gap-2.5 flex-wrap">
-                  {parsedVibes.map((vibe, idx) => (
-                    <div key={idx} className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-zinc-950 border border-zinc-700/80 text-zinc-200 text-xs font-medium">
-                      <span>{vibe}</span>
-                      <button 
-                        type="button" 
-                        onClick={() => handleRemoveVibe(vibe)}
-                        className="text-zinc-500 hover:text-rose-400 p-0.5 rounded transition-colors"
-                      >
-                        <X size={12} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ========================================================= */}
-          {/* TAB 5: ÂM NHẠC HỆ THỐNG (MUSIC TRACKS)                    */}
-          {/* ========================================================= */}
-          {activeTab === 'music' && (
-            <div className="space-y-5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-zinc-100 font-bold text-lg mb-1">Âm Nhạc Hệ Thống</h2>
-                  <p className="text-zinc-400 text-xs">Quản trị các bản nhạc nền Lo-Fi và âm thanh thư giãn trên toàn hệ thống</p>
-                </div>
-                <button 
-                  type="button"
-                  onClick={() => setIsAddTrackOpen(true)}
-                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-2 shadow-md transition-all active:scale-95"
-                >
-                  <Plus size={15} />
-                  <span>Thêm bản nhạc mới</span>
-                </button>
-              </div>
-
-              <div className="space-y-2.5">
-                {tracks.length === 0 ? (
-                  <div className="py-12 text-center text-zinc-500 text-xs">Chưa có bản nhạc nào trong hệ thống.</div>
-                ) : (
-                  tracks.map(track => (
-                    <div key={track.id} className="p-3.5 rounded-2xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 transition-all flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <button 
-                          type="button"
-                          onClick={() => handleTogglePlayAudio(track)}
-                          className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all flex-shrink-0 ${playingTrackId === track.id ? 'bg-emerald-600 text-white animate-pulse' : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'}`}
-                          title={playingTrackId === track.id ? "Tạm dừng" : "Nghe thử"}
-                        >
-                          {playingTrackId === track.id ? <Pause size={14} /> : <Play size={14} />}
-                        </button>
-                        <div className="min-w-0">
-                          <h4 className="text-zinc-100 font-semibold text-xs truncate">{track.name}</h4>
-                          <span className="text-[10px] text-zinc-500 font-mono block truncate">
-                            {track.artist || 'Nghệ sĩ chưa rõ'} • {track.genre || 'Lo-Fi Chill'}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <button 
-                          type="button"
-                          onClick={() => handleDeleteTrack(track.id)}
-                          className="p-1.5 rounded-lg bg-zinc-800 hover:bg-rose-950/40 text-zinc-400 hover:text-rose-400 transition-all"
-                          title="Xóa bài nhạc"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ========================================================= */}
-          {/* TAB 6: THÀNH VIÊN & PHÂN QUYỀN (USERS & ROLES)            */}
-          {/* ========================================================= */}
-          {activeTab === 'users' && (
-            <div className="space-y-5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-zinc-100 font-bold text-lg mb-1">Quản Lý Thành Viên & Phân Quyền</h2>
-                  <p className="text-zinc-400 text-xs">Xem danh sách tài khoản, khóa tài khoản vi phạm hoặc chỉ định Quản trị viên</p>
-                </div>
-                <div className="relative w-full sm:w-64">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
-                  <input 
-                    type="text" 
-                    placeholder="Tìm theo tên, account..."
-                    value={userSearch}
-                    onChange={(e) => setUserSearch(e.target.value)}
-                    className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-200 text-xs focus:outline-none focus:border-zinc-600"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                {filteredUsers.map(u => {
-                  const isUserAdmin = u.roles && (u.roles.includes('ROLE_ADMIN') || u.roles.includes('ROLE_AMDIN'));
-
+                {allowedItems.map((item) => {
+                  const Icon = item.icon;
+                  const isCurrent = activeTab === item.id;
                   return (
-                    <div key={u.id} className="p-3.5 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-9 h-9 rounded-xl bg-zinc-800 flex items-center justify-center font-bold text-xs text-zinc-200 overflow-hidden border border-zinc-700 flex-shrink-0">
-                          {u.avatar ? (
-                            <img src={u.avatar} alt={u.nickname} className="w-full h-full object-cover" />
-                          ) : (
-                            (u.nickname || u.account || 'U').charAt(0).toUpperCase()
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 truncate">
-                            <span className="text-zinc-100 font-bold text-xs truncate">{u.nickname || u.account}</span>
-                            {isUserAdmin ? (
-                              <span className="px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20 text-[9px] font-bold">
-                                Quản trị viên
-                              </span>
-                            ) : (
-                              <span className="px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400 text-[9px]">
-                                Thành viên
-                              </span>
-                            )}
-                            {u.active === false && (
-                              <span className="px-1.5 py-0.2 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[9px] font-bold">
-                                Đã khóa
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-zinc-500 font-mono text-[10px] truncate block">@{u.account} • ID: {u.id}</span>
-                        </div>
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        setActiveTab(item.id);
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className={`w-full px-3 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-between transition-all duration-150 ${
+                        isCurrent 
+                          ? 'bg-indigo-600/15 text-indigo-300 border border-indigo-500/30 shadow-sm font-bold' 
+                          : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 truncate">
+                        <Icon size={16} className={isCurrent ? 'text-indigo-400' : 'text-zinc-400'} />
+                        <span className="truncate">{item.label}</span>
                       </div>
-
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <button 
-                          type="button"
-                          onClick={() => handleToggleUserAdminRole(u)}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${isUserAdmin ? 'bg-zinc-800 border-zinc-700 text-zinc-300' : 'bg-indigo-500/10 border-indigo-500/20 text-indigo-300'}`}
-                          title="Thay đổi vai trò Admin"
-                        >
-                          {isUserAdmin ? "Hạ xuống User" : "Cấp quyền Admin"}
-                        </button>
-
-                        <button 
-                          type="button"
-                          onClick={() => handleToggleUserStatus(u)}
-                          className={`p-1.5 rounded-lg border transition-all ${u.active !== false ? 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-rose-400' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}`}
-                          title={u.active !== false ? "Khóa tài khoản" : "Mở khóa tài khoản"}
-                        >
-                          {u.active !== false ? <Lock size={14} /> : <Unlock size={14} />}
-                        </button>
-                      </div>
-                    </div>
+                      {isCurrent && <ChevronRight size={13} className="text-indigo-400" />}
+                    </button>
                   );
                 })}
               </div>
-            </div>
-          )}
-
+            );
+          })}
         </div>
-      </div>
 
-      {/* ========================================================= */}
-      {/* MODAL THÊM CÂU HỎI THỬ THÁCH MỚI */}
-      {/* ========================================================= */}
-      {isAddChallengeOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in" onClick={() => setIsAddChallengeOpen(false)}>
-          <div className="w-full max-w-md rounded-3xl bg-zinc-900 border border-zinc-800 p-6 shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between pb-3 border-b border-zinc-800 mb-4">
-              <h3 className="text-zinc-100 font-bold text-sm">Thêm Câu Hỏi Thử Thách Mới</h3>
-              <button onClick={() => setIsAddChallengeOpen(false)} className="text-zinc-400 hover:text-white p-1"><X size={16} /></button>
+        {/* Footer Sidebar */}
+        <div className="p-4 border-t border-zinc-800/80 flex items-center gap-2">
+          <button
+            onClick={() => navigate('/')}
+            className="flex-1 py-2 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-semibold flex items-center justify-center gap-2 transition-all border border-zinc-800"
+          >
+            <ArrowLeft size={14} />
+            <span>Về Sảnh Trực Tuyến</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* Backdrop trên Mobile khi mở Sidebar */}
+      {isMobileMenuOpen && (
+        <div 
+          onClick={() => setIsMobileMenuOpen(false)} 
+          className="fixed inset-0 z-40 bg-black/80 backdrop-blur-sm md:hidden animate-fade-in" 
+        />
+      )}
+
+      {/* ==========================================
+          MAIN CONTENT AREA (FULL ENTERPRISE DASHBOARD)
+          ========================================== */}
+      <main className="flex-1 flex flex-col h-full overflow-hidden bg-zinc-950">
+        {/* Top Navbar */}
+        <header className="h-14 border-b border-zinc-800/80 px-4 sm:px-6 flex items-center justify-between bg-zinc-950/80 backdrop-blur-md flex-shrink-0 z-20">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="md:hidden text-zinc-400 hover:text-white p-1.5 rounded-lg bg-zinc-900 border border-zinc-800"
+            >
+              <Menu size={18} />
+            </button>
+            <div className="flex items-center gap-2 text-xs font-mono text-zinc-400">
+              <span className="text-zinc-400">Quản trị</span>
+              <span>/</span>
+              <span className="text-zinc-200 font-bold capitalize">
+                {sidebarSections.flatMap(s => s.items).find(i => i.id === activeTab)?.label.split('(')[0] || activeTab}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-mono">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span>Hệ thống bảo mật RBAC Online</span>
             </div>
 
-            <form onSubmit={handleAddChallenge} className="space-y-4">
+            <button
+              onClick={() => window.open('/', '_blank')}
+              className="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-white text-xs flex items-center gap-1.5 transition-all"
+              title="Xem ứng dụng ở tab mới"
+            >
+              <ExternalLink size={13} />
+              <span className="hidden sm:inline">Mở Sảnh</span>
+            </button>
+          </div>
+        </header>
+
+        {/* Content Body with Controlled Scrolling */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 custom-scrollbar">
+          <div className="max-w-6xl mx-auto space-y-6">
+
+            {/* ====================================================
+                TAB 1: TỔNG QUAN & SỐ LIỆU (OVERVIEW)
+                ==================================================== */}
+            {activeTab === 'overview' && hasPermission('TL_PERM_STATS_VIEW') && (
+              <div className="space-y-6 animate-fade-in">
+                <div>
+                  <h2 className="text-xl font-bold text-zinc-100 tracking-tight">Tổng Quan Hệ Thống</h2>
+                  <p className="text-xs text-zinc-400 mt-0.5">Chỉ số vận hành thời gian thực và cấu trúc tài nguyên của Talovin</p>
+                </div>
+
+                {/* Grid 4 Cards Thống kê cân đối */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 hover:border-zinc-700 transition-all flex flex-col justify-between">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs font-medium text-zinc-400">Người dùng đăng ký</span>
+                      <div className="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
+                        <Users size={16} />
+                      </div>
+                    </div>
+                    <div className="text-2xl font-bold font-mono text-zinc-100 tracking-tight">{stats?.totalUsers ?? users.length}</div>
+                    <span className="text-[11px] text-zinc-400 mt-1">Tài khoản lưu trên CSDL</span>
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 hover:border-zinc-700 transition-all flex flex-col justify-between">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs font-medium text-zinc-400">Bài viết Sảnh</span>
+                      <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+                        <MessageSquare size={16} />
+                      </div>
+                    </div>
+                    <div className="text-2xl font-bold font-mono text-zinc-100 tracking-tight">{stats?.totalPosts ?? 0}</div>
+                    <span className="text-[11px] text-zinc-400 mt-1">Bài thảo luận & tương tác</span>
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 hover:border-zinc-700 transition-all flex flex-col justify-between">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs font-medium text-zinc-400">Phòng đàm thoại</span>
+                      <div className="w-8 h-8 rounded-lg bg-cyan-500/10 text-cyan-400 flex items-center justify-center">
+                        <Radio size={16} />
+                      </div>
+                    </div>
+                    <div className="text-2xl font-bold font-mono text-zinc-100 tracking-tight">{stats?.totalRooms ?? 0}</div>
+                    <span className="text-[11px] text-zinc-400 mt-1">Không gian chat & WebRTC</span>
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 hover:border-zinc-700 transition-all flex flex-col justify-between">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs font-medium text-zinc-400">Câu hỏi thử thách</span>
+                      <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center">
+                        <Sparkles size={16} />
+                      </div>
+                    </div>
+                    <div className="text-2xl font-bold font-mono text-zinc-100 tracking-tight">{challenges.length}</div>
+                    <span className="text-[11px] text-zinc-400 mt-1">{challengeCategories.length} thể loại tương tác</span>
+                  </div>
+                </div>
+
+                {/* Phân hệ thông tin bảo mật & Khối trạng thái */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  <div className="lg:col-span-2 p-5 rounded-2xl bg-zinc-900/40 border border-zinc-800/80 space-y-4">
+                    <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck size={18} className="text-indigo-400" />
+                        <h3 className="text-sm font-bold text-zinc-200">Trạng Thái An Ninh & Phân Quyền Hạt Mịn (Granular RBAC)</h3>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        Bảo mật cấp cao
+                      </span>
+                    </div>
+
+                    <div className="space-y-3 text-xs text-zinc-400 leading-relaxed">
+                      <p>
+                        Toàn bộ các phân hệ quản lý đã được thiết lập bảo vệ độc lập. Thành viên quản trị chỉ thấy và thao tác đúng các tính năng được phân bổ thông qua mã định danh bảo mật <code className="text-indigo-300 font-mono">TL_ROLE_...</code> và <code className="text-indigo-300 font-mono">TL_PERM_...</code>.
+                      </p>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
+                        <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800/60">
+                          <span className="text-[11px] text-zinc-400 block font-mono">Tổng quyền hạn:</span>
+                          <span className="text-base font-bold text-zinc-200 font-mono">{SYSTEM_PERMISSIONS.length} mã quyền</span>
+                        </div>
+                        <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800/60">
+                          <span className="text-[11px] text-zinc-400 block font-mono">Vai trò mặc định:</span>
+                          <span className="text-base font-bold text-zinc-200 font-mono">{systemRoles.length} vai trò</span>
+                        </div>
+                        <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800/60 col-span-2 sm:col-span-1">
+                          <span className="text-[11px] text-zinc-400 block font-mono">Trạng thái đồng bộ:</span>
+                          <span className="text-base font-bold text-emerald-400 font-mono">Real-time DB</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Quick Shortcut Card */}
+                  <div className="p-5 rounded-2xl bg-zinc-900/40 border border-zinc-800/80 space-y-3 flex flex-col justify-between">
+                    <div>
+                      <h3 className="text-sm font-bold text-zinc-200 mb-2">Thao Tác Nhanh</h3>
+                      <p className="text-xs text-zinc-400 mb-4">Các lối tắt quản trị viên thường xuyên sử dụng</p>
+                      <div className="space-y-2">
+                        {hasPermission('TL_PERM_CHALLENGE_MANAGE') && (
+                          <button
+                            onClick={() => { setActiveTab('challenges'); handleOpenAddChallenge(); }}
+                            className="w-full text-left p-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 text-xs font-semibold text-zinc-300 flex items-center justify-between"
+                          >
+                            <span className="flex items-center gap-2"><Sparkles size={14} className="text-amber-400" /> Thêm câu hỏi thử thách</span>
+                            <Plus size={14} />
+                          </button>
+                        )}
+                        {hasPermission('TL_PERM_USER_MANAGE') && (
+                          <button
+                            onClick={() => setActiveTab('users')}
+                            className="w-full text-left p-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 text-xs font-semibold text-zinc-300 flex items-center justify-between"
+                          >
+                            <span className="flex items-center gap-2"><Users size={14} className="text-emerald-400" /> Quản lý danh sách thành viên</span>
+                            <ChevronRight size={14} />
+                          </button>
+                        )}
+                        {hasPermission('TL_PERM_BRAND_MANAGE') && (
+                          <button
+                            onClick={() => setActiveTab('branding')}
+                            className="w-full text-left p-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 text-xs font-semibold text-zinc-300 flex items-center justify-between"
+                          >
+                            <span className="flex items-center gap-2"><Sliders size={14} className="text-indigo-400" /> Tùy chỉnh Menu & Logo</span>
+                            <ChevronRight size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ====================================================
+                TAB 2: THƯƠNG HIỆU & MENU (BRANDING & MENU)
+                ==================================================== */}
+            {activeTab === 'branding' && hasPermission('TL_PERM_BRAND_MANAGE') && (
+              <div className="space-y-6 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-bold text-zinc-100 tracking-tight">Menu & Cấu Hình Thương Hiệu</h2>
+                    <p className="text-xs text-zinc-400 mt-0.5">Quản lý nhận diện thương hiệu, logo và cấu hình bật/tắt các mục trên menu thanh điều hướng</p>
+                  </div>
+                  <button
+                    onClick={() => saveConfigToBackend({
+                      brand_name: configs.brand_name,
+                      brand_slogan: configs.brand_slogan,
+                      menu_items: JSON.stringify(parsedMenuItems)
+                    })}
+                    disabled={isSavingConfig}
+                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-emerald-950 transition-all"
+                  >
+                    <Save size={14} />
+                    <span>{isSavingConfig ? "Đang lưu..." : "Lưu tất cả thay đổi"}</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Nhận diện thương hiệu */}
+                  <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-4">
+                    <h3 className="text-sm font-bold text-zinc-200 border-b border-zinc-800 pb-3 flex items-center gap-2">
+                      <Sliders size={15} className="text-indigo-400" />
+                      Nhận Diện Ứng Dụng (Brand Info)
+                    </h3>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-xs text-zinc-400 font-mono mb-1 block">Tên ứng dụng / Logo text *</label>
+                        <input
+                          type="text"
+                          value={configs.brand_name || ''}
+                          onChange={(e) => setConfigs({ ...configs, brand_name: e.target.value })}
+                          className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-zinc-400 font-mono mb-1 block">Slogan / Phụ đề</label>
+                        <input
+                          type="text"
+                          value={configs.brand_slogan || ''}
+                          onChange={(e) => setConfigs({ ...configs, brand_slogan: e.target.value })}
+                          className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium"
+                        />
+                      </div>
+                      <div className="pt-2">
+                        <span className="text-[11px] text-zinc-400 block mb-2 font-mono">Xem trước logo hiển thị:</span>
+                        <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800/80 flex items-center gap-3">
+                          <TalovinLogo size={32} />
+                          <div>
+                            <span className="font-extrabold text-white text-base block">{configs.brand_name || "Talovin"}</span>
+                            <span className="text-[11px] text-zinc-400 font-mono">{configs.brand_slogan || "Social Lounge"}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Quản lý danh sách Menu Sidebar */}
+                  <div className="lg:col-span-2 p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-4">
+                    <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                      <h3 className="text-sm font-bold text-zinc-200 flex items-center gap-2">
+                        <Layers size={15} className="text-emerald-400" />
+                        Danh Sách Các Mục Menu Sidebar ({parsedMenuItems.length})
+                      </h3>
+                      <span className="text-[11px] text-zinc-400 font-mono">Nhấn để Bật/Tắt ẩn hiện</span>
+                    </div>
+
+                    <div className="space-y-2">
+                      {parsedMenuItems.map((item) => (
+                        <div
+                          key={item.id}
+                          className="p-3 rounded-xl bg-zinc-950/70 border border-zinc-800/80 flex items-center justify-between gap-3 hover:border-zinc-700 transition-all"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <span className="font-mono text-[11px] text-zinc-400 w-6">#{item.order || 1}</span>
+                            <input
+                              type="text"
+                              value={item.label}
+                              onChange={(e) => {
+                                const newLabel = e.target.value;
+                                setParsedMenuItems(prev => prev.map(m => m.id === item.id ? { ...m, label: newLabel } : m));
+                              }}
+                              className="bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-indigo-500 text-xs font-bold text-zinc-200 px-1 py-0.5 focus:outline-none"
+                            />
+                            <span className="text-[10px] font-mono text-zinc-400 hidden sm:inline">id: {item.id}</span>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setParsedMenuItems(prev => prev.map(m => m.id === item.id ? { ...m, visible: !m.visible } : m));
+                            }}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                              item.visible 
+                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                                : 'bg-zinc-800 text-zinc-400 border border-zinc-700'
+                            }`}
+                          >
+                            {item.visible ? <Eye size={12} /> : <EyeOff size={12} />}
+                            <span>{item.visible ? 'Đang hiện' : 'Đã ẩn'}</span>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ====================================================
+                TAB 3: THẺ BÀI THỬ THÁCH (CHALLENGES - DYNAMIC CATEGORIES)
+                ==================================================== */}
+            {activeTab === 'challenges' && hasPermission('TL_PERM_CHALLENGE_MANAGE') && (
+              <div className="space-y-6 animate-fade-in">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-xl font-bold text-zinc-100 tracking-tight">Quản Lý Thẻ Bài Thử Thách</h2>
+                    <p className="text-xs text-zinc-400 mt-0.5">Thêm, sửa, xóa các câu hỏi tâm lý & tương tác cho người dùng trên Sảnh</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setIsCategoryModalOpen(true)}
+                      className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-bold text-xs flex items-center gap-1.5 border border-zinc-800 transition-all"
+                    >
+                      <FolderCog size={14} className="text-indigo-400" />
+                      <span>Quản lý Thể loại ({challengeCategories.length})</span>
+                    </button>
+                    <button
+                      onClick={handleOpenAddChallenge}
+                      className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-950 transition-all"
+                    >
+                      <Plus size={14} />
+                      <span>Thêm câu hỏi mới</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Filter and Search Bar */}
+                <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-3">
+                  <div className="relative">
+                    <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
+                    <input
+                      type="text"
+                      placeholder="Tìm kiếm nội dung câu hỏi thử thách..."
+                      value={challengeSearch}
+                      onChange={(e) => setChallengeSearch(e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-10 pr-4 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+
+                  {/* Dynamic Category Pills Filter */}
+                  <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                    <button
+                      onClick={() => setChallengeFilter('ALL')}
+                      className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                        challengeFilter === 'ALL' 
+                          ? 'bg-white text-black font-bold' 
+                          : 'bg-zinc-950 text-zinc-400 border border-zinc-800 hover:border-zinc-700'
+                      }`}
+                    >
+                      Tất cả ({challenges.length})
+                    </button>
+                    {challengeCategories.map((cat) => (
+                      <button
+                        key={cat.id}
+                        onClick={() => setChallengeFilter(cat.id)}
+                        className={`px-3 py-1 rounded-full text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                          challengeFilter === cat.id 
+                            ? 'bg-zinc-800 text-white border border-zinc-600 font-bold' 
+                            : 'bg-zinc-950 text-zinc-400 border border-zinc-800 hover:border-zinc-700'
+                        }`}
+                      >
+                        <span className="w-2 h-2 rounded-full" style={{ background: cat.color || '#818cf8' }}></span>
+                        <span>{cat.name}</span>
+                        <span className="text-[10px] font-mono text-zinc-400">
+                          ({challenges.filter(c => c.category === cat.id).length})
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* List of Challenges */}
+                <div className="space-y-2.5">
+                  {filteredChallenges.length === 0 ? (
+                    <div className="p-12 text-center rounded-2xl bg-zinc-900/30 border border-dashed border-zinc-800 text-zinc-400 text-xs">
+                      Không tìm thấy câu hỏi nào phù hợp với bộ lọc.
+                    </div>
+                  ) : (
+                    filteredChallenges.map((item) => (
+                      <div
+                        key={item.id}
+                        className="p-4 rounded-xl bg-zinc-900/60 border border-zinc-800/80 hover:border-zinc-700 flex items-start justify-between gap-4 transition-all"
+                      >
+                        <div className="space-y-1.5 flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span 
+                              className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider"
+                              style={{ 
+                                background: `${item.badgeColor || '#818cf8'}20`, 
+                                color: item.badgeColor || '#818cf8',
+                                border: `1px solid ${item.badgeColor || '#818cf8'}40`
+                              }}
+                            >
+                              {item.categoryName || item.category}
+                            </span>
+                            <span className="text-[11px] font-mono text-zinc-400">Đã bốc: {item.usageCount || 0} lần</span>
+                            {!item.active && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-zinc-800 text-zinc-400 border border-zinc-700">
+                                Đang ẩn
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm font-medium text-zinc-200 leading-snug break-words">
+                            "{item.question}"
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-1 flex-shrink-0 pt-1">
+                          <button
+                            onClick={() => handleToggleChallenge(item)}
+                            className={`p-1.5 rounded-lg text-xs transition-all ${item.active ? 'text-zinc-400 hover:text-white' : 'text-amber-400'}`}
+                            title={item.active ? "Ẩn câu hỏi" : "Kích hoạt câu hỏi"}
+                          >
+                            {item.active ? <Eye size={15} /> : <EyeOff size={15} />}
+                          </button>
+                          <button
+                            onClick={() => handleOpenEditChallenge(item)}
+                            className="p-1.5 rounded-lg text-zinc-400 hover:text-indigo-400 transition-all"
+                            title="Chỉnh sửa câu hỏi"
+                          >
+                            <Edit3 size={15} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteChallenge(item.id)}
+                            className="p-1.5 rounded-lg text-zinc-400 hover:text-red-400 transition-all"
+                            title="Xóa câu hỏi"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ====================================================
+                TAB 4: CHỦ ĐỀ & CẢM XÚC (VIBE TAGS)
+                ==================================================== */}
+            {activeTab === 'vibes' && hasPermission('TL_PERM_TOPIC_MANAGE') && (
+              <div className="space-y-6 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-bold text-zinc-100 tracking-tight">Chủ Đề & Thẻ Cảm Xúc (Vibes)</h2>
+                    <p className="text-xs text-zinc-400 mt-0.5">Quản lý các chip cảm xúc và chủ đề thảo luận nhanh cho thành viên khi đăng bài</p>
+                  </div>
+                  <button
+                    onClick={() => saveConfigToBackend({ vibe_options: JSON.stringify(parsedVibes) }, "Đã lưu danh sách thẻ cảm xúc!")}
+                    disabled={isSavingConfig}
+                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-emerald-950 transition-all"
+                  >
+                    <Save size={14} />
+                    <span>Lưu Thẻ Cảm Xúc</span>
+                  </button>
+                </div>
+
+                <div className="p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-5">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Nhập tên cảm xúc mới (ví dụ: Chữa lành, Hào hứng, Tâm đắc)..."
+                      value={newVibeInput}
+                      onChange={(e) => setNewVibeInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          if (!newVibeInput.trim()) return;
+                          if (parsedVibes.includes(newVibeInput.trim())) return toast.error("Đã tồn tại!");
+                          setParsedVibes([...parsedVibes, newVibeInput.trim()]);
+                          setNewVibeInput('');
+                        }
+                      }}
+                      className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                    />
+                    <button
+                      onClick={() => {
+                        if (!newVibeInput.trim()) return;
+                        if (parsedVibes.includes(newVibeInput.trim())) return toast.error("Đã tồn tại!");
+                        setParsedVibes([...parsedVibes, newVibeInput.trim()]);
+                        setNewVibeInput('');
+                      }}
+                      className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm"
+                    >
+                      <Plus size={14} />
+                      <span>Thêm Thẻ</span>
+                    </button>
+                  </div>
+
+                  <div>
+                    <span className="text-xs font-mono text-zinc-400 block mb-3 font-semibold">
+                      DANH SÁCH CÁC THẺ CẢM XÚC ĐANG HIỂN THỊ TRÊN SẢNH ({parsedVibes.length}):
+                    </span>
+                    <div className="flex flex-wrap gap-2.5">
+                      {parsedVibes.map((vibe) => (
+                        <div
+                          key={vibe}
+                          className="px-3.5 py-1.5 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center gap-2 text-xs font-semibold text-zinc-200 group hover:border-zinc-700"
+                        >
+                          <Sparkles size={12} className="text-indigo-400" />
+                          <span>{vibe}</span>
+                          <button
+                            type="button"
+                            onClick={() => setParsedVibes(parsedVibes.filter(v => v !== vibe))}
+                            className="text-zinc-500 hover:text-red-400 ml-1"
+                            title="Xóa thẻ này"
+                          >
+                            <X size={13} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ====================================================
+                TAB 5: ÂM NHẠC HỆ THỐNG (MUSIC)
+                ==================================================== */}
+            {activeTab === 'music' && hasPermission('TL_PERM_MUSIC_MANAGE') && (
+              <div className="space-y-6 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-bold text-zinc-100 tracking-tight">Âm Nhạc Hệ Thống</h2>
+                    <p className="text-xs text-zinc-400 mt-0.5">Kho nhạc Lo-Fi Chill phát nền thư giãn cho sảnh trực tuyến</p>
+                  </div>
+                  <button
+                    onClick={() => setIsAddTrackOpen(true)}
+                    className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-950 transition-all"
+                  >
+                    <Plus size={14} />
+                    <span>Thêm bản nhạc mới</span>
+                  </button>
+                </div>
+
+                <div className="space-y-2.5">
+                  {tracks.length === 0 ? (
+                    <div className="p-12 text-center rounded-2xl bg-zinc-900/30 border border-dashed border-zinc-800 text-zinc-400 text-xs">
+                      Kho âm nhạc hiện chưa có bản nhạc nào. Hãy thêm file audio .mp3 đầu tiên!
+                    </div>
+                  ) : (
+                    tracks.map((t) => (
+                      <div
+                        key={t.id}
+                        className="p-3.5 rounded-xl bg-zinc-900/60 border border-zinc-800/80 hover:border-zinc-700 flex items-center justify-between gap-4 transition-all"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <button
+                            onClick={() => handleTogglePlayAudio(t)}
+                            className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
+                              playingTrackId === t.id 
+                                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900' 
+                                : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                            }`}
+                          >
+                            {playingTrackId === t.id ? <Pause size={15} /> : <Play size={15} className="ml-0.5" />}
+                          </button>
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-xs font-bold text-zinc-200 truncate">{t.name}</span>
+                            <span className="text-[11px] text-zinc-400 truncate">{t.artist || 'Không rõ nghệ sĩ'} • {t.genre || 'Chill'}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-[10px] font-mono text-zinc-400 max-w-[150px] truncate hidden sm:inline">
+                            {t.audioSrc}
+                          </span>
+                          <button
+                            onClick={() => handleDeleteTrack(t.id)}
+                            className="p-1.5 rounded-lg text-zinc-400 hover:text-red-400 transition-all"
+                            title="Xóa bài hát"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ====================================================
+                TAB 6: QUẢN LÝ THÀNH VIÊN (USERS & ROLE ASSIGNMENT)
+                ==================================================== */}
+            {activeTab === 'users' && hasPermission('TL_PERM_USER_MANAGE') && (
+              <div className="space-y-6 animate-fade-in">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-xl font-bold text-zinc-100 tracking-tight">Quản Lý Thành Viên & Phân Quyền Hạt Mịn</h2>
+                    <p className="text-xs text-zinc-400 mt-0.5">Xem danh sách người dùng, kiểm soát trạng thái khóa và cấp phát quyền hạn theo từng phân hệ</p>
+                  </div>
+                </div>
+
+                {/* Search & Filter Header */}
+                <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 flex flex-col sm:flex-row items-center gap-3">
+                  <div className="relative flex-1 w-full">
+                    <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
+                    <input
+                      type="text"
+                      placeholder="Tìm theo tên, nickname, account hoặc email..."
+                      value={userSearch}
+                      onChange={(e) => setUserSearch(e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-10 pr-4 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-1.5 w-full sm:w-auto">
+                    <button
+                      onClick={() => setUserRoleFilter('ALL')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold ${userRoleFilter === 'ALL' ? 'bg-zinc-800 text-white font-bold' : 'text-zinc-400 hover:text-white'}`}
+                    >
+                      Tất cả ({users.length})
+                    </button>
+                    <button
+                      onClick={() => setUserRoleFilter('ADMIN')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold ${userRoleFilter === 'ADMIN' ? 'bg-zinc-800 text-white font-bold' : 'text-zinc-400 hover:text-white'}`}
+                    >
+                      Có quyền Quản trị
+                    </button>
+                    <button
+                      onClick={() => setUserRoleFilter('MEMBER')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold ${userRoleFilter === 'MEMBER' ? 'bg-zinc-800 text-white font-bold' : 'text-zinc-400 hover:text-white'}`}
+                    >
+                      Thành viên thường
+                    </button>
+                  </div>
+                </div>
+
+                {/* Users List Table */}
+                <div className="space-y-2">
+                  {filteredUsers.map((u) => {
+                    const roles = u.roles || [];
+                    const isSuper = roles.includes('ROLE_ADMIN') || roles.includes('TL_SYS_SUPERADMIN');
+                    const isMod = roles.some(r => r.startsWith('TL_ROLE_') || r.startsWith('TL_PERM_'));
+
+                    return (
+                      <div
+                        key={u.id}
+                        className="p-3.5 rounded-xl bg-zinc-900/60 border border-zinc-800/80 hover:border-zinc-700 flex items-center justify-between gap-3 transition-all"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-zinc-700 to-zinc-600 flex items-center justify-center font-bold text-white flex-shrink-0">
+                            {(u.nickname || u.account || 'U').charAt(0).toUpperCase()}
+                          </div>
+                          <div className="flex flex-col min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-bold text-zinc-100 truncate">{u.nickname || u.account}</span>
+                              <span className="text-[10px] font-mono text-zinc-400">@{u.account}</span>
+                              {isSuper ? (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-red-500/10 text-red-400 border border-red-500/20">
+                                  Super Admin
+                                </span>
+                              ) : isMod ? (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                                  Quản trị bộ phận
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-zinc-800 text-zinc-400 border border-zinc-700">
+                                  Thành viên
+                                </span>
+                              )}
+                              {!u.active && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-red-950 text-red-300 border border-red-800">
+                                  Đã khóa
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[11px] text-zinc-400 truncate">{u.email || 'Chưa đăng ký email'} • ID: {u.id}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {hasPermission('TL_PERM_ROLE_MANAGE') && (
+                            <button
+                              onClick={() => handleOpenRoleModal(u)}
+                              className="px-3 py-1.5 rounded-lg bg-indigo-600/15 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all"
+                            >
+                              <ShieldCheck size={13} />
+                              <span>Phân quyền</span>
+                            </button>
+                          )}
+
+                          <button
+                            onClick={() => handleToggleUserStatus(u)}
+                            className={`p-2 rounded-lg border text-xs transition-all ${
+                              u.active 
+                                ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-red-400' 
+                                : 'bg-red-500/15 border-red-500/30 text-red-400 hover:bg-red-500 hover:text-white'
+                            }`}
+                            title={u.active ? "Khóa tài khoản" : "Mở khóa tài khoản"}
+                          >
+                            {u.active ? <Lock size={14} /> : <Unlock size={14} />}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ====================================================
+                TAB 7: VAI TRÒ & QUYỀN HẠN (SYSTEM ROLES MATRIX)
+                ==================================================== */}
+            {activeTab === 'roles' && hasPermission('TL_PERM_ROLE_MANAGE') && (
+              <div className="space-y-6 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-bold text-zinc-100 tracking-tight">Quản Lý Vai Trò & Ma Trận Phân Quyền</h2>
+                    <p className="text-xs text-zinc-400 mt-0.5">Tạo các vai trò tùy biến và gắn quyền hạn theo từng tính năng cụ thể</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setRoleFormData({
+                        id: '',
+                        name: '',
+                        description: '',
+                        permissions: ['TL_PERM_STATS_VIEW'],
+                        badgeColor: '#6366f1'
+                      });
+                      setIsAddRoleModalOpen(true);
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-indigo-950 transition-all"
+                  >
+                    <ShieldPlus size={14} />
+                    <span>Tạo vai trò mới</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {systemRoles.map((role) => (
+                    <div
+                      key={role.id}
+                      className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-3 flex flex-col justify-between"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <span 
+                              className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold"
+                              style={{ 
+                                background: `${role.badgeColor || '#6366f1'}20`, 
+                                color: role.badgeColor || '#6366f1',
+                                border: `1px solid ${role.badgeColor || '#6366f1'}40`
+                              }}
+                            >
+                              {role.id}
+                            </span>
+                            <h3 className="text-sm font-bold text-white">{role.name}</h3>
+                          </div>
+                          {role.id !== 'TL_SYS_SUPERADMIN' && (
+                            <button
+                              onClick={() => handleDeleteRole(role.id)}
+                              className="text-zinc-500 hover:text-red-400 p-1"
+                              title="Xóa vai trò này"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-xs text-zinc-400 leading-snug">{role.description}</p>
+                      </div>
+
+                      <div className="pt-2 border-t border-zinc-800/60">
+                        <span className="text-[10px] font-mono text-zinc-400 block mb-1.5 uppercase font-semibold">Quyền hạn kích hoạt:</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {role.permissions.map((p) => {
+                            const pDef = SYSTEM_PERMISSIONS.find(sp => sp.id === p);
+                            return (
+                              <span
+                                key={p}
+                                className="px-2 py-0.5 rounded-md text-[10px] font-mono bg-zinc-950 border border-zinc-800 text-zinc-300"
+                              >
+                                {pDef ? pDef.name : p}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+          </div>
+        </div>
+      </main>
+
+      {/* ====================================================
+          MODAL: THÊM / CHỈNH SỬA CÂU HỎI THỬ THÁCH
+          ==================================================== */}
+      {isAddChallengeOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => setIsAddChallengeOpen(false)}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Sparkles size={16} className="text-amber-400" />
+                {editingChallengeItem ? "Chỉnh Sửa Câu Hỏi Thử Thách" : "Thêm Câu Hỏi Thử Thách Mới"}
+              </h3>
+              <button onClick={() => setIsAddChallengeOpen(false)} className="text-zinc-400 hover:text-white">
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveChallengeForm} className="space-y-4">
               <div>
-                <label className="block text-zinc-300 text-xs font-medium mb-1">Nội dung câu hỏi / thử thách *</label>
-                <textarea 
-                  rows="3"
-                  value={newChallenge.question}
-                  onChange={(e) => setNewChallenge(prev => ({ ...prev, question: e.target.value }))}
+                <label className="text-xs text-zinc-400 font-mono mb-1 block">Nội dung câu hỏi / thử thách *</label>
+                <textarea
+                  rows={4}
                   required
                   placeholder="Nhập câu hỏi gợi mở, sâu sắc hoặc thử thách thú vị..."
-                  className="w-full p-3 rounded-xl bg-zinc-950 border border-zinc-700 text-zinc-100 text-xs focus:outline-none focus:border-zinc-500"
+                  value={challengeFormData.question}
+                  onChange={(e) => setChallengeFormData({ ...challengeFormData, question: e.target.value })}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium resize-none leading-relaxed"
                 />
               </div>
 
+              {/* Dynamic Category Selector */}
               <div>
-                <label className="block text-zinc-300 text-xs font-medium mb-1">Thể loại</label>
-                <select 
-                  value={newChallenge.category}
+                <label className="text-xs text-zinc-400 font-mono mb-1 block">Thể loại (Tự động cập nhật từ CSDL)</label>
+                <select
+                  value={challengeFormData.category}
                   onChange={(e) => {
-                    const cat = e.target.value;
-                    const metaMap = {
-                      'TRUTH': { name: 'Thú nhận', color: '#ec4899' },
-                      'DARE': { name: 'Thử thách vui', color: '#f59e0b' },
-                      'DEEP_TALK': { name: 'Tâm sự sâu lắng', color: '#818cf8' },
-                      'MUSIC': { name: 'Gu âm nhạc', color: '#38bdf8' },
-                      'PHILOSOPHY': { name: 'Góc nhìn cuộc sống', color: '#10b981' }
-                    };
-                    const meta = metaMap[cat] || { name: 'Tâm sự sâu lắng', color: '#818cf8' };
-                    setNewChallenge(prev => ({
-                      ...prev,
-                      category: cat,
-                      categoryName: meta.name,
-                      badgeColor: meta.color
-                    }));
+                    const selectedCatId = e.target.value;
+                    const catObj = challengeCategories.find(c => c.id === selectedCatId) || { id: selectedCatId, name: selectedCatId, color: '#818cf8' };
+                    setChallengeFormData({
+                      ...challengeFormData,
+                      category: catObj.id,
+                      categoryName: catObj.name,
+                      badgeColor: catObj.color
+                    });
                   }}
-                  className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-700 text-zinc-100 text-xs focus:outline-none"
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-semibold"
                 >
-                  <option value="DEEP_TALK">Tâm sự sâu lắng</option>
-                  <option value="TRUTH">Thú nhận (Truth)</option>
-                  <option value="DARE">Thử thách vui (Dare)</option>
-                  <option value="MUSIC">Gu âm nhạc</option>
-                  <option value="PHILOSOPHY">Góc nhìn cuộc sống</option>
+                  {challengeCategories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name} ({cat.id})
+                    </option>
+                  ))}
                 </select>
               </div>
 
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-zinc-800">
-                <button type="button" onClick={() => setIsAddChallengeOpen(false)} className="px-4 py-2 rounded-xl bg-zinc-800 text-zinc-300 text-xs font-medium">Hủy</button>
-                <button type="submit" className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md">Thêm câu hỏi</button>
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setIsAddChallengeOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-950"
+                >
+                  {editingChallengeItem ? "Cập nhật" : "Lưu câu hỏi"}
+                </button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* ========================================================= */}
-      {/* MODAL THÊM BẢN NHẠC MỚI */}
-      {/* ========================================================= */}
-      {isAddTrackOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in" onClick={() => setIsAddTrackOpen(false)}>
-          <div className="w-full max-w-md rounded-3xl bg-zinc-900 border border-zinc-800 p-6 shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between pb-3 border-b border-zinc-800 mb-4">
-              <h3 className="text-zinc-100 font-bold text-sm">Thêm Bản Nhạc Hệ Thống</h3>
-              <button onClick={() => setIsAddTrackOpen(false)} className="text-zinc-400 hover:text-white p-1"><X size={16} /></button>
+      {/* ====================================================
+          MODAL: QUẢN LÝ THỂ LOẠI THỬ THÁCH ĐỘNG (CATEGORY CONFIG)
+          ==================================================== */}
+      {isCategoryModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => setIsCategoryModalOpen(false)}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <FolderCog size={16} className="text-indigo-400" />
+                Quản Lý Danh Mục Thể Loại Thử Thách
+              </h3>
+              <button onClick={() => setIsCategoryModalOpen(false)} className="text-zinc-400 hover:text-white">
+                <X size={16} />
+              </button>
             </div>
 
-            <form onSubmit={handleAddTrack} className="space-y-3.5">
+            <div className="space-y-4">
+              {/* Form thêm thể loại mới */}
+              <div className="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 space-y-3">
+                <span className="text-xs font-bold text-zinc-200 block">Thêm hoặc Cập nhật Thể loại:</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] font-mono text-zinc-400 mb-0.5 block">Mã thể loại (ID)</label>
+                    <input
+                      type="text"
+                      placeholder="VD: SECRET_STORY"
+                      value={editingCategory.id}
+                      onChange={(e) => setEditingCategory({ ...editingCategory, id: e.target.value.toUpperCase() })}
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-mono text-zinc-400 mb-0.5 block">Tên hiển thị tiếng Việt</label>
+                    <input
+                      type="text"
+                      placeholder="VD: Bí mật chưa kể"
+                      value={editingCategory.name}
+                      onChange={(e) => setEditingCategory({ ...editingCategory, name: e.target.value })}
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-semibold"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono text-zinc-400">Màu huy hiệu:</span>
+                    <input
+                      type="color"
+                      value={editingCategory.color}
+                      onChange={(e) => setEditingCategory({ ...editingCategory, color: e.target.value })}
+                      className="w-7 h-7 rounded border-none cursor-pointer bg-transparent"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSaveCategory}
+                    className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs"
+                  >
+                    Lưu Thể Loại
+                  </button>
+                </div>
+              </div>
+
+              {/* Danh sách các thể loại đang có */}
+              <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+                {challengeCategories.map((cat) => (
+                  <div
+                    key={cat.id}
+                    className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800 flex items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="w-3.5 h-3.5 rounded-full flex-shrink-0" style={{ background: cat.color }}></span>
+                      <span className="text-xs font-bold text-zinc-200 truncate">{cat.name}</span>
+                      <span className="text-[10px] font-mono text-zinc-400">({cat.id})</span>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setEditingCategory(cat)}
+                        className="p-1 rounded text-zinc-400 hover:text-white"
+                        title="Chỉnh sửa"
+                      >
+                        <Edit3 size={13} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteCategory(cat.id)}
+                        className="p-1 rounded text-zinc-400 hover:text-red-400"
+                        title="Xóa thể loại này"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ====================================================
+          MODAL: THÊM BÀI HÁT MỚI (ADD TRACK)
+          ==================================================== */}
+      {isAddTrackOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => setIsAddTrackOpen(false)}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Music size={16} className="text-indigo-400" />
+                Thêm Bản Nhạc Mới Vào Sảnh
+              </h3>
+              <button onClick={() => setIsAddTrackOpen(false)} className="text-zinc-400 hover:text-white">
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddTrack} className="space-y-3">
               <div>
-                <label className="block text-zinc-300 text-xs font-medium mb-1">Tên bản nhạc *</label>
-                <input 
-                  type="text" 
+                <label className="text-xs text-zinc-400 font-mono mb-1 block">Tên bài hát *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="VD: Night Coffee Chill"
                   value={newTrack.name}
-                  onChange={(e) => setNewTrack(prev => ({ ...prev, name: e.target.value }))}
-                  required
-                  placeholder="VD: Midnight Lo-Fi Beats..."
-                  className="w-full px-3.5 py-2 rounded-xl bg-zinc-950 border border-zinc-700 text-zinc-100 text-xs focus:outline-none focus:border-zinc-500"
+                  onChange={(e) => setNewTrack({ ...newTrack, name: e.target.value })}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
               <div>
-                <label className="block text-zinc-300 text-xs font-medium mb-1">Nghệ sĩ / Tác giả</label>
-                <input 
-                  type="text" 
+                <label className="text-xs text-zinc-400 font-mono mb-1 block">Nghệ sĩ / Tác giả</label>
+                <input
+                  type="text"
+                  placeholder="VD: Talovin Records"
                   value={newTrack.artist}
-                  onChange={(e) => setNewTrack(prev => ({ ...prev, artist: e.target.value }))}
-                  placeholder="VD: Chillhop Music..."
-                  className="w-full px-3.5 py-2 rounded-xl bg-zinc-950 border border-zinc-700 text-zinc-100 text-xs focus:outline-none focus:border-zinc-500"
+                  onChange={(e) => setNewTrack({ ...newTrack, artist: e.target.value })}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
               <div>
-                <label className="block text-zinc-300 text-xs font-medium mb-1">Thể loại</label>
-                <input 
-                  type="text" 
-                  value={newTrack.genre}
-                  onChange={(e) => setNewTrack(prev => ({ ...prev, genre: e.target.value }))}
-                  placeholder="VD: Lo-Fi Chill, Acoustic, Jazzhop..."
-                  className="w-full px-3.5 py-2 rounded-xl bg-zinc-950 border border-zinc-700 text-zinc-100 text-xs focus:outline-none focus:border-zinc-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-zinc-300 text-xs font-medium mb-1">Đường dẫn file âm thanh (MP3 URL) *</label>
-                <input 
-                  type="url" 
-                  value={newTrack.audioSrc}
-                  onChange={(e) => setNewTrack(prev => ({ ...prev, audioSrc: e.target.value }))}
+                <label className="text-xs text-zinc-400 font-mono mb-1 block">Đường dẫn file âm thanh (.mp3) *</label>
+                <input
+                  type="url"
                   required
-                  placeholder="https://.../music.mp3"
-                  className="w-full px-3.5 py-2 rounded-xl bg-zinc-950 border border-zinc-700 text-zinc-100 text-xs focus:outline-none focus:border-zinc-500 font-mono"
+                  placeholder="https://.../song.mp3"
+                  value={newTrack.audioSrc}
+                  onChange={(e) => setNewTrack({ ...newTrack, audioSrc: e.target.value })}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-zinc-800">
-                <button type="button" onClick={() => setIsAddTrackOpen(false)} className="px-4 py-2 rounded-xl bg-zinc-800 text-zinc-300 text-xs font-medium">Hủy</button>
-                <button type="submit" className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md">Thêm nhạc</button>
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setIsAddTrackOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-950"
+                >
+                  Thêm bản nhạc
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ====================================================
+          MODAL: PHÂN QUYỀN THÀNH VIÊN (GRANULAR ROLE ASSIGNMENT)
+          ==================================================== */}
+      {selectedUserForRoles && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => setSelectedUserForRoles(null)}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <ShieldCheck size={16} className="text-indigo-400" />
+                  Cấp Quyền Cho: {selectedUserForRoles.nickname || selectedUserForRoles.account}
+                </h3>
+                <span className="text-[11px] font-mono text-zinc-400">@{selectedUserForRoles.account} • ID: {selectedUserForRoles.id}</span>
+              </div>
+              <button onClick={() => setSelectedUserForRoles(null)} className="text-zinc-400 hover:text-white">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar pr-1">
+              {/* Chọn vai trò chính (Roles) */}
+              <div>
+                <label className="text-xs font-bold text-zinc-300 block mb-2 font-mono">
+                  1. GÁN VAI TRÒ HỆ THỐNG (SYSTEM ROLES):
+                </label>
+                <div className="space-y-2">
+                  {systemRoles.map((role) => {
+                    const isChecked = userRolesEditList.includes(role.id);
+                    return (
+                      <label
+                        key={role.id}
+                        className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition-all ${
+                          isChecked 
+                            ? 'bg-indigo-600/10 border-indigo-500/40 text-white' 
+                            : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:border-zinc-700'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setUserRolesEditList([...userRolesEditList, role.id]);
+                            } else {
+                              setUserRolesEditList(userRolesEditList.filter(r => r !== role.id));
+                            }
+                          }}
+                          className="mt-1 rounded text-indigo-600"
+                        />
+                        <div className="flex flex-col">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-zinc-200">{role.name}</span>
+                            <span className="text-[10px] font-mono text-zinc-400">({role.id})</span>
+                          </div>
+                          <span className="text-[11px] text-zinc-400">{role.description}</span>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Tích chọn quyền hạn hạt mịn trực tiếp */}
+              <div>
+                <label className="text-xs font-bold text-zinc-300 block mb-2 font-mono">
+                  2. CẤP QUYỀN HẠN HẠT MỊN TRỰC TIẾP (GRANULAR PERMISSIONS):
+                </label>
+                <div className="grid grid-cols-1 gap-2">
+                  {SYSTEM_PERMISSIONS.map((perm) => {
+                    const isChecked = userRolesEditList.includes(perm.id);
+                    return (
+                      <label
+                        key={perm.id}
+                        className={`p-2.5 rounded-lg border flex items-center justify-between cursor-pointer transition-all ${
+                          isChecked ? 'bg-zinc-800 border-zinc-600 text-white' : 'bg-zinc-950 border-zinc-850 text-zinc-400'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setUserRolesEditList([...userRolesEditList, perm.id]);
+                              } else {
+                                setUserRolesEditList(userRolesEditList.filter(r => r !== perm.id));
+                              }
+                            }}
+                            className="rounded text-indigo-600"
+                          />
+                          <span className="text-xs font-medium text-zinc-200">{perm.name}</span>
+                        </div>
+                        <span className="text-[10px] font-mono text-zinc-400">{perm.module}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-800">
+              <button
+                type="button"
+                onClick={() => setSelectedUserForRoles(null)}
+                className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveUserRoles}
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-950"
+              >
+                Lưu Phân Quyền
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ====================================================
+          MODAL: TẠO VAI TRÒ MỚI (CREATE SYSTEM ROLE)
+          ==================================================== */}
+      {isAddRoleModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => setIsAddRoleModalOpen(false)}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <ShieldPlus size={16} className="text-indigo-400" />
+                Định Nghĩa Vai Trò Mới
+              </h3>
+              <button onClick={() => setIsAddRoleModalOpen(false)} className="text-zinc-400 hover:text-white">
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveRole} className="space-y-3">
+              <div>
+                <label className="text-xs text-zinc-400 font-mono mb-1 block">Mã vai trò (Role ID) *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="VD: TL_ROLE_EVENT_HOST"
+                  value={roleFormData.id}
+                  onChange={(e) => setRoleFormData({ ...roleFormData, id: e.target.value.toUpperCase() })}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-zinc-400 font-mono mb-1 block">Tên hiển thị vai trò *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="VD: Người điều phối sự kiện"
+                  value={roleFormData.name}
+                  onChange={(e) => setRoleFormData({ ...roleFormData, name: e.target.value })}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-semibold"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-zinc-400 font-mono mb-1 block">Mô tả quyền hạn / trách nhiệm</label>
+                <input
+                  type="text"
+                  placeholder="VD: Chịu trách nhiệm thẻ bài và sự kiện trên Sảnh"
+                  value={roleFormData.description}
+                  onChange={(e) => setRoleFormData({ ...roleFormData, description: e.target.value })}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-zinc-400 font-mono mb-1.5 block">Chọn các quyền hạn gán cho vai trò này:</label>
+                <div className="space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar p-2 rounded-xl bg-zinc-950 border border-zinc-850">
+                  {SYSTEM_PERMISSIONS.map((perm) => {
+                    const isChecked = roleFormData.permissions.includes(perm.id);
+                    return (
+                      <label
+                        key={perm.id}
+                        className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer p-1 rounded hover:bg-zinc-900"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setRoleFormData({ ...roleFormData, permissions: [...roleFormData.permissions, perm.id] });
+                            } else {
+                              setRoleFormData({ ...roleFormData, permissions: roleFormData.permissions.filter(p => p !== perm.id) });
+                            }
+                          }}
+                          className="rounded text-indigo-600"
+                        />
+                        <span className="font-medium">{perm.name}</span>
+                        <span className="text-[10px] font-mono text-zinc-400">({perm.module})</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setIsAddRoleModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-950"
+                >
+                  Lưu Vai Trò
+                </button>
               </div>
             </form>
           </div>
@@ -1068,4 +1934,3 @@ export const AdminDashboard = () => {
 };
 
 export default AdminDashboard;
-

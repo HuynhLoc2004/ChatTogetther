@@ -6,6 +6,7 @@ import chatToggetther.DataRequest.CreateChallengeRequest;
 import chatToggetther.modelEntity.ChallengeEntity;
 import chatToggetther.modelEntity.UserEntity;
 import chatToggetther.repository.ChallengeRepository;
+import chatToggetther.repository.SystemConfigRepository;
 import chatToggetther.repository.UserRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,7 @@ public class ChallengeService {
 
     private final ChallengeRepository challengeRepository;
     private final UserRepository userRepository;
+    private final SystemConfigRepository systemConfigRepository;
 
     public static final Map<String, CategoryMeta> CATEGORIES_META = new LinkedHashMap<>();
 
@@ -145,17 +147,56 @@ public class ChallengeService {
 
     public List<Map<String, Object>> getCategories() {
         List<Map<String, Object>> res = new ArrayList<>();
-        for (Map.Entry<String, CategoryMeta> entry : CATEGORIES_META.entrySet()) {
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("key", entry.getKey());
-            map.put("label", entry.getValue().label());
-            map.put("color", entry.getValue().color());
-            if ("ALL".equalsIgnoreCase(entry.getKey())) {
-                map.put("count", challengeRepository.countByActiveTrue());
-            } else {
-                map.put("count", challengeRepository.findByCategoryAndActiveTrue(entry.getKey()).size());
+
+        // 1. Thêm mục "TẤT CẢ"
+        Map<String, Object> allMap = new LinkedHashMap<>();
+        allMap.put("key", "ALL");
+        allMap.put("label", "Tất cả");
+        allMap.put("color", "#a1a1aa");
+        allMap.put("count", challengeRepository.countByActiveTrue());
+        res.add(allMap);
+
+        // 2. Nạp categories động từ DB nếu có cấu hình
+        boolean loadedFromDb = false;
+        try {
+            Optional<chatToggetther.modelEntity.SystemConfigEntity> cfg = systemConfigRepository.findById("challenge_categories");
+            if (cfg.isPresent() && cfg.get().getConfigValue() != null) {
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                List<Map<String, Object>> dynamicCats = mapper.readValue(
+                        cfg.get().getConfigValue(), 
+                        new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {}
+                );
+                if (dynamicCats != null && !dynamicCats.isEmpty()) {
+                    for (Map<String, Object> c : dynamicCats) {
+                        String key = String.valueOf(c.get("id") != null ? c.get("id") : c.get("key"));
+                        String label = String.valueOf(c.get("name") != null ? c.get("name") : c.get("label"));
+                        String color = String.valueOf(c.get("color") != null ? c.get("color") : "#818cf8");
+
+                        Map<String, Object> map = new LinkedHashMap<>();
+                        map.put("key", key);
+                        map.put("label", label);
+                        map.put("color", color);
+                        map.put("count", challengeRepository.findByCategoryAndActiveTrue(key).size());
+                        res.add(map);
+                    }
+                    loadedFromDb = true;
+                }
             }
-            res.add(map);
+        } catch (Exception e) {
+            log.warn("Không thể nạp challenge_categories từ DB: {}", e.getMessage());
+        }
+
+        // 3. Fallback nếu DB chưa có
+        if (!loadedFromDb) {
+            for (Map.Entry<String, CategoryMeta> entry : CATEGORIES_META.entrySet()) {
+                if ("ALL".equalsIgnoreCase(entry.getKey())) continue;
+                Map<String, Object> map = new LinkedHashMap<>();
+                map.put("key", entry.getKey());
+                map.put("label", entry.getValue().label());
+                map.put("color", entry.getValue().color());
+                map.put("count", challengeRepository.findByCategoryAndActiveTrue(entry.getKey()).size());
+                res.add(map);
+            }
         }
         return res;
     }

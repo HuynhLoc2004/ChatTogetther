@@ -353,7 +353,7 @@ const Home = () => {
       if (!token) return false;
       const payload = JSON.parse(atob(token.split('.')[1]));
       const scope = (payload.scope || '') + ' ' + (payload.roles || '');
-      return scope.includes('ADMIN');
+      return scope.includes('ADMIN') || scope.includes('TL_') || scope.includes('PERM_');
     } catch {
       return false;
     }
