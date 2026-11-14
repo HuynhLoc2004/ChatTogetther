@@ -6,7 +6,7 @@ import {
   Lock, Unlock, Eye, EyeOff, Tag, Compass, Flame, Bookmark, Play, Pause,
   AlertTriangle, CheckCircle2, ChevronRight, Sliders, LayoutGrid,
   ShieldCheck, ShieldAlert, KeyRound, Palette, ExternalLink, Layers,
-  FolderCog, Save, UserCheck, ShieldPlus, LogOut, Menu
+  FolderCog, Save, UserCheck, ShieldPlus, LogOut, Menu, Globe
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
@@ -21,6 +21,7 @@ export const SYSTEM_PERMISSIONS = [
   { id: 'TL_PERM_CHALLENGE_MANAGE', name: 'Quản lý Thẻ bài & Thể loại', module: 'Nội dung', description: 'Toàn quyền thêm, sửa, xóa thẻ bài thử thách và danh mục thể loại' },
   { id: 'TL_PERM_TOPIC_MANAGE', name: 'Quản lý Chủ đề & Cảm xúc', module: 'Nội dung', description: 'Cấu hình các thẻ cảm xúc (Vibes) và chủ đề sảnh trực tuyến' },
   { id: 'TL_PERM_MUSIC_MANAGE', name: 'Quản lý Âm nhạc hệ thống', module: 'Nội dung', description: 'Thêm, phát thử nghiệm và xóa các bản nhạc nền thư giãn' },
+  { id: 'TL_PERM_COMMUNITY_MANAGE', name: 'Quản lý Cộng đồng & Nhóm', module: 'Nội dung', description: 'Quản trị nhóm, bật/tắt đề xuất Feed, duyệt bài và danh mục lý do từ chối' },
   { id: 'TL_PERM_USER_MANAGE', name: 'Quản lý Tài khoản & Kiểm duyệt', module: 'Bảo mật', description: 'Tìm kiếm, xem hồ sơ thành viên và khóa/mở khóa tài khoản' },
   { id: 'TL_PERM_ROLE_MANAGE', name: 'Quản lý Vai trò & Phân quyền', module: 'Bảo mật', description: 'Tạo vai trò tùy biến mới và cấp phát quyền hạn chi tiết cho từng người' }
 ];
@@ -139,6 +140,18 @@ export const AdminDashboard = () => {
     badgeColor: '#6366f1'
   });
 
+  // Quản lý Cộng đồng & Danh mục Lý do Từ chối
+  const [adminGroups, setAdminGroups] = useState([]);
+  const [loadingGroups, setLoadingGroups] = useState(false);
+  const [rejectReasons, setRejectReasons] = useState([
+    { id: 'SPAM', label: 'Spam / Quảng cáo / Tin rác' },
+    { id: 'RULE_VIOLATION', label: 'Vi phạm quy định & nội quy cộng đồng' },
+    { id: 'OFF_TOPIC', label: 'Lạc đề / Không phù hợp với chủ đề nhóm' },
+    { id: 'INAPPROPRIATE', label: 'Ngôn từ thù địch / Phản cảm / Độc hại' },
+    { id: 'COPYRIGHT', label: 'Vi phạm bản quyền nội dung / hình ảnh' }
+  ]);
+  const [newReasonInput, setNewReasonInput] = useState('');
+
   // ==========================================
   // KHỞI TẠO & PHÂN QUYỀN TRUY CẬP (RBAC RESOLVER)
   // ==========================================
@@ -176,6 +189,7 @@ export const AdminDashboard = () => {
       await fetchChallenges();
       await fetchTracks();
       await fetchUsers();
+      await fetchAdminGroups();
     } catch (err) {
       console.error("Lỗi xác thực quyền:", err);
       toast.error("Phiên làm việc hết hạn hoặc không có quyền quản trị");
@@ -227,7 +241,8 @@ export const AdminDashboard = () => {
         items: [
           { id: 'challenges', label: `Thẻ bài thử thách (${challenges.length})`, icon: Sparkles, permission: 'TL_PERM_CHALLENGE_MANAGE' },
           { id: 'vibes', label: `Chủ đề & Cảm xúc (${parsedVibes.length})`, icon: Tag, permission: 'TL_PERM_TOPIC_MANAGE' },
-          { id: 'music', label: `Âm nhạc hệ thống (${tracks.length})`, icon: Music, permission: 'TL_PERM_MUSIC_MANAGE' }
+          { id: 'music', label: `Âm nhạc hệ thống (${tracks.length})`, icon: Music, permission: 'TL_PERM_MUSIC_MANAGE' },
+          { id: 'communities', label: `Cộng đồng & Nhóm (${adminGroups.length})`, icon: Globe, permission: 'TL_PERM_COMMUNITY_MANAGE' }
         ]
       },
       {
@@ -238,7 +253,7 @@ export const AdminDashboard = () => {
         ]
       }
     ];
-  }, [challenges.length, parsedVibes.length, tracks.length, users.length, systemRoles.length]);
+  }, [challenges.length, parsedVibes.length, tracks.length, adminGroups.length, users.length, systemRoles.length]);
 
   // Tự động chuyển tab nếu tab hiện tại không được phép
   useEffect(() => {
@@ -283,10 +298,70 @@ export const AdminDashboard = () => {
             if (Array.isArray(parsedRoles) && parsedRoles.length > 0) setSystemRoles(parsedRoles);
           }
         } catch {}
+        try {
+          if (d.reject_reasons) {
+            const parsedReasons = JSON.parse(d.reject_reasons);
+            if (Array.isArray(parsedReasons) && parsedReasons.length > 0) setRejectReasons(parsedReasons);
+          }
+        } catch {}
       }
     } catch (e) {
       console.error("Lỗi nạp cấu hình hệ thống:", e);
     }
+  };
+
+  const fetchAdminGroups = async () => {
+    try {
+      setLoadingGroups(true);
+      const res = await axiosClient.get('/admin/groups');
+      if (res?.data?.data) {
+        setAdminGroups(res.data.data);
+      }
+    } catch (e) {
+      console.warn("Không thể nạp danh sách cộng đồng admin:", e);
+    } finally {
+      setLoadingGroups(false);
+    }
+  };
+
+  const handleToggleGroupFeed = async (groupId, currentVal) => {
+    try {
+      await axiosClient.post(`/admin/groups/${groupId}/toggle-feed`, {
+        isPublicToFeed: !currentVal
+      });
+      setAdminGroups(prev => prev.map(g => g.id === groupId ? { ...g, isPublicToFeed: !currentVal } : g));
+      toast.success("Đã cập nhật trạng thái đề xuất ra Feed chung!");
+    } catch (e) {
+      toast.error("Không thể cập nhật lúc này");
+    }
+  };
+
+  const handleToggleGroupApproval = async (groupId, currentVal) => {
+    try {
+      await axiosClient.post(`/admin/groups/${groupId}/toggle-approval`, {
+        requiresPostApproval: !currentVal
+      });
+      setAdminGroups(prev => prev.map(g => g.id === groupId ? { ...g, requiresPostApproval: !currentVal } : g));
+      toast.success("Đã cập nhật chế độ duyệt bài trước khi đăng!");
+    } catch (e) {
+      toast.error("Không thể cập nhật lúc này");
+    }
+  };
+
+  const handleAddRejectReason = async (e) => {
+    e.preventDefault();
+    if (!newReasonInput.trim()) return;
+    const newId = 'REASON_' + Date.now();
+    const updated = [...rejectReasons, { id: newId, label: newReasonInput.trim() }];
+    setRejectReasons(updated);
+    setNewReasonInput('');
+    await saveConfigToBackend({ reject_reasons: JSON.stringify(updated) }, "Đã lưu lý do từ chối bài viết mẫu!");
+  };
+
+  const handleDeleteRejectReason = async (idToDelete) => {
+    const updated = rejectReasons.filter(r => r.id !== idToDelete);
+    setRejectReasons(updated);
+    await saveConfigToBackend({ reject_reasons: JSON.stringify(updated) }, "Đã xóa lý do từ chối bài viết!");
   };
 
   const saveConfigToBackend = async (partialConfigs, successMsg = "Đã lưu cấu hình thành công!") => {
@@ -1453,6 +1528,157 @@ export const AdminDashboard = () => {
                       </div>
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* ====================================================
+                TAB 8: QUẢN TRỊ CỘNG ĐỒNG & LÝ DO TỪ CHỐI BÀI VIẾT
+                ==================================================== */}
+            {activeTab === 'communities' && (hasPermission('TL_PERM_COMMUNITY_MANAGE') || hasPermission('TL_PERM_USER_MANAGE')) && (
+              <div className="space-y-6 animate-fade-in">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-xl font-bold text-zinc-100 tracking-tight">Quản Trị Cộng Đồng & Nội Quy</h2>
+                    <p className="text-xs text-zinc-400 mt-0.5">Quản lý các không gian cộng đồng, toggle đề xuất ra Feed chung và cấu hình danh mục lý do từ chối bài viết</p>
+                  </div>
+                  <button
+                    onClick={fetchAdminGroups}
+                    className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold flex items-center gap-1.5 transition-all self-start sm:self-auto"
+                  >
+                    <RefreshCw size={13} className={loadingGroups ? 'animate-spin' : ''} />
+                    <span>Làm mới danh sách</span>
+                  </button>
+                </div>
+
+                {/* Section 1: Danh sách cộng đồng */}
+                <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
+                      <Globe size={16} className="text-emerald-400" />
+                      Danh Sách Các Nhóm Cộng Đồng ({adminGroups.length})
+                    </h3>
+                    <span className="text-xs font-mono text-zinc-500">Đồng bộ cơ sở dữ liệu thời gian thực</span>
+                  </div>
+
+                  {loadingGroups ? (
+                    <div className="py-8 text-center text-zinc-500 font-mono text-xs">Đang tải danh sách cộng đồng...</div>
+                  ) : adminGroups.length === 0 ? (
+                    <div className="py-8 text-center text-zinc-500 text-xs">Chưa có cộng đồng nào được tạo trong hệ thống.</div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {adminGroups.map(group => (
+                        <div key={group.id} className="p-4 rounded-xl bg-zinc-950/80 border border-zinc-800/80 flex flex-col justify-between space-y-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-xs text-zinc-200 overflow-hidden flex-shrink-0">
+                                {group.avatarUrl ? (
+                                  <img src={group.avatarUrl} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                  (group.name || 'G').charAt(0).toUpperCase()
+                                )}
+                              </div>
+                              <div>
+                                <h4 className="text-sm font-bold text-zinc-100 line-clamp-1">{group.name}</h4>
+                                <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-400 mt-0.5">
+                                  <span>Chủ nhóm: {group.ownerName || 'Hệ thống'}</span>
+                                  <span>•</span>
+                                  <span>{group.membersCount || 1} thành viên</span>
+                                  <span>•</span>
+                                  <span>{group.postsCount || 0} bài viết</span>
+                                </div>
+                              </div>
+                            </div>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-mono ${group.isPrivate ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'}`}>
+                              {group.isPrivate ? 'Riêng tư' : 'Công khai'}
+                            </span>
+                          </div>
+
+                          <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">
+                            {group.description || 'Chưa cập nhật mô tả cộng đồng.'}
+                          </p>
+
+                          <div className="pt-3 border-t border-zinc-800/60 flex items-center justify-between text-xs">
+                            <label className="flex items-center gap-2 cursor-pointer text-xs text-zinc-300">
+                              <input
+                                type="checkbox"
+                                checked={group.isPublicToFeed !== false}
+                                onChange={() => handleToggleGroupFeed(group.id, group.isPublicToFeed !== false)}
+                                className="accent-emerald-500 rounded"
+                              />
+                              <span className="text-[11px] text-zinc-300">Đề xuất ra Feed chung</span>
+                            </label>
+
+                            <label className="flex items-center gap-2 cursor-pointer text-xs text-zinc-300">
+                              <input
+                                type="checkbox"
+                                checked={!!group.requiresPostApproval}
+                                onChange={() => handleToggleGroupApproval(group.id, !!group.requiresPostApproval)}
+                                className="accent-sky-500 rounded"
+                              />
+                              <span className="text-[11px] text-zinc-300">Duyệt bài trước khi đăng</span>
+                            </label>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Section 2: Danh mục lý do từ chối bài viết mẫu */}
+                <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
+                        <Tag size={16} className="text-rose-400" />
+                        Danh Mục Lý Do Từ Chối Bài Viết (Reject Reasons)
+                      </h3>
+                      <p className="text-xs text-zinc-400 mt-0.5">
+                        Quản lý động danh mục lý do hiển thị cho Quản trị viên nhóm khi từ chối bài viết. Không fix cứng mã nguồn.
+                      </p>
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleAddRejectReason} className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Nhập lý do từ chối mẫu mới (VD: Vi phạm quy định phát ngôn, Quảng cáo trái phép...)"
+                      value={newReasonInput}
+                      onChange={(e) => setNewReasonInput(e.target.value)}
+                      className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-rose-500 placeholder-zinc-600"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!newReasonInput.trim()}
+                      className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-40 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
+                    >
+                      <Plus size={14} />
+                      <span>Thêm lý do</span>
+                    </button>
+                  </form>
+
+                  <div className="space-y-2">
+                    {rejectReasons.map((reason) => (
+                      <div
+                        key={reason.id}
+                        className="flex items-center justify-between p-3 rounded-xl bg-zinc-950/80 border border-zinc-800/80"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <span className="w-2 h-2 rounded-full bg-rose-400 flex-shrink-0"></span>
+                          <span className="text-xs font-medium text-zinc-200">{reason.label}</span>
+                          <span className="text-[10px] font-mono text-zinc-500">({reason.id})</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteRejectReason(reason.id)}
+                          className="text-zinc-500 hover:text-rose-400 p-1 transition-colors"
+                          title="Xóa lý do này"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}

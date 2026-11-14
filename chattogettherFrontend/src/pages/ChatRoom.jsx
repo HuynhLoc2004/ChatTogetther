@@ -867,11 +867,17 @@ const ChatRoom = () => {
             if (receivedMsg.userId === 0 || receivedMsg.userId === '0') {
               fetchRoomDetail(true);
               const sysId = receivedMsg.id || Date.now() + Math.random();
+              let cleanMsg = receivedMsg.message || '';
+              if (cleanMsg.startsWith('null ')) {
+                cleanMsg = cleanMsg.replace(/^null\s+/, 'Thành viên ');
+              } else if (cleanMsg === 'null') {
+                cleanMsg = 'Thành viên đã rời khỏi phòng';
+              }
               setMessages(prev => {
-                if (prev.find(m => m.text === receivedMsg.message && Math.abs(new Date() - new Date(m.rawTime)) < 1000)) return prev;
+                if (prev.find(m => m.text === cleanMsg && Math.abs(new Date() - new Date(m.rawTime)) < 1000)) return prev;
                 const nextMsgs = [...prev, {
                   id: sysId,
-                  text: receivedMsg.message,
+                  text: cleanMsg,
                   sender: 'Hệ thống',
                   userId: '0',
                   isSystem: true,

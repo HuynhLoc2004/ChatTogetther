@@ -22,6 +22,9 @@ public class CommunityGroupDTO {
     private String avatarUrl;
     private Boolean isPrivate;
     private Boolean requiresApproval;
+    private Boolean isPublicToFeed;
+    private Boolean requiresPostApproval;
+    private Long postsCount;
     private Long ownerId;
     private String ownerName;
     private String ownerAvatar;

@@ -3,10 +3,12 @@ package chatToggetther.service;
 import chatToggetther.Customize.AppException;
 import chatToggetther.Customize.ResponseData;
 import chatToggetther.Customize.SecurityUtils;
+import chatToggetther.DTO.CommunityGroupDTO;
 import chatToggetther.DTO.PostDTO;
 import chatToggetther.DTO.UserDTO;
 import chatToggetther.ENUMS.ErrorCode;
 import chatToggetther.modelEntity.ChallengeEntity;
+import chatToggetther.modelEntity.CommunityGroupEntity;
 import chatToggetther.modelEntity.PostEntity;
 import chatToggetther.modelEntity.RoomEntity;
 import chatToggetther.modelEntity.SystemConfigEntity;
@@ -33,6 +35,7 @@ public class AdminService {
     private final TrackRepository trackRepository;
     private final ChallengeRepository challengeRepository;
     private final SystemConfigRepository systemConfigRepository;
+    private final CommunityGroupRepository groupRepository;
 
     public AdminService(
             UserRepository userRepository,
@@ -41,7 +44,8 @@ public class AdminService {
             MessageRepository messageRepository,
             TrackRepository trackRepository,
             ChallengeRepository challengeRepository,
-            SystemConfigRepository systemConfigRepository
+            SystemConfigRepository systemConfigRepository,
+            CommunityGroupRepository groupRepository
     ) {
         this.userRepository = userRepository;
         this.postRepository = postRepository;
@@ -50,6 +54,7 @@ public class AdminService {
         this.trackRepository = trackRepository;
         this.challengeRepository = challengeRepository;
         this.systemConfigRepository = systemConfigRepository;
+        this.groupRepository = groupRepository;
     }
 
     private void verifyAdmin(JwtAuthenticationToken token) {
@@ -290,7 +295,10 @@ public class AdminService {
             map.put("challenge_categories", "[{\"id\":\"DEEP_TALK\",\"name\":\"Tâm sự sâu lắng\",\"color\":\"#818cf8\"},{\"id\":\"TRUTH\",\"name\":\"Thú nhận (Truth)\",\"color\":\"#f43f5e\"},{\"id\":\"DARE\",\"name\":\"Thử thách vui (Dare)\",\"color\":\"#eab308\"},{\"id\":\"MUSIC\",\"name\":\"Gu âm nhạc\",\"color\":\"#06b6d4\"},{\"id\":\"LIFE\",\"name\":\"Góc nhìn cuộc sống\",\"color\":\"#10b981\"}]");
         }
         if (!map.containsKey("system_roles")) {
-            map.put("system_roles", "[{\"id\":\"TL_SYS_SUPERADMIN\",\"name\":\"Quản trị viên tối cao\",\"description\":\"Toàn quyền kiểm soát toàn bộ hệ thống\",\"permissions\":[\"TL_PERM_ALL\"],\"badgeColor\":\"#ef4444\"},{\"id\":\"TL_ROLE_CONTENT_EDITOR\",\"name\":\"Biên tập viên nội dung\",\"description\":\"Quản lý thẻ bài thử thách và chủ đề cảm xúc\",\"permissions\":[\"TL_PERM_STATS_VIEW\",\"TL_PERM_CHALLENGE_MANAGE\",\"TL_PERM_TOPIC_MANAGE\"],\"badgeColor\":\"#818cf8\"},{\"id\":\"TL_ROLE_COMMUNITY_MOD\",\"name\":\"Kiểm duyệt viên cộng đồng\",\"description\":\"Quản lý và kiểm duyệt tài khoản thành viên\",\"permissions\":[\"TL_PERM_STATS_VIEW\",\"TL_PERM_USER_MANAGE\"],\"badgeColor\":\"#10b981\"},{\"id\":\"TL_ROLE_BRAND_MANAGER\",\"name\":\"Quản lý thương hiệu\",\"description\":\"Quản lý menu, logo và thương hiệu ứng dụng\",\"permissions\":[\"TL_PERM_STATS_VIEW\",\"TL_PERM_BRAND_MANAGE\"],\"badgeColor\":\"#f59e0b\"},{\"id\":\"TL_ROLE_MEDIA_CURATOR\",\"name\":\"Điều phối âm nhạc\",\"description\":\"Quản lý danh sách bài hát và nhạc nền\",\"permissions\":[\"TL_PERM_STATS_VIEW\",\"TL_PERM_MUSIC_MANAGE\"],\"badgeColor\":\"#ec4899\"}]");
+            map.put("system_roles", "[{\"id\":\"TL_SYS_SUPERADMIN\",\"name\":\"Quản trị viên tối cao\",\"description\":\"Toàn quyền kiểm soát toàn bộ hệ thống\",\"permissions\":[\"TL_PERM_ALL\"],\"badgeColor\":\"#ef4444\"},{\"id\":\"TL_ROLE_CONTENT_EDITOR\",\"name\":\"Biên tập viên nội dung\",\"description\":\"Quản lý thẻ bài thử thách và chủ đề cảm xúc\",\"permissions\":[\"TL_PERM_STATS_VIEW\",\"TL_PERM_CHALLENGE_MANAGE\",\"TL_PERM_TOPIC_MANAGE\"],\"badgeColor\":\"#818cf8\"},{\"id\":\"TL_ROLE_COMMUNITY_MOD\",\"name\":\"Kiểm duyệt viên cộng đồng\",\"description\":\"Quản lý tài khoản, cộng đồng và kiểm duyệt bài viết\",\"permissions\":[\"TL_PERM_STATS_VIEW\",\"TL_PERM_USER_MANAGE\",\"TL_PERM_COMMUNITY_MANAGE\"],\"badgeColor\":\"#10b981\"},{\"id\":\"TL_ROLE_BRAND_MANAGER\",\"name\":\"Quản lý thương hiệu\",\"description\":\"Quản lý menu, logo và thương hiệu ứng dụng\",\"permissions\":[\"TL_PERM_STATS_VIEW\",\"TL_PERM_BRAND_MANAGE\"],\"badgeColor\":\"#f59e0b\"},{\"id\":\"TL_ROLE_MEDIA_CURATOR\",\"name\":\"Điều phối âm nhạc\",\"description\":\"Quản lý danh sách bài hát và nhạc nền\",\"permissions\":[\"TL_PERM_STATS_VIEW\",\"TL_PERM_MUSIC_MANAGE\"],\"badgeColor\":\"#ec4899\"}]");
+        }
+        if (!map.containsKey("reject_reasons")) {
+            map.put("reject_reasons", "[{\"id\":\"SPAM\",\"label\":\"Spam / Quảng cáo / Tin rác\"},{\"id\":\"RULE_VIOLATION\",\"label\":\"Vi phạm quy định & nội quy cộng đồng\"},{\"id\":\"OFF_TOPIC\",\"label\":\"Lạc đề / Không phù hợp với chủ đề nhóm\"},{\"id\":\"INAPPROPRIATE\",\"label\":\"Ngôn từ thù địch / Phản cảm / Độc hại\"},{\"id\":\"COPYRIGHT\",\"label\":\"Vi phạm bản quyền nội dung / hình ảnh\"}]");
         }
 
         return new ResponseData<>(200, "Lấy cấu hình hệ thống thành công", map);
@@ -382,6 +390,59 @@ public class AdminService {
         challengeRepository.delete(existing);
 
         return new ResponseData<>(200, "Đã xóa câu hỏi thử thách", true);
+    }
+
+    // ==========================================
+    // QUẢN TRỊ CỘNG ĐỒNG & NHÓM THẢO LUẬN
+    // ==========================================
+
+    @Transactional(readOnly = true)
+    public ResponseData<List<CommunityGroupDTO>> getAllGroupsAdmin(JwtAuthenticationToken token) {
+        verifyAdmin(token, "TL_PERM_COMMUNITY_MANAGE");
+
+        List<CommunityGroupEntity> groups = this.groupRepository.findAllOrderByCreatedAtDesc();
+        List<CommunityGroupDTO> dtos = groups.stream().map(g -> {
+            CommunityGroupDTO dto = new CommunityGroupDTO();
+            dto.setId(g.getId());
+            dto.setName(g.getName());
+            dto.setDescription(g.getDescription());
+            dto.setRules(g.getRules());
+            dto.setCoverUrl(g.getCoverUrl());
+            dto.setAvatarUrl(g.getAvatarUrl());
+            dto.setIsPrivate(g.getIsPrivate());
+            dto.setRequiresApproval(g.getRequiresApproval());
+            dto.setIsPublicToFeed(Boolean.TRUE.equals(g.getIsPublicToFeed()));
+            dto.setRequiresPostApproval(Boolean.TRUE.equals(g.getRequiresPostApproval()));
+            dto.setPostsCount(this.postRepository.countByGroupIdAndStatus(g.getId(), "APPROVED"));
+            dto.setMembersCount((long) (g.getMembers() != null ? g.getMembers().size() : 0));
+            dto.setOwnerName(g.getOwner() != null ? (g.getOwner().getNickname() != null ? g.getOwner().getNickname() : g.getOwner().getAccount()) : "Hệ thống");
+            dto.setCreatedAt(g.getCreatedAt());
+            return dto;
+        }).collect(Collectors.toList());
+
+        return new ResponseData<>(200, "Lấy danh sách cộng đồng thành công", dtos);
+    }
+
+    @Transactional
+    public ResponseData<Boolean> toggleGroupFeed(JwtAuthenticationToken token, Long groupId, Boolean isPublicToFeed) {
+        verifyAdmin(token, "TL_PERM_COMMUNITY_MANAGE");
+        CommunityGroupEntity group = this.groupRepository.findById(groupId).orElseThrow(() ->
+            new AppException(404, "Cộng đồng không tồn tại", 404)
+        );
+        group.setIsPublicToFeed(isPublicToFeed != null && isPublicToFeed);
+        this.groupRepository.save(group);
+        return new ResponseData<>(200, "Đã cập nhật trạng thái đề xuất ra Feed chung", true);
+    }
+
+    @Transactional
+    public ResponseData<Boolean> toggleGroupPostApproval(JwtAuthenticationToken token, Long groupId, Boolean requiresPostApproval) {
+        verifyAdmin(token, "TL_PERM_COMMUNITY_MANAGE");
+        CommunityGroupEntity group = this.groupRepository.findById(groupId).orElseThrow(() ->
+            new AppException(404, "Cộng đồng không tồn tại", 404)
+        );
+        group.setRequiresPostApproval(requiresPostApproval != null && requiresPostApproval);
+        this.groupRepository.save(group);
+        return new ResponseData<>(200, "Đã cập nhật chế độ duyệt bài trước khi đăng", true);
     }
 }
 

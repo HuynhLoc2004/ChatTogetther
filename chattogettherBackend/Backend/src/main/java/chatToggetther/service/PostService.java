@@ -9,10 +9,16 @@ import chatToggetther.DataRequest.CreateCommentRequest;
 import chatToggetther.DataRequest.CreatePostRequest;
 import chatToggetther.ENUMS.ErrorCode;
 import chatToggetther.modelEntity.CommentEntity;
+import chatToggetther.modelEntity.CommunityGroupEntity;
+import chatToggetther.modelEntity.CommunityMemberEntity;
+import chatToggetther.modelEntity.FriendshipEntity;
 import chatToggetther.modelEntity.PostEntity;
 import chatToggetther.modelEntity.PostLikeEntity;
 import chatToggetther.modelEntity.UserEntity;
 import chatToggetther.repository.CommentRepository;
+import chatToggetther.repository.CommunityGroupRepository;
+import chatToggetther.repository.CommunityMemberRepository;
+import chatToggetther.repository.FriendshipRepository;
 import chatToggetther.repository.PostLikeRepository;
 import chatToggetther.repository.PostRepository;
 import chatToggetther.repository.UserRepository;
@@ -23,10 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -36,6 +39,9 @@ public class PostService {
     private final CommentRepository commentRepository;
     private final UserRepository userRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final CommunityGroupRepository groupRepository;
+    private final CommunityMemberRepository memberRepository;
+    private final FriendshipRepository friendshipRepository;
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm dd/MM");
 
@@ -44,13 +50,19 @@ public class PostService {
             PostLikeRepository postLikeRepository,
             CommentRepository commentRepository,
             UserRepository userRepository,
-            SimpMessagingTemplate messagingTemplate
+            SimpMessagingTemplate messagingTemplate,
+            CommunityGroupRepository groupRepository,
+            CommunityMemberRepository memberRepository,
+            FriendshipRepository friendshipRepository
     ) {
         this.postRepository = postRepository;
         this.postLikeRepository = postLikeRepository;
         this.commentRepository = commentRepository;
         this.userRepository = userRepository;
         this.messagingTemplate = messagingTemplate;
+        this.groupRepository = groupRepository;
+        this.memberRepository = memberRepository;
+        this.friendshipRepository = friendshipRepository;
     }
 
     private PostDTO mapToPostDTO(PostEntity post, UserEntity currentUser) {
@@ -85,6 +97,11 @@ public class PostService {
         dto.setLikesCount(likesCount);
         dto.setCommentsCount(commentsCount);
         dto.setSearchHits(hits);
+
+        dto.setGroupId(post.getGroupId());
+        dto.setGroupName(post.getGroupName());
+        dto.setStatus(post.getStatus() != null ? post.getStatus() : "APPROVED");
+        dto.setRejectionReason(post.getRejectionReason());
 
         // Thuật toán AI Tính điểm Thịnh hành (Search Frequency Dominance Algorithm):
         // Ưu tiên cao nhất các bài viết được cộng đồng tìm kiếm nhiều nhất (Search Hits * 10),
@@ -151,6 +168,37 @@ public class PostService {
 
         List<Long> postIds = posts.stream().map(PostEntity::getId).toList();
 
+        // Nạp thông tin các Nhóm cộng đồng (nếu có bài viết trong group)
+        Set<Long> groupIds = posts.stream().map(PostEntity::getGroupId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, CommunityGroupEntity> groupMap = new HashMap<>();
+        if (!groupIds.isEmpty()) {
+            this.groupRepository.findAllById(groupIds).forEach(g -> groupMap.put(g.getId(), g));
+        }
+
+        // Kiểm tra xem currentUser đã tham gia những group nào
+        Set<Long> userMemberGroupIds = new HashSet<>();
+        if (currentUser != null) {
+            List<CommunityMemberEntity> memberships = this.memberRepository.findByUserAndStatus(currentUser, "ACTIVE");
+            for (CommunityMemberEntity m : memberships) {
+                if (m.getGroup() != null) {
+                    userMemberGroupIds.add(m.getGroup().getId());
+                }
+            }
+        }
+
+        // Lấy danh sách ID bạn bè của currentUser (để tính Social Graph Discovery)
+        Set<Long> friendUserIds = new HashSet<>();
+        if (currentUser != null) {
+            List<FriendshipEntity> friends = this.friendshipRepository.findAllAcceptedFriends(currentUser);
+            for (FriendshipEntity f : friends) {
+                if (f.getUser().getId().equals(currentUser.getId())) {
+                    friendUserIds.add(f.getFriend().getId());
+                } else {
+                    friendUserIds.add(f.getUser().getId());
+                }
+            }
+        }
+
         // 1. Tối ưu: Batch count lượt thích gom nhóm trong 1 truy vấn duy nhất (Không chạy vòng lặp)
         Map<Long, Integer> likeCountMap = new HashMap<>();
         List<Object[]> likeCounts = this.postLikeRepository.countLikesByPostIds(postIds);
@@ -178,8 +226,23 @@ public class PostService {
             }
         }
 
-        // 4. Ánh xạ trực tiếp trên bộ nhớ RAM siêu tốc (0ms truy vấn thêm)
-        List<PostDTO> dtos = posts.stream().map(p -> {
+        // 4. Ánh xạ trực tiếp trên bộ nhớ RAM siêu tốc & Thuật toán Đề xuất Cộng đồng Thông minh
+        List<PostDTO> dtos = new ArrayList<>();
+        for (PostEntity p : posts) {
+            CommunityGroupEntity grp = p.getGroupId() != null ? groupMap.get(p.getGroupId()) : null;
+            boolean isMemberOfThisGroup = p.getGroupId() != null && userMemberGroupIds.contains(p.getGroupId());
+
+            // Bảo mật: Nếu bài viết thuộc nhóm riêng tư (Private) hoặc nhóm tắt công khai ra feed (isPublicToFeed = false),
+            // CHỈ người đã tham gia nhóm mới thấy bài viết này trên feed!
+            if (grp != null) {
+                if (Boolean.TRUE.equals(grp.getIsPrivate()) && !isMemberOfThisGroup) {
+                    continue; // Bỏ qua không đề xuất ra ngoài
+                }
+                if (Boolean.FALSE.equals(grp.getIsPublicToFeed()) && !isMemberOfThisGroup) {
+                    continue; // Nhóm không muốn đề xuất ra Feed chung
+                }
+            }
+
             PostDTO dto = new PostDTO();
             dto.setId(p.getId());
             dto.setContent(p.getContent());
@@ -187,6 +250,13 @@ public class PostService {
             dto.setVibe(p.getVibe());
             dto.setCreatedAt(p.getCreatedAt());
             dto.setFormattedTime(p.getCreatedAt() != null ? p.getCreatedAt().format(TIME_FORMATTER) : "");
+
+            dto.setGroupId(p.getGroupId());
+            dto.setGroupName(p.getGroupName() != null ? p.getGroupName() : (grp != null ? grp.getName() : null));
+            dto.setStatus(p.getStatus() != null ? p.getStatus() : "APPROVED");
+            dto.setRejectionReason(p.getRejectionReason());
+            dto.setIsGroupPublic(grp != null ? !Boolean.TRUE.equals(grp.getIsPrivate()) : true);
+            dto.setIsMemberOfGroup(isMemberOfThisGroup);
 
             UserEntity author = p.getUser();
             if (author != null) {
@@ -213,38 +283,48 @@ public class PostService {
 
             long hoursOld = p.getCreatedAt() != null ? Math.max(0, java.time.Duration.between(p.getCreatedAt(), LocalDateTime.now()).toHours()) : 0;
             
-            // THUẬT TOÁN ĐỀ XUẤT THÔNG MINH (Personalized Resonance Ranking):
-            // 1. Điểm tương tác & độ tươi mới (Hacker News / Reddit decay)
+            // THUẬT TOÁN ĐỀ XUẤT CỘNG ĐỒNG THÔNG MINH (Smart Community Resonance Discovery):
+            // 1. Điểm tương tác cơ sở & độ phân rã thời gian tự nhiên
             double engagementScore = ((hits * 3.0) + (commentsCount * 4.0) + (likesCount * 3.0) + 1.0) / Math.pow(hoursOld + 2.0, 1.25);
             
             // 2. Hệ số cộng hưởng cá nhân hóa (Personal Resonance Multiplier)
             double resonanceMultiplier = 1.0;
 
             if (currentUser != null && author != null) {
-                // Tương thích độ tuổi (Age Affinity): Bạn cùng độ tuổi hoặc gần tuổi (+20% đến +40%)
+                // Tương thích độ tuổi (Age Affinity): Bạn cùng độ tuổi (+20% đến +40%)
                 if (currentUser.getAge() != null && author.getAge() != null) {
                     int ageDiff = Math.abs(currentUser.getAge() - author.getAge());
                     if (ageDiff <= 3) {
-                        resonanceMultiplier += 0.4; // Cùng thế hệ / độ tuổi
+                        resonanceMultiplier += 0.4;
                     } else if (ageDiff <= 7) {
                         resonanceMultiplier += 0.2;
                     }
                 }
 
-                // Tương thích vị trí địa lý nếu có
+                // Tương thích vị trí địa lý
                 if (currentUser.getLocation() != null && author.getLocation() != null 
                         && !currentUser.getLocation().trim().isEmpty() 
                         && currentUser.getLocation().equalsIgnoreCase(author.getLocation())) {
                     resonanceMultiplier += 0.25;
                 }
 
-                // Bài viết của chính mình hoặc bài admin
+                // Social Graph: Tác giả bài viết là Bạn Bè (+45%)
+                if (friendUserIds.contains(author.getId())) {
+                    resonanceMultiplier += 0.45;
+                }
+
+                // Bài viết của chính mình
                 if (author.getId().equals(currentUser.getId())) {
                     resonanceMultiplier += 0.15;
                 }
             }
 
-            // Bài viết có đính kèm đa phương tiện phong phú (ảnh / video)
+            // Đề xuất bài viết từ Cộng đồng cho người CHƯA tham gia (+30% để khuyến khích khám phá kết nối mới)
+            if (grp != null && !isMemberOfThisGroup) {
+                resonanceMultiplier += 0.30;
+            }
+
+            // Đa phương tiện phong phú
             if (p.getImageUrl() != null && !p.getImageUrl().trim().isEmpty()) {
                 resonanceMultiplier += 0.2;
             }
@@ -252,7 +332,13 @@ public class PostService {
                 resonanceMultiplier += 0.1;
             }
 
-            double finalRecommendScore = engagementScore * resonanceMultiplier;
+            // 3. Phân kỳ ngẫu nhiên phi xác định cá nhân hóa (Non-deterministic Personal Jitter):
+            // Đảm bảo không bị fix cứng, người dùng A và B (dù cùng là bạn của C) sẽ nhìn thấy thứ tự đa dạng, không trùng lặp 100%
+            long uId = currentUser != null ? currentUser.getId() : 11L;
+            double hashSeed = (uId * 37L + p.getId() * 19L) % 1000;
+            double personalJitter = 0.88 + (Math.sin(hashSeed) * 0.12); // Dao động vi mô [0.88 - 1.00]
+
+            double finalRecommendScore = engagementScore * resonanceMultiplier * personalJitter;
             dto.setTrendingScore(finalRecommendScore);
 
             PostLikeEntity myLike = userLikeMap.get(p.getId());
@@ -264,8 +350,8 @@ public class PostService {
                 dto.setMyReaction(null);
             }
 
-            return dto;
-        }).collect(Collectors.toList());
+            dtos.add(dto);
+        }
 
         // Sắp xếp bài viết thông minh theo điểm đề xuất tối ưu (Personalized Resonance)
         dtos.sort((a, b) -> Double.compare(b.getTrendingScore(), a.getTrendingScore()));
@@ -293,6 +379,39 @@ public class PostService {
         if (request.getVibe() != null && !request.getVibe().trim().isEmpty()) {
             post.setVibe(request.getVibe().trim());
         }
+
+        // Kiểm tra nếu đăng vào một Cộng đồng (Community Group)
+        if (request.getGroupId() != null) {
+            CommunityGroupEntity grp = this.groupRepository.findById(request.getGroupId()).orElseThrow(() ->
+                new AppException(404, "Cộng đồng không tồn tại", 404)
+            );
+
+            // Kiểm tra tư cách thành viên
+            Optional<CommunityMemberEntity> memberOpt = this.memberRepository.findByGroupAndUser(grp, currentUser);
+            boolean isMember = memberOpt.isPresent() && "ACTIVE".equals(memberOpt.get().getStatus());
+            boolean isAdmin = currentUser.getRoles() != null && (currentUser.getRoles().contains("ROLE_ADMIN") || currentUser.getRoles().contains("ROLE_AMDIN"));
+            if (!isMember && !isAdmin) {
+                throw new AppException(403, "Bạn cần gia nhập cộng đồng này trước khi đăng bài thảo luận!", 403);
+            }
+
+            post.setGroupId(grp.getId());
+            post.setGroupName(grp.getName());
+
+            // Phê duyệt bài viết: Nếu nhóm bật chế độ duyệt bài trước khi đăng
+            if (Boolean.TRUE.equals(grp.getRequiresPostApproval())) {
+                String role = memberOpt.map(CommunityMemberEntity::getRole).orElse("MEMBER");
+                if ("OWNER".equals(role) || "DEPUTY".equals(role) || isAdmin) {
+                    post.setStatus("APPROVED");
+                } else {
+                    post.setStatus("PENDING");
+                }
+            } else {
+                post.setStatus("APPROVED");
+            }
+        } else {
+            post.setStatus("APPROVED");
+        }
+
         post.setCreatedAt(LocalDateTime.now());
         this.postRepository.save(post);
 
@@ -303,7 +422,132 @@ public class PostService {
             this.messagingTemplate.convertAndSend("/topic/posts", "NEW_POST");
         } catch (Exception ignored) {}
 
-        return new ResponseData<>(200, "Đăng bài viết thành công", dto);
+        String msg = "PENDING".equals(post.getStatus())
+                ? "Bài viết đã được gửi vào cộng đồng và đang chờ Ban quản trị phê duyệt."
+                : "Đăng bài viết thành công";
+
+        return new ResponseData<>(200, msg, dto);
+    }
+
+    @Transactional(readOnly = true)
+    public ResponseData<List<PostDTO>> getGroupPosts(JwtAuthenticationToken token, Long groupId, String status) {
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        CommunityGroupEntity group = this.groupRepository.findById(groupId).orElseThrow(() ->
+            new AppException(404, "Cộng đồng không tồn tại", 404)
+        );
+
+        Optional<CommunityMemberEntity> memberOpt = (currentUser != null) 
+            ? this.memberRepository.findByGroupAndUser(group, currentUser) 
+            : Optional.empty();
+        String role = memberOpt.map(CommunityMemberEntity::getRole).orElse(null);
+        boolean isPrivileged = "OWNER".equals(role) || "DEPUTY".equals(role) 
+            || (currentUser != null && currentUser.getRoles() != null && (currentUser.getRoles().contains("ROLE_ADMIN") || currentUser.getRoles().contains("ROLE_AMDIN")));
+
+        List<PostEntity> posts;
+        if ("PENDING".equalsIgnoreCase(status)) {
+            if (!isPrivileged) {
+                throw new AppException(403, "Chỉ Ban quản trị cộng đồng mới có quyền xem danh sách chờ duyệt!", 403);
+            }
+            posts = this.postRepository.findByGroupIdAndStatusOrderByCreatedAtDesc(groupId, "PENDING");
+        } else if ("REJECTED".equalsIgnoreCase(status)) {
+            if (!isPrivileged) {
+                throw new AppException(403, "Chỉ Ban quản trị cộng đồng mới có quyền xem danh sách bị từ chối!", 403);
+            }
+            posts = this.postRepository.findByGroupIdAndStatusOrderByCreatedAtDesc(groupId, "REJECTED");
+        } else {
+            posts = this.postRepository.findByGroupIdAndStatusOrderByCreatedAtDesc(groupId, "APPROVED");
+        }
+
+        List<PostDTO> dtos = posts.stream().map(p -> {
+            PostDTO dto = mapToPostDTO(p, currentUser);
+            dto.setGroupId(group.getId());
+            dto.setGroupName(group.getName());
+            dto.setIsGroupPublic(!Boolean.TRUE.equals(group.getIsPrivate()));
+            dto.setIsMemberOfGroup(memberOpt.isPresent() && "ACTIVE".equals(memberOpt.get().getStatus()));
+            return dto;
+        }).collect(Collectors.toList());
+
+        return new ResponseData<>(200, "Lấy danh sách bài viết cộng đồng thành công", dtos);
+    }
+
+    @Transactional
+    public ResponseData<PostDTO> approvePost(JwtAuthenticationToken token, Long postId) {
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        if (currentUser == null) {
+            throw new AppException(401, "Yêu cầu đăng nhập", 401);
+        }
+
+        PostEntity post = this.postRepository.findById(postId).orElseThrow(() ->
+            new AppException(404, "Bài viết không tồn tại", 404)
+        );
+
+        if (post.getGroupId() == null) {
+            throw new AppException(400, "Bài viết này không thuộc cộng đồng", 400);
+        }
+
+        CommunityGroupEntity group = this.groupRepository.findById(post.getGroupId()).orElseThrow(() ->
+            new AppException(404, "Cộng đồng không tồn tại", 404)
+        );
+
+        CommunityMemberEntity member = this.memberRepository.findByGroupAndUser(group, currentUser).orElseThrow(() ->
+            new AppException(403, "Bạn không có quyền quản trị trong cộng đồng này!", 403)
+        );
+
+        boolean isPrivileged = "OWNER".equals(member.getRole()) || "DEPUTY".equals(member.getRole())
+                || (currentUser.getRoles() != null && (currentUser.getRoles().contains("ROLE_ADMIN") || currentUser.getRoles().contains("ROLE_AMDIN")));
+        if (!isPrivileged) {
+            throw new AppException(403, "Chỉ Chủ nhóm hoặc Phó nhóm mới có quyền phê duyệt bài viết!", 403);
+        }
+
+        post.setStatus("APPROVED");
+        post.setRejectionReason(null);
+        this.postRepository.save(post);
+
+        try {
+            this.messagingTemplate.convertAndSend("/topic/posts", "POST_APPROVED");
+        } catch (Exception ignored) {}
+
+        return new ResponseData<>(200, "Đã phê duyệt bài viết thành công!", mapToPostDTO(post, currentUser));
+    }
+
+    @Transactional
+    public ResponseData<PostDTO> rejectPost(JwtAuthenticationToken token, Long postId, String reason) {
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        if (currentUser == null) {
+            throw new AppException(401, "Yêu cầu đăng nhập", 401);
+        }
+
+        PostEntity post = this.postRepository.findById(postId).orElseThrow(() ->
+            new AppException(404, "Bài viết không tồn tại", 404)
+        );
+
+        if (post.getGroupId() == null) {
+            throw new AppException(400, "Bài viết này không thuộc cộng đồng", 400);
+        }
+
+        CommunityGroupEntity group = this.groupRepository.findById(post.getGroupId()).orElseThrow(() ->
+            new AppException(404, "Cộng đồng không tồn tại", 404)
+        );
+
+        CommunityMemberEntity member = this.memberRepository.findByGroupAndUser(group, currentUser).orElseThrow(() ->
+            new AppException(403, "Bạn không có quyền quản trị trong cộng đồng này!", 403)
+        );
+
+        boolean isPrivileged = "OWNER".equals(member.getRole()) || "DEPUTY".equals(member.getRole())
+                || (currentUser.getRoles() != null && (currentUser.getRoles().contains("ROLE_ADMIN") || currentUser.getRoles().contains("ROLE_AMDIN")));
+        if (!isPrivileged) {
+            throw new AppException(403, "Chỉ Chủ nhóm hoặc Phó nhóm mới có quyền từ chối bài viết!", 403);
+        }
+
+        post.setStatus("REJECTED");
+        post.setRejectionReason(reason != null && !reason.trim().isEmpty() ? reason.trim() : "Không phù hợp với định hướng cộng đồng");
+        this.postRepository.save(post);
+
+        try {
+            this.messagingTemplate.convertAndSend("/topic/posts", "POST_REJECTED");
+        } catch (Exception ignored) {}
+
+        return new ResponseData<>(200, "Đã từ chối bài viết!", mapToPostDTO(post, currentUser));
     }
 
     @Transactional

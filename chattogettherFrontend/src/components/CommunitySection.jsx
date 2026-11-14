@@ -4,7 +4,7 @@ import {
   Settings, LogOut, Trash2, Camera, Lock, Globe, FileText, ChevronRight, X,
   ArrowLeft, MessageSquare, PhoneCall, Radio, Send, Image as ImageIcon,
   Heart, MessageCircle, Sparkles, Flame, Check, CornerDownRight, Play,
-  Volume2, Share2, MoreVertical
+  Volume2, Share2, MoreVertical, UserPlus
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import GroupCollageAvatar from './GroupCollageAvatar';
@@ -18,6 +18,14 @@ const COMMUNITY_CATEGORIES = [
   { id: 'game', label: 'Game & Giải trí' }
 ];
 
+const DEFAULT_REJECT_REASONS = [
+  { id: 'SPAM', label: 'Spam / Quảng cáo / Tin rác' },
+  { id: 'RULE_VIOLATION', label: 'Vi phạm quy định & nội quy cộng đồng' },
+  { id: 'OFF_TOPIC', label: 'Lạc đề / Không phù hợp với chủ đề nhóm' },
+  { id: 'INAPPROPRIATE', label: 'Ngôn từ thù địch / Phản cảm / Độc hại' },
+  { id: 'COPYRIGHT', label: 'Vi phạm bản quyền nội dung / hình ảnh' }
+];
+
 export const CommunitySection = ({ 
   currentUserId, 
   currentUserName, 
@@ -25,6 +33,7 @@ export const CommunitySection = ({
   posts = [],
   setPosts,
   rooms = [],
+  friends = [],
   navigate,
   onSelectUser,
   onStartPrivateCall,
@@ -39,11 +48,25 @@ export const CommunitySection = ({
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [groupDetail, setGroupDetail] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
-  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState('feed'); // 'feed' | 'voice' | 'members' | 'rules' | 'settings'
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState('feed'); // 'feed' | 'voice' | 'members' | 'rules' | 'settings' | 'moderation'
 
-  // Phê duyệt thành viên
+  // Phê duyệt thành viên & Duyệt bài viết
   const [pendingMembers, setPendingMembers] = useState([]);
   const [loadingPending, setLoadingPending] = useState(false);
+  const [pendingPosts, setPendingPosts] = useState([]);
+  const [loadingPendingPosts, setLoadingPendingPosts] = useState(false);
+  const [groupDedicatedPosts, setGroupDedicatedPosts] = useState([]);
+
+  // Modal Từ chối bài viết kèm lý do
+  const [rejectModalPost, setRejectModalPost] = useState(null);
+  const [selectedRejectReason, setSelectedRejectReason] = useState('SPAM');
+  const [customRejectReason, setCustomRejectReason] = useState('');
+  const [systemRejectReasons, setSystemRejectReasons] = useState(DEFAULT_REJECT_REASONS);
+  const [isRejecting, setIsRejecting] = useState(false);
+
+  // Modal Mời bạn bè
+  const [isInviteFriendsOpen, setIsInviteFriendsOpen] = useState(false);
+  const [invitingFriendId, setInvitingFriendId] = useState(null);
 
   // Soạn bài viết thảo luận trong nhóm
   const [groupPostText, setGroupPostText] = useState('');
@@ -98,6 +121,8 @@ export const CommunitySection = ({
     if (!group) return;
     setSelectedGroup(group);
     setActiveWorkspaceTab('feed');
+    fetchGroupDedicatedPosts(group.id);
+
     try {
       setLoadingDetail(true);
       const res = await axiosClient.get(`/groups/${group.id}`);
@@ -106,12 +131,106 @@ export const CommunitySection = ({
         setEditRulesText(res.data.data.rules || '');
         if (['OWNER', 'DEPUTY'].includes(res.data.data.currentUserRole)) {
           fetchPendingMembers(group.id);
+          fetchPendingPosts(group.id);
         }
       }
     } catch (err) {
       console.warn("Lỗi tải chi tiết cộng đồng:", err);
     } finally {
       setLoadingDetail(false);
+    }
+  };
+
+  // Nạp cấu hình lý do từ chối động từ hệ thống
+  useEffect(() => {
+    const fetchRejectReasons = async () => {
+      try {
+        const res = await axiosClient.get('/system/config');
+        if (res.data?.data?.reject_reasons) {
+          const parsed = JSON.parse(res.data.data.reject_reasons);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setSystemRejectReasons(parsed);
+          }
+        }
+      } catch (e) {}
+    };
+    fetchRejectReasons();
+  }, []);
+
+  const fetchGroupDedicatedPosts = async (groupId) => {
+    try {
+      const res = await axiosClient.get(`/posts/group/${groupId}?status=APPROVED`);
+      if (res.data?.data) {
+        setGroupDedicatedPosts(res.data.data);
+      }
+    } catch (e) {}
+  };
+
+  const fetchPendingPosts = async (groupId) => {
+    try {
+      setLoadingPendingPosts(true);
+      const res = await axiosClient.get(`/posts/group/${groupId}?status=PENDING`);
+      if (res.data?.data) {
+        setPendingPosts(res.data.data);
+      }
+    } catch (e) {
+      setPendingPosts([]);
+    } finally {
+      setLoadingPendingPosts(false);
+    }
+  };
+
+  const handleApprovePost = async (postId) => {
+    try {
+      await axiosClient.post(`/posts/${postId}/approve`);
+      toast.success("Đã phê duyệt bài viết thành công!");
+      if (selectedGroup) {
+        fetchPendingPosts(selectedGroup.id);
+        fetchGroupDedicatedPosts(selectedGroup.id);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Lỗi khi duyệt bài viết");
+    }
+  };
+
+  const handleRejectPostOpen = (post) => {
+    setRejectModalPost(post);
+    setSelectedRejectReason(systemRejectReasons[0]?.id || 'SPAM');
+    setCustomRejectReason('');
+  };
+
+  const handleConfirmRejectPost = async () => {
+    if (!rejectModalPost) return;
+    try {
+      setIsRejecting(true);
+      const reasonLabel = selectedRejectReason === 'CUSTOM'
+        ? (customRejectReason.trim() || 'Không phù hợp với nội quy cộng đồng')
+        : (systemRejectReasons.find(r => r.id === selectedRejectReason)?.label || selectedRejectReason);
+
+      await axiosClient.post(`/posts/${rejectModalPost.id}/reject`, { reason: reasonLabel });
+      toast.success("Đã từ chối bài viết");
+      setRejectModalPost(null);
+      if (selectedGroup) {
+        fetchPendingPosts(selectedGroup.id);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Lỗi khi từ chối bài viết");
+    } finally {
+      setIsRejecting(false);
+    }
+  };
+
+  const handleInviteFriend = async (friendUserId) => {
+    if (!selectedGroup) return;
+    try {
+      setInvitingFriendId(friendUserId);
+      const res = await axiosClient.post(`/groups/${selectedGroup.id}/invite/${friendUserId}`);
+      toast.success(res.data?.message || "Đã mời bạn bè tham gia cộng đồng!");
+      handleOpenGroup(selectedGroup);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Không thể mời bạn bè vào cộng đồng lúc này");
+    } finally {
+      setInvitingFriendId(null);
     }
   };
 
@@ -287,14 +406,20 @@ export const CommunitySection = ({
       const res = await axiosClient.post('/posts', {
         content: groupPostText.trim() || "Thảo luận cộng đồng",
         imageUrl: payloadMedia,
-        vibe: groupTag
+        vibe: groupTag,
+        groupId: selectedGroup.id
       });
 
       if (res.data && res.data.data) {
-        toast.success("Đã đăng bài thảo luận vào cộng đồng!");
+        if (res.data.data.status === 'PENDING') {
+          toast("Bài viết đã gửi, đang chờ Ban quản trị duyệt!", { icon: '⏳' });
+        } else {
+          toast.success("Đã đăng bài thảo luận vào cộng đồng!");
+        }
         setGroupPostText('');
         setGroupAttachedImage(null);
-        if (setPosts) {
+        fetchGroupDedicatedPosts(selectedGroup.id);
+        if (setPosts && res.data.data.status === 'APPROVED') {
           setPosts(prev => [res.data.data, ...prev]);
         }
       }
@@ -360,13 +485,21 @@ export const CommunitySection = ({
     }
   };
 
-  // Lọc các bài viết thuộc về cộng đồng đang chọn
+  // Lọc và kết hợp các bài viết thuộc về cộng đồng đang chọn
   const safeGroupName = String(selectedGroup?.name || '').toLowerCase().trim();
-  const groupPosts = (posts || []).filter(p => {
-    if (!p || !safeGroupName) return false;
-    const v = String(p.vibe || '').toLowerCase();
-    return v.includes(safeGroupName) || v.includes(`cộng đồng: ${safeGroupName}`);
-  });
+  const groupPosts = React.useMemo(() => {
+    const map = new Map();
+    groupDedicatedPosts.forEach(p => { if (p && p.id) map.set(p.id, p); });
+    (posts || []).forEach(p => {
+      if (!p) return;
+      if (selectedGroup && p.groupId && p.groupId.toString() === selectedGroup.id.toString()) {
+        map.set(p.id, p);
+      } else if (safeGroupName && String(p.vibe || '').toLowerCase().includes(safeGroupName)) {
+        map.set(p.id, p);
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  }, [groupDedicatedPosts, posts, selectedGroup, safeGroupName]);
 
   // Tìm phòng thoại đang mở cho nhóm này
   const activeGroupRoom = safeGroupName ? (rooms || []).find(r => 
@@ -463,6 +596,16 @@ export const CommunitySection = ({
                 <div className="flex items-center gap-2 flex-wrap">
                   <button 
                     type="button"
+                    onClick={() => setIsInviteFriendsOpen(true)}
+                    className="px-3.5 py-2.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 text-xs font-semibold border border-indigo-500/30 transition-all active:scale-95 flex items-center gap-1.5"
+                    title="Mời bạn bè vào cộng đồng"
+                  >
+                    <UserPlus size={14} />
+                    <span>Mời bạn bè</span>
+                  </button>
+
+                  <button 
+                    type="button"
                     onClick={handleOpenGroupVoiceRoom}
                     className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-2 shadow-lg shadow-emerald-900/20 transition-all active:scale-95"
                   >
@@ -473,7 +616,7 @@ export const CommunitySection = ({
                   <button 
                     type="button"
                     onClick={() => setActiveWorkspaceTab('feed')}
-                    className="px-3.5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold border border-zinc-700/80 transition-all active:scale-95"
+                    className="px-3.5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold border border-zinc-700/80 transition-all active:scale-95 flex items-center gap-1.5"
                   >
                     <MessageSquare size={14} />
                     <span>Thảo luận</span>
@@ -528,22 +671,41 @@ export const CommunitySection = ({
                 </button>
 
                 {['OWNER', 'DEPUTY'].includes(groupDetail?.currentUserRole || selectedGroup.currentUserRole) && (
-                  <button 
-                    type="button"
-                    onClick={() => {
-                      setActiveWorkspaceTab('settings');
-                      fetchPendingMembers(selectedGroup.id);
-                    }}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all flex-shrink-0 ${activeWorkspaceTab === 'settings' ? 'bg-zinc-800 text-amber-300 shadow-sm' : 'text-zinc-400 hover:text-amber-300'}`}
-                  >
-                    <Settings size={14} />
-                    <span>Quản trị</span>
-                    {pendingMembers.length > 0 && (
-                      <span className="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-400 text-[10px] font-mono border border-amber-500/30">
-                        {pendingMembers.length}
-                      </span>
-                    )}
-                  </button>
+                  <>
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        setActiveWorkspaceTab('moderation');
+                        fetchPendingPosts(selectedGroup.id);
+                      }}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all flex-shrink-0 ${activeWorkspaceTab === 'moderation' ? 'bg-zinc-800 text-sky-400 shadow-sm' : 'text-zinc-400 hover:text-sky-300'}`}
+                    >
+                      <Shield size={14} />
+                      <span>Duyệt bài</span>
+                      {pendingPosts.length > 0 && (
+                        <span className="px-1.5 py-0.2 rounded-full bg-sky-500/20 text-sky-400 text-[10px] font-mono border border-sky-500/30">
+                          {pendingPosts.length}
+                        </span>
+                      )}
+                    </button>
+
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        setActiveWorkspaceTab('settings');
+                        fetchPendingMembers(selectedGroup.id);
+                      }}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all flex-shrink-0 ${activeWorkspaceTab === 'settings' ? 'bg-zinc-800 text-amber-300 shadow-sm' : 'text-zinc-400 hover:text-amber-300'}`}
+                    >
+                      <Settings size={14} />
+                      <span>Quản trị</span>
+                      {pendingMembers.length > 0 && (
+                        <span className="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-400 text-[10px] font-mono border border-amber-500/30">
+                          {pendingMembers.length}
+                        </span>
+                      )}
+                    </button>
+                  </>
                 )}
               </div>
             </div>
@@ -888,6 +1050,90 @@ export const CommunitySection = ({
                 <div className="p-4 rounded-xl bg-zinc-950/70 border border-zinc-800/80 text-zinc-300 text-xs leading-relaxed whitespace-pre-wrap font-sans">
                   {groupDetail?.rules || selectedGroup.rules || "Chào mừng bạn! Quy tắc cơ bản là tôn trọng lẫn nhau, không chia sẻ nội dung độc hại và cùng nhau xây dựng cộng đồng văn minh."}
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* ========================================================= */}
+          {/* TAB: DUYỆT BÀI VIẾT (MODERATION - DÀNH CHO CHỦ / PHÓ NHÓM) */}
+          {/* ========================================================= */}
+          {activeWorkspaceTab === 'moderation' && ['OWNER', 'DEPUTY'].includes(groupDetail?.currentUserRole || selectedGroup.currentUserRole) && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Shield size={16} className="text-sky-400" />
+                  <h3 className="text-zinc-100 font-bold text-sm">
+                    Bài Viết Chờ Phê Duyệt ({pendingPosts.length})
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => fetchPendingPosts(selectedGroup.id)}
+                  className="text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
+                >
+                  Làm mới
+                </button>
+              </div>
+
+              {loadingPendingPosts ? (
+                <div className="py-12 text-center text-zinc-500 text-xs font-mono">
+                  Đang tải danh sách bài viết chờ duyệt...
+                </div>
+              ) : pendingPosts.length === 0 ? (
+                <div className="py-12 px-4 rounded-2xl bg-zinc-900 border border-zinc-800 text-center text-zinc-400 text-xs">
+                  <CheckCircle2 size={32} className="mx-auto text-emerald-500/60 mb-2" />
+                  Tuyệt vời! Không có bài viết nào đang chờ duyệt trong cộng đồng này.
+                </div>
+              ) : (
+                pendingPosts.map(post => (
+                  <div key={post.id} className="p-4 sm:p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-3 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-bold text-zinc-200 overflow-hidden">
+                          {post.authorAvatar ? (
+                            <img src={post.authorAvatar} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            (post.authorNickname || 'U').charAt(0).toUpperCase()
+                          )}
+                        </div>
+                        <div>
+                          <div className="text-xs font-semibold text-zinc-200">{post.authorNickname || post.authorAccount}</div>
+                          <div className="text-[10px] text-zinc-500 font-mono">{post.formattedTime || 'Vừa xong'}</div>
+                        </div>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 text-[10px] font-mono border border-amber-500/30">
+                        Chờ duyệt
+                      </span>
+                    </div>
+
+                    <p className="text-zinc-200 text-xs leading-relaxed whitespace-pre-wrap">{post.content}</p>
+
+                    {post.imageUrl && (
+                      <div className="rounded-xl overflow-hidden max-h-60 border border-zinc-800">
+                        <img src={post.imageUrl} alt="" className="w-full object-cover" />
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-800/80">
+                      <button
+                        type="button"
+                        onClick={() => handleRejectPostOpen(post)}
+                        className="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-semibold border border-rose-500/30 transition-all flex items-center gap-1 active:scale-95"
+                      >
+                        <XCircle size={13} />
+                        <span>Từ chối</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleApprovePost(post.id)}
+                        className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-all flex items-center gap-1 shadow-sm active:scale-95"
+                      >
+                        <CheckCircle2 size={13} />
+                        <span>Duyệt bài</span>
+                      </button>
+                    </div>
+                  </div>
+                ))
               )}
             </div>
           )}
@@ -1307,6 +1553,192 @@ export const CommunitySection = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL TỪ CHỐI BÀI VIẾT KÈM LÝ DO (ĐỘNG KHÔNG FIX CỨNG) */}
+      {/* ========================================================= */}
+      {rejectModalPost && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in" onClick={() => setRejectModalPost(null)}>
+          <div 
+            className="relative w-full max-w-md rounded-3xl bg-zinc-900 border border-zinc-800 p-6 shadow-2xl flex flex-col space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+              <div className="flex items-center gap-2">
+                <XCircle size={18} className="text-rose-400" />
+                <h3 className="text-zinc-100 font-bold text-sm">Lý Do Từ Chối Bài Viết</h3>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setRejectModalPost(null)}
+                className="text-zinc-400 hover:text-white p-1"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <p className="text-zinc-400 text-xs leading-relaxed">
+              Vui lòng chọn hoặc nhập lý do từ chối để thông báo minh bạch cho tác giả bài viết:
+            </p>
+
+            <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+              {systemRejectReasons.map(r => (
+                <label 
+                  key={r.id} 
+                  className={`flex items-center gap-2.5 p-3 rounded-xl border text-xs cursor-pointer transition-all ${
+                    selectedRejectReason === r.id 
+                      ? 'bg-rose-500/10 border-rose-500/40 text-rose-300 font-semibold' 
+                      : 'bg-zinc-950/60 border-zinc-800 text-zinc-300 hover:bg-zinc-800/60'
+                  }`}
+                >
+                  <input 
+                    type="radio" 
+                    name="reject_reason" 
+                    value={r.id}
+                    checked={selectedRejectReason === r.id}
+                    onChange={() => setSelectedRejectReason(r.id)}
+                    className="accent-rose-500"
+                  />
+                  <span>{r.label}</span>
+                </label>
+              ))}
+
+              <label 
+                className={`flex items-center gap-2.5 p-3 rounded-xl border text-xs cursor-pointer transition-all ${
+                  selectedRejectReason === 'CUSTOM' 
+                    ? 'bg-rose-500/10 border-rose-500/40 text-rose-300 font-semibold' 
+                    : 'bg-zinc-950/60 border-zinc-800 text-zinc-300 hover:bg-zinc-800/60'
+                }`}
+              >
+                <input 
+                  type="radio" 
+                  name="reject_reason" 
+                  value="CUSTOM"
+                  checked={selectedRejectReason === 'CUSTOM'}
+                  onChange={() => setSelectedRejectReason('CUSTOM')}
+                  className="accent-rose-500"
+                />
+                <span>Lý do tùy chỉnh khác...</span>
+              </label>
+            </div>
+
+            {selectedRejectReason === 'CUSTOM' && (
+              <textarea 
+                rows="3"
+                value={customRejectReason}
+                onChange={(e) => setCustomRejectReason(e.target.value)}
+                placeholder="Nhập lý do chi tiết từ chối bài viết..."
+                className="w-full p-3 rounded-xl bg-zinc-950 border border-zinc-700 text-zinc-100 text-xs focus:outline-none focus:border-rose-500"
+              />
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-800">
+              <button 
+                type="button"
+                onClick={() => setRejectModalPost(null)}
+                className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold"
+              >
+                Hủy
+              </button>
+              <button 
+                type="button"
+                onClick={handleConfirmRejectPost}
+                disabled={isRejecting}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-all shadow-md active:scale-95 disabled:opacity-50"
+              >
+                {isRejecting ? "Đang xử lý..." : "Xác nhận từ chối"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL MỜI BẠN BÈ VÀO CỘNG ĐỒNG */}
+      {/* ========================================================= */}
+      {isInviteFriendsOpen && selectedGroup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in" onClick={() => setIsInviteFriendsOpen(false)}>
+          <div 
+            className="relative w-full max-w-md rounded-3xl bg-zinc-900 border border-zinc-800 p-6 shadow-2xl flex flex-col space-y-4 max-h-[85vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+              <div className="flex items-center gap-2">
+                <UserPlus size={18} className="text-indigo-400" />
+                <h3 className="text-zinc-100 font-bold text-sm">Mời Bạn Bè Vào {selectedGroup.name}</h3>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setIsInviteFriendsOpen(false)}
+                className="text-zinc-400 hover:text-white p-1"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <p className="text-zinc-400 text-xs leading-relaxed">
+              Chọn bạn bè thân thiết từ danh sách kết nối để mời họ cùng tham gia thảo luận và kết nối trong cộng đồng:
+            </p>
+
+            <div className="space-y-2 overflow-y-auto max-h-72 pr-1">
+              {!friends || friends.length === 0 ? (
+                <div className="py-8 text-center text-zinc-500 text-xs">
+                  Bạn chưa có bạn bè nào trong danh sách kết nối. Hãy kết bạn ở Sảnh trực tuyến trước nhé!
+                </div>
+              ) : (
+                friends.map(friend => {
+                  const friendId = friend.id || friend.userId;
+                  const isAlreadyMember = groupDetail?.members?.some(m => m.userId === friendId) || false;
+
+                  return (
+                    <div key={friendId} className="flex items-center justify-between p-3 rounded-xl bg-zinc-950/70 border border-zinc-800/80">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-bold text-zinc-200 overflow-hidden">
+                          {friend.avatar ? (
+                            <img src={friend.avatar} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            (friend.nickname || friend.account || 'U').charAt(0).toUpperCase()
+                          )}
+                        </div>
+                        <div>
+                          <div className="text-xs font-semibold text-zinc-200">{friend.nickname || friend.account}</div>
+                          <div className="text-[10px] text-zinc-500 font-mono">@{friend.account || 'user'}</div>
+                        </div>
+                      </div>
+
+                      {isAlreadyMember ? (
+                        <span className="text-[11px] font-mono text-emerald-400/80 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                          Đã tham gia
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleInviteFriend(friendId)}
+                          disabled={invitingFriendId === friendId}
+                          className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1 shadow-sm"
+                        >
+                          <UserPlus size={12} />
+                          <span>{invitingFriendId === friendId ? 'Đang gửi...' : 'Mời vào'}</span>
+                        </button>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="flex items-center justify-end pt-3 border-t border-zinc-800">
+              <button 
+                type="button"
+                onClick={() => setIsInviteFriendsOpen(false)}
+                className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold"
+              >
+                Đóng
+              </button>
+            </div>
           </div>
         </div>
       )}

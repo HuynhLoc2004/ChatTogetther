@@ -26,5 +26,7 @@ public class CreateGroupRequest {
     private String avatarUrl;
     private Boolean isPrivate = false;
     private Boolean requiresApproval = false;
+    private Boolean isPublicToFeed = true;
+    private Boolean requiresPostApproval = false;
 }
 

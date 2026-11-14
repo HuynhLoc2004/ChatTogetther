@@ -34,6 +34,18 @@ public class PostEntity {
     @Column(name = "search_hits")
     private Long searchHits = 0L;
 
+    @Column(name = "group_id")
+    private Long groupId;
+
+    @Column(name = "group_name", columnDefinition = "TEXT")
+    private String groupName;
+
+    @Column(name = "status")
+    private String status = "APPROVED"; // "APPROVED", "PENDING", "REJECTED"
+
+    @Column(name = "rejection_reason", columnDefinition = "TEXT")
+    private String rejectionReason;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 

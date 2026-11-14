@@ -245,7 +245,11 @@ public class RoomService {
                   && Boolean.TRUE.equals(userRoomEntity.getActive())) {
               Long oldRoomId = userRoomEntity.getRoomEntity().getId();
               SendMessageDTO leaveMsg = new SendMessageDTO();
-              String name = (userEntity.getNickname() != null && !userEntity.getNickname().isEmpty()) ? userEntity.getNickname() : userEntity.getAccount();
+              String rawNick = userEntity.getNickname();
+              String rawAcc = userEntity.getAccount();
+              String name = (rawNick != null && !rawNick.trim().isEmpty() && !"null".equalsIgnoreCase(rawNick.trim()))
+                      ? rawNick.trim()
+                      : (rawAcc != null && !rawAcc.trim().isEmpty() && !"null".equalsIgnoreCase(rawAcc.trim()) ? rawAcc.trim() : "Thành viên");
               leaveMsg.setMessage(name + " đã rời khỏi phòng");
               leaveMsg.setUserId(0L);
               leaveMsg.setNickname("Hệ thống");
@@ -303,9 +307,11 @@ public class RoomService {
             userRoomEntity.setIsAdmin(false); // Reset quyền admin khi rời
             this.userRoomRepository.save(userRoomEntity);
 
-            String leaveName = (userEntity.getNickname() != null && !userEntity.getNickname().trim().isEmpty())
-                    ? userEntity.getNickname()
-                    : (userEntity.getAccount() != null ? userEntity.getAccount() : "Thành viên");
+            String rawLNick = userEntity.getNickname();
+            String rawLAcc = userEntity.getAccount();
+            String leaveName = (rawLNick != null && !rawLNick.trim().isEmpty() && !"null".equalsIgnoreCase(rawLNick.trim()))
+                    ? rawLNick.trim()
+                    : (rawLAcc != null && !rawLAcc.trim().isEmpty() && !"null".equalsIgnoreCase(rawLAcc.trim()) ? rawLAcc.trim() : "Thành viên");
             SendMessageDTO systemMsg = new SendMessageDTO();
             systemMsg.setMessage(leaveName + " đã rời khỏi phòng");
             systemMsg.setUserId(0L);

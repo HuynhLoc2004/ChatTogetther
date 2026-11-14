@@ -107,6 +107,15 @@ public class CommunityGroupController {
         return ResponseEntity.ok(this.groupService.setMemberRole(token, id, targetUserId, newRole));
     }
 
+    @PostMapping("/{id}/invite/{friendUserId}")
+    public ResponseEntity<ResponseData<String>> inviteFriend(
+            JwtAuthenticationToken token,
+            @PathVariable("id") Long id,
+            @PathVariable("friendUserId") Long friendUserId
+    ) {
+        return ResponseEntity.ok(this.groupService.inviteFriend(token, id, friendUserId));
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<ResponseData<Boolean>> deleteGroup(
             JwtAuthenticationToken token,

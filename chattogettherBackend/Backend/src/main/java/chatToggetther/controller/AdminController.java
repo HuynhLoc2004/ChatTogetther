@@ -127,5 +127,34 @@ public class AdminController {
     ) {
         return ResponseEntity.ok(this.adminService.deleteChallenge(token, id));
     }
+
+    // ==========================================
+    // QUẢN TRỊ CỘNG ĐỒNG (COMMUNITY GROUPS)
+    // ==========================================
+
+    @GetMapping("/groups")
+    public ResponseEntity<ResponseData<List<chatToggetther.DTO.CommunityGroupDTO>>> getAllGroupsAdmin(JwtAuthenticationToken token) {
+        return ResponseEntity.ok(this.adminService.getAllGroupsAdmin(token));
+    }
+
+    @PostMapping("/groups/{id}/toggle-feed")
+    public ResponseEntity<ResponseData<Boolean>> toggleGroupFeed(
+            JwtAuthenticationToken token,
+            @PathVariable("id") Long id,
+            @RequestBody Map<String, Boolean> body
+    ) {
+        Boolean isPublicToFeed = body != null ? body.get("isPublicToFeed") : true;
+        return ResponseEntity.ok(this.adminService.toggleGroupFeed(token, id, isPublicToFeed));
+    }
+
+    @PostMapping("/groups/{id}/toggle-approval")
+    public ResponseEntity<ResponseData<Boolean>> toggleGroupPostApproval(
+            JwtAuthenticationToken token,
+            @PathVariable("id") Long id,
+            @RequestBody Map<String, Boolean> body
+    ) {
+        Boolean requiresPostApproval = body != null ? body.get("requiresPostApproval") : false;
+        return ResponseEntity.ok(this.adminService.toggleGroupPostApproval(token, id, requiresPostApproval));
+    }
 }
 

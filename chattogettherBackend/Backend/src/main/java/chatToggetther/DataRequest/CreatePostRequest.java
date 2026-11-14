@@ -21,4 +21,6 @@ public class CreatePostRequest {
 
     @Size(max = 200, message = "Thẻ chủ đề tối đa 200 ký tự")
     private String vibe;
+
+    private Long groupId;
 }

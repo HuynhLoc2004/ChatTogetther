@@ -39,4 +39,12 @@ public class PostDTO {
     private Boolean isLikedByMe;
     private String myReaction; // "HEART", "FIRE", "HAHA", "WOW", "LIKE", "CROWN"
     private String reactionSummary; // e.g. "❤️ 🔥 😂"
+
+    // Thông tin Cộng đồng (Nếu bài viết đăng trong một Group)
+    private Long groupId;
+    private String groupName;
+    private String status; // "APPROVED", "PENDING", "REJECTED"
+    private String rejectionReason;
+    private Boolean isGroupPublic;
+    private Boolean isMemberOfGroup;
 }

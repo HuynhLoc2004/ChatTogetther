@@ -39,6 +39,33 @@ public class PostController {
         return ResponseEntity.ok(this.postService.createPost(token, request));
     }
 
+    @GetMapping("/group/{groupId}")
+    public ResponseEntity<ResponseData<List<PostDTO>>> getGroupPosts(
+            JwtAuthenticationToken token,
+            @PathVariable("groupId") Long groupId,
+            @RequestParam(value = "status", required = false, defaultValue = "APPROVED") String status
+    ) {
+        return ResponseEntity.ok(this.postService.getGroupPosts(token, groupId, status));
+    }
+
+    @PostMapping("/{id}/approve")
+    public ResponseEntity<ResponseData<PostDTO>> approvePost(
+            JwtAuthenticationToken token,
+            @PathVariable("id") Long postId
+    ) {
+        return ResponseEntity.ok(this.postService.approvePost(token, postId));
+    }
+
+    @PostMapping("/{id}/reject")
+    public ResponseEntity<ResponseData<PostDTO>> rejectPost(
+            JwtAuthenticationToken token,
+            @PathVariable("id") Long postId,
+            @RequestBody(required = false) java.util.Map<String, String> body
+    ) {
+        String reason = body != null ? body.get("reason") : null;
+        return ResponseEntity.ok(this.postService.rejectPost(token, postId, reason));
+    }
+
     @PostMapping("/{id}/like")
     public ResponseEntity<ResponseData<PostDTO>> toggleLike(
             JwtAuthenticationToken token,

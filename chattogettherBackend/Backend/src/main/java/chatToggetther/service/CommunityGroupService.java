@@ -12,6 +12,7 @@ import chatToggetther.modelEntity.CommunityMemberEntity;
 import chatToggetther.modelEntity.UserEntity;
 import chatToggetther.repository.CommunityGroupRepository;
 import chatToggetther.repository.CommunityMemberRepository;
+import chatToggetther.repository.PostRepository;
 import chatToggetther.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
@@ -29,6 +30,7 @@ public class CommunityGroupService {
     private final CommunityGroupRepository groupRepository;
     private final CommunityMemberRepository memberRepository;
     private final UserRepository userRepository;
+    private final PostRepository postRepository;
 
     @Transactional(readOnly = true)
     public ResponseData<List<CommunityGroupDTO>> getAllGroups(String keyword, JwtAuthenticationToken token) {
@@ -74,6 +76,8 @@ public class CommunityGroupService {
         group.setAvatarUrl(request.getAvatarUrl());
         group.setIsPrivate(Boolean.TRUE.equals(request.getIsPrivate()));
         group.setRequiresApproval(Boolean.TRUE.equals(request.getRequiresApproval()));
+        group.setIsPublicToFeed(request.getIsPublicToFeed() != null ? request.getIsPublicToFeed() : true);
+        group.setRequiresPostApproval(Boolean.TRUE.equals(request.getRequiresPostApproval()));
         group.setOwner(currentUser);
         group.setCreatedAt(LocalDateTime.now());
 
@@ -124,9 +128,63 @@ public class CommunityGroupService {
         if (request.getRequiresApproval() != null && "OWNER".equals(member.getRole())) {
             group.setRequiresApproval(request.getRequiresApproval());
         }
+        if (request.getIsPublicToFeed() != null && "OWNER".equals(member.getRole())) {
+            group.setIsPublicToFeed(request.getIsPublicToFeed());
+        }
+        if (request.getRequiresPostApproval() != null && "OWNER".equals(member.getRole())) {
+            group.setRequiresPostApproval(request.getRequiresPostApproval());
+        }
+        if (request.getIsPrivate() != null && "OWNER".equals(member.getRole())) {
+            group.setIsPrivate(request.getIsPrivate());
+        }
 
         this.groupRepository.save(group);
         return new ResponseData<>(200, "Cập nhật cộng đồng thành công", mapToGroupDTO(group, currentUser, true));
+    }
+
+    @Transactional
+    public ResponseData<String> inviteFriend(JwtAuthenticationToken token, Long groupId, Long friendUserId) {
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        if (currentUser == null) {
+            throw new AppException(401, "Yêu cầu đăng nhập để mời bạn bè", 401);
+        }
+        CommunityGroupEntity group = this.groupRepository.findById(groupId).orElseThrow(() ->
+            new AppException(404, "Cộng đồng không tồn tại", 404)
+        );
+
+        // Kiểm tra xem người mời có phải thành viên của nhóm không
+        CommunityMemberEntity myMembership = this.memberRepository.findByGroupAndUser(group, currentUser).orElseThrow(() ->
+            new AppException(403, "Bạn cần là thành viên của cộng đồng để mời bạn bè!", 403)
+        );
+        if (!"ACTIVE".equals(myMembership.getStatus())) {
+            throw new AppException(403, "Tài khoản của bạn chưa được kích hoạt trong nhóm này!", 403);
+        }
+
+        UserEntity friend = this.userRepository.findById(friendUserId).orElseThrow(() ->
+            new AppException(404, "Bạn bè không tồn tại", 404)
+        );
+
+        Optional<CommunityMemberEntity> existing = this.memberRepository.findByGroupAndUser(group, friend);
+        if (existing.isPresent()) {
+            CommunityMemberEntity m = existing.get();
+            if ("ACTIVE".equals(m.getStatus())) {
+                return new ResponseData<>(200, "Bạn bè đã là thành viên của cộng đồng", "ACTIVE");
+            } else {
+                m.setStatus("ACTIVE");
+                this.memberRepository.save(m);
+                return new ResponseData<>(200, "Đã kích hoạt thành viên thành công!", "ACTIVE");
+            }
+        }
+
+        CommunityMemberEntity newMember = new CommunityMemberEntity();
+        newMember.setGroup(group);
+        newMember.setUser(friend);
+        newMember.setRole("MEMBER");
+        newMember.setStatus("ACTIVE"); // Khi bạn bè được mời bởi thành viên nhóm, kích hoạt trực tiếp
+        newMember.setJoinedAt(LocalDateTime.now());
+        this.memberRepository.save(newMember);
+
+        return new ResponseData<>(200, "Đã mời " + (friend.getNickname() != null ? friend.getNickname() : friend.getAccount()) + " vào cộng đồng!", "ACTIVE");
     }
 
     @Transactional
@@ -322,6 +380,9 @@ public class CommunityGroupService {
         dto.setAvatarUrl(g.getAvatarUrl());
         dto.setIsPrivate(g.getIsPrivate());
         dto.setRequiresApproval(g.getRequiresApproval());
+        dto.setIsPublicToFeed(Boolean.TRUE.equals(g.getIsPublicToFeed()));
+        dto.setRequiresPostApproval(Boolean.TRUE.equals(g.getRequiresPostApproval()));
+        dto.setPostsCount(this.postRepository != null ? this.postRepository.countByGroupIdAndStatus(g.getId(), "APPROVED") : 0L);
         if (g.getOwner() != null) {
             dto.setOwnerId(g.getOwner().getId());
             dto.setOwnerName(g.getOwner().getNickname() != null && !g.getOwner().getNickname().isEmpty() 

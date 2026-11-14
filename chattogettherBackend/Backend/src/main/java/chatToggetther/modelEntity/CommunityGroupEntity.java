@@ -39,6 +39,12 @@ public class CommunityGroupEntity {
     @Column(name = "requires_approval")
     private Boolean requiresApproval = false;
 
+    @Column(name = "is_public_to_feed")
+    private Boolean isPublicToFeed = true;
+
+    @Column(name = "requires_post_approval")
+    private Boolean requiresPostApproval = false;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id", nullable = false)
     private UserEntity owner;

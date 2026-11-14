@@ -216,6 +216,7 @@ const Home = () => {
   const currentUserId = localStorage.getItem('user_id');
   const currentUserName = localStorage.getItem('nickname') || localStorage.getItem('account') || localStorage.getItem('username') || 'Thành viên';
   const currentUserAccount = localStorage.getItem('account') || localStorage.getItem('username') || 'user';
+  const currentUserAvatar = localStorage.getItem('user_avatar') || '';
 
   // Navigation tab chính: 'feed' | 'rooms' | 'trending' | 'saved'
   const [activeTab, setActiveTab] = useState('feed');
@@ -924,8 +925,8 @@ const Home = () => {
     setIsTopRefreshing(true);
     try {
       await Promise.allSettled([
-        fetchPosts(0, true),
-        fetchRooms(),
+        fetchPosts(true),
+        fetchRooms(true),
         fetchFriends()
       ]);
     } catch (e) {
@@ -2124,6 +2125,40 @@ const Home = () => {
 
                   return (
                     <article key={post.id} id={`post-${post.id}`} className="post-item-card">
+                      {post.groupId && (
+                        <div className="post-community-header-bar flex items-center justify-between pb-2 mb-2.5 border-b border-zinc-800/80 text-xs">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="text-emerald-400 font-semibold flex items-center gap-1 truncate">
+                              <span className="text-[10px]">✦</span>
+                              <span className="text-zinc-200 hover:underline cursor-pointer" onClick={() => setActiveTab('groups')}>
+                                {post.groupName || 'Cộng đồng'}
+                              </span>
+                            </span>
+                            <span className="text-zinc-600 text-[10px]">•</span>
+                            <span className="text-[11px] text-zinc-400 flex-shrink-0 font-sans">Đề xuất</span>
+                          </div>
+
+                          {!post.isMemberOfGroup && (
+                            <button
+                              type="button"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                try {
+                                  await axiosClient.post(`/groups/${post.groupId}/join`);
+                                  toast.success(`Đã gia nhập ${post.groupName || 'cộng đồng'}!`);
+                                  setPosts(prev => prev.map(p => p.groupId === post.groupId ? { ...p, isMemberOfGroup: true } : p));
+                                } catch (err) {
+                                  toast.error(err.response?.data?.message || 'Không thể gia nhập');
+                                }
+                              }}
+                              className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-[11px] font-semibold border border-emerald-500/30 transition-all flex items-center gap-1 active:scale-95 flex-shrink-0"
+                            >
+                              <Plus size={11} />
+                              <span>Tham gia</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
                       <div className="post-header-row">
                         <div 
                           className="post-avatar-click" 
@@ -2587,6 +2622,7 @@ const Home = () => {
                 posts={safePosts}
                 setPosts={setPosts}
                 rooms={safeRooms}
+                friends={safeFriends}
                 navigate={navigate}
                 onSelectUser={setSelectedProfileUserId}
                 onStartPrivateCall={handleStartPrivateCall}
@@ -5367,18 +5403,25 @@ const Home = () => {
           }
           .main-stream { max-width: 100%; min-width: 0; padding-bottom: max(75px, env(safe-area-inset-bottom)); }
           .rooms-active-grid { grid-template-columns: 1fr; }
+          .vibe-tags-row {
+            margin: 8px 0;
+            padding-left: 0;
+            gap: 5px;
+          }
           .creator-bottom-row { 
             padding-left: 0; 
-            gap: 4px;
+            margin-top: 8px;
+            gap: 6px;
             flex-wrap: nowrap;
             align-items: center;
             justify-content: space-between;
           }
           .creator-left-tools {
             display: flex;
-            gap: 3px;
+            gap: 4px;
             align-items: center;
             min-width: 0;
+            flex-shrink: 1;
             overflow-x: auto;
             scrollbar-width: none;
           }
@@ -5386,10 +5429,13 @@ const Home = () => {
             padding: 5px 6px;
             font-size: 11px;
             gap: 3px;
+            white-space: nowrap;
           }
           .btn-publish-submit {
-            padding: 6px 12px;
+            padding: 6px 14px;
             font-size: 12px;
+            flex-shrink: 0;
+            white-space: nowrap;
           }
           .composer-attached-preview { 
             margin: 8px 0; 

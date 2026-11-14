@@ -22,6 +22,9 @@ public class UpdateGroupRequest {
 
     private String coverUrl;
     private String avatarUrl;
+    private Boolean isPrivate;
     private Boolean requiresApproval;
+    private Boolean isPublicToFeed;
+    private Boolean requiresPostApproval;
 }
 

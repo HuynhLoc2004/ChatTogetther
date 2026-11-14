@@ -14,13 +14,23 @@ public interface PostRepository extends JpaRepository<PostEntity, Long> {
 
     @Query("SELECT DISTINCT p FROM PostEntity p " +
            "JOIN FETCH p.user u " +
+           "WHERE (p.status IS NULL OR p.status = 'APPROVED') " +
            "ORDER BY p.createdAt DESC")
     List<PostEntity> findAllPostsWithDetails(Pageable pageable);
 
     @Query("SELECT DISTINCT p FROM PostEntity p " +
            "JOIN FETCH p.user u " +
+           "WHERE (p.status IS NULL OR p.status = 'APPROVED') " +
            "ORDER BY p.createdAt DESC")
     List<PostEntity> findAllPostsWithDetails();
+
+    List<PostEntity> findByGroupIdOrderByCreatedAtDesc(Long groupId);
+
+    List<PostEntity> findByGroupIdAndStatusOrderByCreatedAtDesc(Long groupId, String status);
+
+    long countByGroupId(Long groupId);
+
+    long countByGroupIdAndStatus(Long groupId, String status);
 
     @Query("SELECT DISTINCT p FROM PostEntity p " +
            "JOIN FETCH p.user u " +
