@@ -1015,7 +1015,9 @@ export const AdminDashboard = () => {
                     onClick={() => saveConfigToBackend({
                       brand_name: configs.brand_name,
                       brand_slogan: configs.brand_slogan,
-                      menu_items: JSON.stringify(parsedMenuItems)
+                      menu_items: JSON.stringify(parsedMenuItems),
+                      enable_repost: configs.enable_repost || 'true',
+                      public_friends: configs.public_friends || 'true'
                     })}
                     disabled={isSavingConfig}
                     className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-emerald-950 transition-all"
@@ -1110,6 +1112,53 @@ export const AdminDashboard = () => {
                           </button>
                         </div>
                       ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Quản lý các tính năng hệ thống (Feature Toggles: Repost, Public Friends, v.v.) */}
+                <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-4">
+                  <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                    <h3 className="text-sm font-bold text-zinc-200 flex items-center gap-2">
+                      <Sliders size={15} className="text-emerald-400" />
+                      Cài Đặt Tính Năng Tương Tác & Cá Nhân (Feature Controls)
+                    </h3>
+                    <span className="text-[11px] text-zinc-400 font-mono">Bật / Tắt theo nhu cầu vận hành</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="p-3.5 rounded-xl bg-zinc-950/70 border border-zinc-800/80 flex items-center justify-between">
+                      <div>
+                        <div className="text-xs font-bold text-zinc-200">Chức năng Đăng lại (Repost)</div>
+                        <div className="text-[11px] text-zinc-400 mt-0.5">Cho phép người dùng chia sẻ lại bài viết lên trang cá nhân</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const current = configs.enable_repost !== 'false';
+                          setConfigs({ ...configs, enable_repost: current ? 'false' : 'true' });
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${configs.enable_repost !== 'false' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-zinc-800 text-zinc-400 border border-zinc-700'}`}
+                      >
+                        {configs.enable_repost !== 'false' ? 'Đang bật' : 'Đã tắt'}
+                      </button>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl bg-zinc-950/70 border border-zinc-800/80 flex items-center justify-between">
+                      <div>
+                        <div className="text-xs font-bold text-zinc-200">Công khai danh sách bạn bè</div>
+                        <div className="text-[11px] text-zinc-400 mt-0.5">Hiển thị danh sách bạn bè cho người khác khi xem trang cá nhân</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const current = configs.public_friends !== 'false';
+                          setConfigs({ ...configs, public_friends: current ? 'false' : 'true' });
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${configs.public_friends !== 'false' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-zinc-800 text-zinc-400 border border-zinc-700'}`}
+                      >
+                        {configs.public_friends !== 'false' ? 'Đang bật' : 'Đã tắt'}
+                      </button>
                     </div>
                   </div>
                 </div>

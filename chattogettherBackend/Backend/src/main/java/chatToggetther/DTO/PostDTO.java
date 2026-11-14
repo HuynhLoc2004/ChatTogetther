@@ -34,9 +34,14 @@ public class PostDTO {
     // Số liệu tương tác & Reactions & Thuật toán Thịnh hành Tìm kiếm
     private Integer likesCount;
     private Integer commentsCount;
+    private Integer repostsCount;
     private Long searchHits;
     private Double trendingScore;
     private Boolean isLikedByMe;
+    private Boolean isRepostedByMe;
+    private String repostedByUsername;
+    private String repostedByNickname;
+    private String repostedAt;
     private String myReaction; // "HEART", "FIRE", "HAHA", "WOW", "LIKE", "CROWN"
     private String reactionSummary; // e.g. "❤️ 🔥 😂"
 

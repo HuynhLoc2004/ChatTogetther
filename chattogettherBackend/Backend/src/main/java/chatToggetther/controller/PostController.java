@@ -169,4 +169,28 @@ public class PostController {
     ) {
         return ResponseEntity.ok(this.postService.reportPost(token, id, request));
     }
+
+    @PostMapping("/{id}/repost")
+    public ResponseEntity<ResponseData<PostDTO>> toggleRepost(
+            JwtAuthenticationToken token,
+            @PathVariable("id") Long id
+    ) {
+        return ResponseEntity.ok(this.postService.toggleRepost(token, id));
+    }
+
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<ResponseData<List<PostDTO>>> getUserPosts(
+            JwtAuthenticationToken token,
+            @PathVariable("userId") Long userId
+    ) {
+        return ResponseEntity.ok(this.postService.getUserPosts(token, userId));
+    }
+
+    @GetMapping("/user/{userId}/reposts")
+    public ResponseEntity<ResponseData<List<PostDTO>>> getUserReposts(
+            JwtAuthenticationToken token,
+            @PathVariable("userId") Long userId
+    ) {
+        return ResponseEntity.ok(this.postService.getUserReposts(token, userId));
+    }
 }

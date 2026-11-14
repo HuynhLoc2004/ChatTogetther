@@ -10,7 +10,7 @@ import {
   Edit3, Trash2, MoreVertical, Tag, Filter, Check,
   Mic, Headphones, Moon, Gamepad2, Film, Square,
   Flag, AlertTriangle, UserCheck,
-  ChevronDown, Menu, Globe, Layers, SlidersHorizontal
+  ChevronDown, Menu, Globe, Layers, SlidersHorizontal, Repeat
 } from 'lucide-react';
 import axiosClient, { BACKEND_URL } from '../api/axiosClient';
 import { saveRoomsOffline, getRoomsOffline } from '../utils/offlineDB';
@@ -1018,6 +1018,39 @@ const Home = () => {
     }
   };
 
+  // Đăng lại bài viết (Repost)
+  const handleToggleRepost = async (postId) => {
+    // Optimistic UI Update
+    setPosts(prev => prev.map(p => {
+      if (p.id === postId) {
+        const wasReposted = Boolean(p.isRepostedByMe);
+        const currentCount = Number(p.repostsCount || 0);
+        return {
+          ...p,
+          isRepostedByMe: !wasReposted,
+          repostsCount: wasReposted ? Math.max(0, currentCount - 1) : currentCount + 1
+        };
+      }
+      return p;
+    }));
+
+    try {
+      const res = await axiosClient.post(`/posts/${postId}/repost`);
+      if (res.data?.data) {
+        const updated = res.data.data;
+        setPosts(prev => prev.map(p => p.id === postId ? {
+          ...p,
+          repostsCount: updated.repostsCount,
+          isRepostedByMe: updated.isRepostedByMe
+        } : p));
+      }
+      toast.success(res.data?.message || "Đã đăng lại bài viết!");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Không thể đăng lại bài viết!");
+      fetchPosts(true);
+    }
+  };
+
   const fetchPendingFriendsCount = async () => {
     if (!currentUserId) return;
     try {
@@ -1704,7 +1737,7 @@ const Home = () => {
             {dynamicMenu.profile?.visible !== false && (
               <button 
                 className="nav-item"
-                onClick={() => setSelectedProfileUserId(currentUserId)}
+                onClick={() => navigate('/profile')}
               >
                 <User size={15} strokeWidth={1.5} />
                 <span>{dynamicMenu.profile?.label || "Hồ sơ & Huy hiệu"}</span>
@@ -1728,7 +1761,7 @@ const Home = () => {
           {/* User Profile & Account Dock Card (Chân Sidebar chuẩn phong cách Linear / Discord) */}
           <div 
             className="nav-user-dock cursor-pointer" 
-            onClick={() => setSelectedProfileUserId(currentUserId)}
+            onClick={() => navigate('/profile')}
             title="Quản lý tài khoản, hồ sơ & đăng xuất"
           >
             <div className="dock-user-profile">
@@ -2468,10 +2501,20 @@ const Home = () => {
                           )}
                         </div>
                       )}
+
+                      {/* Thông báo Người đăng lại (Repost Banner) */}
+                      {post.repostedByUsername && (
+                        <div className="flex items-center gap-1.5 pb-2 mb-2 text-xs text-emerald-400 font-medium border-b border-zinc-800/60">
+                          <Repeat size={13} className="flex-shrink-0" />
+                          <span>{post.repostedByNickname || post.repostedByUsername} đã đăng lại</span>
+                          {post.repostedAt && <span className="text-[10.5px] text-zinc-500 font-mono ml-auto">{post.repostedAt}</span>}
+                        </div>
+                      )}
+
                       <div className="post-header-row">
                         <div 
-                          className="post-avatar-click" 
-                          onClick={() => setSelectedProfileUserId(post.authorId || post.userId)}
+                          className="post-avatar-click cursor-pointer" 
+                          onClick={() => navigate(`/profile/${post.authorId || post.userId}`)}
                         >
                           <UserAvatar 
                             avatar={post.authorAvatar} 
@@ -2483,8 +2526,8 @@ const Home = () => {
                         <div className="post-header-info">
                           <div className="post-name-line">
                             <span 
-                              className="author-display-name"
-                              onClick={() => setSelectedProfileUserId(post.authorId || post.userId)}
+                              className="author-display-name cursor-pointer hover:underline"
+                              onClick={() => navigate(`/profile/${post.authorId || post.userId}`)}
                             >
                               {post.authorNickname || post.authorAccount || "Thành viên"}
                             </span>
@@ -2735,6 +2778,17 @@ const Home = () => {
                           <Share2 size={15} strokeWidth={1.5} />
                           <span className="text-xs">Chia sẻ</span>
                         </button>
+
+                        {/* Nút Đăng lại (Repost) */}
+                        <button
+                          type="button"
+                          onClick={() => handleToggleRepost(post.id)}
+                          className={`action-btn ${post.isRepostedByMe ? 'text-emerald-400 font-bold active-reposted' : ''}`}
+                          title={post.isRepostedByMe ? "Hủy đăng lại" : "Đăng lại bài viết lên trang cá nhân"}
+                        >
+                          <Repeat size={15} strokeWidth={1.5} className={post.isRepostedByMe ? "text-emerald-400" : ""} />
+                          <span className="font-mono text-xs">{post.repostsCount || 0}</span>
+                        </button>
                       </div>
 
                       {/* Khu vực bình luận: Chỉ mở khi người dùng click */}
@@ -2754,7 +2808,7 @@ const Home = () => {
                                     <div key={cmt.id} className={isReply ? "cmt-reply-item" : "cmt-row cmt-root-row"}>
                                       <div 
                                         className="cursor-pointer flex-shrink-0"
-                                        onClick={() => setSelectedProfileUserId(cmt.authorId)}
+                                        onClick={() => navigate(`/profile/${cmt.authorId}`)}
                                         title="Xem hồ sơ cá nhân"
                                       >
                                         <UserAvatar 
@@ -2768,7 +2822,7 @@ const Home = () => {
                                           <div className="cmt-author-info min-w-0">
                                             <span 
                                               className={`cmt-user-name ${isReply ? 'reply-name' : ''} cursor-pointer hover:underline truncate`}
-                                              onClick={() => setSelectedProfileUserId(cmt.authorId)}
+                                              onClick={() => navigate(`/profile/${cmt.authorId}`)}
                                             >
                                               {cmt.authorNickname || cmt.authorAccount || 'Thành viên'}
                                             </span>
@@ -2972,7 +3026,7 @@ const Home = () => {
                 rooms={safeRooms}
                 friends={safeFriends}
                 navigate={navigate}
-                onSelectUser={setSelectedProfileUserId}
+                onSelectUser={(uid) => navigate(`/profile/${uid}`)}
                 onStartPrivateCall={handleStartPrivateCall}
                 onNavigateFeed={() => setActiveTab('feed')}
               />
@@ -3215,7 +3269,7 @@ const Home = () => {
         <button 
           type="button"
           className="b-nav-item"
-          onClick={() => setSelectedProfileUserId(currentUserId)}
+          onClick={() => navigate('/profile')}
         >
           <User size={18} strokeWidth={1.5} />
           <span>Hồ sơ</span>
@@ -3510,7 +3564,7 @@ const Home = () => {
           currentUserId={currentUserId}
           onSelectUser={(uid) => {
             setIsFriendsOpen(false);
-            setSelectedProfileUserId(uid);
+            navigate(`/profile/${uid}`);
           }}
           navigate={navigate}
         />

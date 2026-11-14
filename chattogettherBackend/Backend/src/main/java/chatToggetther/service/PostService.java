@@ -16,6 +16,7 @@ import chatToggetther.modelEntity.CommentLikeEntity;
 import chatToggetther.modelEntity.PostEntity;
 import chatToggetther.modelEntity.PostLikeEntity;
 import chatToggetther.modelEntity.PostReportEntity;
+import chatToggetther.modelEntity.PostRepostEntity;
 import chatToggetther.modelEntity.UserEntity;
 import chatToggetther.repository.CommentLikeRepository;
 import chatToggetther.repository.CommentRepository;
@@ -24,6 +25,7 @@ import chatToggetther.repository.CommunityMemberRepository;
 import chatToggetther.repository.FriendshipRepository;
 import chatToggetther.repository.PostLikeRepository;
 import chatToggetther.repository.PostReportRepository;
+import chatToggetther.repository.PostRepostRepository;
 import chatToggetther.repository.PostRepository;
 import chatToggetther.repository.UserRepository;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -48,6 +50,7 @@ public class PostService {
     private final FriendshipRepository friendshipRepository;
     private final PostReportRepository postReportRepository;
     private final CommentLikeRepository commentLikeRepository;
+    private final PostRepostRepository postRepostRepository;
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm dd/MM");
 
@@ -61,7 +64,8 @@ public class PostService {
             CommunityMemberRepository memberRepository,
             FriendshipRepository friendshipRepository,
             PostReportRepository postReportRepository,
-            CommentLikeRepository commentLikeRepository
+            CommentLikeRepository commentLikeRepository,
+            PostRepostRepository postRepostRepository
     ) {
         this.postRepository = postRepository;
         this.postLikeRepository = postLikeRepository;
@@ -73,6 +77,7 @@ public class PostService {
         this.friendshipRepository = friendshipRepository;
         this.postReportRepository = postReportRepository;
         this.commentLikeRepository = commentLikeRepository;
+        this.postRepostRepository = postRepostRepository;
     }
 
     private PostDTO mapToPostDTO(PostEntity post, UserEntity currentUser) {
@@ -102,10 +107,12 @@ public class PostService {
 
         int likesCount = this.postLikeRepository.countByPost(post);
         int commentsCount = this.commentRepository.countByPost(post);
+        long repostsCount = this.postRepostRepository.countByPost(post);
         long hits = post.getSearchHits() != null ? post.getSearchHits() : 0L;
 
         dto.setLikesCount(likesCount);
         dto.setCommentsCount(commentsCount);
+        dto.setRepostsCount((int) repostsCount);
         dto.setSearchHits(hits);
 
         dto.setGroupId(post.getGroupId());
@@ -130,9 +137,11 @@ public class PostService {
                 dto.setIsLikedByMe(false);
                 dto.setMyReaction(null);
             }
+            dto.setIsRepostedByMe(this.postRepostRepository.existsByPostAndUser(post, currentUser));
         } else {
             dto.setIsLikedByMe(false);
             dto.setMyReaction(null);
+            dto.setIsRepostedByMe(false);
         }
 
         return dto;
@@ -767,6 +776,7 @@ public class PostService {
             throw new AppException(403, "Bạn không có quyền xóa bài viết này!", 403);
         }
 
+        this.postRepostRepository.deleteAllByPost(post);
         this.postRepository.delete(post);
 
         try {
@@ -947,5 +957,90 @@ public class PostService {
         } catch (Exception ignored) {}
 
         return new ResponseData<>(200, "Báo cáo bài viết thành công. Ban quản trị sẽ sớm xem xét xử lý!", true);
+    }
+
+    @Transactional
+    public ResponseData<PostDTO> toggleRepost(JwtAuthenticationToken token, Long postId) {
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        if (currentUser == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Vui lòng đăng nhập lại", 401);
+        }
+        PostEntity post = this.postRepository.findById(postId).orElseThrow(() ->
+            new AppException(404, "Bài viết không tồn tại", 404)
+        );
+
+        Optional<PostRepostEntity> existingOpt = this.postRepostRepository.findByPostAndUser(post, currentUser);
+        boolean reposted;
+        if (existingOpt.isPresent()) {
+            this.postRepostRepository.delete(existingOpt.get());
+            reposted = false;
+        } else {
+            PostRepostEntity newRepost = PostRepostEntity.builder()
+                    .post(post)
+                    .user(currentUser)
+                    .createdAt(LocalDateTime.now())
+                    .build();
+            this.postRepostRepository.save(newRepost);
+            reposted = true;
+
+            // Gửi realtime notification cho tác giả bài viết nếu không phải chính mình
+            if (!post.getUser().getId().equals(currentUser.getId())) {
+                try {
+                    String reposterName = currentUser.getNickname() != null && !currentUser.getNickname().trim().isEmpty()
+                            ? currentUser.getNickname() : currentUser.getAccount();
+                    Map<String, Object> notif = new HashMap<>();
+                    notif.put("id", UUID.randomUUID().toString());
+                    notif.put("type", "REPOST");
+                    notif.put("text", reposterName + " đã đăng lại bài viết của bạn!");
+                    notif.put("time", LocalDateTime.now().format(TIME_FORMATTER));
+                    notif.put("postId", post.getId());
+                    notif.put("unread", true);
+                    this.messagingTemplate.convertAndSend("/topic/user/" + post.getUser().getId() + "/notifications", notif);
+                } catch (Exception ignored) {}
+            }
+        }
+
+        try {
+            this.messagingTemplate.convertAndSend("/topic/posts", "POST_REPOST_UPDATED");
+        } catch (Exception ignored) {}
+
+        PostDTO dto = mapToPostDTO(post, currentUser);
+        dto.setIsRepostedByMe(reposted);
+        return new ResponseData<>(200, reposted ? "Đã đăng lại bài viết lên trang cá nhân!" : "Đã hủy đăng lại bài viết", dto);
+    }
+
+    @Transactional(readOnly = true)
+    public ResponseData<List<PostDTO>> getUserPosts(JwtAuthenticationToken token, Long targetUserId) {
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        UserEntity targetUser = this.userRepository.findById(targetUserId).orElseThrow(() ->
+            new AppException(404, "Người dùng không tồn tại", 404)
+        );
+
+        List<PostEntity> posts = this.postRepository.findAllPostsWithDetails().stream()
+                .filter(p -> p.getUser().getId().equals(targetUserId))
+                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
+                .collect(Collectors.toList());
+
+        List<PostDTO> dtos = posts.stream().map(p -> mapToPostDTO(p, currentUser)).collect(Collectors.toList());
+        return new ResponseData<>(200, "Lấy danh sách bài viết của người dùng thành công", dtos);
+    }
+
+    @Transactional(readOnly = true)
+    public ResponseData<List<PostDTO>> getUserReposts(JwtAuthenticationToken token, Long targetUserId) {
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        UserEntity targetUser = this.userRepository.findById(targetUserId).orElseThrow(() ->
+            new AppException(404, "Người dùng không tồn tại", 404)
+        );
+
+        List<PostRepostEntity> reposts = this.postRepostRepository.findByUserOrderByCreatedAtDesc(targetUser);
+        List<PostDTO> dtos = reposts.stream().map(r -> {
+            PostDTO dto = mapToPostDTO(r.getPost(), currentUser);
+            dto.setRepostedByUsername(targetUser.getAccount());
+            dto.setRepostedByNickname(targetUser.getNickname() != null ? targetUser.getNickname() : targetUser.getAccount());
+            dto.setRepostedAt(r.getCreatedAt() != null ? r.getCreatedAt().format(TIME_FORMATTER) : "");
+            return dto;
+        }).collect(Collectors.toList());
+
+        return new ResponseData<>(200, "Lấy danh sách bài đăng lại thành công", dtos);
     }
 }
