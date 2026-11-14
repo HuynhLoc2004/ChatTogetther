@@ -1021,7 +1021,12 @@ const Home = () => {
       }
     } catch (err) {
       console.warn("Lỗi thả cảm xúc:", err);
-      fetchPosts(true);
+      if (err.response?.status === 404) {
+        setPosts(prev => prev.filter(p => p.id !== postId));
+        setSelectedThreadPost(prev => prev?.id === postId ? null : prev);
+      } else {
+        fetchPosts(true);
+      }
     }
   };
 
@@ -1044,6 +1049,10 @@ const Home = () => {
       }
     } catch (err) {
       console.warn("Lỗi lấy bình luận:", err);
+      if (err.response?.status === 404) {
+        setPosts(prev => prev.filter(p => p.id !== postId));
+        setSelectedThreadPost(prev => prev?.id === postId ? null : prev);
+      }
     }
   };
 
@@ -1207,6 +1216,10 @@ const Home = () => {
         setPosts(prev => prev.map(p => p.id === postId ? { ...p, commentsCount: (p.commentsCount || 0) + 1 } : p));
       }
     } catch (err) {
+      if (err.response?.status === 404) {
+        setPosts(prev => prev.filter(p => p.id !== postId));
+        setSelectedThreadPost(prev => prev?.id === postId ? null : prev);
+      }
       toast.error(err.response?.data?.message || "Lỗi gửi phản hồi!");
     } finally {
       setSubmittingComment(prev => ({ ...prev, [postId]: false }));
@@ -1780,6 +1793,151 @@ const Home = () => {
 
   const currentTrack = tracks && tracks.length > 0 ? tracks[currentTrackIndex] : null;
 
+  // Render một bubble bình luận (dùng chung cho cả Mobile Single Feed và Desktop Dual-view)
+  const renderCommentBubble = (cmt, isReply = false, targetPostId) => {
+    const isCmtMe = currentUserId && cmt.authorId?.toString() === currentUserId.toString();
+    const targetPost = posts.find(p => p.id === targetPostId) || selectedThreadPost;
+    const canDeleteCmt = isCmtMe || (currentUserId && targetPost?.authorId?.toString() === currentUserId.toString());
+    const isEditingThisCmt = editingCommentId === cmt.id;
+
+    return (
+      <div key={cmt.id} className={isReply ? "cmt-reply-item" : "cmt-row cmt-root-row"}>
+        <div 
+          className="cursor-pointer flex-shrink-0"
+          onClick={() => navigate(`/profile/${cmt.authorId}`)}
+          title="Xem hồ sơ cá nhân"
+        >
+          <UserAvatar 
+            avatar={cmt.authorAvatar} 
+            name={cmt.authorNickname || cmt.authorAccount} 
+            size={isReply ? 26 : 32} 
+          />
+        </div>
+
+        <div className="cmt-bubble-content flex-1 min-w-0">
+          <div className="cmt-header-row flex items-center justify-between">
+            <div className="cmt-author-info flex items-center gap-1.5 min-w-0">
+              <span 
+                className="cmt-user-name font-semibold text-xs text-[#f1f5f9] cursor-pointer hover:underline truncate"
+                onClick={() => navigate(`/profile/${cmt.authorId}`)}
+              >
+                {cmt.authorNickname || cmt.authorAccount || 'Thành viên'}
+              </span>
+              <span className="cmt-user-handle text-[11px] text-zinc-400 font-mono truncate">
+                @{cmt.authorAccount || 'user'}
+              </span>
+              <span className="text-zinc-600">·</span>
+              <span className="text-[11px] text-zinc-400">{cmt.formattedTime || 'Vừa xong'}</span>
+            </div>
+          </div>
+
+          {isEditingThisCmt ? (
+            <div className="cmt-inline-edit-box my-1">
+              <input 
+                type="text" 
+                value={editingCommentText}
+                onChange={(e) => setEditingCommentText(e.target.value)}
+                className="w-full bg-[#181a24] border border-zinc-700 rounded-lg p-2 text-xs text-[#f1f5f9] focus:outline-none"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSaveEditComment(targetPostId, cmt.id);
+                  if (e.key === 'Escape') setEditingCommentId(null);
+                }}
+              />
+              <div className="flex gap-2 justify-end mt-1">
+                <button type="button" onClick={() => setEditingCommentId(null)} className="px-2.5 py-1 text-xs text-zinc-400 hover:text-white">Hủy</button>
+                <button type="button" onClick={() => handleSaveEditComment(targetPostId, cmt.id)} className="px-3 py-1 bg-white text-zinc-900 text-xs font-semibold rounded-md">Lưu</button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <p className="text-xs sm:text-[13px] text-[#cbd5e1] leading-relaxed my-1">
+                {cmt.replyToUser && (
+                  <span className="text-sky-400 font-mono mr-1">@{cmt.replyToUser}</span>
+                )}
+                {cmt.content}
+              </p>
+
+              <div className="flex items-center gap-3 pt-1 text-zinc-400">
+                <button
+                  type="button"
+                  onClick={() => handleToggleLikeComment(targetPostId, cmt.id)}
+                  className={`flex items-center gap-1 text-[11px] hover:text-[#f1f5f9] transition-colors ${cmt.isLiked ? 'text-rose-500 font-bold' : ''}`}
+                >
+                  <Heart size={12} className={cmt.isLiked ? "fill-rose-500 text-rose-500" : ""} />
+                  {Number(cmt.likesCount || 0) > 0 && <span>{cmt.likesCount}</span>}
+                </button>
+
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    setReplyTargetMap(prev => ({
+                      ...prev,
+                      [targetPostId]: {
+                        commentId: cmt.id,
+                        authorAccount: cmt.authorAccount || 'user',
+                        authorNickname: cmt.authorNickname || cmt.authorAccount || 'Thành viên'
+                      }
+                    }));
+                    const input = document.getElementById('thread-modal-reply-input') || document.getElementById('thread-mobile-reply-input');
+                    if (input) input.focus();
+                  }} 
+                  className="flex items-center gap-1 text-[11px] hover:text-[#f1f5f9] transition-colors"
+                >
+                  <CornerDownRight size={12} />
+                  <span>Trả lời</span>
+                </button>
+
+                {isCmtMe && !isEditingThisCmt && (
+                  <button 
+                    type="button" 
+                    onClick={() => handleStartEditComment(cmt)} 
+                    className="text-[11px] hover:text-[#f1f5f9] transition-colors"
+                  >
+                    Sửa
+                  </button>
+                )}
+                {canDeleteCmt && (
+                  <button 
+                    type="button" 
+                    onClick={() => handleDeleteComment(targetPostId, cmt.id)} 
+                    className="text-[11px] hover:text-rose-400 transition-colors"
+                  >
+                    Xóa
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // Render cây phân cấp thảo luận
+  const renderCommentThreadsTree = (targetPostId) => {
+    const list = commentsMap[targetPostId] || [];
+    if (list.length === 0) {
+      return (
+        <div className="py-12 text-center text-zinc-500">
+          <MessageSquare size={24} className="mx-auto mb-2 opacity-30 text-zinc-400" />
+          <p className="text-xs text-zinc-400">Chưa có phản hồi nào. Hãy là người đầu tiên chia sẻ góc nhìn!</p>
+        </div>
+      );
+    }
+    const threads = buildCommentThreads(list);
+    return threads.map((thread) => (
+      <div key={thread.id} className="cmt-thread-group border-b border-zinc-800/60 pb-3">
+        {renderCommentBubble(thread, false, targetPostId)}
+        {thread.replies && thread.replies.length > 0 && (
+          <div className="cmt-replies-branch-thread">
+            {thread.replies.map(reply => renderCommentBubble(reply, true, targetPostId))}
+          </div>
+        )}
+      </div>
+    ));
+  };
+
   return (
     <div className="social-app-wrapper">
       <audio 
@@ -2112,226 +2270,16 @@ const Home = () => {
               </button>
             </div>
 
-            {/* CỤM CHUÔNG THÔNG BÁO SẢNH (Anchored Dropdown trên PC & Side Drawer trên Mobile) */}
-            <div className="notif-anchor-wrap hidden sm:block" style={{ position: 'relative' }}>
-              <button 
-                onClick={() => setIsNotifOpen(!isNotifOpen)} 
-                className="btn-header-notif"
-                title="Thông báo sảnh"
-              >
-                <Bell size={15} strokeWidth={1.5} />
-                {notifications.some(n => n.unread) && <span className="notif-dot"></span>}
-              </button>
-
-              {/* Dropdown Card cố định ngay dưới chuông trên Desktop */}
-              {isNotifOpen && (
-                <>
-                  <div 
-                    style={{ position: 'fixed', inset: 0, zIndex: 90 }} 
-                    onClick={() => setIsNotifOpen(false)} 
-                  />
-                  <div 
-                    className="notif-desktop-popover animate-fade-in"
-                    style={{
-                      position: 'absolute',
-                      top: 'calc(100% + 8px)',
-                      right: 0,
-                      width: '330px',
-                      background: '#161924',
-                      border: '1px solid #283044',
-                      borderRadius: '16px',
-                      boxShadow: '0 16px 40px -4px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.05)',
-                      zIndex: 100,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      overflow: 'hidden'
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {/* Header Dropdown */}
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '12px 14px',
-                      borderBottom: '1px solid #23293a',
-                      background: '#13151f'
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Bell size={14} style={{ color: '#cbd5e1' }} />
-                        <span style={{ fontSize: '13px', fontWeight: 600, color: '#f1f5f9' }}>Thông báo sảnh</span>
-                        {notifications.filter(n => n.unread).length > 0 && (
-                          <span style={{
-                            fontSize: '10px',
-                            fontFamily: 'monospace',
-                            padding: '1px 6px',
-                            borderRadius: '9999px',
-                            background: 'rgba(59, 130, 246, 0.2)',
-                            color: '#60a5fa',
-                            border: '1px solid rgba(59, 130, 246, 0.3)'
-                          }}>
-                            {notifications.filter(n => n.unread).length}
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        {notifications.length > 0 && (
-                          <button 
-                            onClick={() => setNotifications(prev => prev.map(n => ({ ...n, unread: false })))} 
-                            style={{
-                              background: 'transparent',
-                              border: 'none',
-                              color: '#94a3b8',
-                              fontSize: '11px',
-                              cursor: 'pointer',
-                              fontWeight: 500
-                            }}
-                          >
-                            Đã đọc hết
-                          </button>
-                        )}
-                        <button 
-                          onClick={() => setIsNotifOpen(false)} 
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: '#94a3b8',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            padding: '2px'
-                          }}
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Danh sách thông báo */}
-                    <div className="custom-dark-scrollbar" style={{ maxHeight: '360px', overflowY: 'auto', padding: '6px' }}>
-                      {notifications.length === 0 ? (
-                        <div style={{ padding: '32px 16px', textAlign: 'center', color: '#8896ab' }}>
-                          <Bell size={24} style={{ margin: '0 auto 8px auto', opacity: 0.4, color: '#64748b' }} />
-                          <p style={{ fontSize: '12.5px', fontWeight: 600, color: '#cbd5e1', margin: '0 0 4px 0' }}>Chưa có thông báo nào</p>
-                          <p style={{ fontSize: '11px', color: '#64748b', margin: 0, lineHeight: 1.4 }}>
-                            Các lượt thả cảm xúc, lời mời kết bạn và phản hồi sẽ hiển thị ở đây.
-                          </p>
-                        </div>
-                      ) : (
-                        notifications.map(n => (
-                          <div 
-                            key={n.id} 
-                            onClick={() => {
-                              setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, unread: false } : item));
-                              setIsNotifOpen(false);
-                              if (n.postId) {
-                                const el = document.getElementById(`post-${n.postId}`);
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                              }
-                            }}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'flex-start',
-                              gap: '10px',
-                              padding: '10px 12px',
-                              borderRadius: '10px',
-                              cursor: 'pointer',
-                              background: n.unread ? 'rgba(36, 42, 60, 0.6)' : 'transparent',
-                              border: n.unread ? '1px solid rgba(96, 165, 250, 0.25)' : '1px solid transparent',
-                              marginBottom: '4px',
-                              transition: 'all 0.15s'
-                            }}
-                          >
-                            <div style={{
-                              width: '6px',
-                              height: '6px',
-                              borderRadius: '50%',
-                              background: '#38bdf8',
-                              marginTop: '6px',
-                              flexShrink: 0,
-                              opacity: n.unread ? 1 : 0
-                            }} />
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <p style={{ margin: 0, fontSize: '12px', color: '#f1f5f9', lineHeight: 1.4, wordBreak: 'break-word' }}>
-                                {n.text}
-                              </p>
-                              <span style={{ fontSize: '10px', color: '#64748b', marginTop: '3px', display: 'block', fontFamily: 'monospace' }}>
-                                {n.time}
-                              </span>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Modal Thông Báo trên Mobile: Dạng Side Drawer trượt mượt mà từ PHẢI sang TRÁI */}
-            {isNotifOpen && (
-              <div 
-                className="sm:hidden fixed inset-0 z-[70] flex justify-end bg-black/60 backdrop-blur-sm animate-fade-in"
-                onClick={() => setIsNotifOpen(false)}
-              >
-                <div 
-                  className="w-[320px] max-w-[88vw] h-full bg-[#161923] border-l border-[#242b3b] shadow-2xl flex flex-col drawer-slide-right"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <div className="flex items-center justify-between p-4 border-b border-[#23293a] bg-[#13151f]">
-                    <div className="flex items-center gap-2">
-                      <Bell size={16} className="text-slate-200" />
-                      <span className="text-sm font-bold text-white">Thông báo sảnh</span>
-                      {notifications.filter(n => n.unread).length > 0 && (
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">
-                          {notifications.filter(n => n.unread).length}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {notifications.length > 0 && (
-                        <button 
-                          onClick={() => setNotifications(prev => prev.map(n => ({ ...n, unread: false })))} 
-                          className="text-slate-400 hover:text-white text-xs font-mono"
-                        >
-                          Đã đọc hết
-                        </button>
-                      )}
-                      <button onClick={() => setIsNotifOpen(false)} className="text-slate-400 hover:text-white p-1">
-                        <X size={18} />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="p-3 flex-1 overflow-y-auto custom-dark-scrollbar">
-                    {notifications.length === 0 ? (
-                      <div className="py-16 text-center text-slate-400">
-                        <Bell size={28} className="mx-auto mb-2 opacity-40 text-slate-500" />
-                        <p className="text-sm font-semibold text-slate-300">Chưa có thông báo nào</p>
-                        <p className="text-xs text-slate-500 mt-1">Các lượt thả cảm xúc, lời mời kết bạn và bình luận sẽ hiển thị ở đây.</p>
-                      </div>
-                    ) : (
-                      notifications.map(n => (
-                        <div 
-                          key={n.id}
-                          className="p-3 rounded-xl mb-2 bg-[#1b202e] text-xs text-slate-200 border border-[#252c3e] cursor-pointer active:scale-98 transition-all"
-                          onClick={() => {
-                            setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, unread: false } : item));
-                            setIsNotifOpen(false);
-                            if (n.postId) {
-                              const el = document.getElementById(`post-${n.postId}`);
-                              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            }
-                          }}
-                        >
-                          <p className="font-medium text-slate-100">{n.text}</p>
-                          <span className="text-[10px] text-slate-400 font-mono block mt-1">{n.time}</span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
+            {/* NÚT CHUÔNG THÔNG BÁO SẢNH (Mở Slide-over Drawer sang trọng) */}
+            <button 
+              type="button"
+              onClick={() => setIsNotifOpen(!isNotifOpen)} 
+              className="btn-header-notif hidden sm:flex"
+              title="Thông báo sảnh (Mở ngăn kéo)"
+            >
+              <Bell size={15} strokeWidth={1.5} />
+              {notifications.some(n => n.unread) && <span className="notif-dot"></span>}
+            </button>
           </div>
 
           {/* ============================================================== */}
@@ -4270,24 +4218,151 @@ const Home = () => {
       )}
 
       {/* ============================================================== */}
+      {/* SLIDE-OVER NOTIFICATION DRAWER (Trượt từ ngoài mép phải vào cho cả PC & Mobile) */}
+      {/* ============================================================== */}
+      {isNotifOpen && (
+        <div 
+          className="fixed inset-0 z-[120] flex justify-end bg-black/60 backdrop-blur-sm transition-opacity duration-300"
+          onClick={() => setIsNotifOpen(false)}
+        >
+          <div 
+            className="w-full sm:w-[420px] max-w-full h-full bg-[#0c0d12] border-l border-zinc-800 shadow-[-20px_0_50px_rgba(0,0,0,0.85)] flex flex-col transform transition-transform duration-300 ease-out drawer-slide-right"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header Drawer */}
+            <div className="flex items-center justify-between px-4 py-3.5 border-b border-zinc-800/80 bg-[#12131a] flex-shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-zinc-800/80 border border-zinc-700/60 flex items-center justify-center text-slate-200">
+                  <Bell size={16} strokeWidth={1.8} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-white tracking-tight">Thông báo sảnh</span>
+                    {notifications.filter(n => n.unread).length > 0 && (
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                        {notifications.filter(n => n.unread).length} mới
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-zinc-400 m-0">Tương tác và cập nhật theo thời gian thực</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {notifications.length > 0 && (
+                  <button 
+                    type="button"
+                    onClick={() => setNotifications(prev => prev.map(n => ({ ...n, unread: false })))} 
+                    className="text-xs text-zinc-400 hover:text-white px-2 py-1 rounded-lg hover:bg-zinc-800/50 transition-colors"
+                  >
+                    Đã đọc hết
+                  </button>
+                )}
+                <button 
+                  type="button"
+                  onClick={() => setIsNotifOpen(false)} 
+                  className="w-8 h-8 rounded-xl hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center transition-colors"
+                  title="Đóng"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Body: Danh sách thông báo (Mới nhất ở trên xuống dưới) */}
+            <div className="flex-1 overflow-y-auto p-3 space-y-2.5 custom-dark-scrollbar">
+              {notifications.length === 0 ? (
+                <div className="py-24 text-center px-4 text-zinc-400">
+                  <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mx-auto mb-3 text-zinc-500">
+                    <Bell size={22} className="opacity-60" />
+                  </div>
+                  <p className="text-sm font-semibold text-zinc-200">Chưa có thông báo nào</p>
+                  <p className="text-xs text-zinc-400 mt-1 max-w-xs mx-auto leading-relaxed">
+                    Các lượt thả cảm xúc, phản hồi bài viết và kết nối âm thanh sẽ hiển thị ở đây.
+                  </p>
+                </div>
+              ) : (
+                notifications.map(n => (
+                  <div 
+                    key={n.id}
+                    onClick={() => {
+                      setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, unread: false } : item));
+                      setIsNotifOpen(false);
+                      if (n.postId) {
+                        const targetPost = posts.find(p => p.id === n.postId);
+                        if (targetPost) {
+                          setSelectedThreadPost(targetPost);
+                          fetchComments(targetPost.id);
+                        } else {
+                          const el = document.getElementById(`post-${n.postId}`);
+                          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                      }
+                    }}
+                    className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-start gap-3 ${
+                      n.unread 
+                        ? 'bg-zinc-900/90 border-zinc-700/80 shadow-md hover:border-zinc-500' 
+                        : 'bg-zinc-950/60 border-zinc-800/60 hover:bg-zinc-900/40 text-zinc-300'
+                    }`}
+                  >
+                    <div className="flex-shrink-0 mt-0.5">
+                      <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-sm">
+                        {n.icon || (n.text?.includes('thích') || n.text?.includes('tim') ? '❤️' : n.text?.includes('bình luận') ? '💬' : '🔔')}
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-zinc-100 leading-relaxed font-sans m-0">
+                        {n.text}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <span className="text-[10px] text-zinc-400 font-mono">
+                          {n.time || 'Vừa xong'}
+                        </span>
+                        {n.unread && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse"></span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Footer Drawer */}
+            <div className="p-3 border-t border-zinc-800/80 bg-[#09090b] flex items-center justify-between text-xs text-zinc-400 flex-shrink-0">
+              <span className="font-mono text-[11px]">Talovin Notification Drawer</span>
+              <button 
+                type="button"
+                onClick={() => setNotifications([])}
+                className="text-zinc-400 hover:text-rose-400 transition-colors text-xs"
+              >
+                Xóa toàn bộ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
       {/* MODAL CHI TIẾT BÀI VIẾT & DÒNG THẢO LUẬN (TALOVIN DUAL-VIEW) */}
       {/* ============================================================== */}
       {selectedThreadPost && (
         <div 
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-5 bg-black/75 backdrop-blur-md modal-backdrop-smooth"
+          className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center p-0 sm:p-5 bg-black/80 backdrop-blur-md modal-backdrop-smooth"
           onClick={() => setSelectedThreadPost(null)}
         >
+          {/* Khung Modal Container: Trên mobile là full màn hình cố định, trên PC là Dual-View 2 cột */}
           <div 
-            className="relative w-full sm:max-w-4xl lg:max-w-5xl h-[100dvh] sm:h-auto sm:max-h-[88vh] bg-[#151822] border-0 sm:border border-[#283144] sm:rounded-2xl flex flex-col overflow-hidden modal-card-smooth"
+            className="relative w-full sm:w-[940px] lg:w-[1040px] h-full sm:h-[82vh] sm:max-h-[740px] sm:min-h-[580px] bg-[#0c0d12] border-0 sm:border border-zinc-800 sm:rounded-3xl flex flex-col overflow-hidden shadow-2xl modal-card-smooth"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header Modal View */}
-            <div className="sticky top-0 z-30 flex items-center justify-between px-4 sm:px-5 py-3.5 border-b border-[#222838] bg-[#13151f]/95 backdrop-blur-md flex-shrink-0">
-              <div className="flex items-center gap-3">
+            {/* Header Modal View chung */}
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-zinc-800/80 bg-[#12131a] flex-shrink-0">
+              <div className="flex items-center gap-2">
                 <button 
                   type="button"
                   onClick={() => setSelectedThreadPost(null)}
-                  className="p-1.5 rounded-xl hover:bg-[#1e2332] text-slate-300 hover:text-white transition-all active:scale-95 flex items-center gap-1.5 text-xs font-semibold"
+                  className="p-1.5 rounded-xl hover:bg-zinc-800 text-zinc-300 hover:text-white transition-all active:scale-95 flex items-center gap-2 text-xs font-semibold"
                   title="Quay lại sảnh"
                 >
                   <ArrowLeft size={18} />
@@ -4299,7 +4374,7 @@ const Home = () => {
                 <button 
                   type="button"
                   onClick={() => setSelectedThreadPost(null)}
-                  className="w-8 h-8 rounded-full hover:bg-[#1e2332] text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+                  className="w-8 h-8 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center transition-colors"
                   title="Đóng"
                 >
                   <X size={18} />
@@ -4307,10 +4382,183 @@ const Home = () => {
               </div>
             </div>
 
-            {/* Split View trên PC / Single Scroll trên Mobile */}
-            <div className="flex-1 flex flex-col sm:flex-row overflow-hidden min-h-0 sm:min-h-[460px]">
-              {/* CỘT TRÁI: BÀI VIẾT CHÍNH (FOCUSED POST CARD) */}
-              <div className="w-full sm:w-[48%] flex flex-col border-b sm:border-b-0 sm:border-r border-[#222838] bg-[#161924] p-4 sm:p-5 overflow-y-auto custom-dark-scrollbar space-y-4">
+            {/* ============================================================== */}
+            {/* GIAO DIỆN TRÊN MOBILE: 1 KHUNG CUỘN DUY NHẤT (Không bị bóp chiều cao khi gõ phím) */}
+            {/* ============================================================== */}
+            <div className="sm:hidden flex-1 flex flex-col min-h-0 overflow-hidden bg-[#0c0d12]">
+              {/* Vùng cuộn liền mạch từ bài viết xuống bình luận */}
+              <div className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-4 custom-dark-scrollbar">
+                {/* Tác giả bài viết */}
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div 
+                      className="cursor-pointer flex-shrink-0"
+                      onClick={() => navigate(`/profile/${selectedThreadPost.authorId || selectedThreadPost.userId}`)}
+                    >
+                      <UserAvatar 
+                        avatar={selectedThreadPost.authorAvatar} 
+                        name={selectedThreadPost.authorNickname || selectedThreadPost.authorAccount} 
+                        size={40} 
+                      />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span 
+                          className="font-bold text-sm text-[#f1f5f9] hover:underline cursor-pointer"
+                          onClick={() => navigate(`/profile/${selectedThreadPost.authorId || selectedThreadPost.userId}`)}
+                        >
+                          {selectedThreadPost.authorNickname || selectedThreadPost.authorAccount || 'Thành viên'}
+                        </span>
+                        {selectedThreadPost.authorBadge && (
+                          <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                            {selectedThreadPost.authorBadge}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 text-xs text-zinc-400 font-mono">
+                        <span>@{selectedThreadPost.authorAccount || 'user'}</span>
+                        <span>•</span>
+                        <span>{selectedThreadPost.formattedTime || TIME_FORMATTER(selectedThreadPost.createdAt)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {selectedThreadPost.vibe && (
+                    <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-zinc-800/80 text-zinc-300 border border-zinc-700">
+                      {selectedThreadPost.vibe}
+                    </span>
+                  )}
+                </div>
+
+                {/* Nội dung bài viết */}
+                <p className="text-[15px] text-[#f1f5f9] leading-relaxed whitespace-pre-wrap font-sans">
+                  {selectedThreadPost.content}
+                </p>
+
+                {/* Media bài viết */}
+                {(() => {
+                  const media = parsePostMedia(selectedThreadPost.imageUrl);
+                  if (!media.mediaUrl && !media.audioUrl) return null;
+                  return (
+                    <div className="rounded-xl overflow-hidden border border-zinc-800 my-2">
+                      {media.mediaType === 'video' ? (
+                        <video src={media.mediaUrl} controls autoPlay loop muted playsInline className="w-full max-h-[340px] object-cover" />
+                      ) : media.mediaUrl ? (
+                        <img src={media.mediaUrl} alt="Media" className="w-full max-h-[340px] object-cover" />
+                      ) : null}
+                    </div>
+                  );
+                })()}
+
+                {/* Hàng chỉ số tương tác */}
+                <div className="flex items-center gap-4 py-2.5 text-xs text-zinc-400 border-y border-zinc-800/80">
+                  <span><strong className="text-white">{selectedThreadPost.likesCount || 0}</strong> lượt thích</span>
+                  <span>•</span>
+                  <span><strong className="text-white">{selectedThreadPost.commentsCount || (commentsMap[selectedThreadPost.id]?.length || 0)}</strong> phản hồi</span>
+                </div>
+
+                {/* Nút hành động nhanh trên mobile (KHÔNG CÓ NÚT ĐĂNG LẠI) */}
+                <div className="flex items-center justify-around py-1 border-b border-zinc-800/80 text-zinc-400 relative">
+                  <button 
+                    type="button"
+                    onClick={() => handleReactPost(selectedThreadPost.id, selectedThreadPost.myReaction || 'HEART')}
+                    className={`flex items-center gap-1.5 p-2 rounded-lg transition-all active:scale-95 ${
+                      selectedThreadPost.isLikedByMe || selectedThreadPost.myReaction ? 'text-rose-500 font-semibold' : 'hover:text-white'
+                    }`}
+                  >
+                    <Heart 
+                      size={18} 
+                      className={selectedThreadPost.isLikedByMe || selectedThreadPost.myReaction ? 'fill-rose-500 text-rose-500' : ''} 
+                    />
+                    <span className="text-xs">
+                      {selectedThreadPost.myReaction && REACTION_EMOJIS.find(r => r.type === selectedThreadPost.myReaction)
+                        ? REACTION_EMOJIS.find(r => r.type === selectedThreadPost.myReaction).label
+                        : 'Thích'}
+                    </span>
+                  </button>
+
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      const input = document.getElementById('thread-mobile-reply-input');
+                      if (input) input.focus();
+                    }}
+                    className="flex items-center gap-1.5 p-2 rounded-lg hover:text-white transition-colors active:scale-95"
+                  >
+                    <MessageSquare size={18} />
+                    <span className="text-xs">Phản hồi</span>
+                  </button>
+
+                  <button 
+                    type="button"
+                    onClick={() => setSharePost(selectedThreadPost)}
+                    className="flex items-center gap-1.5 p-2 rounded-lg hover:text-white transition-colors active:scale-95"
+                  >
+                    <Share2 size={18} />
+                    <span className="text-xs">Chia sẻ</span>
+                  </button>
+                </div>
+
+                {/* Tiêu đề Dòng thảo luận trên mobile */}
+                <div className="pt-2 flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
+                    <MessageSquare size={14} className="text-zinc-400" />
+                    <span>Dòng thảo luận ({selectedThreadPost.commentsCount || (commentsMap[selectedThreadPost.id]?.length || 0)})</span>
+                  </h4>
+                  <span className="text-[11px] text-zinc-500 font-mono">Phản hồi phân cấp</span>
+                </div>
+
+                {/* Danh sách bình luận dạng cây */}
+                <div className="space-y-3 pt-1">
+                  {renderCommentThreadsTree(selectedThreadPost.id)}
+                </div>
+              </div>
+
+              {/* Ô nhập bình luận cố định ở đáy mobile view */}
+              <div className="p-3 bg-[#12131a] border-t border-zinc-800 flex items-center gap-2.5 flex-shrink-0">
+                <UserAvatar avatar={currentUserAvatar} name={currentUserName} size={32} />
+                <div className="flex-1 min-w-0">
+                  {replyTargetMap[selectedThreadPost.id] && (
+                    <div className="flex items-center justify-between text-[11px] text-zinc-400 pb-1 mb-1 border-b border-zinc-800">
+                      <span>Đang trả lời <strong>@{replyTargetMap[selectedThreadPost.id].authorAccount}</strong></span>
+                      <button 
+                        type="button" 
+                        onClick={() => setReplyTargetMap(prev => ({ ...prev, [selectedThreadPost.id]: null }))}
+                        className="text-zinc-400 hover:text-white"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  )}
+                  <input 
+                    id="thread-mobile-reply-input"
+                    type="text"
+                    value={commentInputs[selectedThreadPost.id] || ''}
+                    onChange={(e) => setCommentInputs(prev => ({ ...prev, [selectedThreadPost.id]: e.target.value }))}
+                    placeholder={`Trả lời @${selectedThreadPost.authorAccount || 'user'}...`}
+                    className="w-full bg-transparent border-none text-xs text-white focus:outline-none placeholder-zinc-500"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleAddComment(selectedThreadPost.id);
+                    }}
+                  />
+                </div>
+                <button 
+                  type="button"
+                  onClick={() => handleAddComment(selectedThreadPost.id)}
+                  disabled={submittingComment[selectedThreadPost.id] || !commentInputs[selectedThreadPost.id]?.trim()}
+                  className="px-4 py-1.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs transition-all disabled:opacity-40 disabled:hover:bg-white active:scale-95 flex-shrink-0"
+                >
+                  {submittingComment[selectedThreadPost.id] ? 'Gửi...' : 'Đăng'}
+                </button>
+              </div>
+            </div>
+
+            {/* ============================================================== */}
+            {/* GIAO DIỆN TRÊN DESKTOP: DUAL-VIEW 2 CỘT SONG SONG CỐ ĐỊNH */}
+            {/* ============================================================== */}
+            <div className="hidden sm:flex flex-1 flex-row overflow-hidden min-h-0 bg-[#0c0d12]">
+              {/* CỘT TRÁI: BÀI VIẾT CHÍNH (46%) */}
+              <div className="w-[46%] flex flex-col border-r border-zinc-800/80 bg-[#101118] p-5 overflow-y-auto custom-dark-scrollbar space-y-4">
                 {/* Header tác giả */}
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
@@ -4338,7 +4586,7 @@ const Home = () => {
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-1.5 text-xs text-slate-400 font-mono">
+                      <div className="flex items-center gap-1.5 text-xs text-zinc-400 font-mono">
                         <span>@{selectedThreadPost.authorAccount || 'user'}</span>
                         <span>•</span>
                         <span>{selectedThreadPost.formattedTime || TIME_FORMATTER(selectedThreadPost.createdAt)}</span>
@@ -4347,14 +4595,14 @@ const Home = () => {
                   </div>
 
                   {selectedThreadPost.vibe && (
-                    <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-[#1e2332] text-slate-300 border border-[#2b3346]">
+                    <span className="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-zinc-800 text-zinc-300 border border-zinc-700">
                       {selectedThreadPost.vibe}
                     </span>
                   )}
                 </div>
 
                 {/* Nội dung bài viết chính */}
-                <p className="text-[15px] sm:text-base text-[#f1f5f9] leading-relaxed whitespace-pre-wrap font-sans">
+                <p className="text-[15px] text-[#f1f5f9] leading-relaxed whitespace-pre-wrap font-sans">
                   {selectedThreadPost.content}
                 </p>
 
@@ -4363,7 +4611,7 @@ const Home = () => {
                   const media = parsePostMedia(selectedThreadPost.imageUrl);
                   if (!media.mediaUrl && !media.audioUrl) return null;
                   return (
-                    <div className="rounded-xl overflow-hidden border border-[#242b3b] my-2">
+                    <div className="rounded-2xl overflow-hidden border border-zinc-800 my-2">
                       {media.mediaType === 'video' ? (
                         <video src={media.mediaUrl} controls autoPlay loop muted playsInline className="w-full max-h-[380px] object-cover" />
                       ) : media.mediaUrl ? (
@@ -4374,21 +4622,21 @@ const Home = () => {
                 })()}
 
                 {/* Hàng chỉ số tương tác */}
-                <div className="flex items-center gap-4 py-2.5 text-xs text-slate-400 border-y border-[#222838]">
-                  <span><strong className="text-[#f1f5f9]">{selectedThreadPost.likesCount || 0}</strong> lượt thích</span>
+                <div className="flex items-center gap-4 py-2.5 text-xs text-zinc-400 border-y border-zinc-800/80">
+                  <span><strong className="text-white">{selectedThreadPost.likesCount || 0}</strong> lượt thích</span>
                   <span>•</span>
-                  <span><strong className="text-[#f1f5f9]">{selectedThreadPost.commentsCount || (commentsMap[selectedThreadPost.id]?.length || 0)}</strong> phản hồi</span>
+                  <span><strong className="text-white">{selectedThreadPost.commentsCount || (commentsMap[selectedThreadPost.id]?.length || 0)}</strong> phản hồi</span>
                 </div>
 
-                {/* Hàng nút hành động nhanh với Reaction Popover đầy đủ emoji */}
-                <div className="flex items-center justify-around py-1 border-b border-[#222838] text-slate-400 relative">
+                {/* Hàng nút hành động nhanh với Reaction Popover đầy đủ emoji (KHÔNG CÓ NÚT ĐĂNG LẠI) */}
+                <div className="flex items-center justify-around py-1 border-b border-zinc-800/80 text-zinc-400 relative">
                   {/* Cụm Thả Cảm Xúc / Emoji Popover */}
                   <div className="relative group">
                     <button 
                       type="button"
                       onClick={() => handleReactPost(selectedThreadPost.id, selectedThreadPost.myReaction || 'HEART')}
                       onMouseEnter={() => setActiveReactionPicker(`modal_${selectedThreadPost.id}`)}
-                      className={`flex items-center gap-1.5 p-2 rounded-lg hover:text-white transition-all active:scale-95 ${
+                      className={`flex items-center gap-1.5 p-2 rounded-xl hover:text-white transition-all active:scale-95 ${
                         selectedThreadPost.isLikedByMe || selectedThreadPost.myReaction ? 'text-rose-500 font-semibold' : ''
                       }`}
                     >
@@ -4437,10 +4685,10 @@ const Home = () => {
                   <button 
                     type="button"
                     onClick={() => {
-                      const input = document.getElementById(`thread-modal-reply-input`);
+                      const input = document.getElementById('thread-modal-reply-input');
                       if (input) input.focus();
                     }}
-                    className="flex items-center gap-1.5 p-2 rounded-lg hover:text-white transition-colors active:scale-95"
+                    className="flex items-center gap-1.5 p-2 rounded-xl hover:text-white transition-colors active:scale-95"
                   >
                     <MessageSquare size={17} />
                     <span className="text-xs">Phản hồi</span>
@@ -4449,7 +4697,7 @@ const Home = () => {
                   <button 
                     type="button"
                     onClick={() => setSharePost(selectedThreadPost)}
-                    className="flex items-center gap-1.5 p-2 rounded-lg hover:text-white transition-colors active:scale-95"
+                    className="flex items-center gap-1.5 p-2 rounded-xl hover:text-white transition-colors active:scale-95"
                   >
                     <Share2 size={17} />
                     <span className="text-xs">Chia sẻ</span>
@@ -4457,170 +4705,33 @@ const Home = () => {
                 </div>
               </div>
 
-              {/* CỘT PHẢI: KHÔNG GIAN BÌNH LUẬN & DÒNG THẢO LUẬN */}
-              <div className="w-full sm:w-[52%] flex flex-col bg-[#13151f] overflow-hidden">
+              {/* CỘT PHẢI: DÒNG THẢO LUẬN (54%) */}
+              <div className="w-[54%] flex flex-col bg-[#0c0d12] overflow-hidden">
                 {/* Header danh sách thảo luận */}
-                <div className="px-4 py-3 border-b border-[#222838] flex items-center justify-between bg-[#151822]">
-                  <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                    <MessageSquare size={14} className="text-slate-400" />
+                <div className="px-5 py-3.5 border-b border-zinc-800/80 flex items-center justify-between bg-[#12131a] flex-shrink-0">
+                  <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
+                    <MessageSquare size={14} className="text-zinc-400" />
                     <span>Dòng thảo luận ({selectedThreadPost.commentsCount || (commentsMap[selectedThreadPost.id]?.length || 0)})</span>
                   </h4>
-                  <span className="text-[11px] text-slate-500">Phản hồi phân cấp</span>
+                  <span className="text-[11px] text-zinc-500 font-mono">Phản hồi phân cấp</span>
                 </div>
 
-                {/* Danh sách bình luận có custom scrollbar mỏng tối */}
-                <div className="flex-1 overflow-y-auto custom-dark-scrollbar p-4 space-y-4">
-                  {(!commentsMap[selectedThreadPost.id] || commentsMap[selectedThreadPost.id].length === 0) ? (
-                    <div className="py-16 text-center text-slate-500">
-                      <MessageSquare size={28} className="mx-auto mb-2 opacity-30 text-slate-500" />
-                      <p className="text-xs text-slate-400">Chưa có phản hồi nào. Hãy là người đầu tiên chia sẻ góc nhìn!</p>
-                    </div>
-                  ) : (
-                    buildCommentThreads(commentsMap[selectedThreadPost.id]).map((thread) => {
-                      const renderThreadBubble = (cmt, isReply = false) => {
-                        const isCmtMe = currentUserId && cmt.authorId?.toString() === currentUserId.toString();
-                        const canDeleteCmt = isCmtMe || (currentUserId && selectedThreadPost.authorId?.toString() === currentUserId.toString());
-                        const isEditingThisCmt = editingCommentId === cmt.id;
-
-                        return (
-                          <div key={cmt.id} className={isReply ? "cmt-reply-item" : "cmt-row cmt-root-row"}>
-                            <div 
-                              className="cursor-pointer flex-shrink-0"
-                              onClick={() => navigate(`/profile/${cmt.authorId}`)}
-                              title="Xem hồ sơ cá nhân"
-                            >
-                              <UserAvatar 
-                                avatar={cmt.authorAvatar} 
-                                name={cmt.authorNickname || cmt.authorAccount} 
-                                size={isReply ? 26 : 32} 
-                              />
-                            </div>
-
-                            <div className="cmt-bubble-content flex-1 min-w-0">
-                              <div className="cmt-header-row flex items-center justify-between">
-                                <div className="cmt-author-info flex items-center gap-1.5 min-w-0">
-                                  <span 
-                                    className="cmt-user-name font-semibold text-xs text-[#f1f5f9] cursor-pointer hover:underline truncate"
-                                    onClick={() => navigate(`/profile/${cmt.authorId}`)}
-                                  >
-                                    {cmt.authorNickname || cmt.authorAccount || 'Thành viên'}
-                                  </span>
-                                  <span className="cmt-user-handle text-[11px] text-slate-400 font-mono truncate">
-                                    @{cmt.authorAccount || 'user'}
-                                  </span>
-                                  <span className="text-slate-600">·</span>
-                                  <span className="text-[11px] text-slate-400">{cmt.formattedTime || 'Vừa xong'}</span>
-                                </div>
-                              </div>
-
-                              {isEditingThisCmt ? (
-                                <div className="cmt-inline-edit-box my-1">
-                                  <input 
-                                    type="text" 
-                                    value={editingCommentText}
-                                    onChange={(e) => setEditingCommentText(e.target.value)}
-                                    className="w-full bg-[#1a1e2b] border border-[#2b3346] rounded-lg p-2 text-xs text-[#f1f5f9] focus:outline-none"
-                                    autoFocus
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') handleSaveEditComment(selectedThreadPost.id, cmt.id);
-                                      if (e.key === 'Escape') setEditingCommentId(null);
-                                    }}
-                                  />
-                                  <div className="flex gap-2 justify-end mt-1">
-                                    <button type="button" onClick={() => setEditingCommentId(null)} className="px-2.5 py-1 text-xs text-slate-400 hover:text-white">Hủy</button>
-                                    <button type="button" onClick={() => handleSaveEditComment(selectedThreadPost.id, cmt.id)} className="px-3 py-1 bg-white text-slate-900 text-xs font-semibold rounded-md">Lưu</button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <>
-                                  <p className="text-xs sm:text-[13px] text-[#cbd5e1] leading-relaxed my-1">
-                                    {cmt.replyToUser && (
-                                      <span className="text-blue-400 font-mono mr-1">@{cmt.replyToUser}</span>
-                                    )}
-                                    {cmt.content}
-                                  </p>
-
-                                  <div className="flex items-center gap-3 pt-1 text-slate-400">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleToggleLikeComment(selectedThreadPost.id, cmt.id)}
-                                      className={`flex items-center gap-1 text-[11px] hover:text-[#f1f5f9] transition-colors ${cmt.isLiked ? 'text-rose-500 font-bold' : ''}`}
-                                    >
-                                      <Heart size={12} className={cmt.isLiked ? "fill-rose-500 text-rose-500" : ""} />
-                                      {Number(cmt.likesCount || 0) > 0 && <span>{cmt.likesCount}</span>}
-                                    </button>
-
-                                    <button 
-                                      type="button" 
-                                      onClick={() => {
-                                        setReplyTargetMap(prev => ({
-                                          ...prev,
-                                          [selectedThreadPost.id]: {
-                                            commentId: cmt.id,
-                                            authorAccount: cmt.authorAccount || 'user',
-                                            authorNickname: cmt.authorNickname || cmt.authorAccount || 'Thành viên'
-                                          }
-                                        }));
-                                        const input = document.getElementById(`thread-modal-reply-input`);
-                                        if (input) input.focus();
-                                      }} 
-                                      className="flex items-center gap-1 text-[11px] hover:text-[#f1f5f9] transition-colors"
-                                    >
-                                      <CornerDownRight size={12} />
-                                      <span>Trả lời</span>
-                                    </button>
-
-                                    {isCmtMe && !isEditingThisCmt && (
-                                      <button 
-                                        type="button" 
-                                        onClick={() => handleStartEditComment(cmt)} 
-                                        className="text-[11px] hover:text-[#f1f5f9] transition-colors"
-                                      >
-                                        Sửa
-                                      </button>
-                                    )}
-                                    {canDeleteCmt && (
-                                      <button 
-                                        type="button" 
-                                        onClick={() => handleDeleteComment(selectedThreadPost.id, cmt.id)} 
-                                        className="text-[11px] hover:text-rose-400 transition-colors"
-                                      >
-                                        Xóa
-                                      </button>
-                                    )}
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      };
-
-                      return (
-                        <div key={thread.id} className="cmt-thread-group border-b border-[#1e2332] pb-3">
-                          {renderThreadBubble(thread, false)}
-                          {thread.replies && thread.replies.length > 0 && (
-                            <div className="cmt-replies-branch-thread">
-                              {thread.replies.map(reply => renderThreadBubble(reply, true))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })
-                  )}
+                {/* Danh sách bình luận dạng cây */}
+                <div className="flex-1 overflow-y-auto custom-dark-scrollbar p-5 space-y-4">
+                  {renderCommentThreadsTree(selectedThreadPost.id)}
                 </div>
 
                 {/* Ô NHẬP PHẢN HỒI (Cố định ở đáy cột phải) */}
-                <div className="p-3 bg-[#151822] border-t border-[#222838] flex items-center gap-3">
+                <div className="p-3.5 bg-[#12131a] border-t border-zinc-800/80 flex items-center gap-3 flex-shrink-0">
                   <UserAvatar avatar={currentUserAvatar} name={currentUserName} size={32} />
                   <div className="flex-1 min-w-0">
                     {replyTargetMap[selectedThreadPost.id] && (
-                      <div className="flex items-center justify-between text-[11px] text-slate-400 pb-1 mb-1 border-b border-[#252c3c]">
+                      <div className="flex items-center justify-between text-[11px] text-zinc-400 pb-1 mb-1 border-b border-zinc-800">
                         <span>Đang trả lời <strong>@{replyTargetMap[selectedThreadPost.id].authorAccount}</strong></span>
                         <button 
                           type="button" 
                           onClick={() => setReplyTargetMap(prev => ({ ...prev, [selectedThreadPost.id]: null }))}
-                          className="text-slate-400 hover:text-white"
+                          className="text-zinc-400 hover:text-white"
                         >
                           <X size={12} />
                         </button>
@@ -4632,7 +4743,7 @@ const Home = () => {
                       value={commentInputs[selectedThreadPost.id] || ''}
                       onChange={(e) => setCommentInputs(prev => ({ ...prev, [selectedThreadPost.id]: e.target.value }))}
                       placeholder={`Trả lời @${selectedThreadPost.authorAccount || 'user'}...`}
-                      className="w-full bg-transparent border-none text-xs sm:text-sm text-[#f1f5f9] focus:outline-none placeholder-slate-500"
+                      className="w-full bg-transparent border-none text-xs sm:text-sm text-[#f1f5f9] focus:outline-none placeholder-zinc-500"
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') handleAddComment(selectedThreadPost.id);
                       }}
@@ -4642,7 +4753,7 @@ const Home = () => {
                     type="button"
                     onClick={() => handleAddComment(selectedThreadPost.id)}
                     disabled={submittingComment[selectedThreadPost.id] || !commentInputs[selectedThreadPost.id]?.trim()}
-                    className="px-4 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-900 font-semibold text-xs transition-all disabled:opacity-40 disabled:hover:bg-white active:scale-95 flex-shrink-0"
+                    className="px-4 py-1.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs transition-all disabled:opacity-40 disabled:hover:bg-white active:scale-95 flex-shrink-0"
                   >
                     {submittingComment[selectedThreadPost.id] ? 'Gửi...' : 'Đăng'}
                   </button>

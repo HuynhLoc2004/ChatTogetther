@@ -22,6 +22,14 @@ class ErrorBoundary extends Component {
 
   componentDidCatch(error, errorInfo) {
     console.error("ErrorBoundary caught an error:", error, errorInfo);
+    const msg = (error && error.message) ? error.message.toLowerCase() : '';
+    if (msg.includes('dynamically imported module') || msg.includes('failed to fetch') || msg.includes('loading chunk')) {
+      const hasAutoReloaded = sessionStorage.getItem('chunk_reload_attempt');
+      if (!hasAutoReloaded) {
+        sessionStorage.setItem('chunk_reload_attempt', '1');
+        window.location.reload();
+      }
+    }
   }
 
   handleReload = () => {
