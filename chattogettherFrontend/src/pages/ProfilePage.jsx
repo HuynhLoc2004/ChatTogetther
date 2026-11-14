@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Edit3, LogOut, UserPlus, UserCheck, Clock, 
-  MapPin, Calendar, Mail, Phone, Lock, Check, X, 
+  MapPin, Calendar, Mail, Phone, PhoneCall, Lock, Check, X, 
   Camera, Upload, Trash2, Heart, MessageSquare, Share2, 
   Shield, Sparkles, Loader2, Users, Radio, Headphones, 
   Mic, Play, Pause, Square, RotateCcw, AudioLines, Volume2, 
@@ -550,11 +550,22 @@ const ProfilePage = () => {
 
                     <button
                       type="button"
-                      onClick={() => navigate('/')}
-                      className="h-11 rounded-xl bg-zinc-800/80 hover:bg-zinc-700/80 border border-zinc-700 text-white font-semibold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                      onClick={() => navigate(`/messages/${targetUserId}`)}
+                      className="h-11 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-md"
+                      title="Nhắn tin riêng 1-1 với người này"
                     >
                       <MessageSquare size={15} />
-                      <span>Trò chuyện</span>
+                      <span>Nhắn tin riêng</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/messages/${targetUserId}`)}
+                      className="h-11 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/80 text-white font-semibold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                      title="Mở cuộc gọi thoại / video 1-1"
+                    >
+                      <PhoneCall size={15} className="text-emerald-400" />
+                      <span>Gọi trực tiếp</span>
                     </button>
                   </div>
                 ) : (

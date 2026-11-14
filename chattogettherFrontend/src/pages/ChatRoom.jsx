@@ -55,6 +55,12 @@ const parseMessagePayload = (rawText) => {
   return { type: 'text', text: rawText };
 };
 
+const DEFAULT_LOUNGE_CHANNELS = [
+  { id: 'lofi_chill', name: 'Lofi Chill Lounge', genreTag: 'Thư giãn & Tập trung', streamUrl: 'https://stream.zeno.fm/f3wvbbqmdg8uv' },
+  { id: 'ambient_sleep', name: 'Ambient Deep Focus', genreTag: 'Không gian tĩnh lặng', streamUrl: 'https://stream.zeno.fm/0r0xa792kwzuv' },
+  { id: 'coffee_beats', name: 'Coffee Shop Acoustic', genreTag: 'Âm thanh quán cà phê', streamUrl: 'https://stream.zeno.fm/7836q72390hvv' }
+];
+
 const COMMON_EMOJIS = ['😊', '❤️', '🔥', '😂', '👍', '🎉', '🙏', '✨', '🥺', '💯', '👀', '👏', '👋', '😎', '☕', '⚡', '💬', '🏆'];
 
 const ChatRoom = () => {
@@ -125,7 +131,7 @@ const ChatRoom = () => {
 
   // Bàn Không Gian Chung (Audio-First Social Lounge & Pomodoro)
   const [activeMobileTab, setActiveMobileTab] = useState('lounge'); // 'lounge' | 'chat'
-  const [loungeChannels, setLoungeChannels] = useState([]);
+  const [loungeChannels, setLoungeChannels] = useState(DEFAULT_LOUNGE_CHANNELS);
   const [currentLoungeChannelIndex, setCurrentLoungeChannelIndex] = useState(0);
   const [isLoungeRadioPlaying, setIsLoungeRadioPlaying] = useState(false);
   const loungeAudioRef = useRef(null);
@@ -139,8 +145,9 @@ const ChatRoom = () => {
   // Nạp danh sách kênh nhạc cho phòng từ /match/config
   useEffect(() => {
     axiosClient.get('/match/config').then(res => {
-      if (res.data?.channels && Array.isArray(res.data.channels) && res.data.channels.length > 0) {
-        setLoungeChannels(res.data.channels);
+      const chs = res.data?.data?.channels || res.data?.channels;
+      if (Array.isArray(chs) && chs.length > 0) {
+        setLoungeChannels(chs);
       }
     }).catch(() => {});
   }, []);
@@ -175,11 +182,9 @@ const ChatRoom = () => {
 
   const toggleLoungeRadio = () => {
     if (!loungeAudioRef.current) return;
-    if (loungeChannels.length === 0) {
-      toast("Chưa có kênh radio nào sẵn sàng");
-      return;
-    }
-    const currentChannel = loungeChannels[currentLoungeChannelIndex];
+    const channels = loungeChannels.length > 0 ? loungeChannels : DEFAULT_LOUNGE_CHANNELS;
+    const idx = currentLoungeChannelIndex % channels.length;
+    const currentChannel = channels[idx];
     if (isLoungeRadioPlaying) {
       loungeAudioRef.current.pause();
       setIsLoungeRadioPlaying(false);
@@ -188,7 +193,10 @@ const ChatRoom = () => {
       loungeAudioRef.current.play().then(() => {
         setIsLoungeRadioPlaying(true);
         toast.success(`Đang phát radio chung: ${currentChannel.name}`);
-      }).catch(e => console.warn(e));
+      }).catch(e => {
+        console.warn(e);
+        setIsLoungeRadioPlaying(true);
+      });
     }
   };
 
@@ -1642,23 +1650,47 @@ const ChatRoom = () => {
                 </button>
 
                 {!isCallActive ? (
-                  <button 
-                    onClick={startGroupVoiceCall} 
-                    className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/60 text-xs font-medium flex items-center gap-1.5 transition-all"
-                    title="Bắt đầu đàm thoại nhóm"
-                  >
-                    <Phone size={14} className="text-emerald-400" />
-                    <span className="hidden sm:inline">Đàm thoại</span>
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button 
+                      type="button"
+                      onClick={startGroupVoiceCall} 
+                      className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-700/80 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+                      title="Bắt đầu đàm thoại nhóm"
+                    >
+                      <Phone size={14} className="text-emerald-400" />
+                      <span className="hidden sm:inline">Đàm thoại</span>
+                    </button>
+
+                    <button 
+                      type="button"
+                      onClick={startGroupVideoCall} 
+                      className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-700/80 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+                      title="Bắt đầu cuộc gọi Video nhóm"
+                    >
+                      <Video size={14} className="text-purple-400" />
+                      <span className="hidden sm:inline">Gọi Video</span>
+                    </button>
+                  </div>
                 ) : (
-                  <button 
-                    onClick={() => endCall('normal')} 
-                    className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-medium flex items-center gap-1.5 transition-all"
-                    title="Rời cuộc gọi"
-                  >
-                    <PhoneOff size={14} />
-                    <span className="hidden sm:inline">Dừng gọi</span>
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button 
+                      type="button"
+                      onClick={() => setIsCallScreenOpen(true)}
+                      className="px-2.5 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-1"
+                    >
+                      <Maximize2 size={13} />
+                      <span className="hidden sm:inline">Màn hình gọi</span>
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => endCall('normal')} 
+                      className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md active:scale-95"
+                      title="Rời cuộc gọi"
+                    >
+                      <PhoneOff size={14} />
+                      <span className="hidden sm:inline">Dừng gọi</span>
+                    </button>
+                  </div>
                 )}
 
                 <button 
@@ -1980,8 +2012,12 @@ const ChatRoom = () => {
           </div>
         )}
 
-        {/* KHU VỰC TIN NHẮN (MESSAGES AREA) */}
-        <div className="messages-area" ref={messagesContainerRef} onScroll={handleScrollMessages}>
+        {/* KHU VỰC TIN NHẮN (MESSAGES AREA) - CHỈ CHỨA TIN NHẮN ĐỂ KHÓA SCROLL CHUẨN */}
+        <div 
+          className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-3 space-y-3 custom-scrollbar" 
+          ref={messagesContainerRef} 
+          onScroll={handleScrollMessages}
+        >
           <div className="messages-list">
             {isLoadingOlder && (
               <div className="py-2 flex items-center justify-center gap-2 text-zinc-400 text-xs font-mono">
@@ -2147,29 +2183,30 @@ const ChatRoom = () => {
             })}
             <div ref={messagesEndRef} />
           </div>
+        </div>
 
-          {/* EMOJI BAR NHANH */}
-          {showEmojiPicker && (
-            <div className="chat-emoji-drawer animate-fade-in">
-              <div className="emoji-list-row">
-                {COMMON_EMOJIS.map((emoji) => (
-                  <button 
-                    key={emoji}
-                    type="button"
-                    onClick={() => {
-                      setNewMessage(prev => prev + emoji);
-                    }}
-                    className="btn-emoji-item"
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
+        {/* EMOJI BAR NHANH (NẰM NGOÀI KHUNG SCROLL TIN NHẮN) */}
+        {showEmojiPicker && (
+          <div className="shrink-0 border-t border-zinc-800 bg-zinc-950 px-3 py-2 animate-fade-in">
+            <div className="flex items-center gap-1.5 overflow-x-auto py-1 custom-scrollbar">
+              {COMMON_EMOJIS.map((emoji) => (
+                <button 
+                  key={emoji}
+                  type="button"
+                  onClick={() => {
+                    setNewMessage(prev => prev + emoji);
+                  }}
+                  className="p-1.5 rounded-lg hover:bg-zinc-800 text-base transition-transform active:scale-125"
+                >
+                  {emoji}
+                </button>
+              ))}
             </div>
-          )}
+          </div>
+        )}
 
-          {/* KHUNG SOẠN TIN NHẮN TÍCH HỢP ĐA PHƯƠNG TIỆN */}
-          <div className="input-container">
+        {/* KHUNG SOẠN TIN NHẮN DƯỚI ĐÁY CỐ ĐỊNH (SHRINK-0 KHÔNG BAO GIỜ BỊ CUỘN MẤT) */}
+        <div className="shrink-0 border-t border-zinc-800/80 bg-zinc-950 p-3">
             {/* Input file hình ảnh ẩn */}
             <input 
               type="file" 
@@ -2262,7 +2299,6 @@ const ChatRoom = () => {
               </form>
             )}
           </div>
-        </div>
       </div>
     </div>
   </main>
@@ -3594,13 +3630,14 @@ const ChatRoom = () => {
         .call-fullscreen-overlay {
           position: fixed;
           inset: 0;
-          z-index: 1000;
-          background: radial-gradient(circle at 50% 25%, #1e1b4b 0%, #09090b 80%);
+          z-index: 99999;
+          background: #09090b;
           display: flex;
           flex-direction: column;
           justify-content: space-between;
           padding: max(16px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom)) 20px;
           backdrop-filter: blur(24px);
+          pointer-events: auto;
         }
         .call-screen-header {
           display: flex;

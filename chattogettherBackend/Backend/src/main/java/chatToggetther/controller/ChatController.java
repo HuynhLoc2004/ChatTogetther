@@ -9,6 +9,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/message")
@@ -44,4 +45,13 @@ public class ChatController {
     ) {
         return ResponseEntity.ok(this.chatService.getMessageHistory(jwtAuthenticationToken, roomId, null, 50));
     }
+
+    @GetMapping("/direct/{targetUserId}")
+    public ResponseEntity<ResponseData<Map<String, Object>>> getOrCreateDirectRoom(
+            JwtAuthenticationToken token,
+            @PathVariable("targetUserId") Long targetUserId
+    ) {
+        return ResponseEntity.ok(this.chatService.getOrCreateDirectRoom(token, targetUserId));
+    }
+
 }

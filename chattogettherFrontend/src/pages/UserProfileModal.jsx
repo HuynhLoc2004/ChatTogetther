@@ -1,15 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   X, Camera, Upload, Trash2, User, Mail, Phone, 
   MapPin, Calendar, Lock, ShieldCheck, Check, Edit3, 
   Loader2, UserCheck, Clock, UserPlus, UserMinus, Undo2, PhoneCall, KeyRound, Sparkles,
-  ArrowLeft, ChevronLeft, LogOut, Crown, Shield
+  ArrowLeft, ChevronLeft, LogOut, Crown, Shield, MessageSquare
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
 import TalovinLogo from '../components/TalovinLogo';
 
 export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId, isRoomAdmin, customRoleBadge }) => {
+  const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('profile'); // 'profile' | 'account' | 'security'
@@ -497,15 +499,37 @@ export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentU
                         </button>
                       )}
 
+                      {/* Nút Nhắn tin riêng */}
+                      <button 
+                        type="button"
+                        onClick={() => { onClose(); navigate(`/messages/${effectiveUserId}`); }}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-semibold shadow-md transition-all active:scale-95"
+                        title="Nhắn tin riêng 1-1"
+                      >
+                        <MessageSquare size={13} /> Nhắn tin riêng
+                      </button>
+
+                      {/* Nút Gọi trực tiếp 1-1 */}
                       {onStartPrivateCall && (
                         <button 
                           type="button"
                           onClick={() => { onClose(); onStartPrivateCall(profile); }}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium shadow-md transition-all"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md transition-all active:scale-95"
+                          title="Gọi thoại trực tiếp"
                         >
-                          <PhoneCall size={13} /> Đàm thoại 1-1
+                          <PhoneCall size={13} /> Gọi trực tiếp
                         </button>
                       )}
+
+                      {/* Nút xem trang cá nhân đầy đủ */}
+                      <button
+                        type="button"
+                        onClick={() => { onClose(); navigate(`/profile/${effectiveUserId}`); }}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium border border-zinc-700 transition-colors"
+                        title="Xem toàn bộ hồ sơ trang cá nhân"
+                      >
+                        <User size={13} /> Trang cá nhân
+                      </button>
                     </div>
                   )}
                 </div>

@@ -2152,6 +2152,16 @@ const Home = () => {
               </button>
             )}
 
+            <button 
+              type="button"
+              className="nav-item"
+              onClick={() => navigate('/messages')}
+              title="Hộp thư nhắn tin riêng 1-1"
+            >
+              <MessageSquare size={15} strokeWidth={1.5} />
+              <span>Tin nhắn riêng</span>
+            </button>
+
             {dynamicMenu.friends?.visible !== false && (
               <button 
                 className="nav-item flex items-center justify-between"

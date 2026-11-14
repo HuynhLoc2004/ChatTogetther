@@ -7,6 +7,7 @@ import Home from './pages/Home';
 import ChatRoom from './pages/ChatRoom';
 import AdminDashboard from './pages/AdminDashboard';
 import ProfilePage from './pages/ProfilePage';
+import DirectMessagePage from './pages/DirectMessagePage';
 import './App.css';
 
 // Error Boundary để ngăn chặn hoàn toàn màn hình đen (Blank Screen)
@@ -245,6 +246,22 @@ function App() {
               element={
                 <ProtectedRoute>
                   <ProfilePage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/messages/:userId" 
+              element={
+                <ProtectedRoute>
+                  <DirectMessagePage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/messages" 
+              element={
+                <ProtectedRoute>
+                  <DirectMessagePage />
                 </ProtectedRoute>
               } 
             />

@@ -23,6 +23,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.time.LocalDateTime;
 import java.util.Collections;
+import java.util.Map;
+import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -142,4 +144,69 @@ public class ChatService {
         }).collect(Collectors.toList());
         return new ResponseData<>(200, "Lấy lịch sử tin nhắn thành công", history);
     }
+
+    @Transactional
+    public ResponseData<Map<String, Object>> getOrCreateDirectRoom(JwtAuthenticationToken token, Long targetUserId) {
+        Long myId = SecurityUtils.extractUserId(token);
+        if (myId.equals(targetUserId)) {
+            throw new AppException(400, "Không thể tạo đoạn chat với chính mình", 400);
+        }
+        UserEntity me = userRepository.findById(myId)
+                .orElseThrow(() -> new AppException(404, "Không tìm thấy người dùng hiện tại", 404));
+        UserEntity target = userRepository.findById(targetUserId)
+                .orElseThrow(() -> new AppException(404, "Không tìm thấy người dùng nhận", 404));
+
+        String directKey = "DM_" + Math.min(myId, targetUserId) + "_" + Math.max(myId, targetUserId);
+
+        List<RoomEntity> existing = roomRepository.findAll();
+        RoomEntity dmRoom = existing.stream()
+                .filter(r -> Boolean.TRUE.equals(r.getActive()) && directKey.equals(r.getPassword()))
+                .findFirst()
+                .orElse(null);
+
+        if (dmRoom == null) {
+            String myName = me.getNickname() != null && !me.getNickname().isEmpty() ? me.getNickname() : me.getAccount();
+            String targetName = target.getNickname() != null && !target.getNickname().isEmpty() ? target.getNickname() : target.getAccount();
+
+            dmRoom = new RoomEntity();
+            dmRoom.setActive(true);
+            dmRoom.setRoomName(myName + " & " + targetName);
+            dmRoom.setDescription("Cuộc trò chuyện riêng tư 1-1");
+            dmRoom.setPassword(directKey);
+            dmRoom.setAvatar(target.getAvatar());
+            dmRoom.setLocalDateTime(LocalDateTime.now());
+
+            UserRoomEntity urMe = new UserRoomEntity();
+            urMe.setUserEntity(me);
+            urMe.setRoomEntity(dmRoom);
+            urMe.setActive(true);
+            urMe.setIsAdmin(true);
+            urMe.getTimeJoin().add(LocalDateTime.now());
+            dmRoom.getUserRoomEntityList().add(urMe);
+
+            UserRoomEntity urTarget = new UserRoomEntity();
+            urTarget.setUserEntity(target);
+            urTarget.setRoomEntity(dmRoom);
+            urTarget.setActive(true);
+            urTarget.setIsAdmin(false);
+            urTarget.getTimeJoin().add(LocalDateTime.now());
+            dmRoom.getUserRoomEntityList().add(urTarget);
+
+            roomRepository.saveAndFlush(dmRoom);
+        }
+
+        Map<String, Object> targetData = new HashMap<>();
+        targetData.put("id", target.getId());
+        targetData.put("nickname", target.getNickname() != null ? target.getNickname() : target.getAccount());
+        targetData.put("account", target.getAccount());
+        targetData.put("avatar", target.getAvatar() != null ? target.getAvatar() : "");
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("roomId", dmRoom.getId());
+        res.put("roomName", dmRoom.getRoomName());
+        res.put("targetUser", targetData);
+
+        return new ResponseData<>(200, "Lấy phòng chat 1-1 thành công", res);
+    }
+
 }

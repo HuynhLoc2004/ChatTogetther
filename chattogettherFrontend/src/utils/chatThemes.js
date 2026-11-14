@@ -1,17 +1,17 @@
 /**
  * HỆ THỐNG CHỦ ĐỀ GIAO DIỆN PHÒNG CHAT (TALOVIN CHAT THEMES)
- * Thiết kế: Minimalist, giảm màu mè lòe loẹt, tập trung vào độ tương phản cao, dễ đọc
- * Dễ dàng mở rộng bởi Quản trị viên (Admin) thông qua cấu hình JSON
+ * Thiết kế: Chuẩn Dark Zinc (#09090b) tối giản, loại bỏ hoàn toàn màu xanh rêu / tím lòe loẹt.
+ * Đồng bộ với phong cách Linear / Discord Dark Zinc tinh tế.
  */
 
 export const CHAT_THEMES = [
   {
     id: 'obsidian',
     name: 'Obsidian Zinc (Mặc định)',
-    tag: 'Tối Giản Chuẩn Mực',
+    tag: 'Dark Zinc #09090b',
     bg: '#09090b',
-    headerBg: '#121215',
-    sidebarBg: '#101014',
+    headerBg: '#0f0f12',
+    sidebarBg: '#0c0d10',
     border: '#27272a',
     myBubbleBg: '#27272a',
     myBubbleText: '#f4f4f5',
@@ -19,75 +19,58 @@ export const CHAT_THEMES = [
     theirBubbleText: '#e4e4e7',
     senderColor: '#a1a1aa',
     accent: '#71717a',
-    inputBg: '#121215'
+    inputBg: '#0f0f12'
   },
   {
-    id: 'midnight',
-    name: 'Midnight Indigo',
-    tag: 'Bầu Trời Đêm',
-    bg: '#030712',
-    headerBg: '#0b0f19',
-    sidebarBg: '#090d16',
-    border: '#1f2937',
-    myBubbleBg: '#312e81',
+    id: 'slate',
+    name: 'Deep Slate Zinc',
+    tag: 'Xám Đen Tối Giản',
+    bg: '#08090c',
+    headerBg: '#0e1015',
+    sidebarBg: '#0b0c11',
+    border: '#1e2129',
+    myBubbleBg: '#1e222d',
     myBubbleText: '#f8fafc',
-    theirBubbleBg: '#111827',
+    theirBubbleBg: '#12141a',
     theirBubbleText: '#e2e8f0',
-    senderColor: '#818cf8',
-    accent: '#6366f1',
-    inputBg: '#0b0f19'
+    senderColor: '#94a3b8',
+    accent: '#64748b',
+    inputBg: '#0e1015'
   },
   {
-    id: 'emerald',
-    name: 'Emerald Deep Forest',
-    tag: 'Rừng Xanh Tĩnh Lặng',
-    bg: '#021814',
-    headerBg: '#05241e',
-    sidebarBg: '#041f1a',
-    border: '#064e3b',
-    myBubbleBg: '#065f46',
-    myBubbleText: '#ecfdf5',
-    theirBubbleBg: '#064e3b',
-    theirBubbleText: '#d1fae5',
-    senderColor: '#34d399',
-    accent: '#10b981',
-    inputBg: '#05241e'
+    id: 'pure_black',
+    name: 'Pure Onyx (OLED)',
+    tag: 'Đen Tuyệt Đối',
+    bg: '#000000',
+    headerBg: '#080808',
+    sidebarBg: '#050505',
+    border: '#1c1c1c',
+    myBubbleBg: '#222222',
+    myBubbleText: '#ffffff',
+    theirBubbleBg: '#111111',
+    theirBubbleText: '#d4d4d8',
+    senderColor: '#a1a1aa',
+    accent: '#52525b',
+    inputBg: '#080808'
   },
   {
-    id: 'charcoal',
-    name: 'Monokai Charcoal',
-    tag: 'Trầm Ấm Lập Trình',
-    bg: '#141414',
-    headerBg: '#1c1c1c',
-    sidebarBg: '#181818',
-    border: '#2c2c2c',
-    myBubbleBg: '#2d3748',
-    myBubbleText: '#f7fafc',
-    theirBubbleBg: '#222222',
-    theirBubbleText: '#edf2f7',
-    senderColor: '#f6ad55',
-    accent: '#ed8936',
-    inputBg: '#1c1c1c'
-  },
-  {
-    id: 'amethyst',
-    name: 'Amethyst Twilight',
-    tag: 'Hoàng Hôn Tím',
-    bg: '#0c0714',
-    headerBg: '#160d24',
-    sidebarBg: '#120b1e',
-    border: '#2e1065',
-    myBubbleBg: '#581c87',
-    myBubbleText: '#faf5ff',
-    theirBubbleBg: '#241438',
-    theirBubbleText: '#f3e8ff',
-    senderColor: '#c084fc',
-    accent: '#a855f7',
-    inputBg: '#160d24'
+    id: 'contrast_white',
+    name: 'Zinc White Accent',
+    tag: 'Tương Phản Cao Cấp',
+    bg: '#09090b',
+    headerBg: '#111114',
+    sidebarBg: '#0d0d10',
+    border: '#27272a',
+    myBubbleBg: '#ffffff',
+    myBubbleText: '#09090b',
+    theirBubbleBg: '#18181b',
+    theirBubbleText: '#f4f4f5',
+    senderColor: '#d4d4d8',
+    accent: '#ffffff',
+    inputBg: '#111114'
   }
 ];
 
 export const getThemeById = (themeId) => {
   return CHAT_THEMES.find(t => t.id === themeId) || CHAT_THEMES[0];
 };
-
