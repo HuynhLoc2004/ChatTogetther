@@ -3,13 +3,13 @@ import {
   X, Camera, Upload, Trash2, User, Mail, Phone, 
   MapPin, Calendar, Lock, ShieldCheck, Check, Edit3, 
   Loader2, UserCheck, Clock, UserPlus, UserMinus, Undo2, PhoneCall, KeyRound, Sparkles,
-  ArrowLeft, ChevronLeft, LogOut
+  ArrowLeft, ChevronLeft, LogOut, Crown, Shield
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
 import TalovinLogo from '../components/TalovinLogo';
 
-export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId }) => {
+export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentUserId, isRoomAdmin, customRoleBadge }) => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('profile'); // 'profile' | 'account' | 'security'
@@ -274,7 +274,9 @@ export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentU
   const currentRawAvatar = editData.avatar || profile?.avatar;
   const validAvatar = currentRawAvatar && !isRobotAvatar(currentRawAvatar) ? currentRawAvatar : null;
   const displayName = editData.nickname || profile?.nickname || profile?.account || "Người dùng";
-  const isAdmin = profile?.roles?.includes('ROLE_ADMIN') || profile?.roles?.includes('ROLE_AMDIN');
+  const isSystemAdmin = profile?.roles?.includes('ROLE_ADMIN') || profile?.roles?.includes('ROLE_AMDIN');
+  const isLeader = isRoomAdmin || customRoleBadge === 'OWNER' || customRoleBadge === 'ADMIN';
+  const isAdmin = isSystemAdmin || isLeader;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in" onClick={onClose}>
@@ -381,9 +383,19 @@ export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentU
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <h3 className="text-zinc-100 font-bold text-base tracking-tight truncate">{displayName}</h3>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold ${isAdmin ? 'bg-amber-500/10 text-amber-300 border border-amber-500/20' : 'bg-zinc-800 text-zinc-300 border border-zinc-700'}`}>
-                      {isAdmin ? "Quản trị viên" : "Thành viên"}
-                    </span>
+                    {isLeader ? (
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1 shadow-sm">
+                        <Crown size={11} className="text-amber-400 fill-amber-400" /> Trưởng nhóm / Chủ phòng
+                      </span>
+                    ) : isSystemAdmin ? (
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-purple-500/15 text-purple-300 border border-purple-500/30 flex items-center gap-1 shadow-sm">
+                        <Shield size={11} /> Quản trị viên
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-zinc-800 text-zinc-300 border border-zinc-700">
+                        {customRoleBadge || "Thành viên"}
+                      </span>
+                    )}
                   </div>
                   <span className="text-zinc-500 font-mono text-xs block mb-2">@{profile?.account}</span>
 

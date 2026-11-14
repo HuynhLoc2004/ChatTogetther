@@ -3,8 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Send, Users, LogOut, MessageCircle, Hash, Radio,
   MoreVertical, UserX, ChevronRight, Trash2, Crown, X, Menu, AlertTriangle,
-  Phone, PhoneOff, Mic, MicOff, WifiOff, User, UserCheck, ArrowLeft,
-  Video, VideoOff, Image as ImageIcon, Smile, Palette, Play, Pause,
+  Phone, PhoneOff, PhoneMissed, PhoneCall, Mic, MicOff, WifiOff, User, UserCheck, ArrowLeft,
+  Video, VideoOff, Volume2, VolumeX, Minimize2, Maximize2, ChevronDown,
+  Image as ImageIcon, Smile, Palette, Play, Pause,
   ExternalLink, Square, Camera, RefreshCw
 } from 'lucide-react';
 import axiosClient, { BACKEND_URL } from '../api/axiosClient';
@@ -90,6 +91,10 @@ const ChatRoom = () => {
   const [callDuration, setCallDuration] = useState(0);
   const [incomingCall, setIncomingCall] = useState(null);
   const [privateCallTarget, setPrivateCallTarget] = useState(null);
+  const [isCallScreenOpen, setIsCallScreenOpen] = useState(false);
+  const [isSpeakerOn, setIsSpeakerOn] = useState(true);
+  const [callStatusText, setCallStatusText] = useState('Đang kết nối...');
+  const callTimeoutRef = useRef(null);
 
   // Nhắn tin đa phương tiện
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -252,6 +257,10 @@ const ChatRoom = () => {
       clearInterval(callTimerRef.current);
       callTimerRef.current = null;
     }
+    if (callTimeoutRef.current) {
+      clearTimeout(callTimeoutRef.current);
+      callTimeoutRef.current = null;
+    }
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(track => track.stop());
       localStreamRef.current = null;
@@ -270,6 +279,7 @@ const ChatRoom = () => {
       remoteVideoRef.current.srcObject = null;
     }
     setIsCallActive(false);
+    setIsCallScreenOpen(false);
     setIsVideoCall(false);
     setIsVideoEnabled(true);
     setIsMuted(false);
@@ -277,35 +287,55 @@ const ChatRoom = () => {
     setPrivateCallTarget(null);
   }, []);
 
-  // Kết thúc cuộc gọi & ghi nhận thông báo thời lượng
-  const endCall = () => {
+  // Kết thúc cuộc gọi & ghi nhận thông báo thời lượng / trạng thái (nhỡ, hủy, đã nghe)
+  const endCall = (reason = 'normal') => {
+    if (callTimeoutRef.current) {
+      clearTimeout(callTimeoutRef.current);
+      callTimeoutRef.current = null;
+    }
+
+    const myNickname = localStorage.getItem('nickname') || 'Thành viên';
+    let msgType = 'call_ended';
+    let durationFormatted = '00:00';
+
     if (callDuration > 0) {
       const mins = Math.floor(callDuration / 60);
       const secs = callDuration % 60;
-      const formattedDuration = `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
-      
-      try {
-        const payload = JSON.stringify({
-          type: 'call_ended',
-          duration: formattedDuration,
-          isVideo: isVideoCall,
-          endedBy: localStorage.getItem('nickname') || 'Thành viên'
-        });
-        axiosClient.post('/message/send', {
-          message: payload,
-          timeSend: new Date().toISOString()
-        }, { params: { user_room: roomId } }).catch(() => {});
-      } catch (e) {}
+      durationFormatted = `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
+      msgType = 'call_ended';
+    } else {
+      if (reason === 'missed' || reason === 'timeout') {
+        msgType = 'call_missed';
+      } else {
+        msgType = 'call_cancelled';
+      }
     }
+
+    try {
+      const payload = JSON.stringify({
+        type: msgType,
+        duration: durationFormatted,
+        isVideo: isVideoCall,
+        endedBy: myNickname,
+        callerName: myNickname,
+        targetName: privateCallTarget?.nickname
+      });
+      axiosClient.post('/message/send', {
+        message: payload,
+        timeSend: new Date().toISOString()
+      }, { params: { user_room: roomId } }).catch(() => {});
+    } catch (e) {}
 
     sendCallSignal({ 
       type: 'END',
       isPrivate: !!privateCallTarget,
-      targetUserId: privateCallTarget ? privateCallTarget.id.toString() : null
+      targetUserId: privateCallTarget ? privateCallTarget.id.toString() : null,
+      reason: reason
     });
     cleanupCall();
     setCallDuration(0);
-    toast("Đã kết thúc cuộc gọi");
+    setCallStatusText('Đã kết thúc');
+    toast("Cuộc gọi đã kết thúc");
   };
 
   const sendCallSignal = (data) => {
@@ -359,6 +389,15 @@ const ChatRoom = () => {
       sendCallSignal({ type: 'OFFER', offer, isPrivate: false, isVideo: false });
 
       setIsCallActive(true);
+      setIsCallScreenOpen(true);
+      setCallStatusText('Đang đổ chuông nhóm (Tối đa 45s)...');
+
+      if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
+      callTimeoutRef.current = setTimeout(() => {
+        toast("Không có người tham gia cuộc gọi (Hết 45s)");
+        endCall('missed');
+      }, 45000);
+
       callTimerRef.current = setInterval(() => {
         setCallDuration(prev => prev + 1);
       }, 1000);
@@ -416,6 +455,15 @@ const ChatRoom = () => {
       sendCallSignal({ type: 'OFFER', offer, isPrivate: false, isVideo: true });
 
       setIsCallActive(true);
+      setIsCallScreenOpen(true);
+      setCallStatusText('Đang đổ chuông video nhóm (Tối đa 45s)...');
+
+      if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
+      callTimeoutRef.current = setTimeout(() => {
+        toast("Không có người tham gia video nhóm (Hết 45s)");
+        endCall('missed');
+      }, 45000);
+
       callTimerRef.current = setInterval(() => {
         setCallDuration(prev => prev + 1);
       }, 1000);
@@ -477,11 +525,20 @@ const ChatRoom = () => {
       });
 
       setIsCallActive(true);
+      setIsCallScreenOpen(true);
+      setCallStatusText(`Đang đổ chuông tới ${targetUser.nickname || 'đối phương'}...`);
+
+      if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
+      callTimeoutRef.current = setTimeout(() => {
+        toast(`${targetUser.nickname || 'Đối phương'} không trả lời (Hết 45s)`);
+        endCall('missed');
+      }, 45000);
+
       callTimerRef.current = setInterval(() => {
         setCallDuration(prev => prev + 1);
       }, 1000);
 
-      toast.success(`Đang gọi riêng cho ${targetUser.nickname || 'người dùng'}...`);
+      toast.success(`Đang gọi cho ${targetUser.nickname || 'người dùng'}...`);
     } catch (err) {
       console.error("Lỗi gọi riêng:", err);
       toast.error("Không thể truy cập Microphone!");
@@ -495,6 +552,8 @@ const ChatRoom = () => {
       const isVideo = !!incomingCall.isVideo;
       setIsVideoCall(isVideo);
       setIsVideoEnabled(isVideo);
+      setIsCallScreenOpen(true);
+      setCallStatusText('Đang đàm thoại');
 
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: true, 
@@ -514,7 +573,7 @@ const ChatRoom = () => {
         if (e.candidate) {
           sendCallSignal({ 
             type: 'CANDIDATE', 
-            candidate: e.candidate,
+            candidate: e.candidate, 
             isPrivate: incomingCall.isPrivate,
             targetUserId: incomingCall.callerId,
             isVideo: isVideo
@@ -547,6 +606,7 @@ const ChatRoom = () => {
 
       setIsCallActive(true);
       setIncomingCall(null);
+      if (callTimerRef.current) clearInterval(callTimerRef.current);
       callTimerRef.current = setInterval(() => {
         setCallDuration(prev => prev + 1);
       }, 1000);
@@ -559,12 +619,28 @@ const ChatRoom = () => {
 
   const rejectCall = () => {
     if (incomingCall) {
+      try {
+        const payload = JSON.stringify({
+          type: 'call_missed',
+          duration: '00:00',
+          isVideo: !!incomingCall.isVideo,
+          endedBy: localStorage.getItem('nickname') || 'Thành viên',
+          callerName: incomingCall.callerName
+        });
+        axiosClient.post('/message/send', {
+          message: payload,
+          timeSend: new Date().toISOString()
+        }, { params: { user_room: roomId } }).catch(() => {});
+      } catch (e) {}
+
       sendCallSignal({ 
         type: 'END',
         isPrivate: incomingCall.isPrivate,
-        targetUserId: incomingCall.callerId
+        targetUserId: incomingCall.callerId,
+        reason: 'missed'
       });
       setIncomingCall(null);
+      toast("Đã từ chối cuộc gọi");
     }
   };
 
@@ -574,16 +650,61 @@ const ChatRoom = () => {
       if (audioTrack) {
         audioTrack.enabled = !audioTrack.enabled;
         setIsMuted(!audioTrack.enabled);
+        toast(!audioTrack.enabled ? "Đã tắt micro" : "Đã bật micro");
       }
     }
   };
 
-  const toggleVideo = () => {
+  const toggleSpeaker = () => {
+    setIsSpeakerOn(prev => {
+      const next = !prev;
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.muted = !next;
+      }
+      toast(next ? "Đã bật loa ngoài" : "Đã tắt loa ngoài");
+      return next;
+    });
+  };
+
+  const toggleVideo = async () => {
     if (localStreamRef.current) {
       const videoTrack = localStreamRef.current.getVideoTracks()[0];
       if (videoTrack) {
         videoTrack.enabled = !videoTrack.enabled;
         setIsVideoEnabled(videoTrack.enabled);
+        toast(videoTrack.enabled ? "Đã bật Camera" : "Đã tắt Camera");
+      } else {
+        // Nâng cấp trực tiếp từ thoại lên video ngay trong cuộc gọi
+        try {
+          const videoStream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }
+          });
+          const newTrack = videoStream.getVideoTracks()[0];
+          if (newTrack) {
+            localStreamRef.current.addTrack(newTrack);
+            if (peerConnectionRef.current) {
+              peerConnectionRef.current.addTrack(newTrack, localStreamRef.current);
+              const offer = await peerConnectionRef.current.createOffer();
+              await peerConnectionRef.current.setLocalDescription(offer);
+              sendCallSignal({ 
+                type: 'OFFER', 
+                offer, 
+                isPrivate: !!privateCallTarget, 
+                targetUserId: privateCallTarget?.id?.toString(),
+                isVideo: true 
+              });
+            }
+            if (localVideoRef.current) {
+              localVideoRef.current.srcObject = localStreamRef.current;
+            }
+            setIsVideoCall(true);
+            setIsVideoEnabled(true);
+            toast.success("Đã kích hoạt Camera cuộc gọi!");
+          }
+        } catch (e) {
+          console.error("Lỗi bật camera:", e);
+          toast.error("Không thể mở Camera thiết bị!");
+        }
       }
     }
   };
@@ -603,9 +724,21 @@ const ChatRoom = () => {
         });
       }
     } else if (msg.type === 'ANSWER') {
+      if (callTimeoutRef.current) {
+        clearTimeout(callTimeoutRef.current);
+        callTimeoutRef.current = null;
+      }
+      setCallStatusText('Đang đàm thoại');
       if (peerConnectionRef.current && peerConnectionRef.current.signalingState !== 'stable') {
         await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(msg.answer));
       }
+    } else if (msg.type === 'BUSY') {
+      if (callTimeoutRef.current) {
+        clearTimeout(callTimeoutRef.current);
+        callTimeoutRef.current = null;
+      }
+      toast.error(`${msg.callerName || 'Người nhận'} đang bận cuộc gọi khác!`);
+      cleanupCall();
     } else if (msg.type === 'CANDIDATE') {
       if (peerConnectionRef.current && msg.candidate) {
         try {
@@ -615,10 +748,24 @@ const ChatRoom = () => {
         }
       }
     } else if (msg.type === 'END') {
+      if (callTimeoutRef.current) {
+        clearTimeout(callTimeoutRef.current);
+        callTimeoutRef.current = null;
+      }
       cleanupCall();
-      toast("Cuộc gọi đã kết thúc");
+      toast(msg.reason === 'missed' ? "Cuộc gọi bị nhỡ hoặc từ chối" : "Cuộc gọi đã kết thúc");
     }
   }, [currentUserId, isCallActive, cleanupCall]);
+
+  // Tự động hủy chuông cuộc gọi đến sau 45 giây nếu không trả lời
+  useEffect(() => {
+    if (incomingCall) {
+      const ringTimer = setTimeout(() => {
+        setIncomingCall(null);
+      }, 45000);
+      return () => clearTimeout(ringTimer);
+    }
+  }, [incomingCall]);
 
   // Kết nối WebSocket & Khởi tạo dữ liệu
   useEffect(() => {
@@ -1308,12 +1455,12 @@ const ChatRoom = () => {
           </div>
         )}
 
-        {/* THANH ĐIỀU KHIỂN CUỘC GỌI ĐANG HOẠT ĐỘNG */}
-        {isCallActive && (
-          <div className="active-call-bar">
+        {/* THANH ĐIỀU KHIỂN CUỘC GỌI ĐANG HOẠT ĐỘNG (KHI THU NHỎ VỀ ĐOẠN CHAT) */}
+        {isCallActive && !isCallScreenOpen && (
+          <div className="active-call-bar animate-fade-in">
             <div className="call-info">
               <div className="pulsing-mic">
-                {isVideoCall ? <Video size={16} /> : <Phone size={16} />}
+                {isVideoCall ? <Video size={16} /> : <PhoneCall size={16} />}
               </div>
               <div className="call-text">
                 <span className="call-title">
@@ -1322,12 +1469,22 @@ const ChatRoom = () => {
                     : (isVideoCall ? "Cuộc gọi Video nhóm đang phát" : "Cuộc gọi thoại nhóm đang phát")}
                 </span>
                 <span className="call-timer font-mono">
-                  {Math.floor(callDuration / 60)}:{(callDuration % 60).toString().padStart(2, '0')}
+                  {Math.floor(callDuration / 60)}:{(callDuration % 60).toString().padStart(2, '0')} • {callStatusText}
                 </span>
               </div>
             </div>
 
             <div className="call-controls">
+              <button 
+                type="button"
+                onClick={() => setIsCallScreenOpen(true)}
+                className="btn-expand-call"
+                title="Mở toàn màn hình cuộc gọi"
+              >
+                <Maximize2 size={15} />
+                <span className="expand-text">Màn hình gọi</span>
+              </button>
+
               <button 
                 onClick={toggleMute} 
                 className={`btn-call-action ${isMuted ? 'muted' : ''}`}
@@ -1346,7 +1503,11 @@ const ChatRoom = () => {
                 </button>
               )}
 
-              <button onClick={endCall} className="btn-call-action btn-end-call" title="Kết thúc cuộc gọi">
+              <button 
+                onClick={() => endCall(callDuration > 0 ? 'normal' : 'cancelled')} 
+                className="btn-call-action btn-end-call" 
+                title={callDuration > 0 ? "Kết thúc cuộc gọi" : "Hủy cuộc gọi"}
+              >
                 <PhoneOff size={16} />
               </button>
             </div>
@@ -1479,13 +1640,35 @@ const ChatRoom = () => {
               const isSystem = msg.userId === '0' || msg.userId === 0 || msg.isSystem;
               const payload = parseMessagePayload(msg.text);
 
-              // 1. Render Tin nhắn kết thúc cuộc gọi
+              // 1. Render Tin nhắn trạng thái cuộc gọi (Kết thúc / Bị nhỡ / Đã hủy)
               if (payload.type === 'call_ended') {
                 return (
-                  <div key={msg.id || index} className="call-ended-system-row">
+                  <div key={msg.id || index} className="call-system-row">
                     <div className="call-ended-pill">
+                      {payload.isVideo ? <Video size={13} className="text-emerald-400" /> : <PhoneCall size={13} className="text-emerald-400" />}
+                      <span>Cuộc gọi {payload.isVideo ? 'Video' : 'thoại'} • Thời lượng <strong>{payload.duration || '00:00'}</strong></span>
+                    </div>
+                  </div>
+                );
+              }
+
+              if (payload.type === 'call_missed') {
+                return (
+                  <div key={msg.id || index} className="call-system-row">
+                    <div className="call-missed-pill">
+                      <PhoneMissed size={13} className="text-rose-400" />
+                      <span>Cuộc gọi {payload.isVideo ? 'Video' : 'thoại'} bị nhỡ (Không bắt máy)</span>
+                    </div>
+                  </div>
+                );
+              }
+
+              if (payload.type === 'call_cancelled') {
+                return (
+                  <div key={msg.id || index} className="call-system-row">
+                    <div className="call-cancelled-pill">
                       <PhoneOff size={13} className="text-zinc-400" />
-                      <span>Cuộc gọi {payload.isVideo ? 'Video' : 'thoại'} đã kết thúc • Thời lượng <strong>{payload.duration}</strong></span>
+                      <span>Cuộc gọi đã hủy bởi <strong>{payload.endedBy || payload.callerName || 'Người gọi'}</strong></span>
                     </div>
                   </div>
                 );
@@ -1767,6 +1950,7 @@ const ChatRoom = () => {
         <UserProfileModal 
           userId={selectedProfileUserId}
           currentUserId={currentUserId}
+          isRoomAdmin={roomInfo?.userRoomDTOList?.some(u => u.userDTO?.id?.toString() === selectedProfileUserId?.toString() && u.isAdmin)}
           onClose={() => setSelectedProfileUserId(null)}
           onStartPrivateCall={startPrivateVoiceCall}
         />
@@ -1795,6 +1979,7 @@ const ChatRoom = () => {
             <p>
               <strong>{incomingCall.callerName}</strong> {incomingCall.isPrivate ? "đang gọi riêng cho bạn" : `đang bắt đầu cuộc gọi trong phòng #${roomInfo?.nameroom || roomId}`}
             </p>
+            <span className="text-[11px] text-zinc-400 font-mono block mt-2">Tự động kết thúc sau 45s nếu không nghe máy</span>
             <div className="incoming-actions">
               <button onClick={rejectCall} className="btn-reject-call">
                 <PhoneOff size={18} />
@@ -1833,6 +2018,150 @@ const ChatRoom = () => {
                 {confirmDialog.confirmLabel || "Đồng ý"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MÀN HÌNH CUỘC GỌI TOÀN DIỆN (FULLSCREEN CALL SCREEN OVERLAY) */}
+      {isCallActive && isCallScreenOpen && (
+        <div className="call-fullscreen-overlay animate-fade-in">
+          {/* Header màn hình cuộc gọi */}
+          <div className="call-screen-header">
+            <button 
+              type="button" 
+              onClick={() => setIsCallScreenOpen(false)} 
+              className="btn-minimize-call"
+              title="Thu nhỏ để nhắn tin / quay lại đoạn chat"
+            >
+              <ChevronDown size={20} />
+              <span className="text-xs font-semibold">Thu nhỏ về chat</span>
+            </button>
+
+            <div className="call-screen-title-box">
+              <span className="call-screen-target-name truncate">
+                {privateCallTarget 
+                  ? `${privateCallTarget.nickname || privateCallTarget.account || 'Người dùng'}` 
+                  : (roomInfo?.nameroom || `Phòng #${roomId}`)}
+              </span>
+              <div className="flex items-center gap-2">
+                <span className="call-screen-badge-live">
+                  <span className="status-dot-pulse"></span>
+                  {callStatusText}
+                </span>
+                <span className="call-screen-timer font-mono">
+                  {Math.floor(callDuration / 60)}:{(callDuration % 60).toString().padStart(2, '0')}
+                </span>
+              </div>
+            </div>
+
+            <div className="w-24 flex justify-end">
+              <span className="text-[11px] font-mono text-zinc-400 bg-zinc-900/90 px-2.5 py-1 rounded-md border border-zinc-800">
+                {isVideoCall ? 'WebRTC HD' : 'Audio E2E'}
+              </span>
+            </div>
+          </div>
+
+          {/* Thân màn hình cuộc gọi */}
+          <div className="call-screen-body">
+            {isVideoCall ? (
+              <div className="call-screen-video-container">
+                <div className="remote-video-fullscreen-frame">
+                  <video ref={remoteVideoRef} autoPlay playsInline className="video-fullscreen-elem" />
+                  <div className="video-user-floating-tag">
+                    {privateCallTarget ? (privateCallTarget.nickname || 'Đối phương') : 'Kênh video nhóm'}
+                  </div>
+                </div>
+                {/* Local video PiP */}
+                <div className="local-video-pip-floating">
+                  <video ref={localVideoRef} autoPlay playsInline muted className="video-fullscreen-elem mirror" />
+                  <div className="video-user-floating-tag">Bạn</div>
+                </div>
+              </div>
+            ) : (
+              <div className="call-screen-voice-visual">
+                <div className="voice-avatar-rings-container">
+                  <div className="avatar-pulse-ring ring-1"></div>
+                  <div className="avatar-pulse-ring ring-2"></div>
+                  <div className="call-big-avatar">
+                    {privateCallTarget ? (
+                      (privateCallTarget.nickname || privateCallTarget.account || 'U').charAt(0).toUpperCase()
+                    ) : (
+                      <Users size={48} className="text-emerald-400" />
+                    )}
+                  </div>
+                </div>
+
+                <h3 className="call-partner-heading">
+                  {privateCallTarget 
+                    ? (privateCallTarget.nickname || privateCallTarget.account)
+                    : (roomInfo?.nameroom || `Phòng đàm thoại #${roomId}`)}
+                </h3>
+                <p className="call-subtext-info">
+                  {callDuration > 0 ? "Cuộc gọi thoại bảo mật P2P đang kết nối" : "Đang chờ đối phương nhấc máy (Tối đa 45s)..."}
+                </p>
+
+                {/* Sóng âm thanh sinh động */}
+                <div className="call-waveform-bars">
+                  <span className="c-bar"></span>
+                  <span className="c-bar h-6"></span>
+                  <span className="c-bar h-10"></span>
+                  <span className="c-bar h-14"></span>
+                  <span className="c-bar h-8"></span>
+                  <span className="c-bar h-12"></span>
+                  <span className="c-bar h-5"></span>
+                  <span className="c-bar h-11"></span>
+                  <span className="c-bar h-7"></span>
+                  <span className="c-bar"></span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Thanh công cụ điều khiển cuộc gọi dưới đáy */}
+          <div className="call-screen-controls-bottom">
+            {/* Nút Micro */}
+            <button 
+              type="button" 
+              onClick={toggleMute} 
+              className={`call-action-btn ${isMuted ? 'btn-state-off' : 'btn-state-on'}`}
+              title={isMuted ? "Bật micro" : "Tắt micro"}
+            >
+              {isMuted ? <MicOff size={22} /> : <Mic size={22} />}
+              <span className="action-label">{isMuted ? "Bật mic" : "Tắt mic"}</span>
+            </button>
+
+            {/* Nút Loa ngoài */}
+            <button 
+              type="button" 
+              onClick={toggleSpeaker} 
+              className={`call-action-btn ${!isSpeakerOn ? 'btn-state-off' : 'btn-state-on'}`}
+              title={isSpeakerOn ? "Tắt loa ngoài" : "Bật loa ngoài"}
+            >
+              {!isSpeakerOn ? <VolumeX size={22} /> : <Volume2 size={22} />}
+              <span className="action-label">{isSpeakerOn ? "Loa ngoài" : "Tắt loa"}</span>
+            </button>
+
+            {/* Nút Camera / Chuyển sang Video */}
+            <button 
+              type="button" 
+              onClick={toggleVideo} 
+              className={`call-action-btn ${!isVideoEnabled || !isVideoCall ? 'btn-state-off' : 'btn-state-on'}`}
+              title={isVideoCall ? (isVideoEnabled ? "Tắt camera" : "Bật camera") : "Chuyển sang Video"}
+            >
+              {isVideoCall && isVideoEnabled ? <Video size={22} /> : <VideoOff size={22} />}
+              <span className="action-label">{isVideoCall ? (isVideoEnabled ? "Tắt cam" : "Bật cam") : "Mở Video"}</span>
+            </button>
+
+            {/* Nút Hủy / Kết thúc cuộc gọi */}
+            <button 
+              type="button" 
+              onClick={() => endCall(callDuration > 0 ? 'normal' : 'cancelled')} 
+              className="call-action-btn btn-state-danger"
+              title={callDuration > 0 ? "Kết thúc cuộc gọi" : "Hủy cuộc gọi"}
+            >
+              <PhoneOff size={24} />
+              <span className="action-label">{callDuration > 0 ? "Kết thúc" : "Hủy gọi"}</span>
+            </button>
           </div>
         </div>
       )}
@@ -2257,7 +2586,25 @@ const ChatRoom = () => {
         .call-text { display: flex; flex-direction: column; }
         .call-title { font-size: 12px; font-weight: 600; color: #f8fafc; }
         .call-timer { font-size: 11px; color: #34d399; }
-        .call-controls { display: flex; gap: 8px; }
+        .call-controls { display: flex; align-items: center; gap: 8px; }
+        .btn-expand-call {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 6px 12px;
+          border-radius: 10px;
+          background: rgba(16, 185, 129, 0.18);
+          border: 1px solid rgba(16, 185, 129, 0.35);
+          color: #34d399;
+          font-size: 11px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+        .btn-expand-call:hover {
+          background: #10b981;
+          color: white;
+        }
         .btn-call-action {
           width: 32px;
           height: 32px;
@@ -2269,6 +2616,10 @@ const ChatRoom = () => {
           align-items: center;
           justify-content: center;
           cursor: pointer;
+          transition: all 0.15s;
+        }
+        .btn-call-action:hover {
+          background: rgba(255, 255, 255, 0.2);
         }
         .btn-call-action.muted { background: #eab308; }
         .btn-end-call { background: #ef4444 !important; }
@@ -2326,9 +2677,10 @@ const ChatRoom = () => {
           font-weight: 600;
         }
 
-        /* Khu vực hiển thị tin nhắn */
+        /* Khu vực hiển thị tin nhắn - Cố định scroll chuẩn, không đẩy khung input */
         .messages-area {
           flex: 1;
+          min-height: 0;
           overflow-y: auto;
           padding: 16px;
           display: flex;
@@ -2344,8 +2696,8 @@ const ChatRoom = () => {
           margin-top: auto;
         }
 
-        /* Call Ended Pill */
-        .call-ended-system-row {
+        /* Call Status System Row & Pills */
+        .call-system-row {
           display: flex;
           justify-content: center;
           margin: 6px 0;
@@ -2354,10 +2706,32 @@ const ChatRoom = () => {
           display: inline-flex;
           align-items: center;
           gap: 6px;
-          padding: 5px 12px;
-          border-radius: 16px;
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid var(--chat-border);
+          padding: 6px 14px;
+          border-radius: 20px;
+          background: rgba(16, 185, 129, 0.08);
+          border: 1px solid rgba(16, 185, 129, 0.25);
+          color: #a7f3d0;
+          font-size: 11px;
+        }
+        .call-missed-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 6px 14px;
+          border-radius: 20px;
+          background: rgba(244, 63, 94, 0.08);
+          border: 1px solid rgba(244, 63, 94, 0.25);
+          color: #fecdd3;
+          font-size: 11px;
+        }
+        .call-cancelled-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 6px 14px;
+          border-radius: 20px;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.12);
           color: #a1a1aa;
           font-size: 11px;
         }
@@ -2555,11 +2929,13 @@ const ChatRoom = () => {
         }
         .btn-emoji-item:hover { transform: scale(1.2); }
 
-        /* Khung soạn tin nhắn */
+        /* Khung soạn tin nhắn - Luôn neo chặt dưới chân màn hình */
         .input-container {
+          flex-shrink: 0;
           padding: 10px 14px max(10px, env(safe-area-inset-bottom));
           background: var(--input-bg);
           border-top: 1px solid var(--chat-border);
+          z-index: 20;
         }
         .msg-form {
           display: flex;
@@ -2837,6 +3213,273 @@ const ChatRoom = () => {
         }
         .btn-reject-call { background: #ef4444; color: white; }
         .btn-answer-call { background: #10b981; color: white; }
+
+        /* ================= FULLSCREEN CALL SCREEN OVERLAY ================= */
+        .call-fullscreen-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 1000;
+          background: radial-gradient(circle at 50% 25%, #1e1b4b 0%, #09090b 80%);
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          padding: max(16px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom)) 20px;
+          backdrop-filter: blur(24px);
+        }
+        .call-screen-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding-bottom: 12px;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .btn-minimize-call {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          background: rgba(255, 255, 255, 0.08);
+          border: 1px solid rgba(255, 255, 255, 0.14);
+          color: #e4e4e7;
+          padding: 8px 14px;
+          border-radius: 12px;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        .btn-minimize-call:hover {
+          background: rgba(255, 255, 255, 0.18);
+          color: white;
+        }
+        .call-screen-title-box {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 4px;
+        }
+        .call-screen-target-name {
+          font-size: 16px;
+          font-weight: 700;
+          color: #fafafa;
+          max-width: 220px;
+        }
+        .call-screen-badge-live {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          font-size: 11px;
+          color: #34d399;
+          font-weight: 600;
+        }
+        .call-screen-timer {
+          font-size: 12px;
+          color: #cbd5e1;
+        }
+        .status-dot-pulse {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          background: #10b981;
+          box-shadow: 0 0 8px #10b981;
+          animation: pulse 1.5s infinite;
+        }
+
+        /* Body Call Screen */
+        .call-screen-body {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          position: relative;
+          min-height: 0;
+          padding: 20px 0;
+        }
+        .call-screen-voice-visual {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          text-align: center;
+        }
+        .voice-avatar-rings-container {
+          position: relative;
+          width: 140px;
+          height: 140px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-bottom: 24px;
+        }
+        .call-big-avatar {
+          width: 104px;
+          height: 104px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, #4f46e5, #06b6d4);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 42px;
+          font-weight: 800;
+          color: white;
+          border: 4px solid rgba(255, 255, 255, 0.2);
+          z-index: 2;
+          box-shadow: 0 10px 30px rgba(79, 70, 229, 0.4);
+        }
+        .avatar-pulse-ring {
+          position: absolute;
+          inset: 0;
+          border-radius: 50%;
+          border: 2px solid rgba(99, 102, 241, 0.45);
+          animation: ringPulse 2.4s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+        .avatar-pulse-ring.ring-2 {
+          animation-delay: 1.2s;
+        }
+        @keyframes ringPulse {
+          0% { transform: scale(0.85); opacity: 0.9; }
+          100% { transform: scale(1.6); opacity: 0; }
+        }
+        .call-partner-heading {
+          font-size: 24px;
+          font-weight: 800;
+          color: #ffffff;
+          margin-bottom: 6px;
+        }
+        .call-subtext-info {
+          font-size: 13px;
+          color: #94a3b8;
+          margin-bottom: 24px;
+        }
+        .call-waveform-bars {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          height: 48px;
+        }
+        .c-bar {
+          width: 5px;
+          height: 14px;
+          border-radius: 4px;
+          background: linear-gradient(to top, #6366f1, #38bdf8);
+          animation: barSound 1.2s ease-in-out infinite alternate;
+        }
+        .c-bar:nth-child(2) { animation-delay: 0.2s; }
+        .c-bar:nth-child(3) { animation-delay: 0.4s; }
+        .c-bar:nth-child(4) { animation-delay: 0.1s; }
+        .c-bar:nth-child(5) { animation-delay: 0.5s; }
+        .c-bar:nth-child(6) { animation-delay: 0.3s; }
+        .c-bar:nth-child(7) { animation-delay: 0.6s; }
+        .c-bar:nth-child(8) { animation-delay: 0.25s; }
+        .c-bar:nth-child(9) { animation-delay: 0.45s; }
+        .c-bar:nth-child(10) { animation-delay: 0.15s; }
+        @keyframes barSound {
+          0% { transform: scaleY(0.4); opacity: 0.5; }
+          100% { transform: scaleY(1.8); opacity: 1; }
+        }
+
+        /* Video Call Screen Frame */
+        .call-screen-video-container {
+          width: 100%;
+          height: 100%;
+          max-width: 900px;
+          position: relative;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .remote-video-fullscreen-frame {
+          width: 100%;
+          height: 100%;
+          border-radius: 20px;
+          overflow: hidden;
+          background: #09090b;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          position: relative;
+        }
+        .video-fullscreen-elem {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+        .video-fullscreen-elem.mirror {
+          transform: scaleX(-1);
+        }
+        .local-video-pip-floating {
+          position: absolute;
+          bottom: 16px;
+          right: 16px;
+          width: 140px;
+          height: 190px;
+          border-radius: 16px;
+          overflow: hidden;
+          background: #18181b;
+          border: 2px solid rgba(255, 255, 255, 0.2);
+          box-shadow: 0 12px 30px rgba(0,0,0,0.8);
+          z-index: 5;
+        }
+        .video-user-floating-tag {
+          position: absolute;
+          bottom: 8px;
+          left: 10px;
+          background: rgba(0, 0, 0, 0.65);
+          backdrop-filter: blur(6px);
+          color: white;
+          padding: 3px 8px;
+          border-radius: 6px;
+          font-size: 11px;
+          font-weight: 600;
+        }
+
+        /* Controls Bottom */
+        .call-screen-controls-bottom {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 20px;
+          padding: 16px 0;
+        }
+        .call-action-btn {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 6px;
+          background: none;
+          border: none;
+          cursor: pointer;
+          color: white;
+          padding: 6px 12px;
+          border-radius: 16px;
+          transition: all 0.2s;
+        }
+        .call-action-btn svg {
+          width: 52px;
+          height: 52px;
+          padding: 14px;
+          border-radius: 50%;
+          transition: all 0.2s;
+        }
+        .btn-state-on svg {
+          background: rgba(255, 255, 255, 0.12);
+          color: #f4f4f5;
+        }
+        .btn-state-on:hover svg {
+          background: rgba(255, 255, 255, 0.22);
+          transform: scale(1.08);
+        }
+        .btn-state-off svg {
+          background: #eab308;
+          color: #000000;
+        }
+        .btn-state-danger svg {
+          background: #ef4444;
+          color: #ffffff;
+        }
+        .btn-state-danger:hover svg {
+          background: #dc2626;
+          transform: scale(1.08);
+        }
+        .action-label {
+          font-size: 11px;
+          font-weight: 600;
+          color: #a1a1aa;
+        }
 
         /* ================= TỐI ƯU HÓA MOBILE TOÀN DIỆN (< 768px) ================= */
         @media (max-width: 768px) {
