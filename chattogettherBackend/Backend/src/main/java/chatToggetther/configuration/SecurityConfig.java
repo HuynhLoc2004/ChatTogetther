@@ -50,7 +50,7 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/api/users/create", "/api/auth/login", "/api/challenges", "/api/posts/track-search").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/rooms/info-rooms", "/api/rooms/*/online-users", "/api/groups", "/api/groups/**", "/api/auth/refresh_token", "/api/ping", "/api/posts", "/api/posts/**", "/api/tracks", "/api/tracks/**", "/api/challenges", "/api/challenges/**", "/api/system/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/rooms/info-rooms", "/api/rooms/*/online-users", "/api/groups", "/api/groups/**", "/api/auth/refresh_token", "/api/ping", "/api/posts", "/api/posts/**", "/api/tracks", "/api/tracks/**", "/api/challenges", "/api/challenges/**", "/api/system/**", "/api/match/config", "/api/match/audio/**").permitAll()
                         .requestMatchers("/ws-gs-guide/**").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .anyRequest().authenticated()
