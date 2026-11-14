@@ -2,6 +2,8 @@ package chatToggetther.controller;
 
 import chatToggetther.DTO.CommunityGroupDTO;
 import chatToggetther.DTO.CommunityMemberDTO;
+import chatToggetther.DTO.CommunityReportDTO;
+import chatToggetther.DataRequest.CreateCommunityReportRequest;
 import chatToggetther.DataRequest.CreateGroupRequest;
 import chatToggetther.DataRequest.UpdateGroupRequest;
 import chatToggetther.Customize.ResponseData;
@@ -16,7 +18,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/groups")
+@RequestMapping({"/api/groups", "/api/communities"})
 @RequiredArgsConstructor
 public class CommunityGroupController {
     private final CommunityGroupService groupService;
@@ -24,9 +26,14 @@ public class CommunityGroupController {
     @GetMapping
     public ResponseEntity<ResponseData<List<CommunityGroupDTO>>> getAllGroups(
             JwtAuthenticationToken token,
-            @RequestParam(value = "keyword", required = false) String keyword
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "categoryCode", required = false) String categoryCode,
+            @RequestParam(value = "category", required = false) String categoryAlt,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "size", required = false) Integer size
     ) {
-        return ResponseEntity.ok(this.groupService.getAllGroups(keyword, token));
+        String effectiveCategory = (categoryCode != null && !categoryCode.trim().isEmpty()) ? categoryCode : categoryAlt;
+        return ResponseEntity.ok(this.groupService.getAllGroups(keyword, effectiveCategory, page, size, token));
     }
 
     @GetMapping("/{id}")
@@ -122,5 +129,14 @@ public class CommunityGroupController {
             @PathVariable("id") Long id
     ) {
         return ResponseEntity.ok(this.groupService.deleteGroup(token, id));
+    }
+
+    @PostMapping("/{id}/report")
+    public ResponseEntity<ResponseData<CommunityReportDTO>> reportCommunity(
+            JwtAuthenticationToken token,
+            @PathVariable("id") Long id,
+            @RequestBody @Valid CreateCommunityReportRequest request
+    ) {
+        return ResponseEntity.ok(this.groupService.reportCommunity(token, id, request));
     }
 }

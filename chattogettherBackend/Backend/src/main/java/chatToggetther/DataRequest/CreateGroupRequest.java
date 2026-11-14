@@ -28,5 +28,6 @@ public class CreateGroupRequest {
     private Boolean requiresApproval = false;
     private Boolean isPublicToFeed = true;
     private Boolean requiresPostApproval = false;
+    private String categoryCode = "GENERAL";
+    private Long activeVoiceRoomId;
 }
-

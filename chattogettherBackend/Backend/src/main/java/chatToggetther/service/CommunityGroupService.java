@@ -2,26 +2,33 @@ package chatToggetther.service;
 
 import chatToggetther.DTO.CommunityGroupDTO;
 import chatToggetther.DTO.CommunityMemberDTO;
+import chatToggetther.DTO.CommunityReportDTO;
+import chatToggetther.DataRequest.CreateCommunityReportRequest;
 import chatToggetther.DataRequest.CreateGroupRequest;
+import chatToggetther.DataRequest.ResolveReportRequest;
 import chatToggetther.DataRequest.UpdateGroupRequest;
 import chatToggetther.Customize.AppException;
 import chatToggetther.Customize.ResponseData;
 import chatToggetther.Customize.SecurityUtils;
 import chatToggetther.modelEntity.CommunityGroupEntity;
 import chatToggetther.modelEntity.CommunityMemberEntity;
+import chatToggetther.modelEntity.CommunityReportEntity;
 import chatToggetther.modelEntity.UserEntity;
 import chatToggetther.repository.CommunityGroupRepository;
 import chatToggetther.repository.CommunityMemberRepository;
+import chatToggetther.repository.CommunityReportRepository;
 import chatToggetther.repository.PostRepository;
 import chatToggetther.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -29,17 +36,36 @@ import java.util.stream.Collectors;
 public class CommunityGroupService {
     private final CommunityGroupRepository groupRepository;
     private final CommunityMemberRepository memberRepository;
+    private final CommunityReportRepository reportRepository;
     private final UserRepository userRepository;
     private final PostRepository postRepository;
 
+    // ==========================================
+    // 1. CLIENT & GROUP OWNER APIS
+    // ==========================================
+
     @Transactional(readOnly = true)
-    public ResponseData<List<CommunityGroupDTO>> getAllGroups(String keyword, JwtAuthenticationToken token) {
+    public ResponseData<List<CommunityGroupDTO>> getAllGroups(
+            String keyword, 
+            String categoryCode,
+            Integer page,
+            Integer size,
+            JwtAuthenticationToken token
+    ) {
         UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
         List<CommunityGroupEntity> groups;
-        if (keyword != null && !keyword.trim().isEmpty()) {
-            groups = this.groupRepository.searchGroups(keyword.trim());
+
+        String safeKw = (keyword != null && !keyword.trim().isEmpty()) ? keyword.trim() : null;
+        String safeCategory = (categoryCode != null && !categoryCode.trim().isEmpty() && !categoryCode.equalsIgnoreCase("ALL")) 
+                ? categoryCode.trim() 
+                : null;
+
+        if (page != null && size != null && size > 0) {
+            Pageable pageable = PageRequest.of(Math.max(0, page), size);
+            Page<CommunityGroupEntity> pageResult = this.groupRepository.findActiveCommunitiesWithPaging(safeCategory, safeKw, pageable);
+            groups = pageResult.getContent();
         } else {
-            groups = this.groupRepository.findAllOrderByCreatedAtDesc();
+            groups = this.groupRepository.findActiveCommunities(safeCategory, safeKw);
         }
 
         List<CommunityGroupDTO> dtos = groups.stream()
@@ -55,6 +81,13 @@ public class CommunityGroupService {
         CommunityGroupEntity group = this.groupRepository.findById(groupId).orElseThrow(() ->
             new AppException(404, "Cộng đồng không tồn tại", 404)
         );
+
+        if ("SUSPENDED".equalsIgnoreCase(group.getStatus())) {
+            boolean isAdmin = currentUser != null && currentUser.getRoles() != null && currentUser.getRoles().contains("ROLE_ADMIN");
+            if (!isAdmin) {
+                throw new AppException(403, "Cộng đồng này đã bị đình chỉ do vi phạm tiêu chuẩn cộng đồng!", 403);
+            }
+        }
 
         return new ResponseData<>(200, "Lấy chi tiết cộng đồng thành công", mapToGroupDTO(group, currentUser, true));
     }
@@ -78,6 +111,10 @@ public class CommunityGroupService {
         group.setRequiresApproval(Boolean.TRUE.equals(request.getRequiresApproval()));
         group.setIsPublicToFeed(request.getIsPublicToFeed() != null ? request.getIsPublicToFeed() : true);
         group.setRequiresPostApproval(Boolean.TRUE.equals(request.getRequiresPostApproval()));
+        group.setCategoryCode(request.getCategoryCode() != null && !request.getCategoryCode().trim().isEmpty() ? request.getCategoryCode().trim() : "GENERAL");
+        group.setStatus("ACTIVE");
+        group.setIsFeatured(false);
+        group.setActiveVoiceRoomId(request.getActiveVoiceRoomId());
         group.setOwner(currentUser);
         group.setCreatedAt(LocalDateTime.now());
 
@@ -125,86 +162,53 @@ public class CommunityGroupService {
         if (request.getAvatarUrl() != null) {
             group.setAvatarUrl(request.getAvatarUrl());
         }
-        if (request.getRequiresApproval() != null && "OWNER".equals(member.getRole())) {
-            group.setRequiresApproval(request.getRequiresApproval());
-        }
-        if (request.getIsPublicToFeed() != null && "OWNER".equals(member.getRole())) {
-            group.setIsPublicToFeed(request.getIsPublicToFeed());
-        }
-        if (request.getRequiresPostApproval() != null && "OWNER".equals(member.getRole())) {
-            group.setRequiresPostApproval(request.getRequiresPostApproval());
-        }
-        if (request.getIsPrivate() != null && "OWNER".equals(member.getRole())) {
+        if (request.getIsPrivate() != null) {
             group.setIsPrivate(request.getIsPrivate());
         }
-
-        this.groupRepository.save(group);
-        return new ResponseData<>(200, "Cập nhật cộng đồng thành công", mapToGroupDTO(group, currentUser, true));
-    }
-
-    @Transactional
-    public ResponseData<String> inviteFriend(JwtAuthenticationToken token, Long groupId, Long friendUserId) {
-        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
-        if (currentUser == null) {
-            throw new AppException(401, "Yêu cầu đăng nhập để mời bạn bè", 401);
+        if (request.getRequiresApproval() != null) {
+            group.setRequiresApproval(request.getRequiresApproval());
         }
-        CommunityGroupEntity group = this.groupRepository.findById(groupId).orElseThrow(() ->
-            new AppException(404, "Cộng đồng không tồn tại", 404)
-        );
-
-        // Kiểm tra xem người mời có phải thành viên của nhóm không
-        CommunityMemberEntity myMembership = this.memberRepository.findByGroupAndUser(group, currentUser).orElseThrow(() ->
-            new AppException(403, "Bạn cần là thành viên của cộng đồng để mời bạn bè!", 403)
-        );
-        if (!"ACTIVE".equals(myMembership.getStatus())) {
-            throw new AppException(403, "Tài khoản của bạn chưa được kích hoạt trong nhóm này!", 403);
+        if (request.getIsPublicToFeed() != null) {
+            group.setIsPublicToFeed(request.getIsPublicToFeed());
+        }
+        if (request.getRequiresPostApproval() != null) {
+            group.setRequiresPostApproval(request.getRequiresPostApproval());
+        }
+        if (request.getCategoryCode() != null && !request.getCategoryCode().trim().isEmpty()) {
+            group.setCategoryCode(request.getCategoryCode().trim());
+        }
+        if (request.getActiveVoiceRoomId() != null) {
+            group.setActiveVoiceRoomId(request.getActiveVoiceRoomId());
         }
 
-        UserEntity friend = this.userRepository.findById(friendUserId).orElseThrow(() ->
-            new AppException(404, "Bạn bè không tồn tại", 404)
-        );
-
-        Optional<CommunityMemberEntity> existing = this.memberRepository.findByGroupAndUser(group, friend);
-        if (existing.isPresent()) {
-            CommunityMemberEntity m = existing.get();
-            if ("ACTIVE".equals(m.getStatus())) {
-                return new ResponseData<>(200, "Bạn bè đã là thành viên của cộng đồng", "ACTIVE");
-            } else {
-                m.setStatus("ACTIVE");
-                this.memberRepository.save(m);
-                return new ResponseData<>(200, "Đã kích hoạt thành viên thành công!", "ACTIVE");
-            }
-        }
-
-        CommunityMemberEntity newMember = new CommunityMemberEntity();
-        newMember.setGroup(group);
-        newMember.setUser(friend);
-        newMember.setRole("MEMBER");
-        newMember.setStatus("ACTIVE"); // Khi bạn bè được mời bởi thành viên nhóm, kích hoạt trực tiếp
-        newMember.setJoinedAt(LocalDateTime.now());
-        this.memberRepository.save(newMember);
-
-        return new ResponseData<>(200, "Đã mời " + (friend.getNickname() != null ? friend.getNickname() : friend.getAccount()) + " vào cộng đồng!", "ACTIVE");
+        group = this.groupRepository.save(group);
+        return new ResponseData<>(200, "Cập nhật thông tin cộng đồng thành công", mapToGroupDTO(group, currentUser, true));
     }
 
     @Transactional
     public ResponseData<String> joinGroup(JwtAuthenticationToken token, Long groupId) {
         UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
         if (currentUser == null) {
-            throw new AppException(401, "Yêu cầu đăng nhập để gia nhập cộng đồng", 401);
+            throw new AppException(401, "Yêu cầu đăng nhập", 401);
         }
 
         CommunityGroupEntity group = this.groupRepository.findById(groupId).orElseThrow(() ->
             new AppException(404, "Cộng đồng không tồn tại", 404)
         );
 
+        if ("SUSPENDED".equalsIgnoreCase(group.getStatus())) {
+            throw new AppException(403, "Cộng đồng này đã bị đình chỉ hoạt động!", 403);
+        }
+
         Optional<CommunityMemberEntity> existing = this.memberRepository.findByGroupAndUser(group, currentUser);
         if (existing.isPresent()) {
             CommunityMemberEntity mem = existing.get();
             if ("ACTIVE".equals(mem.getStatus())) {
-                return new ResponseData<>(200, "Bạn đã là thành viên của cộng đồng này", "ACTIVE");
-            } else {
-                return new ResponseData<>(200, "Yêu cầu tham gia của bạn đang chờ phê duyệt", "PENDING");
+                return new ResponseData<>(200, "Bạn đã là thành viên của cộng đồng này", "ALREADY_MEMBER");
+            } else if ("PENDING".equals(mem.getStatus())) {
+                return new ResponseData<>(200, "Yêu cầu tham gia của bạn đang chờ phê duyệt", "PENDING_APPROVAL");
+            } else if ("BANNED".equals(mem.getStatus())) {
+                throw new AppException(403, "Bạn đã bị chặn khỏi cộng đồng này!", 403);
             }
         }
 
@@ -212,16 +216,15 @@ public class CommunityGroupService {
         newMember.setGroup(group);
         newMember.setUser(currentUser);
         newMember.setRole("MEMBER");
-        newMember.setJoinedAt(LocalDateTime.now());
 
         if (Boolean.TRUE.equals(group.getRequiresApproval())) {
             newMember.setStatus("PENDING");
             this.memberRepository.save(newMember);
-            return new ResponseData<>(200, "Đã gửi yêu cầu tham gia. Vui lòng chờ Chủ/Phó nhóm duyệt!", "PENDING");
+            return new ResponseData<>(200, "Đã gửi yêu cầu tham gia, chờ quản trị viên duyệt", "PENDING_APPROVAL");
         } else {
             newMember.setStatus("ACTIVE");
             this.memberRepository.save(newMember);
-            return new ResponseData<>(200, "Gia nhập cộng đồng thành công!", "ACTIVE");
+            return new ResponseData<>(200, "Gia nhập cộng đồng thành công!", "JOINED");
         }
     }
 
@@ -232,13 +235,13 @@ public class CommunityGroupService {
             new AppException(404, "Cộng đồng không tồn tại", 404)
         );
 
-        CommunityMemberEntity member = this.memberRepository.findByGroupAndUser(group, currentUser).orElseThrow(() ->
-            new AppException(400, "Bạn chưa tham gia cộng đồng này", 400)
-        );
-
-        if ("OWNER".equals(member.getRole())) {
-            throw new AppException(400, "Chủ nhóm không thể rời nhóm! Bạn cần chuyển quyền hoặc giải tán nhóm.", 400);
+        if (group.getOwner().getId().equals(currentUser.getId())) {
+            throw new AppException(400, "Chủ nhóm không thể rời cộng đồng! Hãy chuyển quyền Chủ nhóm hoặc giải tán cộng đồng.", 400);
         }
+
+        CommunityMemberEntity member = this.memberRepository.findByGroupAndUser(group, currentUser).orElseThrow(() ->
+            new AppException(400, "Bạn không phải thành viên của nhóm này", 400)
+        );
 
         this.memberRepository.delete(member);
         return new ResponseData<>(200, "Đã rời khỏi cộng đồng", true);
@@ -252,16 +255,16 @@ public class CommunityGroupService {
         );
 
         CommunityMemberEntity currentMember = this.memberRepository.findByGroupAndUser(group, currentUser).orElseThrow(() ->
-            new AppException(403, "Bạn không có quyền quản lý thành viên!", 403)
+            new AppException(403, "Bạn không phải quản trị viên nhóm này!", 403)
         );
 
         if (!"OWNER".equals(currentMember.getRole()) && !"DEPUTY".equals(currentMember.getRole())) {
-            throw new AppException(403, "Chỉ Chủ nhóm hoặc Phó nhóm mới có quyền xem danh sách chờ duyệt!", 403);
+            throw new AppException(403, "Chỉ Chủ nhóm hoặc Phó nhóm mới có quyền duyệt thành viên!", 403);
         }
 
-        List<CommunityMemberEntity> pendingList = this.memberRepository.findByGroupAndStatus(group, "PENDING");
-        List<CommunityMemberDTO> dtos = pendingList.stream().map(this::mapToMemberDTO).collect(Collectors.toList());
-        return new ResponseData<>(200, "Danh sách chờ duyệt", dtos);
+        List<CommunityMemberEntity> pendings = this.memberRepository.findByGroupAndStatus(group, "PENDING");
+        List<CommunityMemberDTO> dtos = pendings.stream().map(this::mapToMemberDTO).collect(Collectors.toList());
+        return new ResponseData<>(200, "Lấy danh sách chờ duyệt thành công", dtos);
     }
 
     @Transactional
@@ -272,11 +275,11 @@ public class CommunityGroupService {
         );
 
         CommunityMemberEntity currentMember = this.memberRepository.findByGroupAndUser(group, currentUser).orElseThrow(() ->
-            new AppException(403, "Bạn không có quyền quản lý thành viên!", 403)
+            new AppException(403, "Bạn không phải quản trị viên nhóm này!", 403)
         );
 
         if (!"OWNER".equals(currentMember.getRole()) && !"DEPUTY".equals(currentMember.getRole())) {
-            throw new AppException(403, "Chỉ Chủ nhóm hoặc Phó nhóm mới có quyền phê duyệt!", 403);
+            throw new AppException(403, "Chỉ Chủ nhóm hoặc Phó nhóm mới có quyền duyệt thành viên!", 403);
         }
 
         UserEntity targetUser = this.userRepository.findById(targetUserId).orElseThrow(() ->
@@ -288,7 +291,9 @@ public class CommunityGroupService {
         );
 
         targetMember.setStatus("ACTIVE");
+        targetMember.setJoinedAt(LocalDateTime.now());
         this.memberRepository.save(targetMember);
+
         return new ResponseData<>(200, "Đã phê duyệt thành viên vào nhóm", true);
     }
 
@@ -300,11 +305,11 @@ public class CommunityGroupService {
         );
 
         CommunityMemberEntity currentMember = this.memberRepository.findByGroupAndUser(group, currentUser).orElseThrow(() ->
-            new AppException(403, "Bạn không có quyền quản lý thành viên!", 403)
+            new AppException(403, "Bạn không phải quản trị viên nhóm này!", 403)
         );
 
         if (!"OWNER".equals(currentMember.getRole()) && !"DEPUTY".equals(currentMember.getRole())) {
-            throw new AppException(403, "Chỉ Chủ nhóm hoặc Phó nhóm mới có quyền từ chối!", 403);
+            throw new AppException(403, "Chỉ Chủ nhóm hoặc Phó nhóm mới có quyền từ chối thành viên!", 403);
         }
 
         UserEntity targetUser = this.userRepository.findById(targetUserId).orElseThrow(() ->
@@ -326,33 +331,48 @@ public class CommunityGroupService {
             new AppException(404, "Cộng đồng không tồn tại", 404)
         );
 
-        CommunityMemberEntity currentMember = this.memberRepository.findByGroupAndUser(group, currentUser).orElseThrow(() ->
-            new AppException(403, "Bạn không có quyền trong cộng đồng này!", 403)
-        );
-
-        if (!"OWNER".equals(currentMember.getRole())) {
-            throw new AppException(403, "Chỉ Chủ nhóm mới có quyền bổ nhiệm hoặc bãi nhiệm Phó nhóm!", 403);
+        if (!group.getOwner().getId().equals(currentUser.getId())) {
+            throw new AppException(403, "Chỉ Chủ nhóm mới có quyền phân quyền thành viên!", 403);
         }
 
         UserEntity targetUser = this.userRepository.findById(targetUserId).orElseThrow(() ->
             new AppException(404, "Người dùng không tồn tại", 404)
         );
 
-        if (targetUser.getId().equals(currentUser.getId())) {
-            throw new AppException(400, "Không thể thay đổi quyền của chính mình", 400);
-        }
-
         CommunityMemberEntity targetMember = this.memberRepository.findByGroupAndUser(group, targetUser).orElseThrow(() ->
-            new AppException(404, "Thành viên không tồn tại trong cộng đồng", 404)
+            new AppException(404, "Thành viên không thuộc nhóm này", 404)
         );
-
-        if (!"DEPUTY".equals(newRole) && !"MEMBER".equals(newRole)) {
-            throw new AppException(400, "Vai trò không hợp lệ (chỉ hỗ trợ DEPUTY hoặc MEMBER)", 400);
-        }
 
         targetMember.setRole(newRole);
         this.memberRepository.save(targetMember);
         return new ResponseData<>(200, "Đã cập nhật quyền thành viên thành công", true);
+    }
+
+    @Transactional
+    public ResponseData<String> inviteFriend(JwtAuthenticationToken token, Long groupId, Long friendUserId) {
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        CommunityGroupEntity group = this.groupRepository.findById(groupId).orElseThrow(() ->
+            new AppException(404, "Cộng đồng không tồn tại", 404)
+        );
+
+        UserEntity friend = this.userRepository.findById(friendUserId).orElseThrow(() ->
+            new AppException(404, "Bạn bè không tồn tại", 404)
+        );
+
+        Optional<CommunityMemberEntity> existing = this.memberRepository.findByGroupAndUser(group, friend);
+        if (existing.isPresent()) {
+            return new ResponseData<>(200, "Người này đã ở trong nhóm hoặc đã gửi yêu cầu", "ALREADY_IN_GROUP");
+        }
+
+        CommunityMemberEntity invite = new CommunityMemberEntity();
+        invite.setGroup(group);
+        invite.setUser(friend);
+        invite.setRole("MEMBER");
+        invite.setStatus("ACTIVE");
+        invite.setJoinedAt(LocalDateTime.now());
+        this.memberRepository.save(invite);
+
+        return new ResponseData<>(200, "Đã thêm bạn bè vào cộng đồng thành công!", "INVITED");
     }
 
     @Transactional
@@ -363,12 +383,186 @@ public class CommunityGroupService {
         );
 
         if (!group.getOwner().getId().equals(currentUser.getId())) {
-            throw new AppException(403, "Chỉ Chủ nhóm mới có quyền giải tán cộng đồng!", 403);
+            boolean isAdmin = currentUser.getRoles() != null && currentUser.getRoles().contains("ROLE_ADMIN");
+            if (!isAdmin) {
+                throw new AppException(403, "Chỉ Chủ nhóm hoặc Super Admin mới có quyền giải tán cộng đồng!", 403);
+            }
         }
 
         this.groupRepository.delete(group);
         return new ResponseData<>(200, "Đã giải tán cộng đồng thành công", true);
     }
+
+    // Gửi báo cáo vi phạm cộng đồng / bài viết trong nhóm
+    @Transactional
+    public ResponseData<CommunityReportDTO> reportCommunity(
+            JwtAuthenticationToken token,
+            Long groupId,
+            CreateCommunityReportRequest request
+    ) {
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        if (currentUser == null) {
+            throw new AppException(401, "Yêu cầu đăng nhập để gửi báo cáo vi phạm", 401);
+        }
+
+        CommunityGroupEntity group = this.groupRepository.findById(groupId).orElseThrow(() ->
+            new AppException(404, "Cộng đồng không tồn tại", 404)
+        );
+
+        CommunityReportEntity report = new CommunityReportEntity();
+        report.setCommunity(group);
+        report.setReporter(currentUser);
+        report.setTargetPostId(request.getTargetPostId());
+        report.setReasonCode(request.getReasonCode().trim().toUpperCase());
+        report.setDescription(request.getDescription());
+        report.setStatus("PENDING");
+        report.setCreatedAt(LocalDateTime.now());
+
+        report = this.reportRepository.save(report);
+
+        return new ResponseData<>(200, "Báo cáo vi phạm đã được gửi đến ban quản trị hệ thống!", mapToReportDTO(report));
+    }
+
+    // ==========================================
+    // 2. SUPER ADMIN SCALE & MODERATION APIS
+    // ==========================================
+
+    @Transactional(readOnly = true)
+    public ResponseData<List<CommunityGroupDTO>> getAdminCommunities(
+            String status,
+            String keyword,
+            Integer page,
+            Integer size,
+            JwtAuthenticationToken token
+    ) {
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        checkSuperAdminRole(currentUser);
+
+        String safeKw = (keyword != null && !keyword.trim().isEmpty()) ? keyword.trim() : null;
+        String safeStatus = (status != null && !status.trim().isEmpty() && !status.equalsIgnoreCase("ALL")) ? status.trim() : null;
+
+        List<CommunityGroupEntity> groups;
+        if (page != null && size != null && size > 0) {
+            Pageable pageable = PageRequest.of(Math.max(0, page), size);
+            Page<CommunityGroupEntity> pageResult = this.groupRepository.findAdminCommunitiesWithPaging(safeStatus, safeKw, pageable);
+            groups = pageResult.getContent();
+        } else {
+            groups = this.groupRepository.findAdminCommunities(safeStatus, safeKw);
+        }
+
+        // Lấy thống kê số báo cáo đang chờ
+        Map<Long, Long> pendingReportsMap = new HashMap<>();
+        try {
+            List<Object[]> counts = this.reportRepository.countPendingReportsByCommunity();
+            for (Object[] row : counts) {
+                if (row.length >= 2 && row[0] != null && row[1] != null) {
+                    pendingReportsMap.put((Long) row[0], (Long) row[1]);
+                }
+            }
+        } catch (Exception ignored) {}
+
+        List<CommunityGroupDTO> dtos = groups.stream().map(g -> {
+            CommunityGroupDTO dto = mapToGroupDTO(g, currentUser, false);
+            dto.setPendingReportsCount(pendingReportsMap.getOrDefault(g.getId(), 0L));
+            return dto;
+        }).collect(Collectors.toList());
+
+        return new ResponseData<>(200, "Lấy danh sách quản trị cộng đồng thành công", dtos);
+    }
+
+    @Transactional
+    public ResponseData<CommunityGroupDTO> updateCommunityStatusByAdmin(
+            JwtAuthenticationToken token,
+            Long groupId,
+            String newStatus,
+            Boolean isFeatured
+    ) {
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        checkSuperAdminRole(currentUser);
+
+        CommunityGroupEntity group = this.groupRepository.findById(groupId).orElseThrow(() ->
+            new AppException(404, "Cộng đồng không tồn tại", 404)
+        );
+
+        if (newStatus != null && !newStatus.trim().isEmpty()) {
+            group.setStatus(newStatus.trim().toUpperCase());
+        }
+        if (isFeatured != null) {
+            group.setIsFeatured(isFeatured);
+        }
+
+        group = this.groupRepository.save(group);
+        return new ResponseData<>(200, "Đã cập nhật trạng thái cộng đồng thành công", mapToGroupDTO(group, currentUser, false));
+    }
+
+    @Transactional
+    public ResponseData<Boolean> deleteCommunityByAdmin(JwtAuthenticationToken token, Long groupId) {
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        checkSuperAdminRole(currentUser);
+
+        CommunityGroupEntity group = this.groupRepository.findById(groupId).orElseThrow(() ->
+            new AppException(404, "Cộng đồng không tồn tại", 404)
+        );
+
+        this.groupRepository.delete(group);
+        return new ResponseData<>(200, "Đã xóa vĩnh viễn cộng đồng khỏi hệ thống", true);
+    }
+
+    @Transactional(readOnly = true)
+    public ResponseData<List<CommunityReportDTO>> getCommunityReports(String status, JwtAuthenticationToken token) {
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        checkSuperAdminRole(currentUser);
+
+        List<CommunityReportEntity> reports;
+        if (status != null && !status.trim().isEmpty() && !status.equalsIgnoreCase("ALL")) {
+            reports = this.reportRepository.findByStatusOrderByCreatedAtDesc(status.trim().toUpperCase());
+        } else {
+            reports = this.reportRepository.findAllByOrderByCreatedAtDesc();
+        }
+
+        List<CommunityReportDTO> dtos = reports.stream().map(this::mapToReportDTO).collect(Collectors.toList());
+        return new ResponseData<>(200, "Lấy danh sách báo cáo vi phạm cộng đồng thành công", dtos);
+    }
+
+    @Transactional
+    public ResponseData<CommunityReportDTO> resolveCommunityReport(
+            JwtAuthenticationToken token,
+            Long reportId,
+            ResolveReportRequest request
+    ) {
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        checkSuperAdminRole(currentUser);
+
+        CommunityReportEntity report = this.reportRepository.findById(reportId).orElseThrow(() ->
+            new AppException(404, "Báo cáo không tồn tại", 404)
+        );
+
+        String action = request.getAction().trim().toUpperCase();
+        report.setStatus(action);
+        report.setAdminNote(request.getAdminNote());
+        report.setResolvedBy(currentUser.getId());
+        report.setResolvedAt(LocalDateTime.now());
+
+        // Nếu quyết định đình chỉ nhóm -> cập nhật status nhóm sang SUSPENDED
+        if ("RESOLVED_SUSPENDED".equals(action) && report.getCommunity() != null) {
+            CommunityGroupEntity community = report.getCommunity();
+            community.setStatus("SUSPENDED");
+            this.groupRepository.save(community);
+        }
+
+        report = this.reportRepository.save(report);
+        return new ResponseData<>(200, "Đã xử lý báo cáo vi phạm thành công", mapToReportDTO(report));
+    }
+
+    private void checkSuperAdminRole(UserEntity user) {
+        if (user == null || user.getRoles() == null || !user.getRoles().contains("ROLE_ADMIN")) {
+            throw new AppException(403, "Yêu cầu quyền Quản trị viên hệ thống (Super Admin)!", 403);
+        }
+    }
+
+    // ==========================================
+    // DTO MAPPERS
+    // ==========================================
 
     private CommunityGroupDTO mapToGroupDTO(CommunityGroupEntity g, UserEntity currentUser, boolean includeMembers) {
         CommunityGroupDTO dto = new CommunityGroupDTO();
@@ -382,7 +576,12 @@ public class CommunityGroupService {
         dto.setRequiresApproval(g.getRequiresApproval());
         dto.setIsPublicToFeed(Boolean.TRUE.equals(g.getIsPublicToFeed()));
         dto.setRequiresPostApproval(Boolean.TRUE.equals(g.getRequiresPostApproval()));
+        dto.setCategoryCode(g.getCategoryCode() != null ? g.getCategoryCode() : "GENERAL");
+        dto.setStatus(g.getStatus() != null ? g.getStatus() : "ACTIVE");
+        dto.setIsFeatured(Boolean.TRUE.equals(g.getIsFeatured()));
+        dto.setActiveVoiceRoomId(g.getActiveVoiceRoomId());
         dto.setPostsCount(this.postRepository != null ? this.postRepository.countByGroupIdAndStatus(g.getId(), "APPROVED") : 0L);
+
         if (g.getOwner() != null) {
             dto.setOwnerId(g.getOwner().getId());
             dto.setOwnerName(g.getOwner().getNickname() != null && !g.getOwner().getNickname().isEmpty() 
@@ -440,6 +639,29 @@ public class CommunityGroupService {
         dto.setRole(m.getRole());
         dto.setStatus(m.getStatus());
         dto.setJoinedAt(m.getJoinedAt());
+        return dto;
+    }
+
+    private CommunityReportDTO mapToReportDTO(CommunityReportEntity r) {
+        CommunityReportDTO dto = new CommunityReportDTO();
+        dto.setId(r.getId());
+        if (r.getCommunity() != null) {
+            dto.setCommunityId(r.getCommunity().getId());
+            dto.setCommunityName(r.getCommunity().getName());
+        }
+        if (r.getReporter() != null) {
+            dto.setReporterId(r.getReporter().getId());
+            dto.setReporterName(r.getReporter().getNickname() != null ? r.getReporter().getNickname() : r.getReporter().getAccount());
+            dto.setReporterAccount(r.getReporter().getAccount());
+        }
+        dto.setTargetPostId(r.getTargetPostId());
+        dto.setReasonCode(r.getReasonCode());
+        dto.setDescription(r.getDescription());
+        dto.setStatus(r.getStatus());
+        dto.setAdminNote(r.getAdminNote());
+        dto.setResolvedBy(r.getResolvedBy());
+        dto.setCreatedAt(r.getCreatedAt());
+        dto.setResolvedAt(r.getResolvedAt());
         return dto;
     }
 }

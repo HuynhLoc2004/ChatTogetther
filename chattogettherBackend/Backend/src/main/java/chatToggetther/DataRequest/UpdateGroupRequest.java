@@ -26,5 +26,6 @@ public class UpdateGroupRequest {
     private Boolean requiresApproval;
     private Boolean isPublicToFeed;
     private Boolean requiresPostApproval;
+    private String categoryCode;
+    private Long activeVoiceRoomId;
 }
-

@@ -45,6 +45,18 @@ public class CommunityGroupEntity {
     @Column(name = "requires_post_approval")
     private Boolean requiresPostApproval = false;
 
+    @Column(name = "category_code")
+    private String categoryCode = "GENERAL";
+
+    @Column(name = "status")
+    private String status = "ACTIVE"; // ACTIVE, RESTRICTED, SUSPENDED
+
+    @Column(name = "is_featured")
+    private Boolean isFeatured = false;
+
+    @Column(name = "active_voice_room_id")
+    private Long activeVoiceRoomId;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id", nullable = false)
     private UserEntity owner;

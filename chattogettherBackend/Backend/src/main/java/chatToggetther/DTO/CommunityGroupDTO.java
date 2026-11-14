@@ -24,13 +24,17 @@ public class CommunityGroupDTO {
     private Boolean requiresApproval;
     private Boolean isPublicToFeed;
     private Boolean requiresPostApproval;
+    private String categoryCode;
+    private String status;
+    private Boolean isFeatured;
+    private Long activeVoiceRoomId;
     private Long postsCount;
     private Long ownerId;
     private String ownerName;
     private String ownerAvatar;
     private Long membersCount;
+    private Long pendingReportsCount;
     private String currentUserRole; // null, OWNER, DEPUTY, MEMBER, PENDING
     private LocalDateTime createdAt;
     private List<CommunityMemberDTO> members = new ArrayList<>();
 }
-
