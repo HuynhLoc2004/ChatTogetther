@@ -2473,80 +2473,6 @@ const Home = () => {
 
           {/* ============================================================== */}
           {/* KHU VỰC A+: PHÒNG ĐÀM THOẠI TRỰC TIẾP (LIVE AUDIO LOUNGE ROOMS) */}
-          {/* Hiển thị ngay trên đầu Sảnh trực tuyến, phá bỏ khuôn Threads */}
-          {/* ============================================================== */}
-          {activeTab === 'feed' && safeRooms.length > 0 && (
-            <div className="mb-4 p-4 rounded-2xl bg-gradient-to-r from-[#141417] to-[#121318] border border-zinc-800/80 shadow-sm animate-fade-in">
-              <div className="flex items-center justify-between mb-3 px-1">
-                <div className="flex items-center gap-2">
-                  <span className="relative flex h-2.5 w-2.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                  </span>
-                  <h3 className="text-xs font-bold text-zinc-100 tracking-wide uppercase font-mono flex items-center gap-1.5">
-                    Phòng Đàm Thoại Trực Tiếp ({safeRooms.length})
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('rooms')}
-                  className="text-[11px] font-mono text-zinc-400 hover:text-emerald-400 transition-colors flex items-center gap-1"
-                >
-                  <span>Xem tất cả</span>
-                  <ChevronRight size={12} />
-                </button>
-              </div>
-
-              {/* Lưới thẻ phòng trực tiếp */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {safeRooms.slice(0, 4).map((room) => {
-                  const isJoined = isUserInRoom(room);
-                  return (
-                    <div 
-                      key={room.id}
-                      onClick={() => onRoomCardClick(room)}
-                      className="p-3 rounded-xl bg-zinc-900/80 hover:bg-zinc-850 border border-zinc-800/80 hover:border-zinc-700/80 transition-all cursor-pointer flex items-center justify-between gap-3 group"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <GroupCollageAvatar 
-                          avatar={room.avatar} 
-                          name={room.nameroom} 
-                          members={room.userRoomDTOList || []}
-                          size={38}
-                        />
-                        <div className="min-w-0">
-                          <h4 className="text-xs font-semibold text-zinc-100 truncate group-hover:text-white flex items-center gap-1">
-                            {room.nameroom}
-                            {room.hasPassword && <Lock size={11} className="text-zinc-500" />}
-                          </h4>
-                          <span className="text-[10px] text-zinc-400 font-mono flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                            {room.soluong || 0} người đang nói
-                          </span>
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onRoomCardClick(room);
-                        }}
-                        className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all flex-shrink-0 ${
-                          isJoined 
-                            ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold' 
-                            : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/60'
-                        }`}
-                      >
-                        {isJoined ? 'Vào lại' : 'Tham gia'}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
           {/* ============================================================== */}
           {/* KHU VỰC B: BỘ TẠO TÍN HIỆU ĐA PHƯƠNG TIỆN (Multimedia Composer) */}
           {/* ============================================================== */}
@@ -3480,8 +3406,8 @@ const Home = () => {
           {/* TAB 2: DANH SÁCH PHÒNG ĐÀM THOẠI TRỰC TIẾP                    */}
           {/* ============================================================== */}
           {activeTab === 'rooms' && (() => {
-            const myJoinedRooms = safeRooms.filter(r => isUserInRoom(r));
-            const suggestedRooms = safeRooms.filter(r => !isUserInRoom(r));
+            const privateOrMyRooms = safeRooms.filter(r => isUserInRoom(r) || r.hasPassword || r.isPrivate);
+            const publicRooms = safeRooms.filter(r => !isUserInRoom(r) && !r.hasPassword && !r.isPrivate);
 
             const renderRoomCard = (room, isJoined) => (
               <div 
@@ -3588,47 +3514,51 @@ const Home = () => {
                   </div>
                 ) : (
                   <div className="space-y-6">
-                    {/* 1. CÁC PHÒNG ĐÃ THAM GIA */}
+                    {/* 1. PHÒNG CỦA BẠN (RIÊNG TƯ) */}
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-xs font-semibold text-zinc-300">
-                          <CheckCircle2 size={14} className="text-zinc-400" />
-                          <span>Phòng của bạn (Đã tham gia)</span>
-                          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[#1c1c1c] text-zinc-300 border border-[#2e2e2e] font-mono">
-                            {myJoinedRooms.length}
+                        <div className="flex items-center gap-2 text-xs font-bold text-zinc-200 tracking-wide font-mono">
+                          <Lock size={14} className="text-amber-400" />
+                          <span>Phòng của bạn (Riêng tư)</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20 font-mono font-semibold">
+                            {privateOrMyRooms.length}
                           </span>
                         </div>
                       </div>
 
-                      {myJoinedRooms.length === 0 ? (
+                      {privateOrMyRooms.length === 0 ? (
                         <div className="p-4 rounded-2xl bg-[#141414]/60 border border-dashed border-[#222222] text-center text-zinc-500 text-xs">
-                          Bạn chưa tham gia phòng đàm thoại nào. Hãy khám phá và tham gia một phòng bên dưới!
+                          Chưa có phòng riêng tư nào của bạn. Hãy bấm "Tạo phòng mới" ở trên và đặt mật khẩu để tạo không gian riêng!
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {myJoinedRooms.map(room => renderRoomCard(room, true))}
+                          {privateOrMyRooms.map(room => renderRoomCard(room, isUserInRoom(room)))}
                         </div>
                       )}
                     </div>
 
-                    {/* 2. CÁC PHÒNG ĐỀ XUẤT HOẠT ĐỘNG */}
-                    {suggestedRooms.length > 0 && (
-                      <div className="space-y-3 pt-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 text-xs font-semibold text-zinc-300">
-                            <Sparkles size={14} className="text-amber-400" />
-                            <span>Khám phá & Đề xuất phòng thoại</span>
-                            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700 font-mono">
-                              {suggestedRooms.length}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {suggestedRooms.map(room => renderRoomCard(room, false))}
+                    {/* 2. PHÒNG CÔNG KHAI ĐANG MỞ */}
+                    <div className="space-y-3 pt-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-xs font-bold text-zinc-200 tracking-wide font-mono">
+                          <Radio size={14} className="text-emerald-400" />
+                          <span>Phòng công khai đang mở</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-mono font-semibold">
+                            {publicRooms.length}
+                          </span>
                         </div>
                       </div>
-                    )}
+
+                      {publicRooms.length === 0 ? (
+                        <div className="p-4 rounded-2xl bg-[#141414]/60 border border-dashed border-[#222222] text-center text-zinc-500 text-xs">
+                          Hiện chưa có phòng công khai nào. Hãy tạo một phòng mở để mọi người cùng vào trò chuyện!
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {publicRooms.map(room => renderRoomCard(room, false))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

@@ -7,6 +7,8 @@ import chatToggetther.DTO.CommunityGroupDTO;
 import chatToggetther.DTO.PostDTO;
 import chatToggetther.DTO.PostReportDTO;
 import chatToggetther.DTO.UserDTO;
+import chatToggetther.DTO.RoomDTO;
+import java.util.ArrayList;
 import chatToggetther.ENUMS.ErrorCode;
 import chatToggetther.modelEntity.ChallengeEntity;
 import chatToggetther.modelEntity.CommunityGroupEntity;
@@ -534,5 +536,45 @@ public class AdminService {
                 .resolvedAt(entity.getResolvedAt())
                 .build();
     }
-}
 
+    @Transactional(readOnly = true)
+    public ResponseData<List<RoomDTO>> getAdminRooms() {
+        List<RoomEntity> all = roomRepository.findAll();
+        List<RoomDTO> result = all.stream().map(room -> {
+            RoomDTO dto = new RoomDTO();
+            dto.setId(room.getId());
+            dto.setNameroom(room.getRoomName());
+            dto.setAvatar(room.getAvatar());
+            dto.setActive(Boolean.TRUE.equals(room.getActive()));
+            dto.setHasPassword(room.getPassword() != null && !room.getPassword().trim().isEmpty() && !room.getPassword().equalsIgnoreCase("null") && !room.getPassword().equals("0"));
+            dto.setIsPrivate(dto.getHasPassword());
+            dto.setCreatedAt(room.getLocalDateTime());
+            long activeMembers = room.getUserRoomEntityList() == null ? 0 : 
+                    room.getUserRoomEntityList().stream().filter(ur -> Boolean.TRUE.equals(ur.getActive())).count();
+            dto.setSoluong(activeMembers);
+            return dto;
+        }).sorted((a, b) -> Long.compare(b.getId(), a.getId())).collect(Collectors.toList());
+        return new ResponseData<>(200, "Lấy danh sách phòng thành công", result);
+    }
+
+    @Transactional
+    public ResponseData<Boolean> forceCloseRoom(Long roomId) {
+        RoomEntity room = roomRepository.findById(roomId)
+                .orElseThrow(() -> new AppException(404, "Phòng không tồn tại", 404));
+        room.setActive(false);
+        if (room.getUserRoomEntityList() != null) {
+            room.getUserRoomEntityList().forEach(ur -> {
+                if (Boolean.TRUE.equals(ur.getActive())) {
+                    ur.setActive(false);
+                    if (ur.getTimeLeft() == null) ur.setTimeLeft(new ArrayList<>());
+                    ur.getTimeLeft().add(LocalDateTime.now());
+                }
+            });
+        }
+        roomRepository.saveAndFlush(room);
+        messagingTemplate.convertAndSend("/topic/rooms", "ROOM_DELETED");
+        messagingTemplate.convertAndSend("/topic/room/" + roomId, "ROOM_DISBANDED");
+        return new ResponseData<>(200, "Đóng phòng thành công", true);
+    }
+
+}

@@ -20,4 +20,7 @@ public class RoomDTO {
     private Boolean hasPassword;
     private String avatar;
     private String description;
+    private Boolean active;
+    private Boolean isPrivate;
+    private java.time.LocalDateTime createdAt;
 }

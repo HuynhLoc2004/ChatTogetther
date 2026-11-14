@@ -8,7 +8,7 @@ import {
   AlertTriangle, CheckCircle2, ChevronRight, Sliders, LayoutGrid,
   ShieldCheck, ShieldAlert, KeyRound, Palette, ExternalLink, Layers,
   FolderCog, Save, UserCheck, ShieldPlus, LogOut, Menu, Globe,
-  FileText, Repeat, RotateCcw, AlertOctagon, Heart, Signal, Disc3
+  FileText, Repeat, RotateCcw, AlertOctagon, Heart, Signal, Disc3, Clock
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
@@ -83,6 +83,18 @@ export const AdminDashboard = () => {
 
   // Thống kê hệ thống
   const [stats, setStats] = useState(null);
+
+  // Quản lý phòng đàm thoại (Room Management)
+  const [adminRooms, setAdminRooms] = useState([]);
+  const [loadingRooms, setLoadingRooms] = useState(false);
+  const [roomFilter, setRoomFilter] = useState('ALL'); // ALL, ACTIVE, CLOSED
+  const [roomSearch, setRoomSearch] = useState('');
+  const [roomParamConfig, setRoomParamConfig] = useState({
+    max_users_normal_room: '10',
+    max_users_pro_room: '50',
+    idle_room_timeout_minutes: '30'
+  });
+  const [isSavingRoomParams, setIsSavingRoomParams] = useState(false);
 
   // Cấu hình hệ thống (System Config)
   const [configs, setConfigs] = useState({
@@ -252,6 +264,7 @@ export const AdminDashboard = () => {
       // 3. Nạp toàn bộ dữ liệu cấu hình ban đầu
       await fetchConfigs();
       await fetchStats();
+      await fetchAdminRooms();
       await fetchChallenges();
       await fetchTracks();
       await fetchUsers();
@@ -297,6 +310,52 @@ export const AdminDashboard = () => {
     return currentUserPermissions.has(permId);
   };
 
+  const fetchAdminRooms = async () => {
+    setLoadingRooms(true);
+    try {
+      const res = await axiosClient.get('/admin/rooms');
+      if (res?.data?.data) {
+        setAdminRooms(res.data.data);
+      }
+    } catch (e) {
+      console.error('Lỗi nạp danh sách phòng admin:', e);
+    } finally {
+      setLoadingRooms(false);
+    }
+  };
+
+  const handleForceCloseRoom = async (roomId, roomName) => {
+    if (!window.confirm(`Bạn có chắc chắn muốn buộc đóng phòng "${roomName || roomId}" khẩn cấp? Tất cả thành viên sẽ được đưa ra khỏi phòng.`)) {
+      return;
+    }
+    try {
+      await axiosClient.post(`/admin/rooms/${roomId}/close`);
+      toast.success(`Đã đóng phòng "${roomName || roomId}" khẩn cấp`);
+      fetchAdminRooms();
+    } catch (e) {
+      toast.error('Không thể đóng phòng: ' + (e.response?.data?.message || e.message));
+    }
+  };
+
+  const handleSaveRoomParams = async (e) => {
+    e.preventDefault();
+    setIsSavingRoomParams(true);
+    try {
+      await axiosClient.put('/admin/config', {
+        configs: {
+          max_users_normal_room: roomParamConfig.max_users_normal_room,
+          max_users_pro_room: roomParamConfig.max_users_pro_room,
+          idle_room_timeout_minutes: roomParamConfig.idle_room_timeout_minutes
+        }
+      });
+      toast.success('Đã lưu cấu hình tham số phòng thoại vào hệ thống!');
+    } catch (e) {
+      toast.error('Lỗi lưu cấu hình: ' + (e.response?.data?.message || e.message));
+    } finally {
+      setIsSavingRoomParams(false);
+    }
+  };
+
   // Định nghĩa các Menu Sidebar theo nhóm rõ ràng
   const sidebarSections = useMemo(() => {
     return [
@@ -304,6 +363,7 @@ export const AdminDashboard = () => {
         sectionTitle: 'TỔNG QUAN & HỆ THỐNG',
         items: [
           { id: 'overview', label: 'Tổng quan & Số liệu', icon: LayoutGrid, permission: 'TL_PERM_STATS_VIEW' },
+          { id: 'rooms', label: `Quản lý Phòng thoại (${adminRooms.length})`, icon: Radio, permission: 'TL_PERM_STATS_VIEW' },
           { id: 'branding', label: 'Menu & Thương hiệu', icon: Sliders, permission: 'TL_PERM_BRAND_MANAGE' }
         ]
       },
@@ -327,7 +387,7 @@ export const AdminDashboard = () => {
         ]
       }
     ];
-  }, [adminPosts.length, adminIntents.length, challenges.length, parsedVibes.length, tracks.length, adminGroups.length, reports.length, users.length, systemRoles.length]);
+  }, [adminPosts.length, adminIntents.length, challenges.length, parsedVibes.length, tracks.length, adminGroups.length, reports.length, users.length, systemRoles.length, adminRooms.length]);
 
   // Tự động chuyển tab nếu tab hiện tại không được phép
   useEffect(() => {
@@ -360,6 +420,13 @@ export const AdminDashboard = () => {
         setConfigs(d);
         try { setParsedMenuItems(JSON.parse(d.menu_items || '[]')); } catch { setParsedMenuItems([]); }
         try { setParsedVibes(JSON.parse(d.vibe_options || '[]')); } catch { setParsedVibes([]); }
+        if (d.max_users_normal_room || d.max_users_pro_room || d.idle_room_timeout_minutes) {
+          setRoomParamConfig({
+            max_users_normal_room: d.max_users_normal_room || '10',
+            max_users_pro_room: d.max_users_pro_room || '50',
+            idle_room_timeout_minutes: d.idle_room_timeout_minutes || '30'
+          });
+        }
         try { 
           if (d.challenge_categories) {
             const parsedCats = JSON.parse(d.challenge_categories);
@@ -3072,6 +3139,292 @@ export const AdminDashboard = () => {
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* ====================================================
+                TAB: QUẢN LÝ PHÒNG THOẠI & THAM SỐ HỆ THỐNG (ROOM MANAGEMENT)
+                ==================================================== */}
+            {activeTab === 'rooms' && (
+              <div className="space-y-6 animate-fade-in">
+                {/* Header tab */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-xl font-bold text-zinc-100 tracking-tight flex items-center gap-2">
+                      <Radio size={20} className="text-emerald-400" />
+                      <span>Quản Lý Phòng Thoại & Tham Số Hệ Thống</span>
+                    </h2>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      Theo dõi trạng thái các phòng đàm thoại trực tiếp, số lượng người tham gia, thực hiện đóng phòng khẩn cấp và cấu hình giới hạn hệ thống.
+                    </p>
+                  </div>
+                  <button
+                    onClick={fetchAdminRooms}
+                    className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold flex items-center gap-1.5 transition-all self-start sm:self-auto"
+                  >
+                    <RefreshCw size={13} className={loadingRooms ? "animate-spin" : ""} />
+                    <span>Làm mới danh sách</span>
+                  </button>
+                </div>
+
+                {/* 4 Thẻ chỉ số tổng quan phòng */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="p-3.5 rounded-2xl bg-zinc-900 border border-zinc-800">
+                    <span className="text-[10px] font-mono text-zinc-400 block mb-1">Tổng số phòng</span>
+                    <span className="text-2xl font-black text-zinc-100 font-mono">
+                      {adminRooms.length}
+                    </span>
+                  </div>
+                  <div className="p-3.5 rounded-2xl bg-zinc-900 border border-emerald-500/30">
+                    <span className="text-[10px] font-mono text-emerald-400 block mb-1">Đang hoạt động</span>
+                    <span className="text-2xl font-black text-emerald-300 font-mono">
+                      {adminRooms.filter(r => r.active).length}
+                    </span>
+                  </div>
+                  <div className="p-3.5 rounded-2xl bg-zinc-900 border border-amber-500/30">
+                    <span className="text-[10px] font-mono text-amber-400 block mb-1">Phòng riêng tư (Mật khẩu)</span>
+                    <span className="text-2xl font-black text-amber-300 font-mono">
+                      {adminRooms.filter(r => r.hasPassword || r.isPrivate).length}
+                    </span>
+                  </div>
+                  <div className="p-3.5 rounded-2xl bg-zinc-900 border border-cyan-500/30">
+                    <span className="text-[10px] font-mono text-cyan-400 block mb-1">Thành viên trực tuyến</span>
+                    <span className="text-2xl font-black text-cyan-300 font-mono">
+                      {adminRooms.reduce((acc, r) => acc + (r.soluong || 0), 0)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* KHỐI FORM CẤU HÌNH THAM SỐ QUY MÔ PHÒNG THOẠI */}
+                <form onSubmit={handleSaveRoomParams} className="p-5 rounded-2xl bg-zinc-900/70 border border-zinc-800 space-y-4">
+                  <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
+                    <div className="flex items-center gap-2">
+                      <Sliders size={16} className="text-emerald-400" />
+                      <h3 className="text-sm font-bold text-zinc-100">Cấu Hình Tham Số Quy Mô Phòng Thoại</h3>
+                    </div>
+                    <span className="text-[10px] font-mono text-zinc-400 bg-zinc-800 px-2 py-0.5 rounded-md">
+                      HỆ THỐNG / POSTGRESQL & REDIS
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                      <label className="text-xs font-medium text-zinc-300 block mb-1.5">
+                        Số người tối đa / phòng thường
+                      </label>
+                      <input 
+                        type="number"
+                        min="2"
+                        max="100"
+                        value={roomParamConfig.max_users_normal_room}
+                        onChange={(e) => setRoomParamConfig({...roomParamConfig, max_users_normal_room: e.target.value})}
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+                        placeholder="10"
+                      />
+                      <span className="text-[10px] text-zinc-500 mt-1 block">Áp dụng cho phòng người dùng tự tạo</span>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-medium text-zinc-300 block mb-1.5">
+                        Số người tối đa / phòng PRO
+                      </label>
+                      <input 
+                        type="number"
+                        min="5"
+                        max="500"
+                        value={roomParamConfig.max_users_pro_room}
+                        onChange={(e) => setRoomParamConfig({...roomParamConfig, max_users_pro_room: e.target.value})}
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+                        placeholder="50"
+                      />
+                      <span className="text-[10px] text-zinc-500 mt-1 block">Không gian sự kiện hoặc Lounge âm nhạc</span>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-medium text-zinc-300 block mb-1.5">
+                        Tự hủy phòng nhàn rỗi (Phút)
+                      </label>
+                      <input 
+                        type="number"
+                        min="5"
+                        max="1440"
+                        value={roomParamConfig.idle_room_timeout_minutes}
+                        onChange={(e) => setRoomParamConfig({...roomParamConfig, idle_room_timeout_minutes: e.target.value})}
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+                        placeholder="30"
+                      />
+                      <span className="text-[10px] text-zinc-500 mt-1 block">Giải phóng tài nguyên WebRTC khi không còn ai</span>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-2">
+                    <button
+                      type="submit"
+                      disabled={isSavingRoomParams}
+                      className="px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95 disabled:opacity-50"
+                    >
+                      <Save size={14} />
+                      <span>{isSavingRoomParams ? 'Đang lưu...' : 'Lưu cấu hình quy mô'}</span>
+                    </button>
+                  </div>
+                </form>
+
+                {/* BẢNG THEO DÕI PHÒNG ĐANG HOẠT ĐỘNG */}
+                <div className="p-5 rounded-2xl bg-zinc-900/70 border border-zinc-800 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <Users size={16} className="text-zinc-300" />
+                      <h3 className="text-sm font-bold text-zinc-100">Bảng Theo Dõi Không Gian Thoại</h3>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* Search */}
+                      <div className="relative">
+                        <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+                        <input 
+                          type="text"
+                          value={roomSearch}
+                          onChange={(e) => setRoomSearch(e.target.value)}
+                          placeholder="Tìm tên hoặc ID phòng..."
+                          className="pl-8 pr-3 py-1.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-zinc-600 w-44 sm:w-56"
+                        />
+                      </div>
+
+                      {/* Filter buttons */}
+                      <div className="flex items-center gap-1 p-0.5 bg-zinc-950 rounded-xl border border-zinc-800">
+                        {[
+                          { id: 'ALL', label: 'Tất cả' },
+                          { id: 'ACTIVE', label: 'Đang mở' },
+                          { id: 'CLOSED', label: 'Đã đóng' }
+                        ].map(f => (
+                          <button
+                            key={f.id}
+                            type="button"
+                            onClick={() => setRoomFilter(f.id)}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
+                              roomFilter === f.id
+                                ? 'bg-zinc-800 text-white shadow-sm'
+                                : 'text-zinc-400 hover:text-zinc-200'
+                            }`}
+                          >
+                            {f.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Danh sách phòng */}
+                  {loadingRooms ? (
+                    <div className="py-12 text-center text-zinc-500 text-xs font-mono">
+                      Đang nạp danh sách phòng thoại...
+                    </div>
+                  ) : adminRooms.length === 0 ? (
+                    <div className="py-12 text-center text-zinc-500 text-xs">
+                      Chưa có phòng thoại nào được tạo trên hệ thống.
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead>
+                          <tr className="border-b border-zinc-800 text-zinc-400 font-mono text-[11px]">
+                            <th className="pb-3 pl-2">ID</th>
+                            <th className="pb-3">Phòng thoại</th>
+                            <th className="pb-3">Phân loại</th>
+                            <th className="pb-3">Thành viên online</th>
+                            <th className="pb-3">Thời gian tạo</th>
+                            <th className="pb-3">Trạng thái</th>
+                            <th className="pb-3 text-right pr-2">Hành động</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-800/60">
+                          {adminRooms
+                            .filter(r => {
+                              if (roomFilter === 'ACTIVE' && !r.active) return false;
+                              if (roomFilter === 'CLOSED' && r.active) return false;
+                              if (roomSearch.trim()) {
+                                const q = roomSearch.toLowerCase();
+                                return (r.nameroom && r.nameroom.toLowerCase().includes(q)) || String(r.id).includes(q);
+                              }
+                              return true;
+                            })
+                            .map((room) => (
+                              <tr key={room.id} className="hover:bg-zinc-850/50 transition-colors">
+                                <td className="py-3 pl-2 font-mono text-zinc-400">#{room.id}</td>
+                                <td className="py-3">
+                                  <div className="flex items-center gap-2.5">
+                                    <div className="w-8 h-8 rounded-lg bg-zinc-800 border border-zinc-700/60 flex items-center justify-center font-bold text-zinc-200 overflow-hidden flex-shrink-0">
+                                      {room.avatar ? (
+                                        <img src={room.avatar} alt="" className="w-full h-full object-cover" />
+                                      ) : (
+                                        <Radio size={14} className="text-zinc-400" />
+                                      )}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <span className="font-semibold text-zinc-200 block truncate max-w-[180px]">
+                                        {room.nameroom || `Phòng #${room.id}`}
+                                      </span>
+                                      {room.description && (
+                                        <span className="text-[10px] text-zinc-400 truncate block max-w-[180px]">
+                                          {room.description}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="py-3">
+                                  {room.hasPassword || room.isPrivate ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                                      <Lock size={10} /> Riêng tư (Mật khẩu)
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                                      <Globe size={10} /> Công khai
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-3">
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-mono font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                    {room.soluong || 0} người
+                                  </span>
+                                </td>
+                                <td className="py-3 text-zinc-400 font-mono text-[11px]">
+                                  {room.createdAt ? new Date(room.createdAt).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : 'N/A'}
+                                </td>
+                                <td className="py-3">
+                                  {room.active ? (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                      Đang mở
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono text-zinc-400 bg-zinc-800 border border-zinc-700">
+                                      Đã đóng
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-3 text-right pr-2">
+                                  {room.active ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleForceCloseRoom(room.id, room.nameroom)}
+                                      className="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white border border-rose-500/25 text-[11px] font-semibold transition-all inline-flex items-center gap-1"
+                                      title="Đóng phòng khẩn cấp và đưa tất cả thành viên ra ngoài"
+                                    >
+                                      <Ban size={11} />
+                                      <span>Đóng phòng</span>
+                                    </button>
+                                  ) : (
+                                    <span className="text-[11px] text-zinc-400 italic">Đã kết thúc</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 

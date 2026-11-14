@@ -2,6 +2,7 @@ package chatToggetther.controller;
 
 import chatToggetther.Customize.ResponseData;
 import chatToggetther.DTO.UserDTO;
+import chatToggetther.DTO.RoomDTO;
 import chatToggetther.modelEntity.TrackEntity;
 import chatToggetther.service.AdminService;
 import org.springframework.http.ResponseEntity;
@@ -174,5 +175,15 @@ public class AdminController {
     ) {
         return ResponseEntity.ok(this.adminService.resolveReport(token, id, body));
     }
-}
 
+    @GetMapping("/rooms")
+    public ResponseEntity<ResponseData<List<RoomDTO>>> getAdminRooms() {
+        return ResponseEntity.ok(this.adminService.getAdminRooms());
+    }
+
+    @PostMapping("/rooms/{id}/close")
+    public ResponseEntity<ResponseData<Boolean>> forceCloseRoom(@PathVariable("id") Long roomId) {
+        return ResponseEntity.ok(this.adminService.forceCloseRoom(roomId));
+    }
+
+}
