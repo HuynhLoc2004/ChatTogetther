@@ -27,54 +27,41 @@ import CommunitySection from '../components/CommunitySection';
 import ResonanceMatchModal from '../components/ResonanceMatchModal';
 import ChallengeDeckModal from '../components/ChallengeDeckModal';
 
-// Avatar: Ưu tiên ảnh thật người dùng tải lên. Nếu chưa có ảnh, dùng Monogram chữ cái tối giản (Tuyệt đối không dùng avatar robot hoạt hình)
+// Avatar: Ưu tiên ảnh thật người dùng tải lên. Nếu chưa có ảnh hoặc lỗi tải, dùng DiceBear Avatar
 export const UserAvatar = ({ avatar, name = '', size = 36, className = "" }) => {
-  const initial = (name || 'U').trim().charAt(0).toUpperCase();
+  const seed = encodeURIComponent((name || 'user').trim() || 'user');
+  const fallbackDicebear = `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=${seed}`;
+  const hasCustomAvatar = Boolean(avatar && avatar.trim());
+  const [imgSrc, setImgSrc] = useState(hasCustomAvatar ? avatar : fallbackDicebear);
 
-  const isRobot = avatar && (avatar.includes('dicebear') || avatar.includes('bottts') || avatar.includes('avataaars'));
-  if (avatar && avatar.trim() && !isRobot) {
-    return (
-      <img 
-        src={avatar} 
-        alt={name || "Avatar"} 
-        className={`user-avatar-img ${className}`} 
-        style={{ 
-          width: size, 
-          height: size, 
-          borderRadius: '50%', 
-          objectFit: 'cover',
-          border: '1px solid rgba(255, 255, 255, 0.12)',
-          background: '#18181b',
-          flexShrink: 0
-        }} 
-        onError={(e) => {
-          e.target.style.display = 'none';
-        }}
-      />
-    );
-  }
+  useEffect(() => {
+    if (avatar && avatar.trim()) {
+      setImgSrc(avatar);
+    } else {
+      setImgSrc(fallbackDicebear);
+    }
+  }, [avatar, fallbackDicebear]);
 
   return (
-    <div 
-      className={`user-avatar-fallback select-none ${className}`} 
+    <img 
+      src={imgSrc} 
+      alt={name || "Avatar"} 
+      className={`user-avatar-img select-none ${className}`} 
       style={{ 
         width: size, 
         height: size, 
         borderRadius: '50%', 
-        background: 'linear-gradient(145deg, #27272a, #141417)',
-        border: '1px solid #3f3f46',
-        color: '#f4f4f5',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontSize: Math.max(11, size * 0.4),
-        fontWeight: 600,
+        objectFit: 'cover',
+        border: '1px solid rgba(255, 255, 255, 0.12)',
+        background: '#18181b',
         flexShrink: 0
+      }} 
+      onError={() => {
+        if (imgSrc !== fallbackDicebear) {
+          setImgSrc(fallbackDicebear);
+        }
       }}
-      title={name}
-    >
-      {initial}
-    </div>
+    />
   );
 };
 
@@ -1381,13 +1368,17 @@ const Home = () => {
       toast("Chưa có bản nhạc nào trong hệ thống");
       return;
     }
+    const track = tracks[currentTrackIndex];
+    if (!audioRef.current.src && track) {
+      audioRef.current.src = track.audioSrc || track.streamUrl || '';
+    }
     if (isPlayingRadio) {
       audioRef.current.pause();
       setIsPlayingRadio(false);
     } else {
       audioRef.current.play().then(() => {
         setIsPlayingRadio(true);
-        toast.success(`Đang phát: ${tracks[currentTrackIndex]?.name || 'Âm nhạc'}`);
+        toast.success(`Đang phát: ${track?.name || 'Âm nhạc'}`);
       }).catch(err => {
         console.warn("Lỗi phát audio:", err);
       });
@@ -1399,7 +1390,8 @@ const Home = () => {
     const nextIdx = (currentTrackIndex + 1) % tracks.length;
     setCurrentTrackIndex(nextIdx);
     if (audioRef.current) {
-      audioRef.current.src = tracks[nextIdx]?.audioSrc || '';
+      const nextTrack = tracks[nextIdx];
+      audioRef.current.src = nextTrack?.audioSrc || nextTrack?.streamUrl || '';
       if (isPlayingRadio) {
         audioRef.current.play().catch(() => {});
       }
@@ -1473,6 +1465,20 @@ const Home = () => {
 
   const fetchTracks = useCallback(async () => {
     try {
+      // Ưu tiên nạp kênh phát nhạc động từ /match/config
+      const configRes = await axiosClient.get('/match/config').catch(() => null);
+      if (configRes?.data?.channels && Array.isArray(configRes.data.channels) && configRes.data.channels.length > 0) {
+        const mappedChannels = configRes.data.channels.map(c => ({
+          id: c.id,
+          name: c.name,
+          artist: 'Talovin Radio',
+          genre: c.genreTag,
+          audioSrc: c.streamUrl,
+          streamUrl: c.streamUrl
+        }));
+        setTracks(mappedChannels);
+        return;
+      }
       const res = await axiosClient.get('/tracks');
       if (res.data?.data && Array.isArray(res.data.data)) {
         setTracks(res.data.data);
@@ -1778,7 +1784,7 @@ const Home = () => {
     <div className="social-app-wrapper">
       <audio 
         ref={audioRef} 
-        src={currentTrack ? currentTrack.audioSrc : ""} 
+        src={currentTrack ? (currentTrack.audioSrc || currentTrack.streamUrl) : ""} 
         preload="none"
       />
       {/* Audio element ẩn để phát voice note của các bài viết */}
@@ -2415,6 +2421,82 @@ const Home = () => {
           )}
 
           {/* ============================================================== */}
+          {/* KHU VỰC A+: PHÒNG ĐÀM THOẠI TRỰC TIẾP (LIVE AUDIO LOUNGE ROOMS) */}
+          {/* Hiển thị ngay trên đầu Sảnh trực tuyến, phá bỏ khuôn Threads */}
+          {/* ============================================================== */}
+          {activeTab === 'feed' && safeRooms.length > 0 && (
+            <div className="mb-4 p-4 rounded-2xl bg-gradient-to-r from-[#141417] to-[#121318] border border-zinc-800/80 shadow-sm animate-fade-in">
+              <div className="flex items-center justify-between mb-3 px-1">
+                <div className="flex items-center gap-2">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                  </span>
+                  <h3 className="text-xs font-bold text-zinc-100 tracking-wide uppercase font-mono flex items-center gap-1.5">
+                    Phòng Đàm Thoại Trực Tiếp ({safeRooms.length})
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('rooms')}
+                  className="text-[11px] font-mono text-zinc-400 hover:text-emerald-400 transition-colors flex items-center gap-1"
+                >
+                  <span>Xem tất cả</span>
+                  <ChevronRight size={12} />
+                </button>
+              </div>
+
+              {/* Lưới thẻ phòng trực tiếp */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {safeRooms.slice(0, 4).map((room) => {
+                  const isJoined = isUserInRoom(room);
+                  return (
+                    <div 
+                      key={room.id}
+                      onClick={() => onRoomCardClick(room)}
+                      className="p-3 rounded-xl bg-zinc-900/80 hover:bg-zinc-850 border border-zinc-800/80 hover:border-zinc-700/80 transition-all cursor-pointer flex items-center justify-between gap-3 group"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <GroupCollageAvatar 
+                          avatar={room.avatar} 
+                          name={room.nameroom} 
+                          members={room.userRoomDTOList || []}
+                          size={38}
+                        />
+                        <div className="min-w-0">
+                          <h4 className="text-xs font-semibold text-zinc-100 truncate group-hover:text-white flex items-center gap-1">
+                            {room.nameroom}
+                            {room.hasPassword && <Lock size={11} className="text-zinc-500" />}
+                          </h4>
+                          <span className="text-[10px] text-zinc-400 font-mono flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                            {room.soluong || 0} người đang nói
+                          </span>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRoomCardClick(room);
+                        }}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all flex-shrink-0 ${
+                          isJoined 
+                            ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold' 
+                            : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/60'
+                        }`}
+                      >
+                        {isJoined ? 'Vào lại' : 'Tham gia'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ============================================================== */}
           {/* KHU VỰC B: BỘ TẠO TÍN HIỆU ĐA PHƯƠNG TIỆN (Multimedia Composer) */}
           {/* ============================================================== */}
           {activeTab === 'feed' && (
@@ -2778,15 +2860,6 @@ const Home = () => {
                         </div>
                       )}
 
-                      {/* Thông báo Người đăng lại (Repost Banner) */}
-                      {post.repostedByUsername && (
-                        <div className="flex items-center gap-1.5 pb-2 mb-2 text-xs text-zinc-300 font-medium border-b border-[#1e1e1e]">
-                          <Repeat size={13} className="flex-shrink-0 text-emerald-400" />
-                          <span>{post.repostedByNickname || post.repostedByUsername} đã đăng lại</span>
-                          {post.repostedAt && <span className="text-[10.5px] text-zinc-500 font-mono ml-auto">{post.repostedAt}</span>}
-                        </div>
-                      )}
-
                       {/* Tín hiệu Đề xuất Xã hội Thông minh (Smart Social Discovery Signals) */}
                       {post.recommendationReason && !post.repostedByUsername && (
                         <div className="flex items-center gap-1.5 pb-2 mb-2 text-[11px] text-zinc-400 font-medium border-b border-[#1e1e1e]">
@@ -3070,15 +3143,12 @@ const Home = () => {
                           )}
                         </div>
 
-                        {/* Nút bình luận: Mở trực tiếp Thread Detail View (chuỗi thảo luận giống Threads) */}
+                        {/* Nút bình luận: Bật/tắt xem thảo luận trực tiếp */}
                         <button 
                           type="button"
-                          onClick={() => {
-                            setSelectedThreadPost(post);
-                            fetchComments(post.id);
-                          }}
-                          className="action-btn"
-                          title="Xem chi tiết & chuỗi thảo luận"
+                          onClick={() => handleToggleComments(post.id)}
+                          className={`action-btn ${expandedComments[post.id] ? 'text-sky-400 font-semibold' : ''}`}
+                          title="Bình luận & Thảo luận"
                         >
                           <MessageSquare size={15} strokeWidth={1.5} />
                           <span className="font-mono text-xs">{post.commentsCount || 0}</span>
@@ -3092,17 +3162,6 @@ const Home = () => {
                         >
                           <Share2 size={15} strokeWidth={1.5} />
                           <span className="text-xs">Chia sẻ</span>
-                        </button>
-
-                        {/* Nút Đăng lại (Repost) */}
-                        <button
-                          type="button"
-                          onClick={() => handleToggleRepost(post.id)}
-                          className={`action-btn ${post.isRepostedByMe ? 'text-emerald-400 font-bold active-reposted' : ''}`}
-                          title={post.isRepostedByMe ? "Hủy đăng lại" : "Đăng lại bài viết lên trang cá nhân"}
-                        >
-                          <Repeat size={15} strokeWidth={1.5} className={post.isRepostedByMe ? "text-emerald-400" : ""} />
-                          <span className="font-mono text-xs">{post.repostsCount || 0}</span>
                         </button>
                       </div>
 
@@ -3638,19 +3697,20 @@ const Home = () => {
 
           {/* Widget 1: Kết Nối Đồng Điệu 1-1 (Resonance Matchmaker) */}
           <div className="widget-box-card">
+            {/* Widget 1: Trạm Dò Sóng FM Thời Gian Thực (FM Frequency Tuner) */}
             <div className="widget-card-title">
-              <Zap size={14} className="text-emerald-400" />
-              <span>Ghép Đôi Đồng Điệu 1-1</span>
+              <Radio size={14} className="text-emerald-400" />
+              <span>Trạm Dò Sóng FM Thời Gian Thực</span>
             </div>
             <p className="widget-card-desc">
-              Thuật toán so khớp gu âm nhạc, mục đích kết nối & tự động loại trừ chính bạn.
+              Dò tìm sóng radio người lạ theo dải tần MHz hoặc tự thu âm 5 giây để phát thanh kết nối đàm thoại 1-1.
             </p>
             <button 
               type="button" 
               onClick={() => setIsSpeedMatchOpen(true)} 
               className="btn-widget-action"
             >
-              Tìm người đồng điệu
+              Dò sóng & Phát thanh
             </button>
           </div>
 
@@ -4318,8 +4378,6 @@ const Home = () => {
                   <span><strong className="text-[#f1f5f9]">{selectedThreadPost.likesCount || 0}</strong> lượt thích</span>
                   <span>•</span>
                   <span><strong className="text-[#f1f5f9]">{selectedThreadPost.commentsCount || (commentsMap[selectedThreadPost.id]?.length || 0)}</strong> phản hồi</span>
-                  <span>•</span>
-                  <span><strong className="text-[#f1f5f9]">{selectedThreadPost.repostsCount || 0}</strong> đăng lại</span>
                 </div>
 
                 {/* Hàng nút hành động nhanh với Reaction Popover đầy đủ emoji */}
@@ -4386,17 +4444,6 @@ const Home = () => {
                   >
                     <MessageSquare size={17} />
                     <span className="text-xs">Phản hồi</span>
-                  </button>
-
-                  <button 
-                    type="button"
-                    onClick={() => handleToggleRepost(selectedThreadPost.id)}
-                    className={`flex items-center gap-1.5 p-2 rounded-lg hover:text-white transition-colors active:scale-95 ${
-                      selectedThreadPost.isRepostedByMe ? 'text-emerald-400 font-semibold' : ''
-                    }`}
-                  >
-                    <Repeat size={17} className={selectedThreadPost.isRepostedByMe ? 'text-emerald-400' : ''} />
-                    <span className="text-xs">{selectedThreadPost.isRepostedByMe ? 'Đã đăng lại' : 'Đăng lại'}</span>
                   </button>
 
                   <button 

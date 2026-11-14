@@ -37,13 +37,11 @@ const ProfilePage = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // Dữ liệu bài viết, đăng lại, đã lưu, bạn bè
+  // Dữ liệu bài viết, đã lưu, bạn bè
   const [userPosts, setUserPosts] = useState([]);
-  const [userReposts, setUserReposts] = useState([]);
   const [savedPosts, setSavedPosts] = useState([]);
   const [userFriends, setUserFriends] = useState([]);
   const [loadingPosts, setLoadingPosts] = useState(false);
-  const [loadingReposts, setLoadingReposts] = useState(false);
   const [loadingFriends, setLoadingFriends] = useState(false);
 
   // Trạng thái kết bạn (nếu xem người khác)
@@ -128,25 +126,7 @@ const ProfilePage = () => {
     }
   }, [effectiveUserId]);
 
-  // 3. Nạp danh sách bài đăng lại (Reposts)
-  const fetchUserReposts = useCallback(async () => {
-    if (!effectiveUserId) return;
-    try {
-      setLoadingReposts(true);
-      const res = await axiosClient.get(`/posts/user/${effectiveUserId}/reposts`);
-      if (res.data?.data) {
-        setUserReposts(res.data.data);
-      } else {
-        setUserReposts([]);
-      }
-    } catch (e) {
-      setUserReposts([]);
-    } finally {
-      setLoadingReposts(false);
-    }
-  }, [effectiveUserId]);
-
-  // 4. Nạp bài viết đã lưu (nếu là chính mình)
+  // 3. Nạp bài viết đã lưu (nếu là chính mình)
   const fetchSavedPosts = useCallback(async () => {
     if (!isMe) return;
     try {
@@ -188,10 +168,9 @@ const ProfilePage = () => {
   useEffect(() => {
     fetchProfile();
     fetchUserPosts();
-    fetchUserReposts();
     if (isMe) fetchSavedPosts();
     fetchUserFriends();
-  }, [fetchProfile, fetchUserPosts, fetchUserReposts, fetchSavedPosts, fetchUserFriends, isMe]);
+  }, [fetchProfile, fetchUserPosts, fetchSavedPosts, fetchUserFriends, isMe]);
 
   // Xử lý nén ảnh đại diện
   const handleAvatarFileSelect = (e) => {
@@ -286,18 +265,6 @@ const ProfilePage = () => {
       toast.error(err.response?.data?.message || "Đổi mật khẩu thất bại!");
     } finally {
       setChangingPassword(false);
-    }
-  };
-
-  // Đăng lại bài viết (Repost)
-  const handleToggleRepost = async (postId) => {
-    try {
-      const res = await axiosClient.post(`/posts/${postId}/repost`);
-      toast.success(res.data?.message || "Thao tác đăng lại thành công!");
-      fetchUserPosts();
-      fetchUserReposts();
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Không thể đăng lại bài viết!");
     }
   };
 
@@ -410,11 +377,9 @@ const ProfilePage = () => {
                 )}
               </div>
 
-              {/* Stats Counters dạng inline chuẩn Threads */}
+              {/* Stats Counters */}
               <div className="flex items-center gap-3 mt-3 text-xs text-[#777777]">
                 <span><strong className="text-white">{userPosts.length}</strong> bài viết</span>
-                <span>•</span>
-                <span><strong className="text-white">{userReposts.length}</strong> đăng lại</span>
                 <span>•</span>
                 <span><strong className="text-white">{userFriends.length}</strong> bạn bè</span>
                 {isMe && (
@@ -638,7 +603,7 @@ const ProfilePage = () => {
           </div>
         )}
 
-        {/* 4. TABS BÀI VIẾT | ĐĂNG LẠI | ĐÃ LƯU | BẠN BÈ */}
+        {/* 4. TABS BÀI VIẾT | ĐÃ LƯU | BẠN BÈ */}
         <div className="flex items-center justify-around border-b border-[#1e1e1e] text-xs">
           <button
             type="button"
@@ -650,18 +615,6 @@ const ProfilePage = () => {
             }`}
           >
             Bài viết ({userPosts.length})
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('reposts')}
-            className={`py-3.5 text-xs font-semibold transition-all border-b-2 flex-1 text-center ${
-              activeTab === 'reposts' 
-                ? 'border-white text-white' 
-                : 'border-transparent text-[#777777] hover:text-zinc-300'
-            }`}
-          >
-            Đăng lại ({userReposts.length})
           </button>
 
           {isMe && (
@@ -737,86 +690,13 @@ const ProfilePage = () => {
                       <MessageSquare size={15} />
                       <span>{post.commentsCount || 0}</span>
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => handleToggleRepost(post.id)}
-                      className={`flex items-center gap-1.5 transition-colors ${post.isRepostedByMe ? "text-emerald-400 font-bold" : "hover:text-white"}`}
-                      title="Đăng lại bài viết"
-                    >
-                      <Repeat size={15} />
-                      <span>{post.repostsCount || 0}</span>
-                    </button>
                   </div>
                 </article>
               ))
             )
           )}
 
-          {/* TAB 2: BÀI ĐĂNG LẠI (REPOSTS) */}
-          {activeTab === 'reposts' && (
-            loadingReposts ? (
-              <div className="py-12 text-center text-zinc-500 font-mono text-xs">
-                <Loader2 size={20} className="animate-spin mx-auto mb-2 text-zinc-400" />
-                <span>Đang tải các bài đăng lại...</span>
-              </div>
-            ) : userReposts.length === 0 ? (
-              <div className="py-16 text-center text-zinc-500">
-                <Repeat size={28} className="mx-auto mb-2 text-zinc-600 opacity-60" />
-                <p className="text-sm font-semibold text-zinc-400">Chưa có bài đăng lại nào</p>
-                <p className="text-xs text-zinc-600 mt-1">Các bài viết được chia sẻ lại sẽ hiển thị ở đây.</p>
-              </div>
-            ) : (
-              userReposts.map(post => (
-                <article key={`repost-${post.id}`} className="py-4 hover:bg-[#141414]/40 transition-colors">
-                  {/* Badge Người đăng lại */}
-                  <div className="flex items-center gap-1.5 pb-2 text-xs text-[#777777] font-medium">
-                    <Repeat size={13} className="text-emerald-400" />
-                    <span>{post.repostedByNickname || profile?.nickname || 'Người dùng'} đã đăng lại</span>
-                    {post.repostedAt && (
-                      <span className="text-zinc-500 font-mono text-[10px] ml-auto">
-                        {post.repostedAt}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Bài viết gốc */}
-                  <div className="flex items-center gap-2.5 mb-2">
-                    <UserAvatar avatar={post.authorAvatar} name={post.authorNickname || post.authorAccount} size={30} />
-                    <div>
-                      <div className="text-xs font-bold text-white">{post.authorNickname || post.authorAccount}</div>
-                      <span className="text-[10px] font-mono text-zinc-500">{post.formattedTime || TIME_FORMATTER(post.createdAt)}</span>
-                    </div>
-                  </div>
-
-                  <p className="text-xs sm:text-sm text-zinc-200 leading-relaxed whitespace-pre-wrap my-2">
-                    {post.content}
-                  </p>
-
-                  <div className="flex items-center gap-5 pt-2 text-xs text-[#777777]">
-                    <span className="flex items-center gap-1.5 hover:text-white cursor-pointer transition-colors">
-                      <Heart size={15} className={post.isLikedByMe ? "fill-rose-500 text-rose-500" : ""} />
-                      <span>{post.likesCount || 0}</span>
-                    </span>
-                    <span className="flex items-center gap-1.5 hover:text-white cursor-pointer transition-colors">
-                      <MessageSquare size={15} />
-                      <span>{post.commentsCount || 0}</span>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleToggleRepost(post.id)}
-                      className="flex items-center gap-1.5 text-emerald-400 font-bold"
-                      title="Hủy đăng lại"
-                    >
-                      <Repeat size={15} />
-                      <span>{post.repostsCount || 0}</span>
-                    </button>
-                  </div>
-                </article>
-              ))
-            )
-          )}
-
-          {/* TAB 3: BÀI VIẾT ĐÃ LƯU (CHỈ CHÍNH CHỦ) */}
+          {/* TAB 2: BÀI VIẾT ĐÃ LƯU (CHỈ CHÍNH CHỦ) */}
           {activeTab === 'saved' && isMe && (
             savedPosts.length === 0 ? (
               <div className="py-16 text-center text-zinc-500">

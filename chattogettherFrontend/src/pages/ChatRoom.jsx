@@ -6,7 +6,7 @@ import {
   Phone, PhoneOff, PhoneMissed, PhoneCall, Mic, MicOff, WifiOff, User, UserCheck, ArrowLeft,
   Video, VideoOff, Volume2, VolumeX, Minimize2, Maximize2, ChevronDown,
   Image as ImageIcon, Smile, Palette, Play, Pause,
-  ExternalLink, Square, Camera, RefreshCw, Share2
+  ExternalLink, Square, Camera, RefreshCw, Share2, Disc3, Sparkles
 } from 'lucide-react';
 import axiosClient, { BACKEND_URL } from '../api/axiosClient';
 import { saveMessagesOffline, getMessagesOffline, getRoomsOffline } from '../utils/offlineDB';
@@ -14,6 +14,7 @@ import UserProfileModal from './UserProfileModal';
 import FriendsModal from './FriendsModal';
 import TalovinLogo from '../components/TalovinLogo';
 import GroupCollageAvatar from '../components/GroupCollageAvatar';
+import { UserAvatar } from './Home';
 import SockJS from 'sockjs-client';
 import Stomp from 'stompjs';
 import toast from 'react-hot-toast';
@@ -121,6 +122,95 @@ const ChatRoom = () => {
   // Phân trang lịch sử tin nhắn cuộn lên (mặc định false để không bị loop giật lag)
   const [hasMoreHistory, setHasMoreHistory] = useState(false);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+
+  // Bàn Không Gian Chung (Audio-First Social Lounge & Pomodoro)
+  const [activeMobileTab, setActiveMobileTab] = useState('lounge'); // 'lounge' | 'chat'
+  const [loungeChannels, setLoungeChannels] = useState([]);
+  const [currentLoungeChannelIndex, setCurrentLoungeChannelIndex] = useState(0);
+  const [isLoungeRadioPlaying, setIsLoungeRadioPlaying] = useState(false);
+  const loungeAudioRef = useRef(null);
+
+  // Pomodoro Focus Timer
+  const [pomoMinutes, setPomoMinutes] = useState(25);
+  const [pomoSeconds, setPomoSeconds] = useState(0);
+  const [isPomoActive, setIsPomoActive] = useState(false);
+  const [pomoMode, setPomoMode] = useState('work'); // 'work' | 'break'
+
+  // Nạp danh sách kênh nhạc cho phòng từ /match/config
+  useEffect(() => {
+    axiosClient.get('/match/config').then(res => {
+      if (res.data?.channels && Array.isArray(res.data.channels) && res.data.channels.length > 0) {
+        setLoungeChannels(res.data.channels);
+      }
+    }).catch(() => {});
+  }, []);
+
+  // Pomodoro Timer interval
+  useEffect(() => {
+    let interval = null;
+    if (isPomoActive) {
+      interval = setInterval(() => {
+        setPomoSeconds(sec => {
+          if (sec > 0) {
+            return sec - 1;
+          } else {
+            setPomoMinutes(min => {
+              if (min > 0) {
+                return min - 1;
+              } else {
+                setIsPomoActive(false);
+                const nextMode = pomoMode === 'work' ? 'break' : 'work';
+                setPomoMode(nextMode);
+                toast.success(nextMode === 'break' ? 'Đã hoàn thành phiên tập trung! Đến giờ nghỉ ngơi 5 phút.' : 'Hết giờ nghỉ! Bắt đầu phiên 25 phút mới.');
+                return nextMode === 'break' ? 5 : 25;
+              }
+            });
+            return 59;
+          }
+        });
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isPomoActive, pomoMode]);
+
+  const toggleLoungeRadio = () => {
+    if (!loungeAudioRef.current) return;
+    if (loungeChannels.length === 0) {
+      toast("Chưa có kênh radio nào sẵn sàng");
+      return;
+    }
+    const currentChannel = loungeChannels[currentLoungeChannelIndex];
+    if (isLoungeRadioPlaying) {
+      loungeAudioRef.current.pause();
+      setIsLoungeRadioPlaying(false);
+    } else {
+      loungeAudioRef.current.src = currentChannel.streamUrl;
+      loungeAudioRef.current.play().then(() => {
+        setIsLoungeRadioPlaying(true);
+        toast.success(`Đang phát radio chung: ${currentChannel.name}`);
+      }).catch(e => console.warn(e));
+    }
+  };
+
+  const nextLoungeChannel = () => {
+    if (loungeChannels.length === 0) return;
+    const nextIdx = (currentLoungeChannelIndex + 1) % loungeChannels.length;
+    setCurrentLoungeChannelIndex(nextIdx);
+    const nextCh = loungeChannels[nextIdx];
+    if (loungeAudioRef.current) {
+      loungeAudioRef.current.src = nextCh.streamUrl;
+      if (isLoungeRadioPlaying) {
+        loungeAudioRef.current.play().catch(() => {});
+      }
+    }
+    toast.success(`Chuyển sang: ${nextCh.name}`);
+  };
+
+  const resetPomoTimer = () => {
+    setIsPomoActive(false);
+    setPomoMinutes(pomoMode === 'work' ? 25 : 5);
+    setPomoSeconds(0);
+  };
   
   // Hàm lấy user_id an toàn (kết hợp localStorage và giải mã JWT token)
   const getUserId = () => {
@@ -1341,7 +1431,7 @@ const ChatRoom = () => {
                       title="Đang trực tuyến - Nhấp để xem hồ sơ & kết bạn"
                     >
                       <div className="member-avatar">
-                         {ur.userDTO?.nickname?.charAt(0).toUpperCase() || "U"}
+                         <UserAvatar avatar={ur.userDTO?.avatar} name={ur.userDTO?.nickname} size={30} />
                          <span className="online-indicator" title="Đang trực tuyến"></span>
                       </div>
                       <div className="member-info">
@@ -1387,7 +1477,7 @@ const ChatRoom = () => {
                       title="Ngoại tuyến - Nhấp để xem hồ sơ & kết bạn"
                     >
                       <div className="member-avatar">
-                         {ur.userDTO?.nickname?.charAt(0).toUpperCase() || "U"}
+                         <UserAvatar avatar={ur.userDTO?.avatar} name={ur.userDTO?.nickname} size={30} />
                          <span className="offline-indicator" title="Ngoại tuyến"></span>
                       </div>
                       <div className="member-info">
@@ -1452,8 +1542,11 @@ const ChatRoom = () => {
         </div>
       </aside>
 
-      {/* KHU VỰC CHAT CHÍNH (MAIN CHAT AREA) */}
-      <main className="chat-main">
+      {/* Audio element ẩn cho Radio Lounge chung của phòng */}
+      <audio ref={loungeAudioRef} loop className="hidden" />
+
+      {/* KHU VỰC CHAT CHÍNH: AUDIO-FIRST SOCIAL LOUNGE (2 CỘT 65% / 35%) */}
+      <main className="chat-main flex-1 flex flex-col h-full overflow-hidden p-0 bg-[#09090b]">
         {isOffline && (
           <div className="offline-top-banner">
             <WifiOff size={15} />
@@ -1461,145 +1554,414 @@ const ChatRoom = () => {
           </div>
         )}
 
-        {/* THANH ĐIỀU KHIỂN CUỘC GỌI ĐANG HOẠT ĐỘNG (KHI THU NHỎ VỀ ĐOẠN CHAT) */}
-        {isCallActive && !isCallScreenOpen && (
-          <div className="active-call-bar animate-fade-in">
-            <div className="call-info">
-              <div className="pulsing-mic">
-                {isVideoCall ? <Video size={16} /> : <PhoneCall size={16} />}
+        {/* MOBILE TOP TAB SWITCHER */}
+        <div className="lg:hidden flex items-center justify-around border-b border-zinc-800 bg-zinc-950 px-2 py-2 text-xs font-semibold z-20">
+          <button 
+            type="button"
+            onClick={() => setActiveMobileTab('lounge')}
+            className={`flex-1 py-1.5 px-3 rounded-xl flex items-center justify-center gap-1.5 transition-all ${
+              activeMobileTab === 'lounge' 
+                ? 'bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/40' 
+                : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            <Users size={14} />
+            <span>Bàn Không Gian Chung</span>
+          </button>
+
+          <button 
+            type="button"
+            onClick={() => setActiveMobileTab('chat')}
+            className={`flex-1 py-1.5 px-3 rounded-xl flex items-center justify-center gap-1.5 transition-all ${
+              activeMobileTab === 'chat' 
+                ? 'bg-sky-500/20 text-sky-400 font-bold border border-sky-500/40' 
+                : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            <MessageCircle size={14} />
+            <span>Thảo luận ({messages.length})</span>
+          </button>
+        </div>
+
+        {/* BODY 2 CỘT (DESKTOP: 65% / 35%, MOBILE: THEO TAB) */}
+        <div className="flex-1 flex flex-col lg:flex-row h-full overflow-hidden">
+          
+          {/* ============================================================== */}
+          {/* CỘT TRÁI (65%): BÀN KHÔNG GIAN CHUNG (LOUNGE TABLE SPACE) */}
+          {/* ============================================================== */}
+          <div className={`lg:w-[65%] w-full flex flex-col h-full border-r border-zinc-800/80 bg-[#0c0d12] overflow-hidden ${
+            activeMobileTab === 'chat' ? 'hidden lg:flex' : 'flex'
+          }`}>
+            {/* Header Bàn Không Gian Chung */}
+            <div className="px-5 py-3 border-b border-zinc-800/80 bg-zinc-950/70 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={() => navigate('/')} 
+                  className="p-1.5 -ml-1 text-zinc-400 hover:text-white rounded-xl hover:bg-zinc-800 transition-colors flex items-center gap-1.5 text-xs font-mono"
+                  title="Quay lại Sảnh"
+                >
+                  <ArrowLeft size={16} />
+                  <span className="hidden sm:inline">Sảnh</span>
+                </button>
+
+                <GroupCollageAvatar 
+                  avatar={roomInfo?.avatar} 
+                  name={roomInfo?.nameroom} 
+                  members={roomInfo?.userRoomDTOList || []}
+                  size={36}
+                />
+                <div>
+                  <h3 className="font-bold text-sm text-zinc-100 flex items-center gap-2">
+                    {roomInfo?.nameroom || `Phòng ${roomId}`}
+                    {isAdminOfThisRoom && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                        Chủ phòng
+                      </span>
+                    )}
+                  </h3>
+                  <span className="text-[11px] font-mono text-zinc-400 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    {onlineMembers.length} thành viên đang có mặt
+                  </span>
+                </div>
               </div>
-              <div className="call-text">
-                <span className="call-title">
-                  {privateCallTarget 
-                    ? `Đang đàm thoại với ${privateCallTarget.nickname || 'người dùng'}` 
-                    : (isVideoCall ? "Cuộc gọi Video nhóm đang phát" : "Cuộc gọi thoại nhóm đang phát")}
-                </span>
-                <span className="call-timer font-mono">
-                  {Math.floor(callDuration / 60)}:{(callDuration % 60).toString().padStart(2, '0')} • {callStatusText}
-                </span>
+
+              {/* Điều khiển Voice & Call trên bàn chung */}
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={toggleMute} 
+                  className={`px-3 py-1.5 rounded-xl border text-xs font-medium flex items-center gap-1.5 transition-all ${
+                    isMuted 
+                      ? 'bg-rose-500/15 border-rose-500/30 text-rose-400' 
+                      : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                  }`}
+                  title={isMuted ? "Bật micro" : "Tắt micro"}
+                >
+                  {isMuted ? <MicOff size={14} /> : <Mic size={14} />}
+                  <span className="hidden md:inline">{isMuted ? 'Mic tắt' : 'Mic bật'}</span>
+                </button>
+
+                {!isCallActive ? (
+                  <button 
+                    onClick={startGroupVoiceCall} 
+                    className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/60 text-xs font-medium flex items-center gap-1.5 transition-all"
+                    title="Bắt đầu đàm thoại nhóm"
+                  >
+                    <Phone size={14} className="text-emerald-400" />
+                    <span className="hidden sm:inline">Đàm thoại</span>
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => endCall('normal')} 
+                    className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-medium flex items-center gap-1.5 transition-all"
+                    title="Rời cuộc gọi"
+                  >
+                    <PhoneOff size={14} />
+                    <span className="hidden sm:inline">Dừng gọi</span>
+                  </button>
+                )}
+
+                <button 
+                  onClick={() => setIsSidebarOpen(true)}
+                  className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                  title="Danh sách tất cả thành viên"
+                >
+                  <Users size={16} />
+                </button>
+
+                <button 
+                  onClick={handleLeaveRoom}
+                  className="p-2 rounded-xl text-zinc-400 hover:text-rose-400 hover:bg-zinc-800/80 transition-colors"
+                  title="Rời khỏi phòng"
+                >
+                  <LogOut size={16} />
+                </button>
               </div>
             </div>
 
-            <div className="call-controls">
-              <button 
-                type="button"
-                onClick={() => setIsCallScreenOpen(true)}
-                className="btn-expand-call"
-                title="Mở toàn màn hình cuộc gọi"
-              >
-                <Maximize2 size={15} />
-                <span className="expand-text">Màn hình gọi</span>
-              </button>
+            {/* THANH ĐIỀU KHIỂN CUỘC GỌI ĐANG HOẠT ĐỘNG (KHI THU NHỎ VỀ ĐOẠN CHAT) */}
+            {isCallActive && !isCallScreenOpen && (
+              <div className="active-call-bar animate-fade-in mx-4 my-2">
+                <div className="call-info">
+                  <div className="pulsing-mic">
+                    {isVideoCall ? <Video size={16} /> : <PhoneCall size={16} />}
+                  </div>
+                  <div className="call-text">
+                    <span className="call-title">
+                      {privateCallTarget 
+                        ? `Đang đàm thoại với ${privateCallTarget.nickname || 'người dùng'}` 
+                        : (isVideoCall ? "Cuộc gọi Video nhóm đang phát" : "Cuộc gọi thoại nhóm đang phát")}
+                    </span>
+                    <span className="call-timer font-mono">
+                      {Math.floor(callDuration / 60)}:{(callDuration % 60).toString().padStart(2, '0')} • {callStatusText}
+                    </span>
+                  </div>
+                </div>
 
-              <button 
-                onClick={toggleMute} 
-                className={`btn-call-action ${isMuted ? 'muted' : ''}`}
-                title={isMuted ? "Bật micro" : "Tắt micro"}
-              >
-                {isMuted ? <MicOff size={16} /> : <Mic size={16} />}
-              </button>
+                <div className="call-controls">
+                  <button 
+                    type="button"
+                    onClick={() => setIsCallScreenOpen(true)}
+                    className="btn-expand-call"
+                    title="Mở toàn màn hình cuộc gọi"
+                  >
+                    <Maximize2 size={15} />
+                    <span className="expand-text">Màn hình gọi</span>
+                  </button>
 
-              {isVideoCall && (
-                <button 
-                  onClick={toggleVideo} 
-                  className={`btn-call-action ${!isVideoEnabled ? 'muted' : ''}`}
-                  title={isVideoEnabled ? "Tắt camera" : "Bật camera"}
-                >
-                  {isVideoEnabled ? <Video size={16} /> : <VideoOff size={16} />}
-                </button>
-              )}
+                  <button 
+                    onClick={toggleMute} 
+                    className={`btn-call-action ${isMuted ? 'muted' : ''}`}
+                    title={isMuted ? "Bật micro" : "Tắt micro"}
+                  >
+                    {isMuted ? <MicOff size={16} /> : <Mic size={16} />}
+                  </button>
 
-              <button 
-                onClick={() => endCall(callDuration > 0 ? 'normal' : 'cancelled')} 
-                className="btn-call-action btn-end-call" 
-                title={callDuration > 0 ? "Kết thúc cuộc gọi" : "Hủy cuộc gọi"}
-              >
-                <PhoneOff size={16} />
-              </button>
+                  {isVideoCall && (
+                    <button 
+                      onClick={toggleVideo} 
+                      className={`btn-call-action ${!isVideoEnabled ? 'muted' : ''}`}
+                      title={isVideoEnabled ? "Tắt camera" : "Bật camera"}
+                    >
+                      {isVideoEnabled ? <Video size={16} /> : <VideoOff size={16} />}
+                    </button>
+                  )}
+
+                  <button 
+                    onClick={() => endCall(callDuration > 0 ? 'normal' : 'cancelled')} 
+                    className="btn-call-action btn-end-call" 
+                    title={callDuration > 0 ? "Kết thúc cuộc gọi" : "Hủy cuộc gọi"}
+                  >
+                    <PhoneOff size={16} />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* VIDEO CALL FLOATING OVERLAY GRID */}
+            {isCallActive && isVideoCall && (
+              <div className="video-call-overlay-card mx-4 my-2">
+                <div className="video-streams-grid">
+                  <div className="remote-video-frame">
+                    <video ref={remoteVideoRef} autoPlay playsInline className="video-player-elem" />
+                    <div className="video-user-tag">Đối phương / Nhóm</div>
+                  </div>
+
+                  <div className="local-video-pip">
+                    <video ref={localVideoRef} autoPlay playsInline muted className="video-player-elem mirror" />
+                    <div className="video-user-tag">Bạn</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* BÀN KHÔNG GIAN CHUNG: LƯỚI AVATAR LỚN + TRÌNH PHÁT NHẠC + POMODORO */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-6">
+              
+              {/* LƯỚI AVATAR LỚN CÁC THÀNH VIÊN TRÊN BÀN */}
+              <div>
+                <div className="flex items-center justify-between mb-3 px-1">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400 font-mono flex items-center gap-1.5">
+                    <Users size={13} className="text-emerald-400" />
+                    <span>Bàn đàm thoại ({onlineMembers.length} trực tuyến / {roomInfo?.userRoomDTOList?.length || 0} tổng)</span>
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5">
+                  {onlineMembers.map((ur, idx) => {
+                    const memberId = ur.userDTO?.id?.toString();
+                    const isMe = memberId === currentUserId;
+                    const isSpeaking = isCallActive && !isMuted && isMe;
+
+                    return (
+                      <div 
+                        key={ur.userDTO?.id || idx}
+                        onClick={() => setSelectedProfileUserId(ur.userDTO?.id)}
+                        className={`relative p-4 rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center text-center group ${
+                          isSpeaking 
+                            ? 'bg-emerald-500/10 border-emerald-500/50 shadow-md ring-2 ring-emerald-500/30' 
+                            : 'bg-zinc-900/60 border-zinc-800/80 hover:border-zinc-700 hover:bg-zinc-900'
+                        }`}
+                      >
+                        <div className="relative mb-2.5">
+                          <UserAvatar 
+                            avatar={ur.userDTO?.avatar} 
+                            name={ur.userDTO?.nickname} 
+                            size={64} 
+                            className={`ring-2 ${isSpeaking ? 'ring-emerald-400 animate-pulse' : 'ring-zinc-700'}`}
+                          />
+                          <span className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-zinc-900 ${
+                            isMe ? (isMuted ? 'bg-zinc-500' : 'bg-emerald-400') : 'bg-emerald-400'
+                          }`} />
+                          {ur.isAdmin && (
+                            <div className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center shadow-sm">
+                              <Crown size={11} />
+                            </div>
+                          )}
+                        </div>
+
+                        <h4 className="font-semibold text-xs text-zinc-100 truncate max-w-[110px] group-hover:text-white">
+                          {ur.userDTO?.nickname || "Thành viên"}
+                          {isMe && <span className="text-zinc-500 font-normal"> (Bạn)</span>}
+                        </h4>
+
+                        <span className="text-[10px] font-mono text-zinc-400 mt-1 flex items-center gap-1">
+                          {isMe && isMuted ? (
+                            <span className="text-rose-400 flex items-center gap-0.5"><MicOff size={10} /> Đã tắt mic</span>
+                          ) : (
+                            <span className="text-emerald-400 flex items-center gap-0.5"><Mic size={10} /> Đang mở mic</span>
+                          )}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* TRÌNH PHÁT NHẠC CHUNG & ĐỒNG HỒ POMODORO */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                
+                {/* TRÌNH PHÁT NHẠC CHUNG */}
+                <div className="p-4 rounded-2xl bg-zinc-900/40 border border-zinc-800/80 space-y-3">
+                  <div className="flex items-center justify-between text-xs font-mono text-zinc-400">
+                    <span className="flex items-center gap-1.5 font-semibold text-zinc-200">
+                      <Disc3 size={15} className={`text-purple-400 ${isLoungeRadioPlaying ? 'animate-spin' : ''}`} />
+                      <span>Đài Nhạc Lounge Chung</span>
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                      LO-FI / AMBIENT
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-950/70 border border-zinc-800/60">
+                    <div className="min-w-0 pr-2">
+                      <h5 className="font-semibold text-xs text-zinc-100 truncate">
+                        {loungeChannels[currentLoungeChannelIndex]?.name || 'Lofi Chill Lounge'}
+                      </h5>
+                      <p className="text-[10px] font-mono text-zinc-500">
+                        {loungeChannels[currentLoungeChannelIndex]?.genreTag || 'Thư giãn & Tập trung'}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button 
+                        type="button"
+                        onClick={toggleLoungeRadio}
+                        className="w-8 h-8 rounded-full bg-purple-600 hover:bg-purple-500 text-white flex items-center justify-center transition-transform active:scale-95 shadow-md shadow-purple-950"
+                        title={isLoungeRadioPlaying ? "Tạm dừng" : "Bật nhạc chung"}
+                      >
+                        {isLoungeRadioPlaying ? <Pause size={14} /> : <Play size={14} className="ml-0.5" />}
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={nextLoungeChannel}
+                        className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                        title="Chuyển kênh tiếp theo"
+                      >
+                        <RefreshCw size={13} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Equalizer Waveform bars */}
+                  <div className="flex items-center justify-center gap-1 h-5 py-1">
+                    <span className={`w-1 rounded-full bg-purple-400 transition-all ${isLoungeRadioPlaying ? 'h-4 animate-pulse' : 'h-1'}`}></span>
+                    <span className={`w-1 rounded-full bg-purple-400 transition-all ${isLoungeRadioPlaying ? 'h-5 animate-pulse delay-75' : 'h-1'}`}></span>
+                    <span className={`w-1 rounded-full bg-purple-400 transition-all ${isLoungeRadioPlaying ? 'h-3 animate-pulse delay-150' : 'h-1'}`}></span>
+                    <span className={`w-1 rounded-full bg-purple-400 transition-all ${isLoungeRadioPlaying ? 'h-4 animate-pulse delay-100' : 'h-1'}`}></span>
+                  </div>
+                </div>
+
+                {/* ĐỒNG HỒ TẬP TRUNG / POMODORO TIMER */}
+                <div className="p-4 rounded-2xl bg-zinc-900/40 border border-zinc-800/80 space-y-3">
+                  <div className="flex items-center justify-between text-xs font-mono text-zinc-400">
+                    <span className="flex items-center gap-1.5 font-semibold text-zinc-200">
+                      <Sparkles size={14} className="text-amber-400" />
+                      <span>Đồng Hồ Tập Trung (Pomodoro)</span>
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20 font-mono">
+                      {pomoMode === 'work' ? 'LÀM VIỆC 25M' : 'NGHỈ NGƠI 5M'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-950/70 border border-zinc-800/60">
+                    <div className="text-3xl font-mono font-bold text-zinc-100 tracking-wider">
+                      {String(pomoMinutes).padStart(2, '0')}:{String(pomoSeconds).padStart(2, '0')}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button 
+                        type="button"
+                        onClick={() => setIsPomoActive(!isPomoActive)}
+                        className={`px-3 py-1.5 rounded-xl font-semibold text-xs flex items-center gap-1.5 transition-all ${
+                          isPomoActive 
+                            ? 'bg-amber-500/20 border border-amber-500/40 text-amber-300' 
+                            : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/60'
+                        }`}
+                      >
+                        {isPomoActive ? <Pause size={12} /> : <Play size={12} />}
+                        <span>{isPomoActive ? 'Tạm dừng' : 'Bắt đầu'}</span>
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={resetPomoTimer}
+                        className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                        title="Đặt lại đồng hồ"
+                      >
+                        <RefreshCw size={13} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-center gap-2 text-[10px] font-mono text-zinc-500">
+                    <button 
+                      type="button" 
+                      onClick={() => { setPomoMode('work'); setPomoMinutes(25); setPomoSeconds(0); setIsPomoActive(false); }}
+                      className={`hover:text-zinc-300 ${pomoMode === 'work' ? 'text-amber-400 font-bold' : ''}`}
+                    >
+                      25m Tập trung
+                    </button>
+                    <span>•</span>
+                    <button 
+                      type="button" 
+                      onClick={() => { setPomoMode('break'); setPomoMinutes(5); setPomoSeconds(0); setIsPomoActive(false); }}
+                      className={`hover:text-zinc-300 ${pomoMode === 'break' ? 'text-amber-400 font-bold' : ''}`}
+                    >
+                      5m Nghỉ ngơi
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+
             </div>
           </div>
-        )}
 
-        {/* HEADER PHÒNG CHAT - TỐI ƯU CỰC MẠNH CHO MOBILE */}
-        <header className="chat-header">
-           <div className="header-left">
-              {/* Nút Quay về Sảnh / Trang chủ rõ ràng cho cả Mobile & Desktop */}
-              <button 
-                onClick={() => navigate('/')} 
-                className="header-back-home-btn" 
-                title="Quay lại Trang chủ / Sảnh"
-              >
-                 <ArrowLeft size={18} />
-                 <span className="back-text">Sảnh</span>
-              </button>
-
-              <button onClick={() => setIsSidebarOpen(true)} className="mobile-toggle-btn" title="Mở danh sách thành viên">
-                 <Menu size={18} />
-              </button>
-
-              <div className="header-info">
-                 <GroupCollageAvatar 
-                   avatar={roomInfo?.avatar} 
-                   name={roomInfo?.nameroom} 
-                   members={roomInfo?.userRoomDTOList || []}
-                   size={32}
-                 />
-                 <div className="flex flex-col leading-tight min-w-0">
-                   <h2 className="room-title-text">{roomInfo?.nameroom || `Phòng ${roomId}`}</h2>
-                   <span className="header-room-id font-mono">#{roomId} • {onlineMembers.length} trực tuyến</span>
-                 </div>
+          {/* ============================================================== */}
+          {/* CỘT PHẢI (35%): KHUNG CHAT / THẢO LUẬN (DISCUSSION FEED) */}
+          {/* ============================================================== */}
+          <div className={`lg:w-[35%] w-full flex flex-col h-full bg-[#0a0b0e] relative overflow-hidden ${
+            activeMobileTab === 'lounge' ? 'hidden lg:flex' : 'flex'
+          }`}>
+            {/* Header Khung Chat */}
+            <div className="px-4 py-3.5 border-b border-zinc-800/80 bg-zinc-950/70 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MessageCircle size={15} className="text-sky-400" />
+                <h4 className="font-bold text-xs text-zinc-200 tracking-wide uppercase font-mono">
+                  Thảo luận ({messages.length})
+                </h4>
               </div>
-           </div>
-           
-           <div className="header-actions">
-              {/* Nút Đổi Chủ Đề Màu Sắc */}
-              <button 
-                onClick={() => setIsThemeModalOpen(true)}
-                className="header-icon-btn"
-                title="Đổi chủ đề màu sắc phòng chat"
-              >
-                <Palette size={16} />
-              </button>
 
-              {/* Nút Bạn Bè */}
-              <button 
-                onClick={() => setIsFriendsModalOpen(true)}
-                className="header-friends-btn"
-                title="Xem danh sách bạn bè & lời mời"
-              >
-                <Users size={16} />
-                <span className="btn-label">Bạn bè</span>
-              </button>
-
-              {/* Nút Gọi Thoại Nhóm */}
-              <button 
-                onClick={startGroupVoiceCall} 
-                disabled={isCallActive}
-                className={`header-call-btn ${isCallActive && !isVideoCall ? 'in-call' : ''}`} 
-                title="Gọi thoại nhóm"
-              >
-                 <Phone size={15} />
-                 <span className="btn-label">{isCallActive && !isVideoCall ? 'Đang gọi' : 'Gọi thoại'}</span>
-              </button>
-
-              {/* Nút Gọi Video Nhóm */}
-              <button 
-                onClick={startGroupVideoCall} 
-                disabled={isCallActive}
-                className={`header-videocall-btn ${isCallActive && isVideoCall ? 'in-call' : ''}`} 
-                title="Gọi Video nhóm"
-              >
-                 <Video size={15} />
-                 <span className="btn-label">{isCallActive && isVideoCall ? 'Đang gọi' : 'Video'}</span>
-              </button>
-
-              {/* Nút Xem Thành Viên */}
-              <button onClick={() => setIsSidebarOpen(true)} className="members-indicator-btn" title="Danh sách thành viên">
-                 <Users size={14} />
-                 <span className="members-count-pill">{roomInfo?.userRoomDTOList?.length || 0}</span>
-              </button>
-           </div>
-        </header>
+              <div className="flex items-center gap-1.5">
+                <button 
+                  onClick={() => setIsThemeModalOpen(true)}
+                  className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                  title="Đổi chủ đề chat"
+                >
+                  <Palette size={14} />
+                </button>
+              </div>
+            </div>
 
         {/* VIDEO CALL FLOATING OVERLAY GRID */}
         {isCallActive && isVideoCall && (
@@ -1698,11 +2060,11 @@ const ChatRoom = () => {
                 <div key={msg.id || index} className={`msg-group ${isMe ? 'msg-me' : 'msg-them'}`}>
                   {!isMe && (
                     <div 
-                      className="msg-avatar"
+                      className="msg-avatar cursor-pointer"
                       onClick={() => setSelectedProfileUserId(msg.userId)}
                       title={`Xem thông tin của ${msg.sender}`}
                     >
-                       {msg.sender?.charAt(0).toUpperCase() || "U"}
+                       <UserAvatar avatar={msg.avatar} name={msg.sender} size={28} />
                     </div>
                   )}
 
@@ -1901,7 +2263,9 @@ const ChatRoom = () => {
             )}
           </div>
         </div>
-      </main>
+      </div>
+    </div>
+  </main>
 
       {/* MODAL ĐỔI CHỦ ĐỀ MÀU SẮC PHÒNG CHAT */}
       {isThemeModalOpen && (
@@ -2092,7 +2456,11 @@ const ChatRoom = () => {
                   <div className="avatar-pulse-ring ring-2"></div>
                   <div className="call-big-avatar">
                     {privateCallTarget ? (
-                      (privateCallTarget.nickname || privateCallTarget.account || 'U').charAt(0).toUpperCase()
+                      <UserAvatar 
+                        avatar={privateCallTarget.avatar} 
+                        name={privateCallTarget.nickname || privateCallTarget.account} 
+                        size={80} 
+                      />
                     ) : (
                       <Users size={48} className="text-emerald-400" />
                     )}

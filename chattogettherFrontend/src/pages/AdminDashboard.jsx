@@ -7,7 +7,7 @@ import {
   AlertTriangle, CheckCircle2, ChevronRight, Sliders, LayoutGrid,
   ShieldCheck, ShieldAlert, KeyRound, Palette, ExternalLink, Layers,
   FolderCog, Save, UserCheck, ShieldPlus, LogOut, Menu, Globe,
-  FileText, Repeat, RotateCcw, AlertOctagon, Heart
+  FileText, Repeat, RotateCcw, AlertOctagon, Heart, Signal, Disc3
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
@@ -179,6 +179,36 @@ export const AdminDashboard = () => {
   const [adminReposts, setAdminReposts] = useState([]);
   const [loadingAdminReposts, setLoadingAdminReposts] = useState(false);
 
+  // Quản lý Băng tần & Đài nhạc FM (Frequency & Audio Channels)
+  const [adminIntents, setAdminIntents] = useState([]);
+  const [adminChannels, setAdminChannels] = useState([]);
+  const [liveFrequencyStats, setLiveFrequencyStats] = useState({ activeBroadcasters: 0, activeIntents: 0, activeChannels: 0 });
+  const [loadingFrequency, setLoadingFrequency] = useState(false);
+
+  // Modal Intent
+  const [isIntentModalOpen, setIsIntentModalOpen] = useState(false);
+  const [editingIntent, setEditingIntent] = useState(null);
+  const [intentFormData, setIntentFormData] = useState({
+    code: '',
+    title: '',
+    subtitle: '',
+    iconName: 'Headphones',
+    freqStart: 88.0,
+    freqEnd: 92.9,
+    isActive: true,
+    displayOrder: 1
+  });
+
+  // Modal Channel
+  const [isChannelModalOpen, setIsChannelModalOpen] = useState(false);
+  const [editingChannel, setEditingChannel] = useState(null);
+  const [channelFormData, setChannelFormData] = useState({
+    name: '',
+    genreTag: 'Lo-Fi Chill',
+    streamUrl: '',
+    isActive: true
+  });
+
   // ==========================================
   // KHỞI TẠO & PHÂN QUYỀN TRUY CẬP (RBAC RESOLVER)
   // ==========================================
@@ -220,6 +250,7 @@ export const AdminDashboard = () => {
       await fetchReports();
       await fetchAdminPosts();
       await fetchAdminReposts();
+      await fetchFrequencyData();
     } catch (err) {
       console.error("Lỗi xác thực quyền:", err);
       toast.error("Phiên làm việc hết hạn hoặc không có quyền quản trị");
@@ -269,7 +300,8 @@ export const AdminDashboard = () => {
       {
         sectionTitle: 'NỘI DUNG & TƯƠNG TÁC',
         items: [
-          { id: 'posts_moderation', label: `Bài viết & Đăng lại (${adminPosts.length})`, icon: FileText, permission: 'TL_PERM_COMMUNITY_MANAGE' },
+          { id: 'posts_moderation', label: `Kiểm duyệt Bài viết (${adminPosts.length})`, icon: FileText, permission: 'TL_PERM_COMMUNITY_MANAGE' },
+          { id: 'frequency_management', label: `Băng tần & Đài phát FM (${adminIntents.length})`, icon: Radio, permission: 'TL_PERM_MUSIC_MANAGE' },
           { id: 'challenges', label: `Thẻ bài thử thách (${challenges.length})`, icon: Sparkles, permission: 'TL_PERM_CHALLENGE_MANAGE' },
           { id: 'vibes', label: `Chủ đề & Cảm xúc (${parsedVibes.length})`, icon: Tag, permission: 'TL_PERM_TOPIC_MANAGE' },
           { id: 'music', label: `Âm nhạc hệ thống (${tracks.length})`, icon: Music, permission: 'TL_PERM_MUSIC_MANAGE' },
@@ -285,7 +317,7 @@ export const AdminDashboard = () => {
         ]
       }
     ];
-  }, [adminPosts.length, challenges.length, parsedVibes.length, tracks.length, adminGroups.length, reports.length, users.length, systemRoles.length]);
+  }, [adminPosts.length, adminIntents.length, challenges.length, parsedVibes.length, tracks.length, adminGroups.length, reports.length, users.length, systemRoles.length]);
 
   // Tự động chuyển tab nếu tab hiện tại không được phép
   useEffect(() => {
@@ -785,6 +817,157 @@ export const AdminDashboard = () => {
     const updated = systemRoles.filter(r => r.id !== roleId);
     setSystemRoles(updated);
     await saveConfigToBackend({ system_roles: JSON.stringify(updated) }, "Đã xóa vai trò!");
+  };
+
+  // --- Quản lý Băng tần & Đài nhạc FM (Frequency Match & Audio Channels) ---
+  const fetchFrequencyData = async () => {
+    try {
+      setLoadingFrequency(true);
+      const [intentsRes, channelsRes, statsRes] = await Promise.all([
+        axiosClient.get('/admin/frequency-config/intents').catch(() => ({ data: [] })),
+        axiosClient.get('/admin/frequency-config/channels').catch(() => ({ data: [] })),
+        axiosClient.get('/admin/frequency-config/live-stats').catch(() => ({ data: {} }))
+      ]);
+      setAdminIntents(Array.isArray(intentsRes.data) ? intentsRes.data : []);
+      setAdminChannels(Array.isArray(channelsRes.data) ? channelsRes.data : []);
+      setLiveFrequencyStats(statsRes.data || { activeBroadcasters: 0, activeIntents: 0, activeChannels: 0 });
+    } catch (e) {
+      console.warn("Lỗi nạp cấu hình tần số:", e);
+    } finally {
+      setLoadingFrequency(false);
+    }
+  };
+
+  const handleToggleIntent = async (id) => {
+    try {
+      const res = await axiosClient.patch(`/admin/frequency-config/intents/${id}/toggle`);
+      setAdminIntents(prev => prev.map(i => i.id === id ? res.data : i));
+      toast.success("Đã cập nhật trạng thái băng tần!");
+    } catch (e) {
+      toast.error("Không thể cập nhật trạng thái băng tần");
+    }
+  };
+
+  const handleDeleteIntent = async (id) => {
+    if (!window.confirm("Bạn có chắc chắn muốn xóa băng tần FM này?")) return;
+    try {
+      await axiosClient.delete(`/admin/frequency-config/intents/${id}`);
+      setAdminIntents(prev => prev.filter(i => i.id !== id));
+      toast.success("Đã xóa băng tần thành công!");
+    } catch (e) {
+      toast.error("Không thể xóa băng tần");
+    }
+  };
+
+  const handleOpenAddIntent = () => {
+    setEditingIntent(null);
+    setIntentFormData({
+      code: `INTENT_${Date.now()}`,
+      title: '',
+      subtitle: '',
+      iconName: 'Headphones',
+      freqStart: 88.0,
+      freqEnd: 92.9,
+      isActive: true,
+      displayOrder: adminIntents.length + 1
+    });
+    setIsIntentModalOpen(true);
+  };
+
+  const handleOpenEditIntent = (intent) => {
+    setEditingIntent(intent);
+    setIntentFormData({
+      code: intent.code,
+      title: intent.title,
+      subtitle: intent.subtitle || '',
+      iconName: intent.iconName || 'Headphones',
+      freqStart: intent.freqStart,
+      freqEnd: intent.freqEnd,
+      isActive: intent.isActive !== false,
+      displayOrder: intent.displayOrder || 1
+    });
+    setIsIntentModalOpen(true);
+  };
+
+  const handleSaveIntent = async (e) => {
+    e.preventDefault();
+    try {
+      if (editingIntent) {
+        const res = await axiosClient.put(`/admin/frequency-config/intents/${editingIntent.id}`, intentFormData);
+        setAdminIntents(prev => prev.map(i => i.id === editingIntent.id ? res.data : i));
+        toast.success("Đã cập nhật băng tần thành công!");
+      } else {
+        const res = await axiosClient.post('/admin/frequency-config/intents', intentFormData);
+        setAdminIntents(prev => [...prev, res.data]);
+        toast.success("Đã thêm băng tần mới thành công!");
+      }
+      setIsIntentModalOpen(false);
+      setEditingIntent(null);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Lỗi lưu băng tần");
+    }
+  };
+
+  const handleToggleChannel = async (id) => {
+    try {
+      const res = await axiosClient.patch(`/admin/frequency-config/channels/${id}/toggle`);
+      setAdminChannels(prev => prev.map(c => c.id === id ? res.data : c));
+      toast.success("Đã cập nhật trạng thái đài phát!");
+    } catch (e) {
+      toast.error("Không thể cập nhật đài phát");
+    }
+  };
+
+  const handleDeleteChannel = async (id) => {
+    if (!window.confirm("Bạn có chắc chắn muốn xóa kênh phát thanh này?")) return;
+    try {
+      await axiosClient.delete(`/admin/frequency-config/channels/${id}`);
+      setAdminChannels(prev => prev.filter(c => c.id !== id));
+      toast.success("Đã xóa đài phát thành công!");
+    } catch (e) {
+      toast.error("Không thể xóa đài phát");
+    }
+  };
+
+  const handleOpenAddChannel = () => {
+    setEditingChannel(null);
+    setChannelFormData({
+      name: '',
+      genreTag: 'Lo-Fi Beats',
+      streamUrl: '',
+      isActive: true
+    });
+    setIsChannelModalOpen(true);
+  };
+
+  const handleOpenEditChannel = (ch) => {
+    setEditingChannel(ch);
+    setChannelFormData({
+      name: ch.name,
+      genreTag: ch.genreTag || 'Lo-Fi Chill',
+      streamUrl: ch.streamUrl,
+      isActive: ch.isActive !== false
+    });
+    setIsChannelModalOpen(true);
+  };
+
+  const handleSaveChannel = async (e) => {
+    e.preventDefault();
+    try {
+      if (editingChannel) {
+        const res = await axiosClient.put(`/admin/frequency-config/channels/${editingChannel.id}`, channelFormData);
+        setAdminChannels(prev => prev.map(c => c.id === editingChannel.id ? res.data : c));
+        toast.success("Đã cập nhật đài phát thành công!");
+      } else {
+        const res = await axiosClient.post('/admin/frequency-config/channels', channelFormData);
+        setAdminChannels(prev => [...prev, res.data]);
+        toast.success("Đã thêm đài phát mới thành công!");
+      }
+      setIsChannelModalOpen(false);
+      setEditingChannel(null);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Lỗi lưu đài phát");
+    }
   };
 
   // --- Lọc dữ liệu hiển thị ---
@@ -1839,6 +2022,222 @@ export const AdminDashboard = () => {
                         </div>
                       ))}
                     </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ====================================================
+                TAB: QUẢN LÝ BĂNG TẦN & ĐÀI NHẠC FM (FREQUENCY & AUDIO CHANNELS)
+                ==================================================== */}
+            {activeTab === 'frequency_management' && (hasPermission('TL_PERM_MUSIC_MANAGE') || hasPermission('TL_PERM_BRAND_MANAGE')) && (
+              <div className="space-y-6 animate-fade-in">
+                {/* Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-xl font-bold text-zinc-100 tracking-tight flex items-center gap-2">
+                      <Radio size={20} className="text-emerald-400" />
+                      <span>Quản Lý Băng Tần FM & Đài Phát Nhạc Hệ Thống</span>
+                    </h2>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      Cấu hình động dải tần số MHz cho Trạm Dò Sóng FM và quản trị các luồng phát thanh Lo-Fi / Ambient
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={fetchFrequencyData}
+                      className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-750 text-zinc-300 font-semibold text-xs flex items-center gap-1.5 transition-all border border-zinc-700/60"
+                    >
+                      <RefreshCw size={13} className={loadingFrequency ? 'animate-spin' : ''} />
+                      <span>Làm mới</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Live Stats Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                  <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800 flex items-center gap-3.5">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                      <Signal size={20} />
+                    </div>
+                    <div>
+                      <span className="text-[11px] font-mono text-zinc-400">Trạm phát sóng trực tiếp</span>
+                      <h4 className="text-lg font-bold font-mono text-emerald-400">{liveFrequencyStats.activeBroadcasters || 0}</h4>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800 flex items-center gap-3.5">
+                    <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400 flex items-center justify-center">
+                      <Radio size={20} />
+                    </div>
+                    <div>
+                      <span className="text-[11px] font-mono text-zinc-400">Băng tần quy hoạch</span>
+                      <h4 className="text-lg font-bold font-mono text-sky-400">{adminIntents.length}</h4>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800 flex items-center gap-3.5">
+                    <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center">
+                      <Disc3 size={20} />
+                    </div>
+                    <div>
+                      <span className="text-[11px] font-mono text-zinc-400">Luồng radio phát thật</span>
+                      <h4 className="text-lg font-bold font-mono text-purple-400">{adminChannels.length}</h4>
+                    </div>
+                  </div>
+                </div>
+
+                {/* BẢNG 1: QUẢN LÝ BĂNG TẦN KẾT NỐI (MatchIntent) */}
+                <div className="p-5 rounded-2xl bg-zinc-900/40 border border-zinc-800 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-bold text-zinc-200">1. Danh mục Băng Tần FM (Match Intents)</h3>
+                      <p className="text-xs text-zinc-400">Quy hoạch dải tần MHz riêng biệt cho từng mục đích kết nối</p>
+                    </div>
+                    <button
+                      onClick={handleOpenAddIntent}
+                      className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5 transition-all shadow-sm"
+                    >
+                      <Plus size={13} />
+                      <span>Thêm băng tần</span>
+                    </button>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="border-b border-zinc-800 text-zinc-400 font-mono text-[11px]">
+                          <th className="py-2.5 px-3">MÃ (CODE)</th>
+                          <th className="py-2.5 px-3">TIÊU ĐỀ & MÔ TẢ</th>
+                          <th className="py-2.5 px-3">DẢI TẦN (MHZ)</th>
+                          <th className="py-2.5 px-3">ICON</th>
+                          <th className="py-2.5 px-3">THỨ TỰ</th>
+                          <th className="py-2.5 px-3 text-center">TRẠNG THÁI</th>
+                          <th className="py-2.5 px-3 text-right">THAO TÁC</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-800/60 font-sans">
+                        {adminIntents.map(intent => (
+                          <tr key={intent.id} className="hover:bg-zinc-800/30 transition-colors">
+                            <td className="py-3 px-3 font-mono text-emerald-400 font-semibold">{intent.code}</td>
+                            <td className="py-3 px-3">
+                              <span className="font-semibold text-zinc-200 block">{intent.title}</span>
+                              <span className="text-[11px] text-zinc-400">{intent.subtitle}</span>
+                            </td>
+                            <td className="py-3 px-3 font-mono text-zinc-300">
+                              {intent.freqStart?.toFixed(1)} - {intent.freqEnd?.toFixed(1)} MHz
+                            </td>
+                            <td className="py-3 px-3 font-mono text-zinc-400">{intent.iconName || 'Radio'}</td>
+                            <td className="py-3 px-3 font-mono text-zinc-400">{intent.displayOrder || 1}</td>
+                            <td className="py-3 px-3 text-center">
+                              <button
+                                onClick={() => handleToggleIntent(intent.id)}
+                                className={`px-2 py-0.5 rounded-full font-mono text-[10px] font-semibold border transition-all ${
+                                  intent.isActive !== false
+                                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                                    : 'bg-zinc-800 border-zinc-700 text-zinc-500'
+                                }`}
+                              >
+                                {intent.isActive !== false ? 'KÍCH HOẠT' : 'TẠM TẮT'}
+                              </button>
+                            </td>
+                            <td className="py-3 px-3 text-right space-x-1.5">
+                              <button
+                                onClick={() => handleOpenEditIntent(intent)}
+                                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                                title="Chỉnh sửa"
+                              >
+                                <Edit3 size={13} />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteIntent(intent.id)}
+                                className="p-1.5 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-zinc-800 transition-colors"
+                                title="Xóa"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* BẢNG 2: QUẢN LÝ ĐÀI PHÁT NHẠC HỆ THỐNG (AudioChannel) */}
+                <div className="p-5 rounded-2xl bg-zinc-900/40 border border-zinc-800 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-bold text-zinc-200">2. Đài Phát Nhạc Nền Hệ Thống (Audio Channels)</h3>
+                      <p className="text-xs text-zinc-400">Các luồng radio Lo-Fi / Ambient phát trực tiếp trên sảnh và phòng chung</p>
+                    </div>
+                    <button
+                      onClick={handleOpenAddChannel}
+                      className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs flex items-center gap-1.5 transition-all shadow-sm"
+                    >
+                      <Plus size={13} />
+                      <span>Thêm luồng radio</span>
+                    </button>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="border-b border-zinc-800 text-zinc-400 font-mono text-[11px]">
+                          <th className="py-2.5 px-3">TÊN ĐÀI PHÁT</th>
+                          <th className="py-2.5 px-3">THỂ LOẠI / TAG</th>
+                          <th className="py-2.5 px-3">STREAM URL</th>
+                          <th className="py-2.5 px-3 text-center">TRẠNG THÁI</th>
+                          <th className="py-2.5 px-3 text-right">THAO TÁC</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-800/60 font-sans">
+                        {adminChannels.map(ch => (
+                          <tr key={ch.id} className="hover:bg-zinc-800/30 transition-colors">
+                            <td className="py-3 px-3 font-semibold text-zinc-200 flex items-center gap-2">
+                              <Disc3 size={14} className="text-purple-400 flex-shrink-0" />
+                              <span>{ch.name}</span>
+                            </td>
+                            <td className="py-3 px-3">
+                              <span className="px-2 py-0.5 rounded-md bg-zinc-800 border border-zinc-700/60 text-zinc-300 font-mono text-[10px]">
+                                {ch.genreTag || 'Lo-Fi'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 font-mono text-zinc-400 max-w-[240px] truncate" title={ch.streamUrl}>
+                              {ch.streamUrl}
+                            </td>
+                            <td className="py-3 px-3 text-center">
+                              <button
+                                onClick={() => handleToggleChannel(ch.id)}
+                                className={`px-2 py-0.5 rounded-full font-mono text-[10px] font-semibold border transition-all ${
+                                  ch.isActive !== false
+                                    ? 'bg-purple-500/15 border-purple-500/30 text-purple-400'
+                                    : 'bg-zinc-800 border-zinc-700 text-zinc-500'
+                                }`}
+                              >
+                                {ch.isActive !== false ? 'KÍCH HOẠT' : 'TẠM TẮT'}
+                              </button>
+                            </td>
+                            <td className="py-3 px-3 text-right space-x-1.5">
+                              <button
+                                onClick={() => handleOpenEditChannel(ch)}
+                                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                                title="Chỉnh sửa"
+                              >
+                                <Edit3 size={13} />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteChannel(ch.id)}
+                                className="p-1.5 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-zinc-800 transition-colors"
+                                title="Xóa"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               </div>
@@ -3074,6 +3473,208 @@ export const AdminDashboard = () => {
                 <span>Xác nhận gỡ bài & Gửi cảnh báo</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ====================================================
+          MODAL: THÊM / CHỈNH SỬA BĂNG TẦN (MATCH INTENT)
+          ==================================================== */}
+      {isIntentModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => setIsIntentModalOpen(false)}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Radio size={16} className="text-emerald-400" />
+                <span>{editingIntent ? 'Chỉnh Sửa Băng Tần' : 'Thêm Băng Tần FM Mới'}</span>
+              </h3>
+              <button onClick={() => setIsIntentModalOpen(false)} className="text-zinc-400 hover:text-white">
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveIntent} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block text-zinc-300 font-medium mb-1">Mã định danh (Code - Unique) *</label>
+                <input
+                  type="text"
+                  required
+                  value={intentFormData.code}
+                  onChange={(e) => setIntentFormData(prev => ({ ...prev, code: e.target.value.toUpperCase().replace(/\s+/g, '_') }))}
+                  placeholder="VD: CHILL_MUSIC, DEEP_TALK..."
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-white font-mono focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-zinc-300 font-medium mb-1">Tiêu đề hiển thị *</label>
+                <input
+                  type="text"
+                  required
+                  value={intentFormData.title}
+                  onChange={(e) => setIntentFormData(prev => ({ ...prev, title: e.target.value }))}
+                  placeholder="VD: Nghe nhạc & Chill, Cùng chạy deadline..."
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-zinc-300 font-medium mb-1">Mô tả phụ</label>
+                <input
+                  type="text"
+                  value={intentFormData.subtitle}
+                  onChange={(e) => setIntentFormData(prev => ({ ...prev, subtitle: e.target.value }))}
+                  placeholder="VD: Thưởng thức giai điệu Lo-Fi, xả stress..."
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-zinc-300 font-medium mb-1">Tần số bắt đầu (MHz) *</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="88.0"
+                    max="108.0"
+                    required
+                    value={intentFormData.freqStart}
+                    onChange={(e) => setIntentFormData(prev => ({ ...prev, freqStart: parseFloat(e.target.value) }))}
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-white font-mono focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-zinc-300 font-medium mb-1">Tần số kết thúc (MHz) *</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="88.0"
+                    max="108.0"
+                    required
+                    value={intentFormData.freqEnd}
+                    onChange={(e) => setIntentFormData(prev => ({ ...prev, freqEnd: parseFloat(e.target.value) }))}
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-white font-mono focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-zinc-300 font-medium mb-1">Tên Icon Lucide</label>
+                  <select
+                    value={intentFormData.iconName}
+                    onChange={(e) => setIntentFormData(prev => ({ ...prev, iconName: e.target.value }))}
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="Headphones">Headphones</option>
+                    <option value="Laptop">Laptop</option>
+                    <option value="MessageCircle">MessageCircle</option>
+                    <option value="Sparkles">Sparkles</option>
+                    <option value="Radio">Radio</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-zinc-300 font-medium mb-1">Thứ tự hiển thị</label>
+                  <input
+                    type="number"
+                    value={intentFormData.displayOrder}
+                    onChange={(e) => setIntentFormData(prev => ({ ...prev, displayOrder: parseInt(e.target.value) || 1 }))}
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-white font-mono focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setIsIntentModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-950 flex items-center gap-1.5"
+                >
+                  <Save size={13} />
+                  <span>Lưu băng tần</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ====================================================
+          MODAL: THÊM / CHỈNH SỬA ĐÀI PHÁT NHẠC (AUDIO CHANNEL)
+          ==================================================== */}
+      {isChannelModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => setIsChannelModalOpen(false)}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Disc3 size={16} className="text-purple-400" />
+                <span>{editingChannel ? 'Chỉnh Sửa Đài Phát Nhạc' : 'Thêm Luồng Radio Mới'}</span>
+              </h3>
+              <button onClick={() => setIsChannelModalOpen(false)} className="text-zinc-400 hover:text-white">
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveChannel} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block text-zinc-300 font-medium mb-1">Tên đài phát *</label>
+                <input
+                  type="text"
+                  required
+                  value={channelFormData.name}
+                  onChange={(e) => setChannelFormData(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="VD: Lofi Chill Beats, Ambient Cafe..."
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-zinc-300 font-medium mb-1">Thể loại / Tag *</label>
+                <input
+                  type="text"
+                  required
+                  value={channelFormData.genreTag}
+                  onChange={(e) => setChannelFormData(prev => ({ ...prev, genreTag: e.target.value }))}
+                  placeholder="VD: Lo-Fi, Ambient, Synthwave, Jazz..."
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-zinc-300 font-medium mb-1">Stream URL (Icecast / Zeno / MP3 Stream) *</label>
+                <input
+                  type="url"
+                  required
+                  value={channelFormData.streamUrl}
+                  onChange={(e) => setChannelFormData(prev => ({ ...prev, streamUrl: e.target.value }))}
+                  placeholder="https://stream.zeno.fm/..."
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-white font-mono focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setIsChannelModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold shadow-md shadow-purple-950 flex items-center gap-1.5"
+                >
+                  <Save size={13} />
+                  <span>Lưu đài phát</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
