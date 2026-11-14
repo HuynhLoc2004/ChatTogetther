@@ -36,6 +36,13 @@ public class CommunityGroupController {
         return ResponseEntity.ok(this.groupService.getAllGroups(keyword, effectiveCategory, page, size, token));
     }
 
+    @GetMapping("/overview")
+    public ResponseEntity<ResponseData<Map<String, Object>>> getCommunitiesOverview(
+            JwtAuthenticationToken token
+    ) {
+        return ResponseEntity.ok(this.groupService.getCommunitiesOverview(token));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<ResponseData<CommunityGroupDTO>> getGroupById(
             JwtAuthenticationToken token,
@@ -101,6 +108,24 @@ public class CommunityGroupController {
             @PathVariable("userId") Long userId
     ) {
         return ResponseEntity.ok(this.groupService.rejectMember(token, id, userId));
+    }
+
+    @PostMapping("/{id}/ban/{userId}")
+    public ResponseEntity<ResponseData<Boolean>> banMember(
+            JwtAuthenticationToken token,
+            @PathVariable("id") Long id,
+            @PathVariable("userId") Long userId
+    ) {
+        return ResponseEntity.ok(this.groupService.banMember(token, id, userId));
+    }
+
+    @PostMapping("/{id}/unban/{userId}")
+    public ResponseEntity<ResponseData<Boolean>> unbanMember(
+            JwtAuthenticationToken token,
+            @PathVariable("id") Long id,
+            @PathVariable("userId") Long userId
+    ) {
+        return ResponseEntity.ok(this.groupService.unbanMember(token, id, userId));
     }
 
     @PostMapping("/{id}/set-role")

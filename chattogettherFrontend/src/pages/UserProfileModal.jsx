@@ -386,11 +386,11 @@ export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentU
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <h3 className="text-zinc-100 font-bold text-base tracking-tight truncate">{displayName}</h3>
                     {isLeader ? (
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1 shadow-sm">
-                        <Crown size={11} className="text-amber-400 fill-amber-400" /> Trưởng nhóm / Chủ phòng
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-zinc-800 text-zinc-200 border border-zinc-700 flex items-center gap-1 shadow-sm">
+                        <Crown size={11} className="text-zinc-200" /> Trưởng nhóm / Chủ phòng
                       </span>
                     ) : isSystemAdmin ? (
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-purple-500/15 text-purple-300 border border-purple-500/30 flex items-center gap-1 shadow-sm">
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-zinc-800 text-zinc-200 border border-zinc-700 flex items-center gap-1 shadow-sm">
                         <Shield size={11} /> Quản trị viên
                       </span>
                     ) : (
@@ -455,7 +455,7 @@ export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentU
                         </div>
                       ) : profile?.friendshipStatus === 'PENDING_SENT' ? (
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-amber-500/10 text-amber-300 border border-amber-500/20 text-xs font-medium">
+                          <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-zinc-800 text-zinc-300 border border-zinc-700 text-xs font-medium">
                             <Clock size={13} /> Đã gửi lời mời
                           </span>
                           <button
@@ -474,7 +474,7 @@ export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentU
                             type="button"
                             onClick={handleAcceptFriendRequest}
                             disabled={submitting}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium shadow-md transition-all"
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-medium shadow-md transition-all"
                           >
                             <UserPlus size={13} /> Đồng ý kết bạn
                           </button>
@@ -493,7 +493,7 @@ export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentU
                           type="button"
                           onClick={handleSendFriendRequest}
                           disabled={submitting}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-white text-zinc-950 text-xs font-medium shadow-md transition-all"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-medium shadow-md transition-all"
                         >
                           <UserPlus size={13} /> Kết bạn
                         </button>

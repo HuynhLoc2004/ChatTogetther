@@ -299,20 +299,40 @@ public class PostService {
             }
         }
 
-        // 4. Ánh xạ trực tiếp trên bộ nhớ RAM siêu tốc & Thuật toán Đề xuất Cộng đồng Thông minh
+        // 4. Ánh xạ trực tiếp trên bộ nhớ RAM siêu tốc & Thuật toán Đề xuất Sảnh Trực Tuyến Thông Minh (Smart Feed Ranking)
+        // Tìm các nhóm mà user đang bị BANNED để tuyệt đối không đề xuất bài
+        Set<Long> bannedGroupIds = new HashSet<>();
+        if (currentUser != null) {
+            List<CommunityMemberEntity> bannedList = this.memberRepository.findByUserAndStatus(currentUser, "BANNED");
+            for (CommunityMemberEntity b : bannedList) {
+                if (b.getGroup() != null) {
+                    bannedGroupIds.add(b.getGroup().getId());
+                }
+            }
+        }
+
         List<PostDTO> dtos = new ArrayList<>();
         for (PostEntity p : posts) {
+            // Loại trừ bài từ nhóm user bị BANNED
+            if (p.getGroupId() != null && bannedGroupIds.contains(p.getGroupId())) {
+                continue;
+            }
+
             CommunityGroupEntity grp = p.getGroupId() != null ? groupMap.get(p.getGroupId()) : null;
             boolean isMemberOfThisGroup = p.getGroupId() != null && userMemberGroupIds.contains(p.getGroupId());
 
-            // Bảo mật: Nếu bài viết thuộc nhóm riêng tư (Private) hoặc nhóm tắt công khai ra feed (isPublicToFeed = false),
-            // CHỈ người đã tham gia nhóm mới thấy bài viết này trên feed!
+            // 1. LỌC NGUỒN DỮ LIỆU HỢP LỆ:
+            // - Bài viết công khai trên Sảnh chung (groupId == null)
+            // - Bài viết thuộc Cộng đồng: phải là nhóm ACTIVE, allowFeedPromotion == true, và user đã tham gia nhóm (hoặc nhóm công khai)
             if (grp != null) {
+                if ("SUSPENDED".equalsIgnoreCase(grp.getStatus())) {
+                    continue; // Nhóm bị đình chỉ
+                }
                 if (Boolean.TRUE.equals(grp.getIsPrivate()) && !isMemberOfThisGroup) {
-                    continue; // Bỏ qua không đề xuất ra ngoài
+                    continue; // Nhóm riêng tư chỉ thành viên mới được xem
                 }
                 if (Boolean.FALSE.equals(grp.getIsPublicToFeed()) && !isMemberOfThisGroup) {
-                    continue; // Nhóm không muốn đề xuất ra Feed chung
+                    continue; // Nhóm không muốn đề xuất ra Feed chung nếu không phải thành viên
                 }
             }
 
@@ -354,97 +374,51 @@ public class PostService {
             dto.setCommentsCount(commentsCount);
             dto.setSearchHits(hits);
 
-            long hoursOld = p.getCreatedAt() != null ? Math.max(0, java.time.Duration.between(p.getCreatedAt(), LocalDateTime.now()).toHours()) : 0;
-            
-            // THUẬT TOÁN ĐỀ XUẤT CỘNG ĐỒNG THÔNG MINH (Smart Community Resonance Discovery):
-            // 1. Điểm tương tác cơ sở & độ phân rã thời gian tự nhiên
-            double engagementScore = ((hits * 3.0) + (commentsCount * 4.0) + (likesCount * 3.0) + 1.0) / Math.pow(hoursOld + 2.0, 1.25);
-            
-            // 2. Hệ số cộng hưởng cá nhân hóa & Thuật toán Đề xuất Xã hội Thông minh (Smart Social Feed Signals)
-            double resonanceMultiplier = 1.0;
+            // 2. CÔNG THỨC CHẤM ĐIỂM XẾP HẠNG (Smart Feed Ranking Formula)
+            // Nhận diện tín hiệu âm thanh đặc trưng (Voice note 15s hoặc audio file)
+            boolean hasAudio = (p.getVibe() != null && (p.getVibe().contains(".mp3") || p.getVibe().contains(".webm") || p.getVibe().contains("voice") || p.getVibe().contains("audio")))
+                    || (p.getImageUrl() != null && (p.getImageUrl().endsWith(".mp3") || p.getImageUrl().endsWith(".webm") || p.getImageUrl().contains("audio")));
+
+            // InteractionScore = (likeCount * 2) + (commentCount * 3) + (hasAudio ? 6 : 0)
+            double interactionScore = (likesCount * 2.0) + (commentsCount * 3.0) + (hasAudio ? 6.0 : 0.0);
+
+            // SocialAffinityBonus
+            double socialAffinityBonus = 0.0;
             String recoReason = null;
             boolean isFriendInteracted = false;
 
-            // Ưu tiên 1: Tín hiệu xã hội trực tiếp từ Bạn Bè (Bình luận / Thích)
-            if (friendCommentSignalMap.containsKey(p.getId())) {
-                resonanceMultiplier += 0.60;
-                recoReason = "Bạn bè (" + friendCommentSignalMap.get(p.getId()) + ") đã bình luận bài viết này";
-                isFriendInteracted = true;
-            } else if (friendLikeSignalMap.containsKey(p.getId())) {
-                resonanceMultiplier += 0.45;
-                recoReason = "Bạn bè (" + friendLikeSignalMap.get(p.getId()) + ") đã thích bài viết này";
-                isFriendInteracted = true;
+            boolean isFriendAuthor = author != null && friendUserIds.contains(author.getId());
+            boolean hasFriendInteraction = friendCommentSignalMap.containsKey(p.getId()) || friendLikeSignalMap.containsKey(p.getId());
+
+            if (isFriendAuthor) {
+                socialAffinityBonus += 15.0;
+                recoReason = "Bài viết từ bạn bè @" + (dto.getAuthorAccount() != null ? dto.getAuthorAccount() : dto.getAuthorNickname());
             }
 
-            // Ưu tiên 2: Bài viết từ Cộng đồng mà user ĐÃ THAM GIA
             if (isMemberOfThisGroup) {
-                resonanceMultiplier += 0.50;
+                socialAffinityBonus += 10.0;
                 if (recoReason == null) {
                     recoReason = "Từ cộng đồng " + (grp != null ? grp.getName() : "bạn đã tham gia");
                 }
-            } else if (grp != null) {
-                // Đề xuất bài viết từ Cộng đồng công khai khác mà user CHƯA tham gia
-                resonanceMultiplier += 0.25;
+            }
+
+            if (hasFriendInteraction) {
+                socialAffinityBonus += 8.0;
+                isFriendInteracted = true;
                 if (recoReason == null) {
-                    recoReason = "Khám phá từ cộng đồng " + grp.getName();
+                    String friendName = friendCommentSignalMap.getOrDefault(p.getId(), friendLikeSignalMap.get(p.getId()));
+                    recoReason = "Bạn bè (" + friendName + ") đã tương tác";
                 }
             }
 
-            if (currentUser != null && author != null) {
-                // Tương thích độ tuổi (Age Affinity): Bạn cùng độ tuổi (+20% đến +40%)
-                if (currentUser.getAge() != null && author.getAge() != null) {
-                    int ageDiff = Math.abs(currentUser.getAge() - author.getAge());
-                    if (ageDiff <= 3) {
-                        resonanceMultiplier += 0.35;
-                    } else if (ageDiff <= 7) {
-                        resonanceMultiplier += 0.15;
-                    }
-                }
+            long hoursOld = p.getCreatedAt() != null ? Math.max(0, java.time.Duration.between(p.getCreatedAt(), LocalDateTime.now()).toHours()) : 0;
+            // TimeDecay: FinalScore = (InteractionScore + SocialAffinityBonus + 10) / Math.pow(hoursSinceCreated + 2, 1.5)
+            double timeDecay = Math.pow(hoursOld + 2.0, 1.5);
+            double finalScore = (interactionScore + socialAffinityBonus + 10.0) / timeDecay;
 
-                // Tương thích vị trí địa lý
-                if (currentUser.getLocation() != null && author.getLocation() != null 
-                        && !currentUser.getLocation().trim().isEmpty() 
-                        && currentUser.getLocation().equalsIgnoreCase(author.getLocation())) {
-                    resonanceMultiplier += 0.20;
-                }
-
-                // Social Graph: Tác giả bài viết là Bạn Bè (+45%)
-                if (friendUserIds.contains(author.getId())) {
-                    resonanceMultiplier += 0.45;
-                    if (recoReason == null) {
-                        recoReason = "Bài viết từ bạn bè " + dto.getAuthorNickname();
-                    }
-                }
-
-                // Bài viết của chính mình
-                if (author.getId().equals(currentUser.getId())) {
-                    resonanceMultiplier += 0.15;
-                }
-            }
-
-            // Đa phương tiện phong phú
-            if (p.getImageUrl() != null && !p.getImageUrl().trim().isEmpty()) {
-                resonanceMultiplier += 0.2;
-            }
-            if (p.getVibe() != null && !p.getVibe().trim().isEmpty()) {
-                resonanceMultiplier += 0.1;
-            }
-
-            if (recoReason == null && engagementScore > 10.0) {
-                recoReason = "Thịnh hành được quan tâm nhiều";
-            }
-
+            dto.setTrendingScore(finalScore);
             dto.setRecommendationReason(recoReason);
             dto.setIsFriendInteraction(isFriendInteracted);
-
-            // 3. Phân kỳ ngẫu nhiên phi xác định cá nhân hóa (Non-deterministic Personal Jitter):
-            // Đảm bảo không bị fix cứng, người dùng A và B (dù cùng là bạn của C) sẽ nhìn thấy thứ tự đa dạng, không trùng lặp 100%
-            long uId = currentUser != null ? currentUser.getId() : 11L;
-            double hashSeed = (uId * 37L + p.getId() * 19L) % 1000;
-            double personalJitter = 0.88 + (Math.sin(hashSeed) * 0.12); // Dao động vi mô [0.88 - 1.00]
-
-            double finalRecommendScore = engagementScore * resonanceMultiplier * personalJitter;
-            dto.setTrendingScore(finalRecommendScore);
 
             PostLikeEntity myLike = userLikeMap.get(p.getId());
             if (myLike != null) {
@@ -458,10 +432,49 @@ public class PostService {
             dtos.add(dto);
         }
 
-        // Sắp xếp bài viết thông minh theo điểm đề xuất tối ưu (Personalized Resonance)
+        // Sắp xếp bài viết sơ bộ theo điểm FinalScore giảm dần
         dtos.sort((a, b) -> Double.compare(b.getTrendingScore(), a.getTrendingScore()));
 
-        return new ResponseData<>(200, "Lấy danh sách bài viết thành công", dtos);
+        // 3. QUY TẮC CHỐNG NGẬP SẢNH (Diversity Cap):
+        // Không xếp quá 2 bài liên tiếp từ cùng một Cộng đồng hoặc cùng một tác giả trên bảng tin
+        List<PostDTO> diversified = new ArrayList<>();
+        List<PostDTO> pool = new ArrayList<>(dtos);
+
+        while (!pool.isEmpty()) {
+            int selectedIdx = -1;
+            int sz = diversified.size();
+            Long last1Group = sz >= 1 ? diversified.get(sz - 1).getGroupId() : null;
+            Long last2Group = sz >= 2 ? diversified.get(sz - 2).getGroupId() : null;
+            Long last1Author = sz >= 1 ? diversified.get(sz - 1).getAuthorId() : null;
+            Long last2Author = sz >= 2 ? diversified.get(sz - 2).getAuthorId() : null;
+
+            for (int i = 0; i < pool.size(); i++) {
+                PostDTO cand = pool.get(i);
+                boolean wouldViolateGroup = cand.getGroupId() != null 
+                        && last1Group != null 
+                        && last2Group != null 
+                        && cand.getGroupId().equals(last1Group) 
+                        && cand.getGroupId().equals(last2Group);
+
+                boolean wouldViolateAuthor = cand.getAuthorId() != null 
+                        && last1Author != null 
+                        && last2Author != null 
+                        && cand.getAuthorId().equals(last1Author) 
+                        && cand.getAuthorId().equals(last2Author);
+
+                if (!wouldViolateGroup && !wouldViolateAuthor) {
+                    selectedIdx = i;
+                    break;
+                }
+            }
+
+            if (selectedIdx == -1) {
+                selectedIdx = 0; // Nếu tất cả ứng viên còn lại đều từ cùng group/author thì lấy phần tử tiếp theo
+            }
+            diversified.add(pool.remove(selectedIdx));
+        }
+
+        return new ResponseData<>(200, "Lấy danh sách bài viết thành công", diversified);
     }
 
     @Transactional

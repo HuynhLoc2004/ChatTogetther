@@ -79,6 +79,36 @@ public class CommunityGroupService {
     }
 
     @Transactional(readOnly = true)
+    public ResponseData<Map<String, Object>> getCommunitiesOverview(JwtAuthenticationToken token) {
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        List<CommunityGroupEntity> allActiveGroups = this.groupRepository.findActiveCommunities(null, null);
+
+        List<CommunityGroupDTO> joined = new ArrayList<>();
+        List<CommunityGroupDTO> suggested = new ArrayList<>();
+
+        for (CommunityGroupEntity g : allActiveGroups) {
+            CommunityGroupDTO dto = mapToGroupDTO(g, currentUser, false);
+            if (dto.getCurrentUserRole() != null) {
+                joined.add(dto);
+            } else {
+                suggested.add(dto);
+            }
+        }
+
+        suggested.sort((a, b) -> {
+            int feat = Boolean.compare(Boolean.TRUE.equals(b.getIsFeatured()), Boolean.TRUE.equals(a.getIsFeatured()));
+            if (feat != 0) return feat;
+            return Long.compare(b.getMembersCount() != null ? b.getMembersCount() : 0, a.getMembersCount() != null ? a.getMembersCount() : 0);
+        });
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("joinedCommunities", joined);
+        result.put("suggestedCommunities", suggested);
+
+        return new ResponseData<>(200, "Lấy tổng quan cộng đồng thành công", result);
+    }
+
+    @Transactional(readOnly = true)
     public ResponseData<CommunityGroupDTO> getGroupById(Long groupId, JwtAuthenticationToken token) {
         UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
         CommunityGroupEntity group = this.groupRepository.findById(groupId).orElseThrow(() ->
@@ -379,6 +409,68 @@ public class CommunityGroupService {
     }
 
     @Transactional
+    public ResponseData<Boolean> banMember(JwtAuthenticationToken token, Long groupId, Long targetUserId) {
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        CommunityGroupEntity group = this.groupRepository.findById(groupId).orElseThrow(() ->
+            new AppException(404, "Cộng đồng không tồn tại", 404)
+        );
+
+        CommunityMemberEntity currentMember = this.memberRepository.findByGroupAndUser(group, currentUser).orElseThrow(() ->
+            new AppException(403, "Bạn không phải quản trị viên nhóm này!", 403)
+        );
+
+        if (!"OWNER".equals(currentMember.getRole()) && !"DEPUTY".equals(currentMember.getRole())) {
+            throw new AppException(403, "Chỉ Chủ nhóm hoặc Phó nhóm mới có quyền chặn thành viên!", 403);
+        }
+
+        UserEntity targetUser = this.userRepository.findById(targetUserId).orElseThrow(() ->
+            new AppException(404, "Người dùng không tồn tại", 404)
+        );
+
+        if (group.getOwner() != null && group.getOwner().getId().equals(targetUserId)) {
+            throw new AppException(400, "Không thể chặn Chủ nhóm!", 400);
+        }
+
+        CommunityMemberEntity targetMember = this.memberRepository.findByGroupAndUser(group, targetUser).orElse(null);
+        if (targetMember == null) {
+            targetMember = new CommunityMemberEntity();
+            targetMember.setGroup(group);
+            targetMember.setUser(targetUser);
+            targetMember.setRole("MEMBER");
+        }
+        targetMember.setStatus("BANNED");
+        this.memberRepository.save(targetMember);
+        return new ResponseData<>(200, "Đã chặn thành viên khỏi nhóm", true);
+    }
+
+    @Transactional
+    public ResponseData<Boolean> unbanMember(JwtAuthenticationToken token, Long groupId, Long targetUserId) {
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        CommunityGroupEntity group = this.groupRepository.findById(groupId).orElseThrow(() ->
+            new AppException(404, "Cộng đồng không tồn tại", 404)
+        );
+
+        CommunityMemberEntity currentMember = this.memberRepository.findByGroupAndUser(group, currentUser).orElseThrow(() ->
+            new AppException(403, "Bạn không phải quản trị viên nhóm này!", 403)
+        );
+
+        if (!"OWNER".equals(currentMember.getRole()) && !"DEPUTY".equals(currentMember.getRole())) {
+            throw new AppException(403, "Chỉ Chủ nhóm hoặc Phó nhóm mới có quyền gỡ chặn!", 403);
+        }
+
+        UserEntity targetUser = this.userRepository.findById(targetUserId).orElseThrow(() ->
+            new AppException(404, "Người dùng không tồn tại", 404)
+        );
+
+        Optional<CommunityMemberEntity> targetMemberOpt = this.memberRepository.findByGroupAndUser(group, targetUser);
+        if (targetMemberOpt.isPresent()) {
+            CommunityMemberEntity targetMember = targetMemberOpt.get();
+            this.memberRepository.delete(targetMember);
+        }
+        return new ResponseData<>(200, "Đã gỡ chặn thành viên khỏi nhóm", true);
+    }
+
+    @Transactional
     public ResponseData<Boolean> setMemberRole(JwtAuthenticationToken token, Long groupId, Long targetUserId, String newRole) {
         UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
         CommunityGroupEntity group = this.groupRepository.findById(groupId).orElseThrow(() ->
@@ -674,7 +766,9 @@ public class CommunityGroupService {
                     .findFirst();
             if (userMem.isPresent()) {
                 CommunityMemberEntity mem = userMem.get();
-                if ("ACTIVE".equals(mem.getStatus())) {
+                if ("BANNED".equalsIgnoreCase(mem.getStatus())) {
+                    dto.setCurrentUserRole("BANNED");
+                } else if ("ACTIVE".equalsIgnoreCase(mem.getStatus()) || "APPROVED".equalsIgnoreCase(mem.getStatus())) {
                     dto.setCurrentUserRole(mem.getRole());
                 } else {
                     dto.setCurrentUserRole("PENDING");

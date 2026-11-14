@@ -31,6 +31,15 @@ public class PostController {
         return ResponseEntity.ok(this.postService.getAllPosts(token, page, size));
     }
 
+    @GetMapping("/feed")
+    public ResponseEntity<ResponseData<List<PostDTO>>> getFeedPosts(
+            JwtAuthenticationToken token,
+            @RequestParam(value = "page", required = false, defaultValue = "0") Integer page,
+            @RequestParam(value = "size", required = false, defaultValue = "25") Integer size
+    ) {
+        return ResponseEntity.ok(this.postService.getAllPosts(token, page, size));
+    }
+
     @PostMapping
     public ResponseEntity<ResponseData<PostDTO>> createPost(
             JwtAuthenticationToken token,

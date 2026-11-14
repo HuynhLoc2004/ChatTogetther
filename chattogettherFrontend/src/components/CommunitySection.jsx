@@ -145,10 +145,24 @@ export const CommunitySection = ({
     fetchCategories();
   }, []);
 
-  // Nạp danh sách cộng đồng
+  // Nạp danh sách cộng đồng (Hỗ trợ overview 2 mục & tìm kiếm)
   const fetchGroups = async (kw = '') => {
     try {
       setLoading(true);
+      if (!kw.trim()) {
+        try {
+          const resOverview = await axiosClient.get('/groups/overview');
+          if (resOverview.data?.data) {
+            const joined = resOverview.data.data.joinedCommunities || [];
+            const suggested = resOverview.data.data.suggestedCommunities || [];
+            setGroups([...joined, ...suggested]);
+            return;
+          }
+        } catch (overviewErr) {
+          console.warn("Lỗi gọi /groups/overview, dùng fallback /groups:", overviewErr);
+        }
+      }
+
       const res = await axiosClient.get('/groups', {
         params: kw.trim() ? { keyword: kw.trim() } : {}
       });
@@ -440,6 +454,31 @@ export const CommunitySection = ({
       handleOpenGroup(selectedGroup);
     } catch (err) {
       toast.error(err.response?.data?.message || "Không thể cập nhật quyền");
+    }
+  };
+
+  // Chặn thành viên khỏi cộng đồng
+  const handleBanMember = async (targetUserId) => {
+    if (!selectedGroup) return;
+    if (!window.confirm("Bạn có chắc chắn muốn chặn thành viên này? Họ sẽ không thể đăng bài hoặc bình luận trong nhóm.")) return;
+    try {
+      await axiosClient.post(`/groups/${selectedGroup.id}/ban/${targetUserId}`);
+      toast.success("Đã chặn thành viên khỏi cộng đồng!");
+      handleOpenGroup(selectedGroup);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Không thể chặn thành viên");
+    }
+  };
+
+  // Gỡ chặn thành viên
+  const handleUnbanMember = async (targetUserId) => {
+    if (!selectedGroup) return;
+    try {
+      await axiosClient.post(`/groups/${selectedGroup.id}/unban/${targetUserId}`);
+      toast.success("Đã gỡ chặn thành viên!");
+      handleOpenGroup(selectedGroup);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Không thể gỡ chặn thành viên");
     }
   };
 
@@ -904,6 +943,30 @@ export const CommunitySection = ({
           </div>
 
           {/* ============================================================== */}
+          {/* THANH PHÒNG THOẠI TRỰC TIẾP (LIVE GROUP ROOM BAR)               */}
+          {/* ============================================================== */}
+          {(activeGroupRoom || selectedGroup.activeVoiceRoomId) && (
+            <div className="flex items-center justify-between p-3.5 rounded-xl bg-zinc-900 border border-zinc-800 shadow-sm mt-3.5">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="relative flex h-2.5 w-2.5 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                </span>
+                <span className="text-xs text-zinc-200 font-medium truncate">
+                  Đang có phòng đàm thoại nhóm • <strong className="text-emerald-400 font-mono tabular-nums">{activeGroupRoom?.members?.length || 1}</strong> thành viên đang kết nối
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleOpenGroupVoiceRoom}
+                className="h-8 px-3.5 rounded-lg bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-semibold shrink-0 transition-colors active:scale-95 shadow-sm"
+              >
+                Tham gia ngay
+              </button>
+            </div>
+          )}
+
+          {/* ============================================================== */}
           {/* LƯỚI 4 TAB CHIA ĐỀU CHUẨN MOBILE & LAPTOP (KHÔNG BỊ CẮT CHỮ)    */}
           {/* ============================================================== */}
           <div className={`grid ${canManage ? 'grid-cols-4' : 'grid-cols-3'} gap-1 bg-zinc-900/80 p-1 rounded-xl border border-zinc-800 text-center mt-3.5`}>
@@ -990,7 +1053,13 @@ export const CommunitySection = ({
               )}
 
               {/* Box soạn thảo bài viết dành riêng cho nhóm (Ảnh & Ghi âm 15s) */}
-              <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800/90 shadow-sm">
+              {selectedGroup.currentUserRole === 'BANNED' ? (
+                <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 text-center space-y-1">
+                  <p className="text-xs font-semibold text-rose-400">Bạn đã bị chặn khỏi cộng đồng này</p>
+                  <p className="text-[11px] text-zinc-400">Bạn chỉ có thể xem nội dung lưu trữ và không thể đăng bài thảo luận hoặc bình luận.</p>
+                </div>
+              ) : (
+                <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800/90 shadow-sm">
                 <div className="flex items-start gap-3">
                   <div className="w-9 h-9 rounded-full bg-zinc-800 overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-xs text-white border border-zinc-700">
                     {safeAvatar ? (
@@ -1113,6 +1182,7 @@ export const CommunitySection = ({
                   </div>
                 </div>
               </div>
+              )}
 
               {/* Danh sách bài thảo luận trong nhóm */}
               {groupPosts.length === 0 ? (
@@ -1298,6 +1368,28 @@ export const CommunitySection = ({
                             <MessageCircle size={13} />
                             <span className="hidden sm:inline">Nhắn tin</span>
                           </button>
+                        )}
+
+                        {canManage && !isSelf && !isOwner && (
+                          member.status === 'BANNED' ? (
+                            <button
+                              type="button"
+                              onClick={() => handleUnbanMember(member.userId)}
+                              className="px-2.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 transition-all text-xs flex items-center gap-1 font-mono"
+                              title="Gỡ chặn thành viên"
+                            >
+                              <span>Gỡ chặn</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleBanMember(member.userId)}
+                              className="px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-rose-950/40 text-zinc-400 hover:text-rose-400 border border-zinc-800 transition-all text-xs flex items-center gap-1 font-mono"
+                              title="Chặn thành viên"
+                            >
+                              <span>Chặn</span>
+                            </button>
+                          )
                         )}
                       </div>
                     </div>
@@ -1817,12 +1909,12 @@ export const CommunitySection = ({
 
             return (
               <div className="space-y-6">
-                {/* 1. CỘNG ĐỒNG CỦA BẠN (ĐÃ THAM GIA) */}
+                {/* 1. TRẠM CỘNG ĐỒNG CỦA BẠN (ĐÃ THAM GIA) */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-xs font-semibold text-zinc-300">
                       <CheckCircle2 size={14} className="text-zinc-400" />
-                      <span>Cộng đồng của bạn (Đã tham gia)</span>
+                      <span>Trạm cộng đồng của bạn (Đã tham gia)</span>
                       <span className="text-[10px] px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-300 border border-zinc-700 font-mono tabular-nums">
                         {myJoinedGroups.length}
                       </span>
@@ -1840,13 +1932,13 @@ export const CommunitySection = ({
                   )}
                 </div>
 
-                {/* 2. CỘNG ĐỒNG KHÁM PHÁ / ĐỀ XUẤT */}
+                {/* 2. ĐỀ XUẤT ĐỒNG ĐIỆU */}
                 {suggestedGroups.length > 0 && (
                   <div className="space-y-3 pt-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-xs font-semibold text-zinc-300">
                         <Sparkles size={14} className="text-zinc-400" />
-                        <span>Khám phá cộng đồng mới</span>
+                        <span>Đề xuất đồng điệu</span>
                         <span className="text-[10px] px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-300 border border-zinc-700 font-mono tabular-nums">
                           {suggestedGroups.length}
                         </span>

@@ -2896,14 +2896,21 @@ const Home = ({ initialTab }) => {
                       {post.groupId && (
                         <div className="post-community-header-bar flex items-center justify-between pb-2 mb-2.5 border-b border-zinc-800/80 text-xs">
                           <div className="flex items-center gap-1.5 min-w-0">
-                            <span className="text-emerald-400 font-semibold flex items-center gap-1 truncate">
-                              <span className="text-[10px]">✦</span>
-                              <span className="text-zinc-200 hover:underline cursor-pointer" onClick={() => setActiveTab('groups')}>
-                                {post.groupName || 'Cộng đồng'}
-                              </span>
+                            <span className="text-zinc-400 font-mono text-[11px] shrink-0">Tần số từ •</span>
+                            <span 
+                              className="text-zinc-100 font-semibold hover:underline cursor-pointer truncate" 
+                              onClick={() => {
+                                if (post.groupId) navigate(`/communities/${post.groupId}`);
+                                else setActiveTab('groups');
+                              }}
+                            >
+                              {post.groupName || 'Cộng đồng'}
                             </span>
-                            <span className="text-zinc-600 text-[10px]">•</span>
-                            <span className="text-[11px] text-zinc-400 flex-shrink-0 font-sans">Đề xuất</span>
+                            {post.recommendationReason && (
+                              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400 border border-zinc-700 shrink-0">
+                                {post.recommendationReason}
+                              </span>
+                            )}
                           </div>
 
                           {!post.isMemberOfGroup && (
@@ -2919,7 +2926,7 @@ const Home = ({ initialTab }) => {
                                   toast.error(err.response?.data?.message || 'Không thể gia nhập');
                                 }
                               }}
-                              className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-[11px] font-semibold border border-emerald-500/30 transition-all flex items-center gap-1 active:scale-95 flex-shrink-0"
+                              className="px-2.5 py-1 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[11px] font-medium border border-zinc-700 transition-all flex items-center gap-1 active:scale-95 flex-shrink-0"
                             >
                               <Plus size={11} />
                               <span>Tham gia</span>
@@ -2929,12 +2936,12 @@ const Home = ({ initialTab }) => {
                       )}
 
                       {/* Tín hiệu Đề xuất Xã hội Thông minh (Smart Social Discovery Signals) */}
-                      {post.recommendationReason && !post.repostedByUsername && (
-                        <div className="flex items-center gap-1.5 pb-2 mb-2 text-[11px] text-zinc-400 font-medium border-b border-[#1e1e1e]">
+                      {post.recommendationReason && !post.groupId && !post.repostedByUsername && (
+                        <div className="flex items-center gap-1.5 pb-2 mb-2 text-[11px] text-zinc-400 font-medium border-b border-zinc-800">
                           {post.isFriendInteraction ? (
                             <Users size={12} className="text-zinc-400 flex-shrink-0" />
                           ) : (
-                            <Sparkles size={12} className="text-amber-400 flex-shrink-0" />
+                            <Sparkles size={12} className="text-zinc-400 flex-shrink-0" />
                           )}
                           <span>{post.recommendationReason}</span>
                         </div>
@@ -4371,37 +4378,37 @@ const Home = ({ initialTab }) => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.22, ease: "easeOut" }}
-            className="fixed inset-0 z-[120] flex justify-end bg-black/65 backdrop-blur-md"
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-[120] flex justify-end bg-black/70 sm:backdrop-blur-sm"
             onClick={() => setIsNotifOpen(false)}
           >
             <motion.div 
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
-              transition={{ duration: 0.28, ease: [0.32, 0.72, 0, 1] }}
+              transition={{ type: "tween", duration: 0.22, ease: [0.25, 1, 0.5, 1] }}
               drag="x"
-              dragConstraints={{ left: 0 }}
-              dragElastic={{ right: 0.5 }}
+              dragConstraints={{ left: 0, right: 0 }}
+              dragElastic={0.15}
               onDragEnd={(e, { offset, velocity }) => {
-                if (offset.x > 80 || velocity.x > 300) {
+                if (offset.x > 70 || velocity.x > 250) {
                   setIsNotifOpen(false);
                 }
               }}
-              className="w-full sm:w-[420px] max-w-full h-full bg-[#0c0d12] border-l border-zinc-800 shadow-[-20px_0_50px_rgba(0,0,0,0.9)] flex flex-col will-change-transform touch-pan-y"
+              className="w-full sm:w-[420px] max-w-full h-full bg-zinc-950 border-l border-zinc-800 shadow-2xl flex flex-col will-change-transform transform-gpu touch-pan-y"
               onClick={(e) => e.stopPropagation()}
             >
             {/* Header Drawer */}
-            <div className="flex items-center justify-between px-4 py-3.5 border-b border-zinc-800/80 bg-[#12131a] flex-shrink-0">
+            <div className="flex items-center justify-between px-4 py-3.5 border-b border-zinc-800 bg-zinc-900 flex-shrink-0">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-zinc-800/80 border border-zinc-700/60 flex items-center justify-center text-slate-200">
+                <div className="w-8 h-8 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-200">
                   <Bell size={16} strokeWidth={1.8} />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-bold text-white tracking-tight">Thông báo sảnh</span>
                     {notifications.filter(n => n.unread).length > 0 && (
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-200 border border-zinc-700">
                         {notifications.filter(n => n.unread).length} mới
                       </span>
                     )}
