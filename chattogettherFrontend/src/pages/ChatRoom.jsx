@@ -6,7 +6,7 @@ import {
   Phone, PhoneOff, PhoneMissed, PhoneCall, Mic, MicOff, WifiOff, User, UserCheck, ArrowLeft,
   Video, VideoOff, Volume2, VolumeX, Minimize2, Maximize2, ChevronDown,
   Image as ImageIcon, Smile, Palette, Play, Pause,
-  ExternalLink, Square, Camera, RefreshCw
+  ExternalLink, Square, Camera, RefreshCw, Share2
 } from 'lucide-react';
 import axiosClient, { BACKEND_URL } from '../api/axiosClient';
 import { saveMessagesOffline, getMessagesOffline, getRoomsOffline } from '../utils/offlineDB';

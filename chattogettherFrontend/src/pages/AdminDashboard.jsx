@@ -7,7 +7,7 @@ import {
   AlertTriangle, CheckCircle2, ChevronRight, Sliders, LayoutGrid,
   ShieldCheck, ShieldAlert, KeyRound, Palette, ExternalLink, Layers,
   FolderCog, Save, UserCheck, ShieldPlus, LogOut, Menu, Globe,
-  FileText, Repeat, RotateCcw, AlertOctagon
+  FileText, Repeat, RotateCcw, AlertOctagon, Heart
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';

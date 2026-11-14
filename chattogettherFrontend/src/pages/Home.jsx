@@ -10,7 +10,8 @@ import {
   Edit3, Trash2, MoreVertical, Tag, Filter, Check,
   Mic, Headphones, Moon, Gamepad2, Film, Square,
   Flag, AlertTriangle, UserCheck,
-  ChevronDown, Menu, Globe, Layers, SlidersHorizontal, Repeat, Sun, Smile
+  ChevronDown, Menu, Globe, Layers, SlidersHorizontal, Repeat, Sun, Smile,
+  ArrowLeft, RefreshCw
 } from 'lucide-react';
 import axiosClient, { BACKEND_URL } from '../api/axiosClient';
 import { saveRoomsOffline, getRoomsOffline } from '../utils/offlineDB';
@@ -252,6 +253,32 @@ const Home = () => {
     setTimeout(() => {
       setIsTabSwitching(false);
     }, 280);
+  };
+
+  // Khởi tạo cuộc gọi / đàm thoại riêng 1-1 từ Sảnh hoặc Cộng đồng
+  const handleStartPrivateCall = async (targetUser) => {
+    if (!targetUser) return;
+    const targetUserId = targetUser.id || targetUser.userId;
+    if (!targetUserId) return;
+    if (targetUserId.toString() === currentUserId?.toString()) {
+      toast.error("Bạn không thể tự gọi cho chính mình!");
+      return;
+    }
+    const targetName = targetUser.nickname || targetUser.account || targetUser.name || 'Thành viên';
+    try {
+      const roomName = `1-1: ${currentUserName} & ${targetName}`;
+      const response = await axiosClient.post('/rooms/create-room', {
+        roomName: roomName.slice(0, 35),
+        password: null
+      });
+      if (response.data && response.data.data) {
+        const roomId = response.data.data.id;
+        toast.success(`Đang mở phòng đàm thoại với ${targetName}...`);
+        navigate(`/room/${roomId}?targetUserId=${targetUserId}&autoCall=true`);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Không thể khởi tạo cuộc gọi 1-1!");
+    }
   };
 
   // State Phòng Chat
