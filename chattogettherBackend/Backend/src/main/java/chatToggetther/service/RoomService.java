@@ -262,8 +262,11 @@ public class RoomService {
           this.userRoomRepository.save(userRoomEntity);
           messagingTemplate.convertAndSend("/topic/rooms", "ROOM_UPDATED");
           
+          String joinName = (userEntity.getNickname() != null && !userEntity.getNickname().trim().isEmpty())
+                  ? userEntity.getNickname()
+                  : (userEntity.getAccount() != null ? userEntity.getAccount() : "Thành viên");
           SendMessageDTO systemMsg = new SendMessageDTO();
-          systemMsg.setMessage(userEntity.getNickname() + " vừa vào phòng");
+          systemMsg.setMessage(joinName + " vừa vào phòng");
           systemMsg.setUserId(0L);
           systemMsg.setNickname("Hệ thống");
           systemMsg.setTimeSend(LocalDateTime.now());
@@ -300,8 +303,11 @@ public class RoomService {
             userRoomEntity.setIsAdmin(false); // Reset quyền admin khi rời
             this.userRoomRepository.save(userRoomEntity);
 
+            String leaveName = (userEntity.getNickname() != null && !userEntity.getNickname().trim().isEmpty())
+                    ? userEntity.getNickname()
+                    : (userEntity.getAccount() != null ? userEntity.getAccount() : "Thành viên");
             SendMessageDTO systemMsg = new SendMessageDTO();
-            systemMsg.setMessage(userEntity.getNickname() + " đã rời khỏi phòng");
+            systemMsg.setMessage(leaveName + " đã rời khỏi phòng");
             systemMsg.setUserId(0L);
             systemMsg.setNickname("Hệ thống");
             systemMsg.setTimeSend(LocalDateTime.now());
@@ -348,8 +354,11 @@ public class RoomService {
             userRoomEntity.getTimeLeft().add(LocalDateTime.now());
             this.userRoomRepository.save(userRoomEntity);
 
+            String removeName = (userToRemove.getNickname() != null && !userToRemove.getNickname().trim().isEmpty())
+                    ? userToRemove.getNickname()
+                    : (userToRemove.getAccount() != null ? userToRemove.getAccount() : "Thành viên");
             SendMessageDTO systemMsg = new SendMessageDTO();
-            systemMsg.setMessage(userToRemove.getNickname() + " đã bị mời ra khỏi phòng");
+            systemMsg.setMessage(removeName + " đã bị mời ra khỏi phòng");
             systemMsg.setUserId(userIdToRemove); 
             systemMsg.setId(-1L); // Đánh dấu là KICK
             systemMsg.setNickname("Hệ thống");
@@ -359,7 +368,7 @@ public class RoomService {
             messagingTemplate.convertAndSend("/topic/room/" + roomId, systemMsg);
             messagingTemplate.convertAndSend("/topic/rooms", "ROOM_UPDATED");
 
-            return new ResponseData<>(200, "Đuổi thành viên " + userToRemove.getNickname() + " thành công", true);
+            return new ResponseData<>(200, "Đuổi thành viên " + removeName + " thành công", true);
         }
         return new ResponseData<>(400, "Người dùng này không ở trong phòng", false);
     }
@@ -443,8 +452,11 @@ public class RoomService {
         userRoomRepository.save(newAdminUR);
 
         // Notify all clients
+        String newAdminName = (newAdminUser.getNickname() != null && !newAdminUser.getNickname().trim().isEmpty())
+                ? newAdminUser.getNickname()
+                : (newAdminUser.getAccount() != null ? newAdminUser.getAccount() : "Thành viên");
         SendMessageDTO systemMsg = new SendMessageDTO();
-        systemMsg.setMessage(newAdminUser.getNickname() + " đã trở thành quản trị viên mới của phòng!");
+        systemMsg.setMessage(newAdminName + " đã trở thành quản trị viên mới của phòng!");
         systemMsg.setId(0L);
         systemMsg.setUserId(0L);
         systemMsg.setNickname("Hệ thống");

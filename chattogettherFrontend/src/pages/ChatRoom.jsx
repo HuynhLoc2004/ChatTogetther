@@ -1493,9 +1493,11 @@ const ChatRoom = () => {
 
               // 2. Render Tin nhắn hệ thống thông thường
               if (isSystem) {
+                const rawText = String(payload.text || msg.text || "");
+                const cleanText = rawText.replace(/^null\s+/, "Thành viên ");
                 return (
                   <div key={msg.id || index} className="system-msg">
-                    <span>{payload.text || msg.text}</span>
+                    <span>{cleanText}</span>
                   </div>
                 );
               }
