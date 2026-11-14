@@ -12,10 +12,12 @@ import chatToggetther.modelEntity.CommentEntity;
 import chatToggetther.modelEntity.CommunityGroupEntity;
 import chatToggetther.modelEntity.CommunityMemberEntity;
 import chatToggetther.modelEntity.FriendshipEntity;
+import chatToggetther.modelEntity.CommentLikeEntity;
 import chatToggetther.modelEntity.PostEntity;
 import chatToggetther.modelEntity.PostLikeEntity;
 import chatToggetther.modelEntity.PostReportEntity;
 import chatToggetther.modelEntity.UserEntity;
+import chatToggetther.repository.CommentLikeRepository;
 import chatToggetther.repository.CommentRepository;
 import chatToggetther.repository.CommunityGroupRepository;
 import chatToggetther.repository.CommunityMemberRepository;
@@ -45,6 +47,7 @@ public class PostService {
     private final CommunityMemberRepository memberRepository;
     private final FriendshipRepository friendshipRepository;
     private final PostReportRepository postReportRepository;
+    private final CommentLikeRepository commentLikeRepository;
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm dd/MM");
 
@@ -57,7 +60,8 @@ public class PostService {
             CommunityGroupRepository groupRepository,
             CommunityMemberRepository memberRepository,
             FriendshipRepository friendshipRepository,
-            PostReportRepository postReportRepository
+            PostReportRepository postReportRepository,
+            CommentLikeRepository commentLikeRepository
     ) {
         this.postRepository = postRepository;
         this.postLikeRepository = postLikeRepository;
@@ -68,6 +72,7 @@ public class PostService {
         this.memberRepository = memberRepository;
         this.friendshipRepository = friendshipRepository;
         this.postReportRepository = postReportRepository;
+        this.commentLikeRepository = commentLikeRepository;
     }
 
     private PostDTO mapToPostDTO(PostEntity post, UserEntity currentUser) {
@@ -134,6 +139,10 @@ public class PostService {
     }
 
     private CommentDTO mapToCommentDTO(CommentEntity comment) {
+        return mapToCommentDTO(comment, null);
+    }
+
+    private CommentDTO mapToCommentDTO(CommentEntity comment, UserEntity currentUser) {
         CommentDTO dto = new CommentDTO();
         dto.setId(comment.getId());
         dto.setContent(comment.getContent());
@@ -149,6 +158,14 @@ public class PostService {
             dto.setAuthorNickname(author.getNickname() != null && !author.getNickname().isEmpty() ? author.getNickname() : author.getAccount());
             dto.setAuthorAccount(author.getAccount());
             dto.setAuthorAvatar(author.getAvatar());
+        }
+
+        long count = this.commentLikeRepository.countByComment(comment);
+        dto.setLikesCount(count);
+        if (currentUser != null) {
+            dto.setIsLiked(this.commentLikeRepository.existsByCommentAndUser(comment, currentUser));
+        } else {
+            dto.setIsLiked(false);
         }
 
         return dto;
@@ -611,12 +628,18 @@ public class PostService {
 
     @Transactional(readOnly = true)
     public ResponseData<List<CommentDTO>> getPostComments(Long postId) {
+        return getPostComments(null, postId);
+    }
+
+    @Transactional(readOnly = true)
+    public ResponseData<List<CommentDTO>> getPostComments(JwtAuthenticationToken token, Long postId) {
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
         PostEntity post = this.postRepository.findById(postId).orElseThrow(() ->
             new AppException(404, "Bài viết không tồn tại", 404)
         );
 
         List<CommentEntity> comments = this.commentRepository.findCommentsByPost(post);
-        List<CommentDTO> dtos = comments.stream().map(this::mapToCommentDTO).collect(Collectors.toList());
+        List<CommentDTO> dtos = comments.stream().map(c -> this.mapToCommentDTO(c, currentUser)).collect(Collectors.toList());
         return new ResponseData<>(200, "Lấy danh sách bình luận thành công", dtos);
     }
 
@@ -804,6 +827,7 @@ public class PostService {
             throw new AppException(403, "Bạn không có quyền xóa bình luận này!", 403);
         }
 
+        this.commentLikeRepository.deleteAllByComment(comment);
         this.commentRepository.delete(comment);
 
         try {
@@ -839,7 +863,54 @@ public class PostService {
             this.messagingTemplate.convertAndSend("/topic/posts", "POST_COMMENT_UPDATED");
         } catch (Exception ignored) {}
 
-        return new ResponseData<>(200, "Cập nhật bình luận thành công", mapToCommentDTO(comment));
+        return new ResponseData<>(200, "Cập nhật bình luận thành công", mapToCommentDTO(comment, currentUser));
+    }
+
+    @Transactional
+    public ResponseData<CommentDTO> toggleLikeComment(JwtAuthenticationToken token, Long commentId) {
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        if (currentUser == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
+        }
+
+        CommentEntity comment = this.commentRepository.findById(commentId).orElseThrow(() ->
+            new AppException(404, "Bình luận không tồn tại", 404)
+        );
+
+        Optional<CommentLikeEntity> existing = this.commentLikeRepository.findByCommentAndUser(comment, currentUser);
+        if (existing.isPresent()) {
+            this.commentLikeRepository.delete(existing.get());
+        } else {
+            CommentLikeEntity like = CommentLikeEntity.builder()
+                    .comment(comment)
+                    .user(currentUser)
+                    .createdAt(LocalDateTime.now())
+                    .build();
+            this.commentLikeRepository.save(like);
+
+            // Gửi realtime notification nếu người thả tim không phải tác giả bình luận
+            if (comment.getUser() != null && !comment.getUser().getId().equals(currentUser.getId())) {
+                try {
+                    Map<String, Object> notif = new HashMap<>();
+                    notif.put("type", "COMMENT_LIKE");
+                    notif.put("title", "Cảm xúc phản hồi");
+                    String actor = currentUser.getNickname() != null ? currentUser.getNickname() : currentUser.getAccount();
+                    String preview = comment.getContent().length() > 25 ? comment.getContent().substring(0, 25) + "..." : comment.getContent();
+                    notif.put("text", actor + " đã thích phản hồi của bạn: \"" + preview + "\"");
+                    notif.put("message", actor + " đã thích phản hồi của bạn: \"" + preview + "\"");
+                    notif.put("postId", comment.getPost() != null ? comment.getPost().getId() : null);
+                    notif.put("time", "Vừa xong");
+                    notif.put("unread", true);
+                    this.messagingTemplate.convertAndSend("/topic/user/" + comment.getUser().getId() + "/notifications", notif);
+                } catch (Exception ignored) {}
+            }
+        }
+
+        try {
+            this.messagingTemplate.convertAndSend("/topic/posts", "COMMENT_LIKED");
+        } catch (Exception ignored) {}
+
+        return new ResponseData<>(200, "Thao tác thành công", mapToCommentDTO(comment, currentUser));
     }
 
     @Transactional

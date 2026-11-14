@@ -24,5 +24,8 @@ public class CommentDTO {
 
     private Long parentId;
     private String replyToUser;
+
+    private Long likesCount = 0L;
+    private Boolean isLiked = false;
 }
 

@@ -9,7 +9,8 @@ import {
   Shuffle, Image as ImageIcon, CheckCircle2, Zap, Dices, Maximize2, Download,
   Edit3, Trash2, MoreVertical, Tag, Filter, Check,
   Mic, Headphones, Moon, Gamepad2, Film, Square,
-  Flag, AlertTriangle, UserCheck
+  Flag, AlertTriangle, UserCheck,
+  ChevronDown, Menu, Globe, Layers, SlidersHorizontal
 } from 'lucide-react';
 import axiosClient, { BACKEND_URL } from '../api/axiosClient';
 import { saveRoomsOffline, getRoomsOffline } from '../utils/offlineDB';
@@ -221,9 +222,27 @@ const Home = () => {
 
   // Navigation tab chính: 'feed' | 'rooms' | 'trending' | 'saved'
   const [activeTab, setActiveTab] = useState('feed');
+  const [isSpaceDrawerOpen, setIsSpaceDrawerOpen] = useState(false);
+  const [isVibesExpanded, setIsVibesExpanded] = useState(false);
+  const [isTabSwitching, setIsTabSwitching] = useState(false);
   const [pendingFriendsCount, setPendingFriendsCount] = useState(0);
   const [replyTargetMap, setReplyTargetMap] = useState({});
   const [isTopRefreshing, setIsTopRefreshing] = useState(false);
+
+  // Chuyển không gian mượt mà kèm hiệu ứng tải nhẹ (Soft transition)
+  const handleSwitchTab = (tabId) => {
+    if (tabId === activeTab) {
+      setIsSpaceDrawerOpen(false);
+      return;
+    }
+    setIsTabSwitching(true);
+    setIsSpaceDrawerOpen(false);
+    setActiveFilterTag(null);
+    setActiveTab(tabId);
+    setTimeout(() => {
+      setIsTabSwitching(false);
+    }, 280);
+  };
 
   // State Phòng Chat
   const [rooms, setRooms] = useState([]);
@@ -955,6 +974,47 @@ const Home = () => {
       }
     } catch (err) {
       console.warn("Lỗi lấy bình luận:", err);
+    }
+  };
+
+  // Thả cảm xúc / Tim cho phản hồi (Bình luận)
+  const handleToggleLikeComment = async (postId, commentId) => {
+    // Cập nhật Optimistic ngay lập tức để tạo phản hồi tức thì
+    setCommentsMap(prev => {
+      const currentList = prev[postId] || [];
+      const updated = currentList.map(c => {
+        if (c.id === commentId) {
+          const wasLiked = Boolean(c.isLiked);
+          const currentCount = Number(c.likesCount || 0);
+          return {
+            ...c,
+            isLiked: !wasLiked,
+            likesCount: wasLiked ? Math.max(0, currentCount - 1) : currentCount + 1
+          };
+        }
+        return c;
+      });
+      return { ...prev, [postId]: updated };
+    });
+
+    try {
+      const res = await axiosClient.post(`/posts/comments/${commentId}/like`);
+      if (res.data?.data) {
+        const updatedCmt = res.data.data;
+        setCommentsMap(prev => {
+          const currentList = prev[postId] || [];
+          return {
+            ...prev,
+            [postId]: currentList.map(c => c.id === commentId ? {
+              ...c,
+              isLiked: updatedCmt.isLiked,
+              likesCount: updatedCmt.likesCount
+            } : c)
+          };
+        });
+      }
+    } catch (err) {
+      fetchComments(postId);
     }
   };
 
@@ -1706,36 +1766,65 @@ const Home = () => {
             </div>
           </header>
 
-          {/* Header Sảnh Desktop */}
+          {/* Header Sảnh Desktop & Bộ chuyển không gian Mobile */}
           <div className="stream-header">
-            <div className="stream-tabs">
+            {/* Thanh chuyển không gian trên Mobile (Dạng Viên Nang + Hamburger Menu mượt mà) */}
+            <div className="mobile-space-selector-bar flex sm:hidden items-center justify-between w-full py-1 gap-2">
+              <button
+                type="button"
+                onClick={() => setIsSpaceDrawerOpen(true)}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-850/90 border border-zinc-750 text-zinc-100 text-xs font-bold shadow-sm active:scale-95 transition-all flex-1 min-w-0"
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0"></span>
+                <span className="truncate">
+                  {activeTab === 'feed' ? '✦ Sảnh trực tuyến' :
+                   activeTab === 'groups' ? '✦ Không gian Cộng đồng' :
+                   activeTab === 'trending' ? '🔥 Xu hướng Thịnh hành' :
+                   activeTab === 'saved' ? '🔖 Kho lưu trữ cá nhân' :
+                   `🎙️ Phòng thoại (${safeRooms.length})`}
+                </span>
+                <ChevronDown size={14} className="text-zinc-400 ml-auto flex-shrink-0" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsSpaceDrawerOpen(true)}
+                className="p-2 rounded-xl bg-zinc-850/90 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-750 transition-all flex items-center justify-center flex-shrink-0 active:scale-95 shadow-sm"
+                title="Mở toàn bộ danh mục không gian"
+              >
+                <Menu size={16} />
+              </button>
+            </div>
+
+            {/* Thanh Tab truyền thống trên Desktop */}
+            <div className="stream-tabs hidden sm:flex">
               <button 
                 className={`stream-tab ${activeTab === 'feed' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('feed'); setActiveFilterTag(null); }}
+                onClick={() => handleSwitchTab('feed')}
               >
                 Sảnh trực tuyến
               </button>
               <button 
                 className={`stream-tab ${activeTab === 'groups' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('groups'); setActiveFilterTag(null); }}
+                onClick={() => handleSwitchTab('groups')}
               >
                 Cộng đồng
               </button>
               <button 
                 className={`stream-tab ${activeTab === 'trending' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('trending'); setActiveFilterTag(null); }}
+                onClick={() => handleSwitchTab('trending')}
               >
                 Thịnh hành
               </button>
               <button 
                 className={`stream-tab ${activeTab === 'saved' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('saved'); setActiveFilterTag(null); }}
+                onClick={() => handleSwitchTab('saved')}
               >
                 Đã lưu
               </button>
               <button 
                 className={`stream-tab ${activeTab === 'rooms' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('rooms'); setActiveFilterTag(null); }}
+                onClick={() => handleSwitchTab('rooms')}
               >
                 Phòng thoại ({safeRooms.length})
               </button>
@@ -1963,6 +2052,89 @@ const Home = () => {
             )}
           </div>
 
+          {/* MODAL / BOTTOM SHEET CHỌN KHÔNG GIAN DÀNH CHO MOBILE */}
+          {isSpaceDrawerOpen && (
+            <div 
+              className="sm:hidden fixed inset-0 z-[999] flex items-end bg-black/80 backdrop-blur-sm animate-fade-in"
+              onClick={() => setIsSpaceDrawerOpen(false)}
+            >
+              <div 
+                className="w-full max-h-[85vh] rounded-t-3xl bg-[#131622] border-t border-[#2a3045] shadow-2xl flex flex-col overflow-hidden animate-slide-up"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between px-4 py-3.5 border-b border-[#202538]">
+                  <div className="flex items-center gap-2">
+                    <Layers size={18} className="text-emerald-400" />
+                    <span className="text-sm font-bold text-white tracking-wide">Chọn Không Gian Talovin</span>
+                  </div>
+                  <button 
+                    onClick={() => setIsSpaceDrawerOpen(false)}
+                    className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800/80 transition-colors"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className="p-3 space-y-2 overflow-y-auto max-h-[65vh]">
+                  {[
+                    { id: 'feed', label: 'Sảnh trực tuyến', desc: 'Bảng tin thời gian thực, tin mới & kết nối toàn hệ thống', icon: Globe, color: 'text-sky-400 bg-sky-500/10 border-sky-500/20' },
+                    { id: 'groups', label: 'Không gian Cộng đồng', desc: 'Tiểu xã hội chuyên sâu, câu lạc bộ & diễn đàn tự quản', icon: Users, color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
+                    { id: 'trending', label: 'Xu hướng Thịnh hành', desc: 'Bài viết và chủ đề thảo luận có tương tác sôi động nhất', icon: Flame, color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
+                    { id: 'saved', label: 'Kho lưu trữ cá nhân', desc: 'Tất cả các bài viết & khoảnh khắc bạn đã đánh dấu lưu', icon: Bookmark, color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
+                    { id: 'rooms', label: `Phòng thoại (${safeRooms.length})`, desc: 'Phòng thoại trò chuyện âm thanh & tán gẫu trực tiếp', icon: Radio, color: 'text-rose-400 bg-rose-500/10 border-rose-500/20' },
+                  ].map((space) => {
+                    const IconComp = space.icon;
+                    const isActive = activeTab === space.id;
+                    return (
+                      <button
+                        key={space.id}
+                        type="button"
+                        onClick={() => handleSwitchTab(space.id)}
+                        className={`w-full flex items-center justify-between p-3 rounded-2xl border transition-all text-left ${
+                          isActive 
+                            ? 'bg-zinc-800/90 border-emerald-500/50 shadow-md shadow-emerald-500/5' 
+                            : 'bg-[#181c2b] border-[#262c3e] hover:bg-[#1f2437] text-zinc-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center border flex-shrink-0 ${space.color}`}>
+                            <IconComp size={18} />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xs font-bold ${isActive ? 'text-white' : 'text-zinc-200'} truncate`}>
+                                {space.label}
+                              </span>
+                              {isActive && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse flex-shrink-0"></span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-zinc-400 line-clamp-1 mt-0.5 font-normal">
+                              {space.desc}
+                            </p>
+                          </div>
+                        </div>
+                        {isActive && (
+                          <div className="flex-shrink-0 ml-2 text-emerald-400">
+                            <Check size={16} strokeWidth={2.5} />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* THANH BÁO HIỆU SOFT TRANSITION KHI CHUYỂN TAB */}
+          {isTabSwitching && (
+            <div className="tab-switching-indicator flex items-center justify-center gap-2 py-2 px-3 mb-2 rounded-xl bg-zinc-900/90 border border-zinc-800 text-xs text-zinc-300 animate-pulse">
+              <div className="w-3.5 h-3.5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin"></div>
+              <span>Đang chuyển không gian...</span>
+            </div>
+          )}
+
           {/* Banner lọc chủ đề đang chọn */}
           {activeFilterTag && (
             <div className="active-tag-filter-banner">
@@ -2067,23 +2239,66 @@ const Home = () => {
                 </div>
               ) : null}
 
-              {/* Chọn Vibe Tags (Động từ Admin Dashboard) */}
-              <div className="vibe-tags-row">
-                {dynamicVibes.map(v => {
-                  const IconComponent = v.icon || Sparkles;
-                  const isSelected = selectedVibe === v.id;
-                  return (
+              {/* Chọn Vibe Tags (Động từ Admin Dashboard) - Hỗ trợ mở rộng & Responsive toàn diện */}
+              <div className="composer-vibes-wrapper my-2">
+                <div className="flex items-center justify-between mb-1.5 px-0.5">
+                  <span className="text-[11px] font-semibold text-zinc-400 flex items-center gap-1.5 flex-wrap">
+                    <Sparkles size={12} className="text-amber-400 flex-shrink-0" />
+                    <span>Cảm xúc bài viết ({dynamicVibes.length})</span>
+                    {selectedVibe && (
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                        Đang chọn: {dynamicVibes.find(v => v.id === selectedVibe)?.label}
+                      </span>
+                    )}
+                  </span>
+                  {dynamicVibes.length > 3 && (
                     <button
-                      key={v.id}
                       type="button"
-                      onClick={() => setSelectedVibe(isSelected ? null : v.id)}
-                      className={`vibe-tag-pill ${isSelected ? 'active' : ''}`}
+                      onClick={() => setIsVibesExpanded(!isVibesExpanded)}
+                      className="text-[11px] font-medium text-emerald-400 hover:text-emerald-300 flex items-center gap-0.5 py-0.5 px-2 rounded-lg bg-zinc-800/60 hover:bg-zinc-800 border border-zinc-700/60 transition-all flex-shrink-0 active:scale-95"
                     >
-                      <IconComponent size={13} strokeWidth={1.5} className="vibe-icon" />
-                      <span>{v.label}</span>
+                      <span>{isVibesExpanded ? 'Thu gọn ▲' : 'Xem tất cả ▼'}</span>
                     </button>
-                  );
-                })}
+                  )}
+                </div>
+
+                {isVibesExpanded ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1.5 pt-0.5 pb-1 animate-fade-in">
+                    {dynamicVibes.map(v => {
+                      const IconComponent = v.icon || Sparkles;
+                      const isSelected = selectedVibe === v.id;
+                      return (
+                        <button
+                          key={v.id}
+                          type="button"
+                          onClick={() => setSelectedVibe(isSelected ? null : v.id)}
+                          className={`vibe-tag-pill w-full justify-center ${isSelected ? 'active' : ''}`}
+                        >
+                          <IconComponent size={13} strokeWidth={1.5} className="vibe-icon flex-shrink-0" />
+                          <span className="truncate">{v.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="vibe-tags-row flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
+                    {dynamicVibes.map(v => {
+                      const IconComponent = v.icon || Sparkles;
+                      const isSelected = selectedVibe === v.id;
+                      return (
+                        <button
+                          key={v.id}
+                          type="button"
+                          onClick={() => setSelectedVibe(isSelected ? null : v.id)}
+                          className={`vibe-tag-pill flex-shrink-0 ${isSelected ? 'active' : ''}`}
+                        >
+                          <IconComponent size={13} strokeWidth={1.5} className="vibe-icon" />
+                          <span>{v.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Nhập Sparks / Chủ đề cộng đồng nếu mở */}
@@ -2550,21 +2765,37 @@ const Home = () => {
                                       </div>
                                       <div className={`cmt-bubble-content ${isReply ? 'reply-bubble' : 'root-bubble'}`}>
                                         <div className="cmt-name-row">
-                                          <div className="cmt-author-info">
+                                          <div className="cmt-author-info min-w-0">
                                             <span 
-                                              className={`cmt-user-name ${isReply ? 'reply-name' : ''} cursor-pointer hover:underline`}
+                                              className={`cmt-user-name ${isReply ? 'reply-name' : ''} cursor-pointer hover:underline truncate`}
                                               onClick={() => setSelectedProfileUserId(cmt.authorId)}
                                             >
                                               {cmt.authorNickname || cmt.authorAccount || 'Thành viên'}
                                             </span>
-                                            <span className={`cmt-user-handle ${isReply ? 'reply-handle' : ''}`}>
+                                            <span className={`cmt-user-handle ${isReply ? 'reply-handle' : ''} truncate`}>
                                               @{cmt.authorAccount || 'user'}
                                             </span>
-                                            <span className="cmt-meta-dot">·</span>
-                                            <span className="cmt-time-label">{cmt.formattedTime || 'Vừa xong'}</span>
+                                            <span className="cmt-meta-dot flex-shrink-0">·</span>
+                                            <span className="cmt-time-label flex-shrink-0">{cmt.formattedTime || 'Vừa xong'}</span>
                                           </div>
 
-                                          <div className="cmt-action-btns">
+                                          <div className="cmt-action-btns flex-shrink-0">
+                                            {/* Nút Thả tim / Cảm xúc cho phản hồi */}
+                                            <button
+                                              type="button"
+                                              onClick={() => handleToggleLikeComment(post.id, cmt.id)}
+                                              className={`btn-cmt-act reaction ${cmt.isLiked ? 'liked text-rose-500' : ''}`}
+                                              title={cmt.isLiked ? 'Bỏ thích phản hồi' : 'Thích phản hồi'}
+                                            >
+                                              <Heart 
+                                                size={11} 
+                                                className={cmt.isLiked ? "fill-rose-500 text-rose-500 transition-all scale-105" : "transition-all"} 
+                                              />
+                                              {Number(cmt.likesCount || 0) > 0 && (
+                                                <span className="cmt-like-count font-mono text-[10px]">{cmt.likesCount}</span>
+                                              )}
+                                            </button>
+
                                             {/* Nút Trả lời phản hồi */}
                                             <button 
                                               type="button" 
@@ -2583,8 +2814,8 @@ const Home = () => {
                                               className="btn-cmt-act reply"
                                               title="Trả lời bình luận này"
                                             >
-                                              <CornerDownRight size={11} />
-                                              <span>Trả lời</span>
+                                              <CornerDownRight size={11} className="flex-shrink-0" />
+                                              <span className="whitespace-nowrap flex-shrink-0">Trả lời</span>
                                             </button>
 
                                             {isCmtMe && !isEditingThisCmt && (
@@ -4944,43 +5175,60 @@ const Home = () => {
           align-items: center;
           margin-bottom: 4px;
           gap: 8px;
+          min-width: 0;
         }
         .cmt-author-info {
           display: flex;
           align-items: center;
-          gap: 6px;
-          flex-wrap: wrap;
+          gap: 5px;
+          flex-wrap: nowrap;
+          overflow: hidden;
+          min-width: 0;
+          flex: 1;
         }
         .cmt-user-name {
-          font-size: 12.5px;
+          font-size: 12px;
           font-weight: 700;
           color: #f8fafc;
           letter-spacing: -0.01em;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          max-width: 130px;
         }
         .cmt-user-name.reply-name {
-          font-size: 12px;
+          font-size: 11.5px;
           font-weight: 600;
           color: #e2e8f0;
+          max-width: 110px;
         }
         .cmt-user-handle {
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 11px;
+          font-size: 10.5px;
           color: #8b9bb4;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          max-width: 90px;
         }
         .cmt-user-handle.reply-handle {
-          font-size: 10.5px;
+          font-size: 10px;
           color: #64748b;
+          max-width: 75px;
         }
         .cmt-meta-dot {
           color: #475569;
           font-weight: bold;
           font-size: 11px;
           user-select: none;
+          flex-shrink: 0;
         }
         .cmt-time-label {
           font-size: 10.5px;
           color: #64748b;
           font-family: ui-monospace, SFMono-Regular, monospace;
+          white-space: nowrap;
+          flex-shrink: 0;
         }
 
         .cmt-body-text {
@@ -5006,25 +5254,48 @@ const Home = () => {
         .cmt-action-btns {
           display: flex;
           align-items: center;
-          gap: 6px;
+          gap: 4px;
           margin-left: auto;
+          flex-shrink: 0;
+          white-space: nowrap;
         }
         .btn-cmt-act {
           background: transparent;
           border: none;
           color: #94a3b8;
           cursor: pointer;
-          padding: 3px 6px;
+          padding: 3px 5px;
           border-radius: 6px;
-          display: flex;
+          display: inline-flex;
           align-items: center;
-          gap: 4px;
+          gap: 3px;
           font-size: 11px;
           transition: all 0.15s;
+          white-space: nowrap;
+          flex-shrink: 0;
+        }
+        .btn-cmt-act span {
+          white-space: nowrap;
+          display: inline-block;
         }
         .btn-cmt-act:hover { color: #f8fafc; background: rgba(255, 255, 255, 0.06); }
         .btn-cmt-act.reply:hover { color: #38bdf8; }
         .btn-cmt-act.danger:hover { color: #f87171; }
+        .btn-cmt-act.reaction {
+          color: #71717a;
+        }
+        .btn-cmt-act.reaction:hover {
+          color: #f43f5e;
+          background: rgba(244, 63, 94, 0.08);
+        }
+        .btn-cmt-act.reaction.liked {
+          color: #f43f5e;
+        }
+        .cmt-like-count {
+          font-size: 10px;
+          font-weight: 600;
+          line-height: 1;
+        }
 
         .replying-to-banner {
           display: flex;
@@ -5675,7 +5946,7 @@ const Home = () => {
           .main-stream { 
             max-width: 100%; 
             min-width: 0; 
-            padding-bottom: calc(96px + env(safe-area-inset-bottom, 24px)); 
+            padding-bottom: calc(120px + env(safe-area-inset-bottom, 24px)); 
           }
           .rooms-active-grid { grid-template-columns: 1fr; }
           .vibe-tags-row {

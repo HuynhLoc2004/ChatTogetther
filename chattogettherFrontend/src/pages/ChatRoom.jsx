@@ -867,10 +867,10 @@ const ChatRoom = () => {
             if (receivedMsg.userId === 0 || receivedMsg.userId === '0') {
               fetchRoomDetail(true);
               const sysId = receivedMsg.id || Date.now() + Math.random();
-              let cleanMsg = receivedMsg.message || '';
-              if (cleanMsg.startsWith('null ')) {
-                cleanMsg = cleanMsg.replace(/^null\s+/, 'Thành viên ');
-              } else if (cleanMsg === 'null') {
+              let cleanMsg = (receivedMsg.message || '')
+                .replace(/^null\s+/, 'Thành viên ')
+                .replace(/\bnull\b/gi, 'Thành viên');
+              if (cleanMsg === 'null' || !cleanMsg.trim()) {
                 cleanMsg = 'Thành viên đã rời khỏi phòng';
               }
               setMessages(prev => {
@@ -1683,10 +1683,12 @@ const ChatRoom = () => {
               // 2. Render Tin nhắn hệ thống thông thường
               if (isSystem) {
                 const rawText = String(payload.text || msg.text || "");
-                const cleanText = rawText.replace(/^null\s+/, "Thành viên ");
+                const cleanText = rawText
+                  .replace(/^null\s+/, "Thành viên ")
+                  .replace(/\bnull\b/gi, "Thành viên");
                 return (
                   <div key={msg.id || index} className="system-msg">
-                    <span>{cleanText}</span>
+                    <span>{cleanText || 'Thành viên đã rời khỏi phòng'}</span>
                   </div>
                 );
               }

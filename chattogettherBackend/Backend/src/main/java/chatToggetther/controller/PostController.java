@@ -78,8 +78,19 @@ public class PostController {
     }
 
     @GetMapping("/{id}/comments")
-    public ResponseEntity<ResponseData<List<CommentDTO>>> getComments(@PathVariable("id") Long postId) {
-        return ResponseEntity.ok(this.postService.getPostComments(postId));
+    public ResponseEntity<ResponseData<List<CommentDTO>>> getComments(
+            JwtAuthenticationToken token,
+            @PathVariable("id") Long postId
+    ) {
+        return ResponseEntity.ok(this.postService.getPostComments(token, postId));
+    }
+
+    @PostMapping("/comments/{commentId}/like")
+    public ResponseEntity<ResponseData<CommentDTO>> toggleLikeComment(
+            JwtAuthenticationToken token,
+            @PathVariable("commentId") Long commentId
+    ) {
+        return ResponseEntity.ok(this.postService.toggleLikeComment(token, commentId));
     }
 
     @PostMapping("/{id}/comments")
