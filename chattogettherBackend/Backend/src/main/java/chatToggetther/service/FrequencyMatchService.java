@@ -76,6 +76,13 @@ public class FrequencyMatchService {
     // In-memory Concurrent registry (UserId -> StationRecord) với cơ chế tự dọn dẹp theo TTL 15 phút
     private static final Map<Long, StationRecord> ACTIVE_STATIONS = new ConcurrentHashMap<>();
 
+    // Rate limit trackers (UserId -> Timestamp) chống spam phát sóng và spam quét API
+    private static final Map<Long, Long> LAST_BROADCAST_BY_USER = new ConcurrentHashMap<>();
+    private static final Map<Long, Long> LAST_STATIONS_FETCH_BY_USER = new ConcurrentHashMap<>();
+
+    // Hàng đợi sự kiện gom nhóm (Batching 2 giây/lần) đẩy qua STOMP WebSocket /topic/fm-stations
+    private static final java.util.concurrent.ConcurrentLinkedQueue<Map<String, Object>> PENDING_BATCH_EVENTS = new java.util.concurrent.ConcurrentLinkedQueue<>();
+
     // Khóa nguyên tử để tránh Race Condition khi 2 người cùng bấm Khóa (Lock) 1 trạm sóng
     private final ReentrantLock matchLock = new ReentrantLock();
 
@@ -106,11 +113,52 @@ public class FrequencyMatchService {
     @Scheduled(fixedRate = 60000)
     public void cleanStaleBroadcasts() {
         long now = System.currentTimeMillis();
-        int initialSize = ACTIVE_STATIONS.size();
-        ACTIVE_STATIONS.entrySet().removeIf(entry -> (now - entry.getValue().broadcastAt) > STATION_TTL_MS);
-        int removed = initialSize - ACTIVE_STATIONS.size();
-        if (removed > 0) {
-            log.info(">>> Đã tự động thu hồi {} trạm sóng FM hết hạn TTL (15 phút).", removed);
+        List<Long> expiredUsers = new ArrayList<>();
+        ACTIVE_STATIONS.forEach((uId, rec) -> {
+            if ((now - rec.broadcastAt) > STATION_TTL_MS) {
+                expiredUsers.add(uId);
+            }
+        });
+
+        for (Long uId : expiredUsers) {
+            StationRecord rec = ACTIVE_STATIONS.remove(uId);
+            if (rec != null) {
+                PENDING_BATCH_EVENTS.offer(Map.of(
+                        "action", "OFFLINE",
+                        "userId", uId,
+                        "frequency", rec.frequency
+                ));
+            }
+        }
+
+        if (!expiredUsers.isEmpty()) {
+            log.info(">>> Đã tự động thu hồi {} trạm sóng FM hết hạn TTL (15 phút).", expiredUsers.size());
+        }
+    }
+
+    /**
+     * Gom nhóm và phát tán sự kiện trạm sóng qua STOMP WebSocket định kỳ 2 giây/lần
+     * Giúp hệ thống chịu tải hàng nghìn kết nối đồng thời mà không bị ngập luồng packet.
+     */
+    @Scheduled(fixedRate = 2000)
+    public void flushStationBatchEvents() {
+        if (PENDING_BATCH_EVENTS.isEmpty()) return;
+        List<Map<String, Object>> events = new ArrayList<>();
+        Map<String, Object> ev;
+        while ((ev = PENDING_BATCH_EVENTS.poll()) != null) {
+            events.add(ev);
+        }
+        if (!events.isEmpty()) {
+            try {
+                this.messagingTemplate.convertAndSend("/topic/fm-stations", Map.of(
+                        "type", "STATION_BATCH",
+                        "events", events,
+                        "totalLive", ACTIVE_STATIONS.size(),
+                        "timestamp", System.currentTimeMillis()
+                ));
+            } catch (Exception e) {
+                log.warn("Lỗi gửi batch sự kiện FM qua WebSocket: {}", e.getMessage());
+            }
         }
     }
 
@@ -146,6 +194,15 @@ public class FrequencyMatchService {
         if (currentUserId == null) {
             throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
         }
+
+        // Áp dụng Rate-Limit: tối đa 1 lần phát sóng / 10 giây / user
+        long now = System.currentTimeMillis();
+        Long lastBroadcast = LAST_BROADCAST_BY_USER.get(currentUserId);
+        if (lastBroadcast != null && (now - lastBroadcast) < 10000L) {
+            long remaining = (10000L - (now - lastBroadcast) + 999) / 1000;
+            throw new AppException(429, "Thao tác quá nhanh. Vui lòng đợi " + remaining + " giây trước khi phát sóng lại.", 429);
+        }
+        LAST_BROADCAST_BY_USER.put(currentUserId, now);
 
         UserEntity user = this.userRepository.findById(currentUserId).orElseThrow(() ->
                 new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "Người dùng không tồn tại", 404)
@@ -202,6 +259,10 @@ public class FrequencyMatchService {
         );
 
         ACTIVE_STATIONS.put(currentUserId, station);
+        PENDING_BATCH_EVENTS.offer(Map.of(
+                "action", "ONLINE",
+                "station", mapToStationDTO(station)
+        ));
         log.info(">>> Người dùng #{} đã mở trạm sóng tại tần số {} MHz (Mục đích: {})", currentUserId, allocatedFrequency, intent.getCode());
 
         BroadcastStationDTO dto = mapToStationDTO(station);
@@ -367,7 +428,14 @@ public class FrequencyMatchService {
     public ResponseData<Boolean> stopBroadcast(JwtAuthenticationToken token) {
         Long currentUserId = SecurityUtils.extractUserId(token);
         if (currentUserId != null) {
-            ACTIVE_STATIONS.remove(currentUserId);
+            StationRecord removed = ACTIVE_STATIONS.remove(currentUserId);
+            if (removed != null) {
+                PENDING_BATCH_EVENTS.offer(Map.of(
+                        "action", "OFFLINE",
+                        "userId", currentUserId,
+                        "frequency", removed.frequency
+                ));
+            }
             log.info(">>> Người dùng #{} đã tắt phát sóng FM.", currentUserId);
         }
         return new ResponseData<>(200, "Đã dừng phát sóng", true);
@@ -401,42 +469,32 @@ public class FrequencyMatchService {
             max = end;
         }
 
-        // Lấy tất cả tần số hiện tại trong cùng intentCode (ngoại trừ chính mình nếu đang phát)
-        List<Double> occupied = ACTIVE_STATIONS.values().stream()
-                .filter(s -> s.intentCode.equalsIgnoreCase(intentCode) && !s.userId.equals(currentUserId))
-                .map(s -> s.frequency)
-                .collect(Collectors.toList());
+        // Multi-User Stacking: Đếm số lượng trạm đang hoạt động tại từng tần số (tối đa 20 trạm/tần số)
+        Map<Double, Long> occupancyByFreq = ACTIVE_STATIONS.values().stream()
+                .filter(s -> !s.userId.equals(currentUserId))
+                .collect(Collectors.groupingBy(s -> s.frequency, Collectors.counting()));
 
-        // Thử tìm tần số ngẫu nhiên cách các trạm khác ít nhất 0.8 MHz (thử tối đa 25 lần)
+        // Thử tìm tần số ngẫu nhiên còn thoáng (< 20 trạm)
         Random random = new Random();
-        for (int i = 0; i < 25; i++) {
+        for (int i = 0; i < 30; i++) {
             double candidate = min + (random.nextDouble() * (max - min));
-            candidate = Math.round(candidate * 10.0) / 10.0; // Làm tròn 1 chữ số thập phân
+            candidate = Math.round(candidate * 10.0) / 10.0; // Làm tròn 0.1 MHz
 
-            boolean farEnough = true;
-            for (Double occ : occupied) {
-                if (Math.abs(candidate - occ) < 0.8) {
-                    farEnough = false;
-                    break;
-                }
-            }
-            if (farEnough) {
+            // Ưu tiên tần số hoàn toàn trống hoặc có ít hơn 20 trạm
+            long count = occupancyByFreq.getOrDefault(candidate, 0L);
+            if (count < 20L) {
                 return candidate;
             }
         }
 
-        // Nếu dải tần đã đông, chia đều dải tần và lấy điểm cách xa nhất
+        // Nếu tất cả các vị trí thử đều đầy, chọn tần số có ít người nhất
         double bestFreq = min;
-        double maxDist = -1;
-        for (double f = min; f <= max; f += 0.2) {
+        long minCount = Long.MAX_VALUE;
+        for (double f = min; f <= max; f += 0.1) {
             double currentF = Math.round(f * 10.0) / 10.0;
-            double minDist = occupied.stream()
-                    .mapToDouble(occ -> Math.abs(currentF - occ))
-                    .min()
-                    .orElse(100.0);
-
-            if (minDist > maxDist) {
-                maxDist = minDist;
+            long count = occupancyByFreq.getOrDefault(currentF, 0L);
+            if (count < minCount) {
+                minCount = count;
                 bestFreq = currentF;
             }
         }
@@ -498,12 +556,29 @@ public class FrequencyMatchService {
      * Lấy toàn bộ trạm phát sóng đang hoạt động (loại trừ chính mình nếu đang login)
      */
     public ResponseData<List<BroadcastStationDTO>> getAllActiveStations(JwtAuthenticationToken token) {
+        return getAllActiveStations(token, null);
+    }
+
+    public ResponseData<List<BroadcastStationDTO>> getAllActiveStations(JwtAuthenticationToken token, String intentCode) {
         Long currentUserId = SecurityUtils.extractUserId(token);
         long now = System.currentTimeMillis();
+
+        // Rate limit: 1 request / 5 giây / user để chống spam API
+        if (currentUserId != null) {
+            Long lastFetch = LAST_STATIONS_FETCH_BY_USER.get(currentUserId);
+            if (lastFetch != null && (now - lastFetch) < 5000L) {
+                // Người dùng gọi quá nhanh, trả nhanh dữ liệu từ RAM
+            } else {
+                LAST_STATIONS_FETCH_BY_USER.put(currentUserId, now);
+            }
+        }
+
         List<BroadcastStationDTO> list = ACTIVE_STATIONS.values().stream()
                 .filter(s -> (now - s.broadcastAt) <= STATION_TTL_MS)
                 .filter(s -> currentUserId == null || !s.userId.equals(currentUserId))
-                .sorted(Comparator.comparingDouble(s -> s.frequency))
+                .filter(s -> intentCode == null || intentCode.trim().isEmpty() || intentCode.equalsIgnoreCase("ALL") || s.intentCode.equalsIgnoreCase(intentCode.trim()))
+                .sorted(Comparator.comparingLong((StationRecord s) -> s.broadcastAt).reversed())
+                .limit(100) // Tối đa 100 trạm mới nhất để payload JSON siêu nhẹ < 15KB
                 .map(this::mapToStationDTO)
                 .collect(Collectors.toList());
         return new ResponseData<>(200, "Danh sách trạm phát sóng trực tuyến", list);

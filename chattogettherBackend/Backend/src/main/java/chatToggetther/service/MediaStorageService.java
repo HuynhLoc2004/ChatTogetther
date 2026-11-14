@@ -45,9 +45,9 @@ public class MediaStorageService {
             throw new AppException(400, "Tệp âm thanh mẫu không được để trống", 400);
         }
 
-        // Kiểm tra kích thước tệp tối đa 10MB
-        if (file.getSize() > 10 * 1024 * 1024) {
-            throw new AppException(400, "Kích thước đoạn ghi âm vượt quá 10MB", 400);
+        // Kiểm tra kích thước tệp tối đa 500KB cho audio 5s (chống tràn băng thông & dung lượng)
+        if (file.getSize() > 500 * 1024) {
+            throw new AppException(400, "Kích thước đoạn ghi âm vượt quá 500KB (vui lòng thu âm trong khoảng 5 giây)", 400);
         }
 
         String originalFilename = StringUtils.cleanPath(file.getOriginalFilename() != null ? file.getOriginalFilename() : "audio.webm");

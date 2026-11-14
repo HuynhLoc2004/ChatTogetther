@@ -43,8 +43,11 @@ public class FrequencyMatchController {
      * Lấy danh sách các trạm sóng FM trực tuyến (loại trừ chính user hiện tại)
      */
     @GetMapping("/stations")
-    public ResponseEntity<ResponseData<List<BroadcastStationDTO>>> getStations(JwtAuthenticationToken token) {
-        return ResponseEntity.ok(this.frequencyMatchService.getAllActiveStations(token));
+    public ResponseEntity<ResponseData<List<BroadcastStationDTO>>> getStations(
+            JwtAuthenticationToken token,
+            @RequestParam(value = "intentCode", required = false) String intentCode
+    ) {
+        return ResponseEntity.ok(this.frequencyMatchService.getAllActiveStations(token, intentCode));
     }
 
     /**
