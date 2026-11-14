@@ -2754,7 +2754,7 @@ const Home = () => {
 
       </div>
 
-      {/* THANH ĐIỀU HƯỚNG DÀNH CHO MOBILE */}
+      {/* THANH ĐIỀU HƯỚNG DÀNH CHO MOBILE - CÂN ĐỐI 5 CỘT CHUẨN XÁC (+ NẰM CHÍNH GIỮA) */}
       <nav className="mobile-bottom-nav">
         <button 
           type="button"
@@ -2774,15 +2774,6 @@ const Home = () => {
           <span>Cộng đồng</span>
         </button>
 
-        <button 
-          type="button"
-          className={`b-nav-item ${activeTab === 'rooms' ? 'active' : ''}`}
-          onClick={() => setActiveTab('rooms')}
-        >
-          <Radio size={18} strokeWidth={1.5} />
-          <span>Phòng</span>
-        </button>
-
         <div className="b-nav-cell flex items-center justify-center w-full h-full">
           <button 
             type="button"
@@ -2799,11 +2790,11 @@ const Home = () => {
 
         <button 
           type="button"
-          className={`b-nav-item ${activeTab === 'trending' ? 'active' : ''}`}
-          onClick={() => setActiveTab('trending')}
+          className={`b-nav-item ${activeTab === 'rooms' ? 'active' : ''}`}
+          onClick={() => setActiveTab('rooms')}
         >
-          <Flame size={18} strokeWidth={1.5} />
-          <span>Hot</span>
+          <Radio size={18} strokeWidth={1.5} />
+          <span>Phòng</span>
         </button>
 
         <button 
@@ -4920,7 +4911,7 @@ const Home = () => {
           background: rgba(9, 9, 11, 0.96);
           backdrop-filter: blur(16px);
           border-top: 1px solid rgba(255, 255, 255, 0.08);
-          grid-template-columns: repeat(6, 1fr);
+          grid-template-columns: repeat(5, 1fr);
           align-items: center;
           justify-items: center;
           z-index: 80;
@@ -5287,7 +5278,7 @@ const Home = () => {
           .mobile-top-bar { display: flex; }
           .mobile-bottom-nav { 
             display: grid; 
-            grid-template-columns: repeat(6, 1fr);
+            grid-template-columns: repeat(5, 1fr);
             align-items: center;
             justify-items: center;
             transition: transform 0.2s ease, opacity 0.2s ease;
