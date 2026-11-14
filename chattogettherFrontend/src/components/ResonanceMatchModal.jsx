@@ -72,8 +72,9 @@ export const ResonanceMatchModal = ({
 
   // Stomp Ref cho Broadcast Listener
   const stompClientRef = useRef(null);
+  const hasLoadedConfigRef = useRef(false);
 
-  // 1. Tải cấu hình Băng tần & Kênh nhạc từ Backend
+  // 1. Tải cấu hình Băng tần & Kênh nhạc từ Backend đúng 1 lần duy nhất
   const loadConfig = useCallback(async () => {
     try {
       setLoadingConfig(true);
@@ -83,14 +84,14 @@ export const ResonanceMatchModal = ({
         const fetchedChannels = res.data.channels || [];
         setIntents(fetchedIntents);
         setAudioChannels(fetchedChannels);
-        if (fetchedIntents.length > 0 && !selectedIntent) {
+        if (fetchedIntents.length > 0) {
           setSelectedIntent(fetchedIntents[0]);
           setCurrentFrequency(fetchedIntents[0].freqStart || 88.0);
         }
       }
     } catch (err) {
       console.warn("Lỗi tải cấu hình tần số:", err);
-      // Fallback mặc định
+      // Fallback an toàn nếu chưa có cấu hình từ Admin
       const fallback = [
         { code: 'CHILL_MUSIC', title: 'Nghe nhạc & Chill', subtitle: 'Thưởng thức Lo-Fi, xả stress', iconName: 'Headphones', freqStart: 88.0, freqEnd: 92.9 },
         { code: 'DEADLINE_SPRINT', title: 'Cùng chạy deadline', subtitle: 'Co-working tập trung, học tập', iconName: 'Laptop', freqStart: 93.0, freqEnd: 97.9 },
@@ -103,12 +104,25 @@ export const ResonanceMatchModal = ({
     } finally {
       setLoadingConfig(false);
     }
-  }, [selectedIntent]);
+  }, []);
 
   useEffect(() => {
-    if (isOpen) {
-      loadConfig();
+    if (!isOpen) {
+      hasLoadedConfigRef.current = false;
+      return;
     }
+    if (hasLoadedConfigRef.current) return;
+    hasLoadedConfigRef.current = true;
+
+    // Safety timeout tối đa 2.5s luôn giải phóng loading để chống treo/khóa giao diện
+    const safetyTimer = setTimeout(() => {
+      setLoadingConfig(false);
+    }, 2500);
+
+    loadConfig().finally(() => {
+      clearTimeout(safetyTimer);
+      setLoadingConfig(false);
+    });
   }, [isOpen, loadConfig]);
 
   // Khởi tạo Web Audio Noise Generator (Pink / White noise nhẹ)
@@ -1016,12 +1030,13 @@ export const ResonanceMatchModal = ({
           </div>
         )}
 
-        {/* FOOTER BẢO MẬT & BẢN QUYỀN */}
+        {/* FOOTER METADATA ĐƠN SẮC */}
         <div className="px-6 py-3 border-t border-zinc-800/80 bg-zinc-950/80 flex items-center justify-between text-[11px] text-zinc-500 font-mono">
-          <span className="flex items-center gap-1">
-            <ShieldCheck size={12} className="text-emerald-400" /> Web Audio & Real-time WebRTC Protected
+          <span className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            <span>Trạm dò sóng trực tuyến</span>
           </span>
-          <span>Dải tần: 88.0 - 108.0 MHz</span>
+          <span className="tabular-nums">Dải tần: 88.0 - 108.0 MHz</span>
         </div>
 
       </div>

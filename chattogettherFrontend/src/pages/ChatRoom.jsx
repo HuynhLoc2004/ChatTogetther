@@ -1603,7 +1603,7 @@ const ChatRoom = () => {
           <div className="flex items-center gap-2 shrink-0">
             <button 
               type="button"
-              onClick={() => navigate(`/call/room/${roomId}?video=false`)} 
+              onClick={() => navigate(`/call/room/${roomId}?type=audio`)} 
               className="h-9 px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-medium flex items-center gap-1.5 transition-colors duration-150 active:scale-[0.98]"
               title="Chuyển sang màn hình Gọi thoại nhóm"
             >
@@ -1613,7 +1613,7 @@ const ChatRoom = () => {
 
             <button 
               type="button"
-              onClick={() => navigate(`/call/room/${roomId}?video=true`)} 
+              onClick={() => navigate(`/call/room/${roomId}?type=video`)} 
               className="h-9 px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-medium flex items-center gap-1.5 transition-colors duration-150 active:scale-[0.98]"
               title="Chuyển sang màn hình Gọi Video nhóm"
             >

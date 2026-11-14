@@ -64,14 +64,18 @@ const ProfilePage = () => {
   const bioTimerRef = useRef(null);
   const bioChunksRef = useRef([]);
 
+  // Băng tần & Kênh nhạc động từ Backend
+  const [dynamicIntents, setDynamicIntents] = useState([]);
+  const [dynamicTracks, setDynamicTracks] = useState([]);
+
   // Form chỉnh sửa hồ sơ & tần số
   const [editData, setEditData] = useState({
     nickname: '',
     age: '',
     location: '',
     bio: '',
-    favoriteGenre: 'Lo-Fi Midnight • Chill & Focus',
-    favoriteFreq: '94.5 MHz • Cùng chạy deadline',
+    favoriteGenre: '',
+    favoriteFreq: '',
     avatar: ''
   });
 
@@ -86,6 +90,23 @@ const ProfilePage = () => {
 
   const fileInputRef = useRef(null);
 
+  // 0. Tải cấu hình Băng tần & Kênh nhạc động
+  useEffect(() => {
+    axiosClient.get('/public/lobby-config').then(res => {
+      if (res.data?.data) {
+        setDynamicIntents(res.data.data.intents || []);
+        setDynamicTracks(res.data.data.tracks || []);
+      }
+    }).catch(() => {
+      axiosClient.get('/match/config').then(res => {
+        if (res.data) {
+          setDynamicIntents(res.data.intents || []);
+          setDynamicTracks(res.data.channels || []);
+        }
+      }).catch(() => {});
+    });
+  }, []);
+
   // 1. Nạp thông tin hồ sơ
   const fetchProfile = useCallback(async () => {
     try {
@@ -95,8 +116,8 @@ const ProfilePage = () => {
       if (res.data?.data) {
         const data = res.data.data;
         setProfile(data);
-        const storedGenre = localStorage.getItem(`user_genre_${effectiveUserId}`) || 'Lo-Fi Midnight • Chill & Focus';
-        const storedFreq = localStorage.getItem(`user_freq_${effectiveUserId}`) || '94.5 MHz • Cùng chạy deadline';
+        const storedGenre = localStorage.getItem(`user_genre_${effectiveUserId}`) || '';
+        const storedFreq = localStorage.getItem(`user_freq_${effectiveUserId}`) || '';
         
         setEditData({
           nickname: data.nickname || '',
@@ -389,8 +410,8 @@ const ProfilePage = () => {
   };
 
   const isOnline = Boolean(profile?.isOnline ?? true);
-  const userGenre = editData.favoriteGenre || 'Lo-Fi Midnight • Chill & Focus';
-  const userFreq = editData.favoriteFreq || '94.5 MHz • Cùng chạy deadline';
+  const userGenre = editData.favoriteGenre || (dynamicTracks[0] ? `${dynamicTracks[0].title} • ${dynamicTracks[0].artist || dynamicTracks[0].genreTag || 'Lo-Fi'}` : 'Chưa chọn gu âm nhạc');
+  const userFreq = editData.favoriteFreq || (dynamicIntents[0] ? `${dynamicIntents[0].freqStart?.toFixed(1)} - ${dynamicIntents[0].freqEnd?.toFixed(1)} MHz • ${dynamicIntents[0].title}` : 'Chưa chọn băng tần');
 
   return (
     <div className="min-h-screen bg-[#09090b] text-[#f4f4f5] font-sans pb-28 selection:bg-emerald-500 selection:text-black">
@@ -560,7 +581,7 @@ const ProfilePage = () => {
 
                     <button
                       type="button"
-                      onClick={() => navigate(`/call/direct/${targetUserId}?video=false`)}
+                      onClick={() => navigate(`/call/direct/${targetUserId}?type=audio`)}
                       className="h-10 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-200 font-medium text-xs transition-colors duration-150 active:scale-[0.98] flex items-center justify-center gap-1.5"
                       title="Gọi ngay với người này"
                     >
@@ -695,159 +716,6 @@ const ProfilePage = () => {
               </div>
 
             </div>
-
-            {/* PANEL CHỈNH SỬA HỒ SƠ & TẦN SỐ (Khi isEditing mở) */}
-            {isMe && isEditing && (
-              <div className="bg-zinc-900/90 border border-zinc-800/90 p-5 rounded-2xl space-y-4 animate-in fade-in duration-200">
-                <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    <Edit3 size={14} className="text-emerald-400" />
-                    <span>Cập nhật tần số cá nhân</span>
-                  </h3>
-                  <button type="button" onClick={() => setIsEditing(false)} className="text-zinc-400 hover:text-white">
-                    <X size={15} />
-                  </button>
-                </div>
-
-                <form onSubmit={handleSaveProfile} className="space-y-3.5">
-                  <div>
-                    <label className="text-[11px] text-zinc-400 font-mono block mb-1">Tên hiển thị</label>
-                    <input 
-                      type="text"
-                      value={editData.nickname}
-                      onChange={(e) => setEditData(prev => ({ ...prev, nickname: e.target.value }))}
-                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-zinc-600"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] text-zinc-400 font-mono block mb-1">Tiểu sử</label>
-                    <textarea 
-                      rows={3}
-                      value={editData.bio}
-                      onChange={(e) => setEditData(prev => ({ ...prev, bio: e.target.value }))}
-                      placeholder="Viết đôi dòng về năng lượng và tần số của bạn..."
-                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-zinc-600 resize-none"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <div>
-                      <label className="text-[11px] text-zinc-400 font-mono block mb-1">Tuổi</label>
-                      <input 
-                        type="number"
-                        value={editData.age}
-                        onChange={(e) => setEditData(prev => ({ ...prev, age: e.target.value }))}
-                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-zinc-600"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] text-zinc-400 font-mono block mb-1">Vị trí / Khu vực</label>
-                      <input 
-                        type="text"
-                        value={editData.location}
-                        onChange={(e) => setEditData(prev => ({ ...prev, location: e.target.value }))}
-                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-zinc-600"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] text-zinc-400 font-mono block mb-1">Kênh nhạc Lo-Fi yêu thích</label>
-                    <select
-                      value={editData.favoriteGenre}
-                      onChange={(e) => setEditData(prev => ({ ...prev, favoriteGenre: e.target.value }))}
-                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-zinc-600"
-                    >
-                      <option value="Lo-Fi Midnight • Chill & Focus">Lo-Fi Midnight • Chill & Focus</option>
-                      <option value="Ambient Rain • Sâu lắng đêm khuya">Ambient Rain • Sâu lắng đêm khuya</option>
-                      <option value="Acoustic Coffee • Thư giãn sáng sớm">Acoustic Coffee • Thư giãn sáng sớm</option>
-                      <option value="Synthwave Retro • Năng lượng làm việc">Synthwave Retro • Năng lượng làm việc</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] text-zinc-400 font-mono block mb-1">Băng tần thường tham gia</label>
-                    <select
-                      value={editData.favoriteFreq}
-                      onChange={(e) => setEditData(prev => ({ ...prev, favoriteFreq: e.target.value }))}
-                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-zinc-600"
-                    >
-                      <option value="94.5 MHz • Cùng chạy deadline">94.5 MHz • Cùng chạy deadline</option>
-                      <option value="89.2 MHz • Chill & Nghe nhạc">89.2 MHz • Chill & Nghe nhạc</option>
-                      <option value="99.0 MHz • Tâm sự đêm muộn">99.0 MHz • Tâm sự đêm muộn</option>
-                      <option value="105.4 MHz • Kết nối tự do">105.4 MHz • Kết nối tự do</option>
-                    </select>
-                  </div>
-
-                  <div className="pt-2 flex items-center justify-end gap-2">
-                    <button 
-                      type="button" 
-                      onClick={() => setIsEditing(false)} 
-                      className="px-3 py-2 rounded-xl text-xs text-zinc-400 hover:text-white"
-                    >
-                      Hủy
-                    </button>
-                    <button 
-                      type="submit" 
-                      disabled={submitting}
-                      className="px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs transition-all active:scale-95 disabled:opacity-50"
-                    >
-                      {submitting ? 'Đang lưu...' : 'Lưu thay đổi'}
-                    </button>
-                  </div>
-                </form>
-
-                {/* Nút mở đổi mật khẩu */}
-                <div className="border-t border-zinc-800 pt-3">
-                  <button 
-                    type="button" 
-                    onClick={() => setShowPasswordSection(!showPasswordSection)}
-                    className="text-xs text-zinc-400 hover:text-white flex items-center gap-1.5"
-                  >
-                    <Lock size={12} />
-                    <span>{showPasswordSection ? 'Ẩn đổi mật khẩu' : 'Đổi mật khẩu tài khoản'}</span>
-                  </button>
-
-                  {showPasswordSection && (
-                    <form onSubmit={handleChangePassword} className="mt-3 space-y-2.5">
-                      <input 
-                        type="password"
-                        placeholder="Mật khẩu cũ"
-                        value={passwordData.oldPassword}
-                        onChange={(e) => setPasswordData(prev => ({ ...prev, oldPassword: e.target.value }))}
-                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
-                        required
-                      />
-                      <input 
-                        type="password"
-                        placeholder="Mật khẩu mới (tối thiểu 6 ký tự)"
-                        value={passwordData.newPassword}
-                        onChange={(e) => setPasswordData(prev => ({ ...prev, newPassword: e.target.value }))}
-                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
-                        required
-                      />
-                      <input 
-                        type="password"
-                        placeholder="Xác nhận mật khẩu mới"
-                        value={passwordData.confirmPassword}
-                        onChange={(e) => setPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
-                        required
-                      />
-                      <button
-                        type="submit"
-                        disabled={changingPassword}
-                        className="w-full py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-semibold transition-all active:scale-98"
-                      >
-                        {changingPassword ? 'Đang cập nhật...' : 'Xác nhận đổi mật khẩu'}
-                      </button>
-                    </form>
-                  )}
-                </div>
-              </div>
-            )}
           </aside>
 
           {/* ============================================================== */}
@@ -1058,6 +926,188 @@ const ProfilePage = () => {
 
         </div>
       </main>
+
+      {/* MODAL CẬP NHẬT TẦN SỐ CÁ NHÂN & HỒ SƠ Ở GIỮA MÀN HÌNH (MAX-W-LG) */}
+      {isMe && isEditing && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in"
+          onClick={() => setIsEditing(false)}
+        >
+          <div 
+            className="w-full max-w-lg bg-zinc-900 border border-zinc-800/90 p-5 sm:p-6 rounded-2xl space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Edit3 size={15} className="text-zinc-300" />
+                <span>Cập nhật tần số cá nhân</span>
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => setIsEditing(false)} 
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveProfile} className="space-y-4">
+              <div>
+                <label className="text-[11px] text-zinc-400 font-mono block mb-1">Tên hiển thị *</label>
+                <input 
+                  type="text"
+                  value={editData.nickname}
+                  onChange={(e) => setEditData(prev => ({ ...prev, nickname: e.target.value }))}
+                  className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 text-xs text-white focus:outline-none focus:border-zinc-600"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] text-zinc-400 font-mono block mb-1">Tiểu sử</label>
+                <textarea 
+                  rows={3}
+                  value={editData.bio}
+                  onChange={(e) => setEditData(prev => ({ ...prev, bio: e.target.value }))}
+                  placeholder="Viết đôi dòng về năng lượng và tần số của bạn..."
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-zinc-600 resize-none leading-relaxed"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] text-zinc-400 font-mono block mb-1">Tuổi</label>
+                  <input 
+                    type="number"
+                    value={editData.age}
+                    onChange={(e) => setEditData(prev => ({ ...prev, age: e.target.value }))}
+                    className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 text-xs text-white focus:outline-none focus:border-zinc-600 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] text-zinc-400 font-mono block mb-1">Vị trí / Khu vực</label>
+                  <input 
+                    type="text"
+                    value={editData.location}
+                    onChange={(e) => setEditData(prev => ({ ...prev, location: e.target.value }))}
+                    placeholder="VD: TP. Hồ Chí Minh"
+                    className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 text-xs text-white focus:outline-none focus:border-zinc-600"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] text-zinc-400 font-mono block mb-1">Kênh nhạc Lo-Fi yêu thích</label>
+                <select
+                  value={editData.favoriteGenre}
+                  onChange={(e) => setEditData(prev => ({ ...prev, favoriteGenre: e.target.value }))}
+                  className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-xl px-3 text-xs text-white focus:outline-none focus:border-zinc-600"
+                >
+                  {dynamicTracks.length > 0 ? (
+                    dynamicTracks.map((tr) => {
+                      const val = `${tr.title} • ${tr.artist || tr.genreTag || 'Lo-Fi'}`;
+                      return (
+                        <option key={tr.id || tr.title} value={val} className="bg-zinc-900 text-white">
+                          {val}
+                        </option>
+                      );
+                    })
+                  ) : (
+                    <option value="" className="bg-zinc-900 text-zinc-500">Chưa có kênh nhạc từ hệ thống</option>
+                  )}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] text-zinc-400 font-mono block mb-1">Băng tần thường tham gia</label>
+                <select
+                  value={editData.favoriteFreq}
+                  onChange={(e) => setEditData(prev => ({ ...prev, favoriteFreq: e.target.value }))}
+                  className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-xl px-3 text-xs text-white focus:outline-none focus:border-zinc-600 font-mono"
+                >
+                  {dynamicIntents.length > 0 ? (
+                    dynamicIntents.map((it) => {
+                      const val = `${it.freqStart?.toFixed(1)} - ${it.freqEnd?.toFixed(1)} MHz • ${it.title}`;
+                      return (
+                        <option key={it.id || it.code} value={val} className="bg-zinc-900 text-white">
+                          {val}
+                        </option>
+                      );
+                    })
+                  ) : (
+                    <option value="" className="bg-zinc-900 text-zinc-500">Chưa có băng tần từ hệ thống</option>
+                  )}
+                </select>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-zinc-800/80">
+                <button 
+                  type="button" 
+                  onClick={() => setIsEditing(false)} 
+                  className="h-9 px-4 rounded-xl bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-300 text-xs font-medium transition-colors"
+                >
+                  Hủy
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={submitting}
+                  className="h-9 px-4 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs transition-colors duration-150 active:scale-[0.98] disabled:opacity-50 shadow-sm"
+                >
+                  {submitting ? 'Đang lưu...' : 'Lưu thay đổi'}
+                </button>
+              </div>
+            </form>
+
+            {/* Mở rộng đổi mật khẩu */}
+            <div className="border-t border-zinc-800/80 pt-3">
+              <button 
+                type="button" 
+                onClick={() => setShowPasswordSection(!showPasswordSection)}
+                className="text-xs text-zinc-400 hover:text-white flex items-center gap-1.5 transition-colors"
+              >
+                <Lock size={12} />
+                <span>{showPasswordSection ? 'Ẩn đổi mật khẩu' : 'Đổi mật khẩu tài khoản'}</span>
+              </button>
+
+              {showPasswordSection && (
+                <form onSubmit={handleChangePassword} className="mt-3 space-y-2.5">
+                  <input 
+                    type="password"
+                    placeholder="Mật khẩu cũ"
+                    value={passwordData.oldPassword}
+                    onChange={(e) => setPasswordData(prev => ({ ...prev, oldPassword: e.target.value }))}
+                    className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 text-xs text-white focus:outline-none"
+                    required
+                  />
+                  <input 
+                    type="password"
+                    placeholder="Mật khẩu mới (tối thiểu 6 ký tự)"
+                    value={passwordData.newPassword}
+                    onChange={(e) => setPasswordData(prev => ({ ...prev, newPassword: e.target.value }))}
+                    className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 text-xs text-white focus:outline-none"
+                    required
+                  />
+                  <input 
+                    type="password"
+                    placeholder="Xác nhận mật khẩu mới"
+                    value={passwordData.confirmPassword}
+                    onChange={(e) => setPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                    className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 text-xs text-white focus:outline-none"
+                    required
+                  />
+                  <button
+                    type="submit"
+                    disabled={changingPassword}
+                    className="w-full h-10 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-semibold transition-colors active:scale-[0.98]"
+                  >
+                    {changingPassword ? 'Đang cập nhật...' : 'Xác nhận đổi mật khẩu'}
+                  </button>
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL XÁC NHẬN ĐĂNG XUẤT */}
       {showLogoutConfirm && (

@@ -1,5 +1,23 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+:root {
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color-scheme: dark;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: #09090b;
+  color: #f4f4f5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 /* Responsive Toaster Positioning - Không đè lên header phòng hay nút bấm */
 @media (max-width: 768px) {
   div[data-toaster-container],

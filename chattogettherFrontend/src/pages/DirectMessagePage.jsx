@@ -598,7 +598,7 @@ export const DirectMessagePage = () => {
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     type="button"
-                    onClick={() => navigate(`/call/direct/${activePartner.id}?video=false`)}
+                    onClick={() => navigate(`/call/direct/${activePartner.id}?type=audio`)}
                     className="h-9 px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-medium flex items-center gap-1.5 transition-colors duration-150 active:scale-[0.98]"
                     title="Bắt đầu cuộc gọi thoại 1-1"
                   >
@@ -608,7 +608,7 @@ export const DirectMessagePage = () => {
 
                   <button
                     type="button"
-                    onClick={() => navigate(`/call/direct/${activePartner.id}?video=true`)}
+                    onClick={() => navigate(`/call/direct/${activePartner.id}?type=video`)}
                     className="h-9 px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-medium flex items-center gap-1.5 transition-colors duration-150 active:scale-[0.98]"
                     title="Bắt đầu cuộc gọi Video 1-1"
                   >

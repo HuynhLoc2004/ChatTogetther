@@ -22,7 +22,7 @@ const CallPage = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const isVideoParam = searchParams.get('video') === 'true';
+  const isVideoParam = searchParams.get('type') === 'video' || searchParams.get('video') === 'true';
   const isDirectCall = Boolean(userId);
   const isRoomCall = Boolean(roomId);
 

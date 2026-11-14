@@ -512,7 +512,7 @@ export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentU
                       {/* Nút Gọi ngay */}
                       <button 
                         type="button"
-                        onClick={() => { onClose(); navigate(`/call/direct/${effectiveUserId}?video=false`); }}
+                        onClick={() => { onClose(); navigate(`/call/direct/${effectiveUserId}?type=audio`); }}
                         className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-medium transition-colors active:scale-[0.98]"
                         title="Gọi đàm thoại ngay"
                       >
