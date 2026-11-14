@@ -560,12 +560,31 @@ const Home = ({ initialTab }) => {
       const token = localStorage.getItem('accesstoken');
       if (!token) return false;
       const payload = JSON.parse(atob(token.split('.')[1]));
-      const scope = (payload.scope || '') + ' ' + (payload.roles || '');
-      return scope.includes('ADMIN') || scope.includes('TL_') || scope.includes('PERM_');
+      const scope = ((payload.scope || '') + ' ' + (payload.roles || '')).toUpperCase();
+      return scope.includes('ADMIN') || scope.includes('AMDIN') || scope.includes('TL_') || scope.includes('PERM_');
     } catch {
       return false;
     }
   });
+
+  // Đồng bộ kiểm tra quyền Admin thời gian thực từ API Profile
+  useEffect(() => {
+    const verifyAdmin = async () => {
+      try {
+        const res = await axiosClient.get('/users/profile');
+        const u = res?.data?.data;
+        if (u) {
+          const uRoles = Array.isArray(u.roles) ? u.roles : [];
+          const isAdmin = u.vipTier === 'ADMIN' || u.isVerified || uRoles.some(r => {
+            const up = String(r).toUpperCase();
+            return up.includes('ADMIN') || up.includes('AMDIN') || up.startsWith('TL_') || up.startsWith('PERM_');
+          });
+          setIsAdminUser(isAdmin);
+        }
+      } catch (_) {}
+    };
+    verifyAdmin();
+  }, []);
 
   // Đồng bộ cấu hình động từ Admin Dashboard
   useEffect(() => {
@@ -1962,7 +1981,7 @@ const Home = ({ initialTab }) => {
   // Render một bubble bình luận (dùng chung cho cả Mobile Single Feed và Desktop Dual-view)
   const renderCommentBubble = (cmt, isReply = false, targetPostId) => {
     const isCmtMe = currentUserId && cmt.authorId?.toString() === currentUserId.toString();
-    const targetPost = posts.find(p => p.id === targetPostId) || selectedThreadPost;
+    const targetPost = safePosts.find(p => p.id === targetPostId) || selectedThreadPost;
     const canDeleteCmt = isCmtMe || (currentUserId && targetPost?.authorId?.toString() === currentUserId.toString());
     const isEditingThisCmt = editingCommentId === cmt.id;
 
@@ -2326,6 +2345,16 @@ const Home = ({ initialTab }) => {
                 <Music size={12} />
                 <span>{isPlayingRadio ? 'Đang phát' : (currentTrack ? 'Phát nhạc' : 'Âm nhạc')}</span>
               </button>
+              {isAdminUser && (
+                <button 
+                  type="button"
+                  onClick={() => navigate('/admin')} 
+                  className="w-7 h-7 rounded-xl flex items-center justify-center bg-zinc-900 border border-zinc-700 text-zinc-200 transition-all hover:bg-zinc-800"
+                  title="Mở Bảng Quản Trị Hệ Thống"
+                >
+                  <Shield size={14} />
+                </button>
+              )}
               <button onClick={() => setIsNotifOpen(!isNotifOpen)} className="btn-header-notif">
                 <Bell size={16} strokeWidth={1.5} />
                 {notifications.some(n => n.unread) && <span className="notif-dot"></span>}
@@ -2886,7 +2915,7 @@ const Home = ({ initialTab }) => {
               ) : (
                 displayedPosts.map((post) => {
                   const currentReaction = REACTION_EMOJIS.find(e => e.type === post.myReaction);
-                  const isSaved = savedPostIds.includes(post.id);
+                  const isSaved = Array.isArray(savedPostIds) && savedPostIds.includes(post.id);
                   const isMe = currentUserId && post.authorId?.toString() === currentUserId.toString();
                   const isFounder = post.authorVipTier === 'FOUNDER' || post.authorRoles?.includes('ROLE_ADMIN') || post.authorRoles?.includes('ROLE_AMDIN') || post.authorBadge;
                   const parsedMedia = parsePostMedia(post.imageUrl);
@@ -3003,7 +3032,7 @@ const Home = ({ initialTab }) => {
                               </span>
                             )}
 
-                            {post.vibe && (
+                            {post.vibe && typeof post.vibe === 'string' && (
                               <div className="post-topics-bar">
                                 {post.vibe.split(/[|\s]+/).filter(Boolean).map((token, idx) => {
                                   const clean = token.replace(/^[#/]+/, '').trim();
@@ -4458,7 +4487,7 @@ const Home = ({ initialTab }) => {
                       setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, unread: false } : item));
                       setIsNotifOpen(false);
                       if (n.postId) {
-                        const targetPost = posts.find(p => p.id === n.postId);
+                        const targetPost = safePosts.find(p => p.id === n.postId);
                         if (targetPost) {
                           setSelectedThreadPost(targetPost);
                           fetchComments(targetPost.id);

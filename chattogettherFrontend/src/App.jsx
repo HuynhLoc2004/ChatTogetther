@@ -25,7 +25,7 @@ class ErrorBoundary extends Component {
   componentDidCatch(error, errorInfo) {
     console.error("ErrorBoundary caught an error:", error, errorInfo);
     const msg = (error && error.message) ? error.message.toLowerCase() : '';
-    if (msg.includes('dynamically imported module') || msg.includes('failed to fetch') || msg.includes('loading chunk')) {
+    if (msg.includes('dynamically imported module') || msg.includes('failed to fetch') || msg.includes('loading chunk') || msg.includes('load failed')) {
       const hasAutoReloaded = sessionStorage.getItem('chunk_reload_attempt');
       if (!hasAutoReloaded) {
         sessionStorage.setItem('chunk_reload_attempt', '1');
@@ -36,6 +36,7 @@ class ErrorBoundary extends Component {
 
   handleReload = () => {
     localStorage.removeItem('hasCheckedActiveRoom');
+    localStorage.removeItem('talovin_cached_posts');
     sessionStorage.clear();
     window.location.href = '/';
   };
@@ -93,7 +94,7 @@ class ErrorBoundary extends Component {
             </p>
 
             {this.state.error && (
-              <details style={{ textAlign: 'left', marginBottom: '20px', padding: '10px 12px', background: '#09090b', borderRadius: '10px', border: '1px solid #27272a', fontSize: '11px', color: '#f87171', fontFamily: 'monospace' }}>
+              <details open style={{ textAlign: 'left', marginBottom: '20px', padding: '10px 12px', background: '#09090b', borderRadius: '10px', border: '1px solid #27272a', fontSize: '11px', color: '#f87171', fontFamily: 'monospace' }}>
                 <summary style={{ cursor: 'pointer', color: '#71717a', userSelect: 'none' }}>Chi tiết kỹ thuật</summary>
                 <div style={{ marginTop: '8px', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
                   {this.state.error.toString()}

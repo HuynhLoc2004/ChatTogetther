@@ -256,16 +256,47 @@ export const AdminDashboard = () => {
     try {
       setLoading(true);
       // 1. Tải thông tin người dùng hiện tại
-      const profileRes = await axiosClient.get('/users/profile');
-      const user = profileRes?.data?.data;
+      let user = null;
+      try {
+        const profileRes = await axiosClient.get('/users/profile');
+        user = profileRes?.data?.data;
+      } catch (profileErr) {
+        try {
+          const meRes = await axiosClient.get('/users/me');
+          user = meRes?.data?.data;
+        } catch (_) {}
+      }
+
+      if (!user) {
+        // Fallback đọc token từ localStorage nếu API tạm thời trễ
+        const token = localStorage.getItem('accesstoken');
+        if (token) {
+          try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            const scopeRoles = (payload.scope || '').split(' ').filter(Boolean);
+            user = {
+              account: payload.sub,
+              roles: scopeRoles,
+              vipTier: scopeRoles.some(r => r.includes('ADMIN') || r.includes('AMDIN')) ? 'ADMIN' : 'MEMBER'
+            };
+          } catch (_) {}
+        }
+      }
+
       if (!user) throw new Error("Chưa đăng nhập");
       setCurrentUser(user);
 
-      // 2. Xác thực quyền Admin / Moderator
-      const userRoles = user.roles || [];
-      const hasAnyAdminPrivilege = userRoles.some(r => 
-        r.includes('ADMIN') || r.startsWith('TL_') || r.startsWith('PERM_')
-      );
+      // 2. Xác thực quyền Admin / Moderator (nhận diện chuẩn cả ROLE_ADMIN, ROLE_AMDIN, TL_*, PERM_*, vipTier ADMIN)
+      const userRoles = Array.isArray(user.roles) 
+        ? user.roles 
+        : (typeof user.roles === 'string' ? [user.roles] : []);
+
+      const hasAnyAdminPrivilege = user.vipTier === 'ADMIN' || 
+        user.isVerified ||
+        userRoles.some(r => {
+          const upper = String(r).toUpperCase();
+          return upper.includes('ADMIN') || upper.includes('AMDIN') || upper.startsWith('TL_') || upper.startsWith('PERM_');
+        });
 
       if (!hasAnyAdminPrivilege) {
         toast.error("Bạn không có quyền truy cập trung tâm quản trị!");
@@ -273,20 +304,22 @@ export const AdminDashboard = () => {
         return;
       }
 
-      // 3. Nạp toàn bộ dữ liệu cấu hình ban đầu
-      await fetchConfigs();
-      await fetchStats();
-      await fetchAdminRooms();
-      await fetchChallenges();
-      await fetchTracks();
-      await fetchUsers();
-      await fetchAdminGroups();
-      await fetchAdminCommunityCategories();
-      await fetchCommunityReports();
-      await fetchReports();
-      await fetchAdminPosts();
-      await fetchAdminReposts();
-      await fetchFrequencyData();
+      // 3. Nạp toàn bộ dữ liệu cấu hình ban đầu song song, chống sập do 1 endpoint lẻ
+      await Promise.allSettled([
+        fetchConfigs(),
+        fetchStats(),
+        fetchAdminRooms(),
+        fetchChallenges(),
+        fetchTracks(),
+        fetchUsers(),
+        fetchAdminGroups(),
+        fetchAdminCommunityCategories(),
+        fetchCommunityReports(),
+        fetchReports(),
+        fetchAdminPosts(),
+        fetchAdminReposts(),
+        fetchFrequencyData()
+      ]);
     } catch (err) {
       console.error("Lỗi xác thực quyền:", err);
       toast.error("Phiên làm việc hết hạn hoặc không có quyền quản trị");
@@ -299,9 +332,11 @@ export const AdminDashboard = () => {
   // Tính toán danh sách quyền của người dùng hiện tại
   const currentUserPermissions = useMemo(() => {
     if (!currentUser) return new Set();
-    const roles = currentUser.roles || [];
-    const isSuper = roles.includes('ROLE_ADMIN') || roles.includes('ROLE_AMDIN') || 
-                    roles.includes('TL_SYS_SUPERADMIN') || roles.includes('TL_PERM_ALL');
+    const roles = Array.isArray(currentUser.roles) ? currentUser.roles : [];
+    const isSuper = roles.some(r => {
+      const u = String(r).toUpperCase();
+      return u.includes('ADMIN') || u.includes('AMDIN') || u === 'TL_SYS_SUPERADMIN' || u === 'TL_PERM_ALL';
+    }) || currentUser.vipTier === 'ADMIN' || currentUser.isVerified;
     
     if (isSuper) {
       return new Set(['TL_PERM_ALL', ...SYSTEM_PERMISSIONS.map(p => p.id)]);
@@ -310,8 +345,8 @@ export const AdminDashboard = () => {
     const perms = new Set();
     roles.forEach(r => {
       if (r.startsWith('TL_PERM_')) perms.add(r);
-      const roleDef = systemRoles.find(def => def.id === r);
-      if (roleDef && roleDef.permissions) {
+      const roleDef = (systemRoles || []).find(def => def.id === r);
+      if (roleDef && Array.isArray(roleDef.permissions)) {
         roleDef.permissions.forEach(p => perms.add(p));
       }
     });
@@ -1242,10 +1277,10 @@ export const AdminDashboard = () => {
       const matchSearch = !q || (u.account || '').toLowerCase().includes(q) || 
                                 (u.nickname || '').toLowerCase().includes(q) || 
                                 (u.email || '').toLowerCase().includes(q);
-      const roles = u.roles || [];
+      const roles = Array.isArray(u.roles) ? u.roles : [];
       const matchRole = userRoleFilter === 'ALL' || 
-                        (userRoleFilter === 'ADMIN' && (roles.includes('ROLE_ADMIN') || roles.includes('TL_SYS_SUPERADMIN') || roles.some(r => r.startsWith('TL_ROLE_')))) ||
-                        (userRoleFilter === 'MEMBER' && !roles.some(r => r.includes('ADMIN') || r.startsWith('TL_')));
+                        (userRoleFilter === 'ADMIN' && (roles.some(r => r.toUpperCase().includes('ADMIN') || r.toUpperCase().includes('AMDIN')) || roles.includes('TL_SYS_SUPERADMIN') || roles.some(r => r.startsWith('TL_ROLE_')))) ||
+                        (userRoleFilter === 'MEMBER' && !roles.some(r => r.toUpperCase().includes('ADMIN') || r.toUpperCase().includes('AMDIN') || r.startsWith('TL_')));
       return matchSearch && matchRole;
     });
   }, [users, userSearch, userRoleFilter]);
@@ -2616,8 +2651,8 @@ export const AdminDashboard = () => {
                 {/* Users List Table */}
                 <div className="space-y-2">
                   {filteredUsers.map((u) => {
-                    const roles = u.roles || [];
-                    const isSuper = roles.includes('ROLE_ADMIN') || roles.includes('TL_SYS_SUPERADMIN');
+                    const roles = Array.isArray(u.roles) ? u.roles : [];
+                    const isSuper = roles.some(r => r.toUpperCase().includes('ADMIN') || r.toUpperCase().includes('AMDIN')) || roles.includes('TL_SYS_SUPERADMIN');
                     const isMod = roles.some(r => r.startsWith('TL_ROLE_') || r.startsWith('TL_PERM_'));
 
                     return (
@@ -2751,7 +2786,7 @@ export const AdminDashboard = () => {
                       <div className="pt-2 border-t border-zinc-800/60">
                         <span className="text-[10px] font-mono text-zinc-400 block mb-1.5 uppercase font-semibold">Quyền hạn kích hoạt:</span>
                         <div className="flex flex-wrap gap-1.5">
-                          {role.permissions.map((p) => {
+                          {(role.permissions || []).map((p) => {
                             const pDef = SYSTEM_PERMISSIONS.find(sp => sp.id === p);
                             return (
                               <span

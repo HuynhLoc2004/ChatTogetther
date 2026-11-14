@@ -448,6 +448,17 @@ const ProfilePage = () => {
           </div>
 
           <div className="flex items-center gap-2">
+            {isMe && (profile?.roles?.some(r => r.includes('ADMIN') || r.includes('AMDIN')) || profile?.vipTier === 'ADMIN') && (
+              <button
+                type="button"
+                onClick={() => navigate('/admin')}
+                className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-700 text-xs font-medium flex items-center gap-1.5 transition-all active:scale-95"
+                title="Mở Bảng Quản Trị Hệ Thống"
+              >
+                <Shield size={13} />
+                <span>Bảng Quản Trị</span>
+              </button>
+            )}
             {isMe && (
               <button
                 type="button"
@@ -514,8 +525,8 @@ const ProfilePage = () => {
                     <h2 className="text-xl font-bold text-white tracking-tight truncate">
                       {profile?.nickname || profile?.account || 'Người dùng Talovin'}
                     </h2>
-                    {profile?.roles?.includes('ROLE_ADMIN') && (
-                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    {(profile?.roles?.some(r => r.includes('ADMIN') || r.includes('AMDIN')) || profile?.vipTier === 'ADMIN') && (
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-200 border border-zinc-700">
                         ADMIN
                       </span>
                     )}
