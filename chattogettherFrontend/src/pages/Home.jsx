@@ -1842,7 +1842,8 @@ const Home = () => {
 
           {/* Thanh Tab điều hướng Sảnh (Đồng bộ, tối giản cho cả PC & Mobile - Dùng Icon có màu sắc dịu nhẹ) */}
           <div className="stream-header">
-            <div className="stream-tabs">
+            {/* 1. MÀN HÌNH LỚN (PC / TABLET): Hiện đầy đủ các tab ngang */}
+            <div className="stream-tabs hidden sm:flex">
               <button 
                 type="button"
                 className={`stream-tab ${activeTab === 'feed' ? 'active' : ''}`}
@@ -1882,6 +1883,38 @@ const Home = () => {
               >
                 <Radio size={14} className="tab-icon text-rose-400 flex-shrink-0" />
                 <span>Phòng thoại ({safeRooms.length})</span>
+              </button>
+            </div>
+
+            {/* 2. MÀN HÌNH NHỎ (MOBILE): Nút chọn không gian hiện tại + Hamburger mở danh mục mượt mà */}
+            <div className="flex sm:hidden items-center justify-between w-full gap-2">
+              <button
+                type="button"
+                onClick={() => setIsSpaceDrawerOpen(true)}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#141414] hover:bg-[#1a1a1a] border border-[#222222] text-white text-xs font-semibold shadow-sm active:scale-98 transition-all flex-1 min-w-0"
+              >
+                {activeTab === 'feed' && <Globe size={13} className="text-sky-400 flex-shrink-0" />}
+                {activeTab === 'groups' && <Users size={13} className="text-emerald-400 flex-shrink-0" />}
+                {activeTab === 'trending' && <Flame size={13} className="text-amber-400 flex-shrink-0" />}
+                {activeTab === 'saved' && <Bookmark size={13} className="text-purple-400 flex-shrink-0" />}
+                {activeTab === 'rooms' && <Radio size={13} className="text-rose-400 flex-shrink-0" />}
+                <span className="truncate">
+                  {activeTab === 'feed' ? 'Sảnh trực tuyến' :
+                   activeTab === 'groups' ? 'Cộng đồng' :
+                   activeTab === 'trending' ? 'Thịnh hành' :
+                   activeTab === 'saved' ? 'Đã lưu' :
+                   `Phòng thoại (${safeRooms.length})`}
+                </span>
+                <ChevronDown size={13} className="text-zinc-500 ml-auto flex-shrink-0" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsSpaceDrawerOpen(true)}
+                className="w-8 h-8 rounded-xl bg-[#141414] hover:bg-[#1f1f1f] border border-[#222222] text-zinc-300 hover:text-white flex items-center justify-center transition-all active:scale-95 flex-shrink-0"
+                title="Mở menu chuyển không gian"
+              >
+                <Menu size={16} strokeWidth={1.8} />
               </button>
             </div>
 
@@ -2106,6 +2139,74 @@ const Home = () => {
               </div>
             )}
           </div>
+
+          {/* ============================================================== */}
+          {/* BOTTOM SHEET / DRAWER CHUYỂN KHÔNG GIAN CHO MOBILE (MƯỢT MÀ, THẨM MỸ CAO) */}
+          {/* ============================================================== */}
+          {isSpaceDrawerOpen && (
+            <div 
+              className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm animate-fade-in"
+              onClick={() => setIsSpaceDrawerOpen(false)}
+            >
+              <div 
+                className="w-full sm:max-w-md bg-[#121212] border-t sm:border border-[#222222] rounded-t-3xl sm:rounded-2xl p-5 shadow-2xl flex flex-col space-y-3.5 animate-slide-up sm:animate-fade-in"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Thanh gạt trên đỉnh cho mobile */}
+                <div className="w-10 h-1 bg-zinc-700/60 rounded-full mx-auto -mt-1 sm:hidden"></div>
+
+                <div className="flex items-center justify-between pb-2 border-b border-[#1e1e1e]">
+                  <div>
+                    <h3 className="text-sm font-bold text-white tracking-tight">Chuyển không gian</h3>
+                    <p className="text-[11px] text-zinc-400">Chọn không gian bạn muốn trải nghiệm</p>
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={() => setIsSpaceDrawerOpen(false)}
+                    className="w-8 h-8 rounded-full bg-[#1c1c1c] hover:bg-[#282828] text-zinc-400 hover:text-white flex items-center justify-center transition-colors"
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  {[
+                    { id: 'feed', label: 'Sảnh trực tuyến', desc: 'Bảng tin chia sẻ khoảnh khắc & bài viết tự do', icon: Globe, color: 'text-sky-400', bg: 'hover:bg-sky-500/5' },
+                    { id: 'groups', label: 'Cộng đồng', desc: 'Khám phá các hội nhóm & chủ đề chuyên biệt', icon: Users, color: 'text-emerald-400', bg: 'hover:bg-emerald-500/5' },
+                    { id: 'trending', label: 'Thịnh hành', desc: 'Bài viết nhiều tương tác & chủ đề sôi nổi nhất', icon: Flame, color: 'text-amber-400', bg: 'hover:bg-amber-500/5' },
+                    { id: 'saved', label: 'Đã lưu', desc: 'Xem lại bài viết bạn đã bookmark đánh dấu', icon: Bookmark, color: 'text-purple-400', bg: 'hover:bg-purple-500/5' },
+                    { id: 'rooms', label: `Phòng thoại (${safeRooms.length})`, desc: 'Đàm thoại âm thanh trực tiếp độ trễ cực thấp', icon: Radio, color: 'text-rose-400', bg: 'hover:bg-rose-500/5' }
+                  ].map(item => {
+                    const isActive = activeTab === item.id;
+                    const IconComponent = item.icon;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => handleSwitchTab(item.id)}
+                        className={`w-full flex items-center gap-3.5 p-3 rounded-2xl border transition-all text-left active:scale-[0.99] ${
+                          isActive 
+                            ? 'bg-[#1c1c1c] border-[#333333] shadow-sm' 
+                            : 'bg-[#141414] border-transparent ' + item.bg + ' text-zinc-400 hover:text-white'
+                        }`}
+                      >
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${isActive ? 'bg-[#252525]' : 'bg-[#181818]'}`}>
+                          <IconComponent size={18} className={item.color} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className={`text-xs font-bold truncate ${isActive ? 'text-white' : 'text-zinc-200'}`}>{item.label}</div>
+                          <div className="text-[11px] text-zinc-500 truncate">{item.desc}</div>
+                        </div>
+                        {isActive && (
+                          <span className="w-2 h-2 rounded-full bg-white flex-shrink-0"></span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* THANH BÁO HIỆU SOFT TRANSITION KHI CHUYỂN TAB */}
           {isTabSwitching && (
@@ -2354,7 +2455,7 @@ const Home = () => {
                     title="Đính kèm hình ảnh hoặc video clip ngắn"
                   >
                     <ImageIcon size={15} strokeWidth={1.5} className="text-sky-400 flex-shrink-0" />
-                    <span>Ảnh / Video</span>
+                    <span>Ảnh<span className="hidden sm:inline"> / Video</span></span>
                   </button>
 
                   <button 
@@ -2364,7 +2465,7 @@ const Home = () => {
                     title="Ghi âm giọng nói 15 giây"
                   >
                     <Mic size={15} strokeWidth={1.5} className="text-rose-400 flex-shrink-0" />
-                    <span>{isRecordingVoice ? 'Đang thu âm...' : (voiceBase64 ? 'Đã thu 15s' : 'Ghi âm 15s')}</span>
+                    <span>{isRecordingVoice ? 'Thu âm...' : (voiceBase64 ? 'Đã thu' : 'Ghi âm')}</span>
                   </button>
 
                   <button 
@@ -2374,7 +2475,7 @@ const Home = () => {
                     title="Gắn thẻ chủ đề bài viết"
                   >
                     <Tag size={15} strokeWidth={1.5} className="text-amber-400 flex-shrink-0" />
-                    <span>Gắn chủ đề</span>
+                    <span><span className="hidden sm:inline">Gắn </span>chủ đề</span>
                   </button>
                 </div>
 
@@ -3055,18 +3156,18 @@ const Home = () => {
                         {room.hasPassword && <Lock size={12} className="text-zinc-500" title="Phòng có mật khẩu" />}
                       </h4>
                       <span className="text-[11px] text-zinc-400 font-mono flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-zinc-400"></span>
                         {room.soluong || 0} người đang trò chuyện
                       </span>
                     </div>
                   </div>
 
                   {isJoined ? (
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-mono">
+                    <span className="px-2 py-0.5 rounded-full bg-[#1c1c1c] border border-[#2e2e2e] text-zinc-300 text-[10px] font-mono">
                       Đã tham gia
                     </span>
                   ) : (
-                    <span className="px-2 py-0.5 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-300 text-[10px] font-mono">
+                    <span className="px-2 py-0.5 rounded-full bg-[#1c1c1c] border border-[#2e2e2e] text-zinc-400 text-[10px] font-mono">
                       ✦ Đề xuất
                     </span>
                   )}
@@ -3110,7 +3211,7 @@ const Home = () => {
                 <div className="rooms-header-banner flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 sm:p-5 rounded-2xl bg-[#141414] border border-[#1e1e1e] gap-3 sm:gap-4">
                   <div>
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      <span className="w-2 h-2 rounded-full bg-zinc-400"></span>
                       <h3 className="text-zinc-100 font-bold text-base sm:text-lg tracking-tight">Phòng Trò Chuyện & Đàm Thoại Trực Tiếp</h3>
                     </div>
                     <p className="text-zinc-400 text-xs font-sans">
@@ -3143,9 +3244,9 @@ const Home = () => {
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 text-xs font-semibold text-zinc-300">
-                          <CheckCircle2 size={14} className="text-emerald-400" />
+                          <CheckCircle2 size={14} className="text-zinc-400" />
                           <span>Phòng của bạn (Đã tham gia)</span>
-                          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
+                          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[#1c1c1c] text-zinc-300 border border-[#2e2e2e] font-mono">
                             {myJoinedRooms.length}
                           </span>
                         </div>
@@ -5690,15 +5791,13 @@ const Home = () => {
           word-break: break-word;
         }
         .cmt-mention-badge {
-          display: inline-flex;
-          align-items: center;
+          display: inline;
           color: #38bdf8;
-          font-size: 11px;
-          background: rgba(56, 189, 248, 0.12);
-          padding: 1px 7px;
-          border-radius: 5px;
-          border: 1px solid rgba(56, 189, 248, 0.28);
-          margin-right: 6px;
+          font-size: 12px;
+          background: transparent;
+          padding: 0;
+          border: none;
+          margin-right: 4px;
           user-select: none;
           font-weight: 600;
         }

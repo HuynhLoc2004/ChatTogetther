@@ -189,14 +189,14 @@ export const ResonanceMatchModal = ({
         <div className="absolute -bottom-12 -right-12 w-40 h-40 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
         {/* Modal Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-zinc-800/80 mb-5 relative z-10">
+        <div className="flex items-center justify-between pb-4 border-b border-[#1e1e1e] mb-5 relative z-10">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
+            <div className="w-7 h-7 rounded-lg bg-[#222222] border border-[#2e2e2e] text-zinc-200 flex items-center justify-center">
               <Zap size={14} />
             </div>
             <div>
               <h3 className="text-zinc-100 font-bold text-sm tracking-tight">Ghép Đôi Đồng Điệu 1-1</h3>
-              <p className="text-zinc-500 font-mono text-[10px]">Resonance Matching Algorithm</p>
+              <p className="text-zinc-500 text-[11px]">Kết nối ngẫu nhiên theo sở thích</p>
             </div>
           </div>
           <button onClick={onClose} className="text-zinc-400 hover:text-white transition-colors p-1">
@@ -221,11 +221,11 @@ export const ResonanceMatchModal = ({
                     <div 
                       key={opt.id}
                       onClick={() => setSelectedIntent(opt.id)}
-                      className={`p-3 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between ${isSelected ? 'bg-zinc-800 border-emerald-500/60 ring-1 ring-emerald-500/30' : 'bg-zinc-950/60 border-zinc-800 hover:border-zinc-700'}`}
+                      className={`p-3 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between ${isSelected ? 'bg-[#1c1c1c] border-[#444444] text-white' : 'bg-[#121212] border-[#222222] hover:border-[#333333]'}`}
                     >
                       <div className="flex items-center justify-between mb-2">
-                        <Icon size={16} className={isSelected ? 'text-emerald-400' : 'text-zinc-400'} />
-                        {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>}
+                        <Icon size={16} className={isSelected ? 'text-zinc-100' : 'text-zinc-500'} />
+                        {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-white"></span>}
                       </div>
                       <div>
                         <h4 className="text-zinc-100 text-xs font-medium mb-0.5">{opt.title}</h4>
@@ -238,32 +238,32 @@ export const ResonanceMatchModal = ({
             </div>
 
             {/* Thông tin Gu Âm Nhạc đi kèm */}
-            <div className="p-3 rounded-2xl bg-zinc-950/40 border border-zinc-800/80 flex items-center justify-between">
+            <div className="p-3 rounded-2xl bg-[#121212] border border-[#222222] flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Radio size={14} className="text-emerald-400 animate-pulse" />
+                <Radio size={14} className="text-zinc-400" />
                 <div>
                   <span className="text-zinc-400 text-[11px] block">Gu âm nhạc ưu tiên:</span>
                   <span className="text-zinc-200 text-xs font-mono font-medium">{currentTrack?.title || 'Lo-Fi Lounge Beats'}</span>
                 </div>
               </div>
-              <span className="text-[10px] font-mono text-zinc-500 px-2 py-0.5 rounded-md bg-zinc-900 border border-zinc-800">
+              <span className="text-[10px] font-mono text-zinc-400 px-2 py-0.5 rounded-md bg-[#1a1a1a] border border-[#2a2a2a]">
                 {currentTrack?.genre || 'Chill'}
               </span>
             </div>
 
-            {/* Ghi chú minh bạch thuật toán */}
-            <div className="flex items-start gap-2 p-3 rounded-xl bg-zinc-900/60 border border-zinc-800/60 text-[11px] text-zinc-400 font-sans">
+            {/* Ghi chú kết nối thân thiện */}
+            <div className="flex items-start gap-2 p-3 rounded-xl bg-[#141414] border border-[#222222] text-[11px] text-zinc-400 font-sans">
               <ShieldCheck size={14} className="text-zinc-400 flex-shrink-0 mt-0.5" />
               <span>
-                Thuật toán đối soát 3 yếu tố: <strong>Mục đích (40%)</strong> + <strong>Gu nhạc (35%)</strong> + <strong>Hoạt động sảnh (25%)</strong>. Tự động loại trừ chính bạn.
+                Tự động tìm kiếm thành viên đang online có cùng mục đích và sở thích âm nhạc để trò chuyện.
               </span>
             </div>
 
             <button 
               onClick={startMatchingAlgorithm}
-              className="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs shadow-lg shadow-emerald-950/30 transition-all flex items-center justify-center gap-2 mt-2 active:scale-[0.98]"
+              className="w-full py-3 rounded-2xl bg-[#f4f4f5] hover:bg-white text-[#101010] font-semibold text-xs shadow-md transition-all flex items-center justify-center gap-2 mt-2 active:scale-[0.98]"
             >
-              <span>Bắt đầu quét đối tượng phù hợp</span>
+              <span>Bắt đầu tìm người đồng điệu</span>
               <ArrowRight size={14} />
             </button>
           </div>

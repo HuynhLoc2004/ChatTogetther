@@ -122,17 +122,14 @@ export const ChallengeDeckModal = ({ isOpen, onClose, onShareToFeed }) => {
         style={{ maxHeight: '92vh' }}
       >
         {/* Header */}
-        <div className="px-5 py-4 border-b border-zinc-800/80 flex items-center justify-between bg-zinc-900/50">
+        <div className="px-5 py-4 border-b border-[#1e1e1e] flex items-center justify-between bg-[#141414]">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+            <div className="w-8 h-8 rounded-lg bg-[#222222] border border-[#2e2e2e] flex items-center justify-center text-zinc-200">
               <Dices size={18} />
             </div>
             <div>
               <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-1.5">
                 Thẻ Bài Thử Thách & Tương Tác
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700/50">
-                  Data Thực Tế
-                </span>
               </h3>
               <p className="text-[11px] text-zinc-400">Khơi nguồn đối thoại, kết nối cảm xúc chân thật</p>
             </div>
@@ -146,7 +143,7 @@ export const ChallengeDeckModal = ({ isOpen, onClose, onShareToFeed }) => {
         </div>
 
         {/* Category Pills Bar */}
-        <div className="px-4 py-2.5 border-b border-zinc-800/50 bg-zinc-900/30 overflow-x-auto no-scrollbar flex items-center gap-1.5">
+        <div className="px-4 py-2.5 border-b border-[#1e1e1e] bg-[#121212] overflow-x-auto flex items-center gap-1.5" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           {categories.map((cat) => {
             const isSelected = selectedCategory === cat.key;
             return (
@@ -155,16 +152,10 @@ export const ChallengeDeckModal = ({ isOpen, onClose, onShareToFeed }) => {
                 type="button"
                 onClick={() => handleSelectCategory(cat.key)}
                 className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${isSelected
-                    ? 'bg-zinc-100 text-zinc-900 shadow-sm font-bold'
-                    : 'bg-zinc-900/80 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 border border-zinc-800'
+                    ? 'bg-white text-black shadow-sm font-bold'
+                    : 'bg-[#181818] text-zinc-400 hover:text-zinc-200 hover:bg-[#222222] border border-[#262626]'
                   }`}
               >
-                {cat.key !== 'ALL' && (
-                  <span
-                    className="w-1.5 h-1.5 rounded-full"
-                    style={{ backgroundColor: isSelected ? '#18181b' : cat.color || '#a1a1aa' }}
-                  />
-                )}
                 {cat.label}
               </button>
             );
@@ -172,25 +163,12 @@ export const ChallengeDeckModal = ({ isOpen, onClose, onShareToFeed }) => {
         </div>
 
         {/* Body Content */}
-        <div className="p-5 overflow-y-auto space-y-4">
+        <div className="p-5 overflow-y-auto space-y-4" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           {/* Card Lá Bài */}
-          <div className="relative min-h-[220px] rounded-2xl p-5 border transition-all duration-300 flex flex-col justify-between bg-gradient-to-br from-zinc-900/90 via-zinc-900/40 to-zinc-950 border-zinc-800/90 hover:border-zinc-700 shadow-lg">
-            {/* Background Ambient Glow */}
-            <div
-              className="absolute -top-12 -right-12 w-36 h-36 rounded-full blur-3xl opacity-15 pointer-events-none"
-              style={{ backgroundColor: currentChallenge?.badgeColor || '#6366f1' }}
-            />
-
+          <div className="relative min-h-[200px] rounded-2xl p-5 border transition-all duration-300 flex flex-col justify-between bg-[#141414] border-[#222222] hover:border-[#2e2e2e] shadow-lg">
             {/* Top Bar of Card */}
             <div className="flex items-center justify-between relative z-10">
-              <div
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold tracking-wide uppercase"
-                style={{
-                  backgroundColor: `${currentChallenge?.badgeColor || '#6366f1'}15`,
-                  color: currentChallenge?.badgeColor || '#818cf8',
-                  border: `1px solid ${currentChallenge?.badgeColor || '#6366f1'}35`
-                }}
-              >
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold tracking-wide uppercase bg-[#222222] text-zinc-300 border border-[#333333]">
                 <Sparkles size={11} />
                 <span>{currentChallenge?.categoryName || 'Thử Thách'}</span>
               </div>
@@ -218,7 +196,7 @@ export const ChallengeDeckModal = ({ isOpen, onClose, onShareToFeed }) => {
             </div>
 
             {/* Action inside Card: Đưa ra sảnh */}
-            <div className="pt-3 border-t border-zinc-800/60 relative z-10 flex flex-wrap items-center justify-between gap-2">
+            <div className="pt-3 border-t border-[#1e1e1e] relative z-10 flex flex-wrap items-center justify-between gap-2">
               <button
                 type="button"
                 onClick={() => {
@@ -228,7 +206,7 @@ export const ChallengeDeckModal = ({ isOpen, onClose, onShareToFeed }) => {
                   }
                   onClose();
                 }}
-                className="flex-1 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-900/20 active:scale-98"
+                className="flex-1 py-2.5 px-4 rounded-xl bg-white hover:bg-zinc-200 text-black font-semibold text-xs transition-all flex items-center justify-center gap-2 shadow-sm active:scale-98"
               >
                 <Share2 size={14} />
                 <span>Đưa câu hỏi này ra Sảnh</span>
@@ -238,7 +216,7 @@ export const ChallengeDeckModal = ({ isOpen, onClose, onShareToFeed }) => {
                 type="button"
                 onClick={() => drawRandomChallenge()}
                 disabled={isLoading}
-                className="py-2.5 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold text-xs transition-all flex items-center justify-center gap-2 border border-zinc-700/80 active:scale-98"
+                className="py-2.5 px-4 rounded-xl bg-[#222222] hover:bg-[#2a2a2a] text-zinc-200 font-semibold text-xs transition-all flex items-center justify-center gap-2 border border-[#333333] active:scale-98"
                 title="Bốc lá bài khác ngẫu nhiên"
               >
                 <RotateCw size={14} className={isShuffling ? 'animate-spin' : ''} />

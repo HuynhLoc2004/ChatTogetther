@@ -329,16 +329,19 @@ const ProfilePage = () => {
   const isAdmin = profile?.roles?.includes('ROLE_ADMIN') || profile?.roles?.includes('ROLE_AMDIN');
   const isFounder = profile?.vipTier === 'FOUNDER' || isAdmin;
 
+  // Dialog xác nhận đăng xuất
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
   return (
-    <div className="profile-page-root min-h-screen bg-[#09090b] text-[#f4f4f5] font-sans pb-24">
+    <div className="profile-page-root min-h-screen bg-[#101010] text-[#f4f4f5] font-sans pb-28">
       {/* 1. TOP STICKY BAR */}
-      <header className="sticky top-0 z-40 bg-[#101010]/95 backdrop-blur-md border-b border-[#1e1e1e] px-4 py-3 flex items-center justify-between">
+      <header className="sticky top-0 z-40 bg-[#101010]/90 backdrop-blur-md border-b border-[#1e1e1e] px-4 py-3 flex items-center justify-between max-w-2xl mx-auto">
         <div className="flex items-center gap-3">
           <button 
             type="button" 
             onClick={() => navigate('/')}
-            className="p-2 rounded-xl bg-[#18181b] hover:bg-[#242424] text-zinc-300 hover:text-white border border-[#262626] transition-all active:scale-95"
-            title="Quay lại sảnh bài viết"
+            className="p-2 rounded-full hover:bg-[#1a1a1a] text-zinc-400 hover:text-white transition-all active:scale-95"
+            title="Quay lại sảnh"
           >
             <ArrowLeft size={18} />
           </button>
@@ -346,14 +349,11 @@ const ProfilePage = () => {
             <h1 className="text-sm font-bold text-white truncate flex items-center gap-1.5">
               <span>{profile?.nickname || profile?.account || 'Hồ sơ người dùng'}</span>
               {isAdmin && (
-                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-[#222222] text-zinc-300 border border-[#333333]">
                   ADMIN
                 </span>
               )}
             </h1>
-            <p className="text-[11px] font-mono text-zinc-500 truncate">
-              @{profile?.account || 'user'} • {userPosts.length} bài viết
-            </p>
           </div>
         </div>
 
@@ -361,33 +361,84 @@ const ProfilePage = () => {
           {isMe && (
             <button
               type="button"
-              onClick={handleLogout}
-              className="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95"
+              onClick={() => setShowLogoutConfirm(true)}
+              className="px-3 py-1.5 rounded-xl bg-[#1c1c1c] hover:bg-[#252525] text-zinc-300 hover:text-rose-400 border border-[#2a2a2a] text-xs font-medium flex items-center gap-1.5 transition-all active:scale-95"
             >
-              <LogOut size={14} />
-              <span className="hidden sm:inline">Đăng xuất</span>
+              <LogOut size={13} />
+              <span>Đăng xuất</span>
             </button>
           )}
         </div>
       </header>
 
-      {/* 2. HERO PROFILE CONTAINER */}
-      <div className="max-w-4xl mx-auto px-4 pt-4 sm:pt-6">
-        <div className="relative rounded-3xl bg-[#141414] border border-[#222222] p-5 sm:p-7 shadow-lg overflow-hidden">
-          <div className="relative flex flex-col sm:flex-row items-center sm:items-start gap-5 sm:gap-6">
-            {/* Avatar lớn */}
+      {/* 2. HERO PROFILE CONTAINER (CHUẨN BỐ CỤC THREADS PHẲNG, RỘNG RÃI) */}
+      <div className="max-w-2xl mx-auto px-4 pt-4 sm:pt-6">
+        <div className="border-b border-[#1e1e1e] pb-6">
+          <div className="flex items-start justify-between gap-4">
+            {/* Cột thông tin tên & Bio */}
+            <div className="flex-1 min-w-0">
+              <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+                <span>{profile?.nickname || profile?.account || 'Người dùng Talovin'}</span>
+                {isFounder && (
+                  <span className="p-0.5 rounded text-zinc-400" title="Nhà sáng lập">
+                    <Sparkles size={14} />
+                  </span>
+                )}
+              </h2>
+              <p className="text-xs font-mono text-[#777777] mt-0.5">
+                @{profile?.account || 'user'}
+              </p>
+
+              {/* Tiểu sử (Bio) */}
+              <p className="text-xs sm:text-sm text-zinc-200 mt-3 leading-relaxed font-normal whitespace-pre-wrap">
+                {profile?.bio || (isMe ? 'Chưa cập nhật tiểu sử. Bấm nút bên dưới để giới thiệu về bản thân bạn.' : 'Người dùng này chưa cập nhật tiểu sử.')}
+              </p>
+
+              {/* Thông tin phụ: Nơi ở, Tuổi */}
+              <div className="flex flex-wrap items-center gap-3 mt-3 text-xs text-[#777777]">
+                {profile?.location && (
+                  <span className="flex items-center gap-1">
+                    <MapPin size={12} />
+                    <span>{profile.location}</span>
+                  </span>
+                )}
+                {profile?.age && (
+                  <span className="flex items-center gap-1">
+                    <Calendar size={12} />
+                    <span>{profile.age} tuổi</span>
+                  </span>
+                )}
+              </div>
+
+              {/* Stats Counters dạng inline chuẩn Threads */}
+              <div className="flex items-center gap-3 mt-3 text-xs text-[#777777]">
+                <span><strong className="text-white">{userPosts.length}</strong> bài viết</span>
+                <span>•</span>
+                <span><strong className="text-white">{userReposts.length}</strong> đăng lại</span>
+                <span>•</span>
+                <span><strong className="text-white">{userFriends.length}</strong> bạn bè</span>
+                {isMe && (
+                  <>
+                    <span>•</span>
+                    <span><strong className="text-white">{savedPosts.length}</strong> đã lưu</span>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Avatar lớn bên phải */}
             <div className="relative flex-shrink-0 group">
-              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden border border-[#2c2c2c] shadow-md bg-[#18181b] flex items-center justify-center">
-                <UserAvatar avatar={profile?.avatar} name={profile?.nickname || profile?.account} size={112} className="w-full h-full" />
+              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border border-[#2a2a2a] bg-[#181818] flex items-center justify-center">
+                <UserAvatar avatar={profile?.avatar} name={profile?.nickname || profile?.account} size={96} className="w-full h-full" />
               </div>
               {isMe && (
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="absolute bottom-1 right-1 p-2 rounded-xl bg-[#27272a] hover:bg-[#333336] text-white border border-[#3f3f46] shadow-md active:scale-90 transition-all cursor-pointer"
+                  className="absolute bottom-0 right-0 p-1.5 rounded-full bg-[#222222] hover:bg-[#333333] text-white border border-[#3f3f46] shadow-md active:scale-90 transition-all cursor-pointer"
                   title="Thay đổi ảnh đại diện"
                 >
-                  <Camera size={14} strokeWidth={2.5} />
+                  <Camera size={12} strokeWidth={2.5} />
                 </button>
               )}
               <input
@@ -398,131 +449,66 @@ const ProfilePage = () => {
                 className="hidden"
               />
             </div>
+          </div>
 
-            {/* Thông tin chữ */}
-            <div className="flex-1 text-center sm:text-left min-w-0">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <h2 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight flex items-center justify-center sm:justify-start gap-2">
-                    <span>{profile?.nickname || profile?.account || 'Người dùng Talovin'}</span>
-                    {isFounder && (
-                      <span className="p-1 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20" title="Đặc quyền Nhà sáng lập">
-                        <Sparkles size={14} />
-                      </span>
-                    )}
-                  </h2>
-                  <p className="text-xs font-mono text-zinc-400 mt-0.5">
-                    @{profile?.account || 'user'}
-                  </p>
-                </div>
-
-                {/* Nút hành động Chính chủ hoặc Người khác */}
-                <div className="flex items-center justify-center sm:justify-end gap-2 pt-2 sm:pt-0">
-                  {isMe ? (
-                    <button
-                      type="button"
-                      onClick={() => setIsEditing(!isEditing)}
-                      className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 active:scale-95 border ${
-                        isEditing 
-                          ? 'bg-[#1e1e1e] text-zinc-200 border-[#2a2a2a]' 
-                          : 'bg-[#f4f4f5] hover:bg-white text-[#101010] border-transparent font-bold'
-                      }`}
-                    >
-                      <Edit3 size={14} />
-                      <span>{isEditing ? 'Đóng chỉnh sửa' : 'Cập nhật hồ sơ'}</span>
-                    </button>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      {friendStatus === 'ACCEPTED' ? (
-                        <div className="px-3.5 py-1.5 rounded-xl bg-zinc-800 text-emerald-400 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1.5">
-                          <UserCheck size={14} />
-                          <span>Bạn bè</span>
-                        </div>
-                      ) : friendStatus === 'PENDING_SENT' ? (
-                        <div className="px-3.5 py-1.5 rounded-xl bg-zinc-800 text-amber-400 border border-amber-500/30 text-xs font-semibold flex items-center gap-1.5">
-                          <Clock size={14} />
-                          <span>Đã gửi lời mời</span>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={handleSendFriendRequest}
-                          disabled={processingFriend}
-                          className="px-3.5 py-1.5 rounded-xl bg-[#f4f4f5] hover:bg-white text-[#101010] text-xs font-semibold transition-all active:scale-95 flex items-center gap-1.5"
-                        >
-                          <UserPlus size={14} />
-                          <span>Kết bạn</span>
-                        </button>
-                      )}
-
-                      <button
-                        type="button"
-                        onClick={() => toast("Tính năng đàm thoại 1-1 sẽ kết nối qua phòng chat")}
-                        className="px-3.5 py-1.5 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-400 border border-indigo-500/30 text-xs font-semibold transition-all active:scale-95 flex items-center gap-1.5"
-                      >
-                        <PhoneCall size={14} />
-                        <span>Đàm thoại 1-1</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Tiểu sử (Bio) */}
-              <p className="text-xs sm:text-sm text-zinc-300 mt-3 leading-relaxed max-w-2xl font-normal">
-                {profile?.bio || (isMe ? 'Chưa cập nhật tiểu sử. Bấm nút cập nhật để giới thiệu về bản thân bạn!' : 'Người dùng này chưa cập nhật tiểu sử.')}
-              </p>
-
-              {/* Thông tin phụ: Nơi ở, Tuổi, Ngày tham gia */}
-              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-4 mt-3 text-xs text-zinc-400">
-                {profile?.location && (
-                  <span className="flex items-center gap-1">
-                    <MapPin size={13} className="text-zinc-500" />
-                    <span>{profile.location}</span>
-                  </span>
-                )}
-                {profile?.age && (
-                  <span className="flex items-center gap-1">
-                    <Calendar size={13} className="text-zinc-500" />
-                    <span>{profile.age} tuổi</span>
-                  </span>
-                )}
-                <span className="text-zinc-600 font-mono text-[11px]">
-                  ID: #{profile?.id || effectiveUserId}
-                </span>
-              </div>
-
-              {/* Stats Counters Bar */}
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 pt-4 mt-4 border-t border-zinc-800/80 text-center sm:text-left">
-                <div className="p-2 rounded-xl bg-zinc-900/60 border border-zinc-800">
-                  <div className="text-base sm:text-lg font-extrabold text-white font-mono">{userPosts.length}</div>
-                  <div className="text-[11px] text-zinc-400">Bài viết</div>
-                </div>
-                <div className="p-2 rounded-xl bg-zinc-900/60 border border-zinc-800">
-                  <div className="text-base sm:text-lg font-extrabold text-emerald-400 font-mono">{userReposts.length}</div>
-                  <div className="text-[11px] text-zinc-400">Đăng lại</div>
-                </div>
-                <div className="p-2 rounded-xl bg-zinc-900/60 border border-zinc-800">
-                  <div className="text-base sm:text-lg font-extrabold text-sky-400 font-mono">{userFriends.length}</div>
-                  <div className="text-[11px] text-zinc-400">Bạn bè</div>
-                </div>
-                {isMe && (
-                  <div className="p-2 rounded-xl bg-zinc-900/60 border border-zinc-800">
-                    <div className="text-base sm:text-lg font-extrabold text-purple-400 font-mono">{savedPosts.length}</div>
-                    <div className="text-[11px] text-zinc-400">Đã lưu</div>
+          {/* Hàng nút hành động rộng toàn chiều ngang */}
+          <div className="mt-4 flex items-center gap-2">
+            {isMe ? (
+              <button
+                type="button"
+                onClick={() => setIsEditing(!isEditing)}
+                className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-1.5 active:scale-98 border ${
+                  isEditing 
+                    ? 'bg-[#1e1e1e] text-zinc-200 border-[#2a2a2a]' 
+                    : 'bg-[#181818] hover:bg-[#202020] text-white border-[#2a2a2a]'
+                }`}
+              >
+                <Edit3 size={13} />
+                <span>{isEditing ? 'Đóng chỉnh sửa' : 'Cập nhật hồ sơ'}</span>
+              </button>
+            ) : (
+              <div className="flex-1 flex items-center gap-2">
+                {friendStatus === 'ACCEPTED' ? (
+                  <div className="flex-1 py-2 rounded-xl bg-[#1c1c1c] text-zinc-200 border border-[#2e2e2e] text-xs font-medium flex items-center justify-center gap-1.5">
+                    <UserCheck size={14} />
+                    <span>Bạn bè</span>
                   </div>
+                ) : friendStatus === 'PENDING_SENT' ? (
+                  <div className="flex-1 py-2 rounded-xl bg-[#1c1c1c] text-zinc-300 border border-[#2e2e2e] text-xs font-medium flex items-center justify-center gap-1.5">
+                    <Clock size={14} />
+                    <span>Đã gửi lời mời</span>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleSendFriendRequest}
+                    disabled={processingFriend}
+                    className="flex-1 py-2 rounded-xl bg-white hover:bg-zinc-200 text-black text-xs font-semibold transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                  >
+                    <UserPlus size={14} />
+                    <span>Kết bạn</span>
+                  </button>
                 )}
+
+                <button
+                  type="button"
+                  onClick={() => toast("Tính năng đàm thoại sẽ kết nối qua phòng trò chuyện")}
+                  className="px-4 py-2 rounded-xl bg-[#1c1c1c] hover:bg-[#242424] text-zinc-300 border border-[#2a2a2a] text-xs font-medium transition-all active:scale-95 flex items-center gap-1.5"
+                >
+                  <PhoneCall size={14} />
+                  <span>Trò chuyện</span>
+                </button>
               </div>
-            </div>
+            )}
           </div>
         </div>
 
         {/* 3. KHU VỰC CHỈNH SỬA HỒ SƠ RIÊNG BIỆT (CHỈ MỞ KHI BẤM NÚT) */}
         {isEditing && isMe && (
-          <div className="mt-4 p-5 sm:p-6 rounded-3xl bg-[#141414] border border-[#222222] shadow-xl animate-fade-in">
+          <div className="my-4 p-5 rounded-2xl bg-[#141414] border border-[#222222] shadow-xl animate-fade-in">
             <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#222222]">
               <div className="flex items-center gap-2">
-                <Edit3 size={16} className="text-zinc-300" />
+                <Edit3 size={15} className="text-zinc-300" />
                 <h3 className="text-sm font-bold text-white">Chỉnh sửa thông tin hồ sơ</h3>
               </div>
               <button 
@@ -542,7 +528,7 @@ const ProfilePage = () => {
                   value={editData.nickname}
                   onChange={(e) => setEditData({ ...editData, nickname: e.target.value })}
                   placeholder="Nhập biệt danh của bạn..."
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#18181b] border border-[#27272a] text-[#f4f4f5] text-xs focus:outline-none focus:border-[#444444] transition-colors"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#101010] border border-[#222222] text-[#f4f4f5] text-xs focus:outline-none focus:border-[#444444] transition-colors"
                 />
               </div>
 
@@ -554,7 +540,7 @@ const ProfilePage = () => {
                     value={editData.age}
                     onChange={(e) => setEditData({ ...editData, age: e.target.value })}
                     placeholder="VD: 22"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#18181b] border border-[#27272a] text-[#f4f4f5] text-xs focus:outline-none focus:border-[#444444] transition-colors"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#101010] border border-[#222222] text-[#f4f4f5] text-xs focus:outline-none focus:border-[#444444] transition-colors"
                   />
                 </div>
                 <div>
@@ -564,7 +550,7 @@ const ProfilePage = () => {
                     value={editData.location}
                     onChange={(e) => setEditData({ ...editData, location: e.target.value })}
                     placeholder="VD: TP. Hồ Chí Minh"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#18181b] border border-[#27272a] text-[#f4f4f5] text-xs focus:outline-none focus:border-[#444444] transition-colors"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#101010] border border-[#222222] text-[#f4f4f5] text-xs focus:outline-none focus:border-[#444444] transition-colors"
                   />
                 </div>
               </div>
@@ -576,7 +562,7 @@ const ProfilePage = () => {
                   value={editData.bio}
                   onChange={(e) => setEditData({ ...editData, bio: e.target.value })}
                   placeholder="Chia sẻ đôi dòng về công việc, sở thích âm nhạc hoặc tâm sự..."
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#18181b] border border-[#27272a] text-[#f4f4f5] text-xs focus:outline-none focus:border-[#444444] transition-colors"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#101010] border border-[#222222] text-[#f4f4f5] text-xs focus:outline-none focus:border-[#444444] transition-colors"
                 />
               </div>
 
@@ -601,7 +587,7 @@ const ProfilePage = () => {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="px-5 py-2 rounded-xl bg-[#f4f4f5] hover:bg-white text-[#101010] text-xs font-semibold transition-all shadow-sm active:scale-95"
+                    className="px-5 py-2 rounded-xl bg-white hover:bg-zinc-200 text-black text-xs font-semibold transition-all shadow-sm active:scale-95"
                   >
                     {submitting ? 'Đang lưu...' : 'Lưu thay đổi'}
                   </button>
@@ -611,14 +597,14 @@ const ProfilePage = () => {
 
             {/* Khung đổi mật khẩu */}
             {showPasswordSection && (
-              <form onSubmit={handleChangePassword} className="mt-4 pt-4 border-t border-zinc-800 space-y-3">
+              <form onSubmit={handleChangePassword} className="mt-4 pt-4 border-t border-[#222222] space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <input
                     type="password"
                     placeholder="Mật khẩu hiện tại"
                     value={passwordData.oldPassword}
                     onChange={(e) => setPasswordData({ ...passwordData, oldPassword: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-750 text-white text-xs focus:border-emerald-500"
+                    className="w-full px-3 py-2 rounded-xl bg-[#101010] border border-[#222222] text-white text-xs focus:border-[#444444] focus:outline-none"
                     required
                   />
                   <input
@@ -626,7 +612,7 @@ const ProfilePage = () => {
                     placeholder="Mật khẩu mới (>= 6 ký tự)"
                     value={passwordData.newPassword}
                     onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-750 text-white text-xs focus:border-emerald-500"
+                    className="w-full px-3 py-2 rounded-xl bg-[#101010] border border-[#222222] text-white text-xs focus:border-[#444444] focus:outline-none"
                     required
                   />
                   <input
@@ -634,7 +620,7 @@ const ProfilePage = () => {
                     placeholder="Xác nhận mật khẩu mới"
                     value={passwordData.confirmPassword}
                     onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-750 text-white text-xs focus:border-emerald-500"
+                    className="w-full px-3 py-2 rounded-xl bg-[#101010] border border-[#222222] text-white text-xs focus:border-[#444444] focus:outline-none"
                     required
                   />
                 </div>
@@ -642,7 +628,7 @@ const ProfilePage = () => {
                   <button
                     type="submit"
                     disabled={changingPassword}
-                    className="px-4 py-1.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-black text-xs font-bold transition-all"
+                    className="px-4 py-1.5 rounded-xl bg-white hover:bg-zinc-200 text-black text-xs font-semibold transition-all"
                   >
                     {changingPassword ? 'Đang cập nhật...' : 'Xác nhận đổi mật khẩu'}
                   </button>
@@ -652,126 +638,112 @@ const ProfilePage = () => {
           </div>
         )}
 
-        {/* 4. PHÂN MỤC TABS RÕ RÀNG: BÀI VIẾT | ĐĂNG LẠI | ĐÃ LƯU | BẠN BÈ */}
-        <div className="mt-6 border-b border-zinc-800 flex items-center gap-2 overflow-x-auto scrollbar-none">
+        {/* 4. TABS BÀI VIẾT | ĐĂNG LẠI | ĐÃ LƯU | BẠN BÈ */}
+        <div className="flex items-center justify-around border-b border-[#1e1e1e] text-xs">
           <button
             type="button"
             onClick={() => setActiveTab('posts')}
-            className={`pb-3 px-3 text-xs font-bold flex items-center gap-1.5 transition-all border-b-2 whitespace-nowrap ${
+            className={`py-3.5 text-xs font-semibold transition-all border-b-2 flex-1 text-center ${
               activeTab === 'posts' 
-                ? 'border-emerald-400 text-emerald-400' 
-                : 'border-transparent text-zinc-400 hover:text-zinc-200'
+                ? 'border-white text-white' 
+                : 'border-transparent text-[#777777] hover:text-zinc-300'
             }`}
           >
-            <FileText size={15} />
-            <span>Bài viết ({userPosts.length})</span>
+            Bài viết ({userPosts.length})
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('reposts')}
-            className={`pb-3 px-3 text-xs font-bold flex items-center gap-1.5 transition-all border-b-2 whitespace-nowrap ${
+            className={`py-3.5 text-xs font-semibold transition-all border-b-2 flex-1 text-center ${
               activeTab === 'reposts' 
-                ? 'border-emerald-400 text-emerald-400' 
-                : 'border-transparent text-zinc-400 hover:text-zinc-200'
+                ? 'border-white text-white' 
+                : 'border-transparent text-[#777777] hover:text-zinc-300'
             }`}
           >
-            <Repeat size={15} />
-            <span>Đăng lại ({userReposts.length})</span>
+            Đăng lại ({userReposts.length})
           </button>
 
           {isMe && (
             <button
               type="button"
               onClick={() => setActiveTab('saved')}
-              className={`pb-3 px-3 text-xs font-bold flex items-center gap-1.5 transition-all border-b-2 whitespace-nowrap ${
+              className={`py-3.5 text-xs font-semibold transition-all border-b-2 flex-1 text-center ${
                 activeTab === 'saved' 
-                  ? 'border-emerald-400 text-emerald-400' 
-                  : 'border-transparent text-zinc-400 hover:text-zinc-200'
+                  ? 'border-white text-white' 
+                  : 'border-transparent text-[#777777] hover:text-zinc-300'
               }`}
             >
-              <Bookmark size={15} />
-              <span>Đã lưu ({savedPosts.length})</span>
+              Đã lưu ({savedPosts.length})
             </button>
           )}
 
           <button
             type="button"
             onClick={() => setActiveTab('friends')}
-            className={`pb-3 px-3 text-xs font-bold flex items-center gap-1.5 transition-all border-b-2 whitespace-nowrap ${
+            className={`py-3.5 text-xs font-semibold transition-all border-b-2 flex-1 text-center ${
               activeTab === 'friends' 
-                ? 'border-emerald-400 text-emerald-400' 
-                : 'border-transparent text-zinc-400 hover:text-zinc-200'
+                ? 'border-white text-white' 
+                : 'border-transparent text-[#777777] hover:text-zinc-300'
             }`}
           >
-            <Users size={15} />
-            <span>Bạn bè ({userFriends.length})</span>
+            Bạn bè ({userFriends.length})
           </button>
         </div>
 
         {/* 5. NỘI DUNG TỪNG TAB */}
-        <div className="mt-4 space-y-3">
+        <div className="divide-y divide-[#1e1e1e]">
           {/* TAB 1: BÀI VIẾT DO USER ĐĂNG */}
           {activeTab === 'posts' && (
             loadingPosts ? (
               <div className="py-12 text-center text-zinc-500 font-mono text-xs">
-                <Loader2 size={24} className="animate-spin mx-auto mb-2 text-emerald-400" />
+                <Loader2 size={20} className="animate-spin mx-auto mb-2 text-zinc-400" />
                 <span>Đang tải danh sách bài viết...</span>
               </div>
             ) : userPosts.length === 0 ? (
-              <div className="py-16 text-center text-zinc-500 border border-dashed border-zinc-800 rounded-3xl">
-                <FileText size={32} className="mx-auto mb-2 text-zinc-600 opacity-60" />
+              <div className="py-16 text-center text-zinc-500">
+                <FileText size={28} className="mx-auto mb-2 text-zinc-600 opacity-60" />
                 <p className="text-sm font-semibold text-zinc-400">Chưa có bài viết nào</p>
                 <p className="text-xs text-zinc-600 mt-1">Người dùng này chưa xuất bản bài đăng nào trên hệ thống.</p>
               </div>
             ) : (
               userPosts.map(post => (
-                <article key={post.id} className="p-4 sm:p-5 rounded-2xl bg-[#141414] border border-[#1e1e1e] hover:border-[#2a2a2a] transition-all">
-                  <div className="flex items-center justify-between pb-3 mb-2.5 border-b border-zinc-800/60">
+                <article key={post.id} className="py-4 hover:bg-[#141414]/40 transition-colors">
+                  <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2.5">
                       <UserAvatar avatar={post.authorAvatar} name={post.authorNickname || post.authorAccount} size={34} />
                       <div>
                         <div className="text-xs font-bold text-white flex items-center gap-1.5">
                           <span>{post.authorNickname || post.authorAccount}</span>
-                          {post.authorBadge && (
-                            <span className="text-[10px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                              {post.authorBadge}
-                            </span>
-                          )}
                         </div>
                         <span className="text-[10.5px] font-mono text-zinc-500">
                           {post.formattedTime || TIME_FORMATTER(post.createdAt)}
                         </span>
                       </div>
                     </div>
-                    {post.vibe && (
-                      <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-zinc-850 text-zinc-400 border border-zinc-750">
-                        {post.vibe}
-                      </span>
-                    )}
                   </div>
 
-                  <p className="text-xs sm:text-sm text-zinc-200 leading-relaxed whitespace-pre-wrap">
+                  <p className="text-xs sm:text-sm text-zinc-200 leading-relaxed whitespace-pre-wrap my-2">
                     {post.content}
                   </p>
 
                   {/* Hành động */}
-                  <div className="flex items-center gap-4 pt-3 mt-3 border-t border-zinc-800/60 text-xs text-zinc-400">
-                    <span className="flex items-center gap-1">
-                      <Heart size={14} className={post.isLikedByMe ? "fill-rose-500 text-rose-500" : ""} />
+                  <div className="flex items-center gap-5 pt-2 text-xs text-[#777777]">
+                    <span className="flex items-center gap-1.5 hover:text-white cursor-pointer transition-colors">
+                      <Heart size={15} className={post.isLikedByMe ? "fill-rose-500 text-rose-500" : ""} />
                       <span>{post.likesCount || 0}</span>
                     </span>
-                    <span className="flex items-center gap-1">
-                      <MessageSquare size={14} />
+                    <span className="flex items-center gap-1.5 hover:text-white cursor-pointer transition-colors">
+                      <MessageSquare size={15} />
                       <span>{post.commentsCount || 0}</span>
                     </span>
                     <button
                       type="button"
                       onClick={() => handleToggleRepost(post.id)}
-                      className={`flex items-center gap-1 transition-colors ${post.isRepostedByMe ? "text-emerald-400 font-bold" : "hover:text-white"}`}
+                      className={`flex items-center gap-1.5 transition-colors ${post.isRepostedByMe ? "text-emerald-400 font-bold" : "hover:text-white"}`}
                       title="Đăng lại bài viết"
                     >
-                      <Repeat size={14} />
+                      <Repeat size={15} />
                       <span>{post.repostsCount || 0}</span>
                     </button>
                   </div>
@@ -784,21 +756,21 @@ const ProfilePage = () => {
           {activeTab === 'reposts' && (
             loadingReposts ? (
               <div className="py-12 text-center text-zinc-500 font-mono text-xs">
-                <Loader2 size={24} className="animate-spin mx-auto mb-2 text-emerald-400" />
+                <Loader2 size={20} className="animate-spin mx-auto mb-2 text-zinc-400" />
                 <span>Đang tải các bài đăng lại...</span>
               </div>
             ) : userReposts.length === 0 ? (
-              <div className="py-16 text-center text-zinc-500 border border-dashed border-zinc-800 rounded-3xl">
-                <Repeat size={32} className="mx-auto mb-2 text-zinc-600 opacity-60" />
+              <div className="py-16 text-center text-zinc-500">
+                <Repeat size={28} className="mx-auto mb-2 text-zinc-600 opacity-60" />
                 <p className="text-sm font-semibold text-zinc-400">Chưa có bài đăng lại nào</p>
                 <p className="text-xs text-zinc-600 mt-1">Các bài viết được chia sẻ lại sẽ hiển thị ở đây.</p>
               </div>
             ) : (
               userReposts.map(post => (
-                <article key={`repost-${post.id}`} className="p-4 sm:p-5 rounded-2xl bg-[#141414] border border-[#1e1e1e]">
+                <article key={`repost-${post.id}`} className="py-4 hover:bg-[#141414]/40 transition-colors">
                   {/* Badge Người đăng lại */}
-                  <div className="flex items-center gap-1.5 pb-2.5 mb-2.5 border-b border-zinc-800/60 text-xs text-emerald-400 font-medium">
-                    <Repeat size={13} />
+                  <div className="flex items-center gap-1.5 pb-2 text-xs text-[#777777] font-medium">
+                    <Repeat size={13} className="text-emerald-400" />
                     <span>{post.repostedByNickname || profile?.nickname || 'Người dùng'} đã đăng lại</span>
                     {post.repostedAt && (
                       <span className="text-zinc-500 font-mono text-[10px] ml-auto">
@@ -816,26 +788,26 @@ const ProfilePage = () => {
                     </div>
                   </div>
 
-                  <p className="text-xs sm:text-sm text-zinc-200 leading-relaxed whitespace-pre-wrap">
+                  <p className="text-xs sm:text-sm text-zinc-200 leading-relaxed whitespace-pre-wrap my-2">
                     {post.content}
                   </p>
 
-                  <div className="flex items-center gap-4 pt-3 mt-3 border-t border-zinc-800/60 text-xs text-zinc-400">
-                    <span className="flex items-center gap-1">
-                      <Heart size={14} className={post.isLikedByMe ? "fill-rose-500 text-rose-500" : ""} />
+                  <div className="flex items-center gap-5 pt-2 text-xs text-[#777777]">
+                    <span className="flex items-center gap-1.5 hover:text-white cursor-pointer transition-colors">
+                      <Heart size={15} className={post.isLikedByMe ? "fill-rose-500 text-rose-500" : ""} />
                       <span>{post.likesCount || 0}</span>
                     </span>
-                    <span className="flex items-center gap-1">
-                      <MessageSquare size={14} />
+                    <span className="flex items-center gap-1.5 hover:text-white cursor-pointer transition-colors">
+                      <MessageSquare size={15} />
                       <span>{post.commentsCount || 0}</span>
                     </span>
                     <button
                       type="button"
                       onClick={() => handleToggleRepost(post.id)}
-                      className="flex items-center gap-1 text-emerald-400 font-bold"
+                      className="flex items-center gap-1.5 text-emerald-400 font-bold"
                       title="Hủy đăng lại"
                     >
-                      <Repeat size={14} />
+                      <Repeat size={15} />
                       <span>{post.repostsCount || 0}</span>
                     </button>
                   </div>
@@ -847,28 +819,25 @@ const ProfilePage = () => {
           {/* TAB 3: BÀI VIẾT ĐÃ LƯU (CHỈ CHÍNH CHỦ) */}
           {activeTab === 'saved' && isMe && (
             savedPosts.length === 0 ? (
-              <div className="py-16 text-center text-zinc-500 border border-dashed border-zinc-800 rounded-3xl">
-                <Bookmark size={32} className="mx-auto mb-2 text-zinc-600 opacity-60" />
+              <div className="py-16 text-center text-zinc-500">
+                <Bookmark size={28} className="mx-auto mb-2 text-zinc-600 opacity-60" />
                 <p className="text-sm font-semibold text-zinc-400">Chưa có bài viết đã lưu</p>
-                <p className="text-xs text-zinc-600 mt-1">Khi bạn bấm biểu tượng Bookmark ở các bài viết trên sảnh, chúng sẽ lưu tại đây.</p>
+                <p className="text-xs text-zinc-600 mt-1">Lưu các bài viết yêu thích tại Sảnh để xem lại bất cứ lúc nào.</p>
               </div>
             ) : (
               savedPosts.map(post => (
-                <article key={`saved-${post.id}`} className="p-4 sm:p-5 rounded-2xl bg-[#141414] border border-[#1e1e1e]">
-                  <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-zinc-800/60">
+                <article key={`saved-${post.id}`} className="py-4 hover:bg-[#141414]/40 transition-colors">
+                  <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2.5">
-                      <UserAvatar avatar={post.authorAvatar} name={post.authorNickname || post.authorAccount} size={30} />
+                      <UserAvatar avatar={post.authorAvatar} name={post.authorNickname || post.authorAccount} size={34} />
                       <div>
                         <div className="text-xs font-bold text-white">{post.authorNickname || post.authorAccount}</div>
-                        <span className="text-[10px] font-mono text-zinc-500">{post.formattedTime || TIME_FORMATTER(post.createdAt)}</span>
+                        <span className="text-[10.5px] font-mono text-zinc-500">{post.formattedTime || TIME_FORMATTER(post.createdAt)}</span>
                       </div>
                     </div>
-                    <span className="text-[10.5px] font-mono px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">
-                      Đã lưu
-                    </span>
                   </div>
 
-                  <p className="text-xs sm:text-sm text-zinc-200 leading-relaxed whitespace-pre-wrap">
+                  <p className="text-xs sm:text-sm text-zinc-200 leading-relaxed whitespace-pre-wrap my-2">
                     {post.content}
                   </p>
                 </article>
@@ -876,47 +845,82 @@ const ProfilePage = () => {
             )
           )}
 
-          {/* TAB 4: DANH SÁCH BẠN BÈ */}
+          {/* TAB 4: BẠN BÈ */}
           {activeTab === 'friends' && (
-            loadingFriends ? (
-              <div className="py-12 text-center text-zinc-500 font-mono text-xs">
-                <Loader2 size={24} className="animate-spin mx-auto mb-2 text-emerald-400" />
-                <span>Đang tải danh sách bạn bè...</span>
-              </div>
-            ) : userFriends.length === 0 ? (
-              <div className="py-16 text-center text-zinc-500 border border-dashed border-zinc-800 rounded-3xl">
-                <Users size={32} className="mx-auto mb-2 text-zinc-600 opacity-60" />
+            userFriends.length === 0 ? (
+              <div className="py-16 text-center text-zinc-500">
+                <Users size={28} className="mx-auto mb-2 text-zinc-600 opacity-60" />
                 <p className="text-sm font-semibold text-zinc-400">Chưa có bạn bè nào</p>
-                <p className="text-xs text-zinc-600 mt-1">Hãy kết nối với các thành viên khác tại sảnh trực tuyến hoặc phòng thoại!</p>
+                <p className="text-xs text-zinc-600 mt-1">Kết nối thêm nhiều bạn bè từ Sảnh và các phòng thoại để giao lưu!</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {userFriends.map(friend => (
-                  <div 
-                    key={friend.id}
-                    onClick={() => navigate(`/profile/${friend.id}`)}
-                    className="p-3.5 rounded-2xl bg-[#141414] border border-[#1e1e1e] hover:border-[#2a2a2a] transition-all flex items-center justify-between cursor-pointer active:scale-98"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <UserAvatar avatar={friend.avatar} name={friend.nickname || friend.account} size={38} />
-                      <div className="min-w-0">
-                        <div className="text-xs font-bold text-white truncate">{friend.nickname || friend.account}</div>
-                        <div className="text-[10.5px] font-mono text-zinc-500 truncate">@{friend.account || 'user'}</div>
+              <div className="divide-y divide-[#1e1e1e]">
+                {userFriends.map(friend => {
+                  const friendUser = friend.friend?.id?.toString() === effectiveUserId?.toString() ? friend.user : friend.friend;
+                  const fNickname = friendUser?.nickname || friendUser?.account || 'Người dùng';
+                  const fAccount = friendUser?.account || 'user';
+                  const fAvatar = friendUser?.avatar;
+
+                  return (
+                    <div 
+                      key={friend.id} 
+                      className="py-3 flex items-center justify-between hover:bg-[#141414]/40 transition-colors cursor-pointer"
+                      onClick={() => navigate(`/profile/${friendUser?.id}`)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <UserAvatar avatar={fAvatar} name={fNickname} size={40} />
+                        <div>
+                          <div className="text-xs font-bold text-white hover:underline">{fNickname}</div>
+                          <div className="text-[11px] font-mono text-zinc-500">@{fAccount}</div>
+                        </div>
                       </div>
+
+                      <span className="text-xs text-zinc-400 font-medium px-3 py-1 rounded-xl bg-[#181818] border border-[#262626]">
+                        Bạn bè
+                      </span>
                     </div>
-                    <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
-                      Xem hồ sơ
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )
           )}
         </div>
       </div>
+
+      {/* MODAL XÁC NHẬN ĐĂNG XUẤT NỘI BỘ (KHÔNG DÙNG WINDOW.CONFIRM XẤU XÍ) */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={() => setShowLogoutConfirm(false)}>
+          <div className="bg-[#141414] border border-[#222222] rounded-2xl w-full max-w-sm p-5 space-y-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm font-bold text-white">Xác nhận đăng xuất</h3>
+            <p className="text-xs text-zinc-400">Bạn có chắc chắn muốn đăng xuất khỏi tài khoản trên thiết bị này không?</p>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#1e1e1e]">
+              <button
+                type="button"
+                onClick={() => setShowLogoutConfirm(false)}
+                className="px-4 py-2 rounded-xl bg-[#1e1e1e] hover:bg-[#282828] text-zinc-300 text-xs font-semibold border border-[#2e2e2e]"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.clear();
+                  sessionStorage.clear();
+                  toast.success("Đã đăng xuất");
+                  navigate('/login');
+                }}
+                className="px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-black text-xs font-semibold shadow-sm"
+              >
+                Đăng xuất
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 export default ProfilePage;
+
 
