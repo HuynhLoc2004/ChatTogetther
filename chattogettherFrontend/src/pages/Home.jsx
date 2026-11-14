@@ -10,7 +10,7 @@ import {
   Edit3, Trash2, MoreVertical, Tag, Filter, Check,
   Mic, Headphones, Moon, Gamepad2, Film, Square,
   Flag, AlertTriangle, UserCheck,
-  ChevronDown, Menu, Globe, Layers, SlidersHorizontal, Repeat
+  ChevronDown, Menu, Globe, Layers, SlidersHorizontal, Repeat, Sun, Smile
 } from 'lucide-react';
 import axiosClient, { BACKEND_URL } from '../api/axiosClient';
 import { saveRoomsOffline, getRoomsOffline } from '../utils/offlineDB';
@@ -117,13 +117,23 @@ const REACTION_EMOJIS = [
   { type: 'CROWN', emoji: '👑', label: 'Đỉnh' },
 ];
 
-// Danh sách tâm trạng / Chủ đề chia sẻ (Anti-AI: KHÔNG dùng emoji hệ thống, dùng Lucide icon mảnh)
+// Ánh xạ icon thực tế và màu sắc dịu mắt cho từng chủ đề (Không dùng icon AI Sparkles hay màu chói)
+const getVibeIcon = (label) => {
+  const l = (label || '').toLowerCase();
+  if (l.includes('thư giãn') || l.includes('chill') || l.includes('nhạc')) return { icon: Headphones, color: 'text-sky-400' };
+  if (l.includes('tích cực') || l.includes('vui') || l.includes('năng lượng')) return { icon: Sun, color: 'text-amber-400' };
+  if (l.includes('lắng đọng') || l.includes('đêm') || l.includes('buồn')) return { icon: Moon, color: 'text-indigo-400' };
+  if (l.includes('tìm bạn') || l.includes('kết nối') || l.includes('game')) return { icon: Gamepad2, color: 'text-emerald-400' };
+  if (l.includes('tâm sự') || l.includes('chia sẻ') || l.includes('nói chuyện')) return { icon: MessageSquare, color: 'text-purple-400' };
+  return { icon: Tag, color: 'text-zinc-400' };
+};
+
 const VIBE_TAGS = [
-  { id: 'Thư giãn', label: 'Thư giãn', icon: Headphones },
-  { id: 'Tích cực', label: 'Tích cực', icon: Sparkles },
-  { id: 'Lắng đọng', label: 'Lắng đọng', icon: Moon },
-  { id: 'Tìm bạn', label: 'Tìm bạn', icon: Gamepad2 },
-  { id: 'Tâm sự', label: 'Tâm sự', icon: MessageSquare },
+  { id: 'Thư giãn', label: 'Thư giãn', icon: Headphones, color: 'text-sky-400' },
+  { id: 'Tích cực', label: 'Tích cực', icon: Sun, color: 'text-amber-400' },
+  { id: 'Lắng đọng', label: 'Lắng đọng', icon: Moon, color: 'text-indigo-400' },
+  { id: 'Tìm bạn', label: 'Tìm bạn', icon: Gamepad2, color: 'text-emerald-400' },
+  { id: 'Tâm sự', label: 'Tâm sự', icon: MessageSquare, color: 'text-purple-400' },
 ];
 
 // Gợi ý mở đầu kết nối ngẫu nhiên
@@ -409,7 +419,10 @@ const Home = () => {
             try {
               const parsed = JSON.parse(cfg.vibe_options);
               if (Array.isArray(parsed) && parsed.length > 0) {
-                const mapped = parsed.map(v => ({ id: v, label: v, icon: Sparkles }));
+                const mapped = parsed.map(v => {
+                  const meta = getVibeIcon(v);
+                  return { id: v, label: v, icon: meta.icon, color: meta.color };
+                });
                 setDynamicVibes(mapped);
               }
             } catch {}
@@ -1799,67 +1812,48 @@ const Home = () => {
             </div>
           </header>
 
-          {/* Header Sảnh Desktop & Bộ chuyển không gian Mobile */}
+          {/* Thanh Tab điều hướng Sảnh (Đồng bộ, tối giản cho cả PC & Mobile - Dùng Icon có màu sắc dịu nhẹ) */}
           <div className="stream-header">
-            {/* Thanh chuyển không gian trên Mobile (Dạng Viên Nang + Hamburger Menu mượt mà) */}
-            <div className="mobile-space-selector-bar flex sm:hidden items-center justify-between w-full py-1 gap-2">
-              <button
-                type="button"
-                onClick={() => setIsSpaceDrawerOpen(true)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-850/90 border border-zinc-750 text-zinc-100 text-xs font-bold shadow-sm active:scale-95 transition-all flex-1 min-w-0"
-              >
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0"></span>
-                <span className="truncate">
-                  {activeTab === 'feed' ? '✦ Sảnh trực tuyến' :
-                   activeTab === 'groups' ? '✦ Không gian Cộng đồng' :
-                   activeTab === 'trending' ? '🔥 Xu hướng Thịnh hành' :
-                   activeTab === 'saved' ? '🔖 Kho lưu trữ cá nhân' :
-                   `🎙️ Phòng thoại (${safeRooms.length})`}
-                </span>
-                <ChevronDown size={14} className="text-zinc-400 ml-auto flex-shrink-0" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setIsSpaceDrawerOpen(true)}
-                className="p-2 rounded-xl bg-zinc-850/90 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-750 transition-all flex items-center justify-center flex-shrink-0 active:scale-95 shadow-sm"
-                title="Mở toàn bộ danh mục không gian"
-              >
-                <Menu size={16} />
-              </button>
-            </div>
-
-            {/* Thanh Tab truyền thống trên Desktop */}
-            <div className="stream-tabs hidden sm:flex">
+            <div className="stream-tabs">
               <button 
+                type="button"
                 className={`stream-tab ${activeTab === 'feed' ? 'active' : ''}`}
                 onClick={() => handleSwitchTab('feed')}
               >
-                Sảnh trực tuyến
+                <Globe size={14} className="tab-icon text-sky-400 flex-shrink-0" />
+                <span>Sảnh trực tuyến</span>
               </button>
               <button 
+                type="button"
                 className={`stream-tab ${activeTab === 'groups' ? 'active' : ''}`}
                 onClick={() => handleSwitchTab('groups')}
               >
-                Cộng đồng
+                <Users size={14} className="tab-icon text-emerald-400 flex-shrink-0" />
+                <span>Cộng đồng</span>
               </button>
               <button 
+                type="button"
                 className={`stream-tab ${activeTab === 'trending' ? 'active' : ''}`}
                 onClick={() => handleSwitchTab('trending')}
               >
-                Thịnh hành
+                <Flame size={14} className="tab-icon text-amber-400 flex-shrink-0" />
+                <span>Thịnh hành</span>
               </button>
               <button 
+                type="button"
                 className={`stream-tab ${activeTab === 'saved' ? 'active' : ''}`}
                 onClick={() => handleSwitchTab('saved')}
               >
-                Đã lưu
+                <Bookmark size={14} className="tab-icon text-purple-400 flex-shrink-0" />
+                <span>Đã lưu</span>
               </button>
               <button 
+                type="button"
                 className={`stream-tab ${activeTab === 'rooms' ? 'active' : ''}`}
                 onClick={() => handleSwitchTab('rooms')}
               >
-                Phòng thoại ({safeRooms.length})
+                <Radio size={14} className="tab-icon text-rose-400 flex-shrink-0" />
+                <span>Phòng thoại ({safeRooms.length})</span>
               </button>
             </div>
 
@@ -2085,81 +2079,6 @@ const Home = () => {
             )}
           </div>
 
-          {/* MODAL / BOTTOM SHEET CHỌN KHÔNG GIAN DÀNH CHO MOBILE */}
-          {isSpaceDrawerOpen && (
-            <div 
-              className="sm:hidden fixed inset-0 z-[999] flex items-end bg-black/80 backdrop-blur-sm animate-fade-in"
-              onClick={() => setIsSpaceDrawerOpen(false)}
-            >
-              <div 
-                className="w-full max-h-[85vh] rounded-t-3xl bg-[#131622] border-t border-[#2a3045] shadow-2xl flex flex-col overflow-hidden animate-slide-up"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="flex items-center justify-between px-4 py-3.5 border-b border-[#202538]">
-                  <div className="flex items-center gap-2">
-                    <Layers size={18} className="text-emerald-400" />
-                    <span className="text-sm font-bold text-white tracking-wide">Chọn Không Gian Talovin</span>
-                  </div>
-                  <button 
-                    onClick={() => setIsSpaceDrawerOpen(false)}
-                    className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800/80 transition-colors"
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-
-                <div className="p-3 space-y-2 overflow-y-auto max-h-[65vh]">
-                  {[
-                    { id: 'feed', label: 'Sảnh trực tuyến', desc: 'Bảng tin thời gian thực, tin mới & kết nối toàn hệ thống', icon: Globe, color: 'text-sky-400 bg-sky-500/10 border-sky-500/20' },
-                    { id: 'groups', label: 'Không gian Cộng đồng', desc: 'Tiểu xã hội chuyên sâu, câu lạc bộ & diễn đàn tự quản', icon: Users, color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
-                    { id: 'trending', label: 'Xu hướng Thịnh hành', desc: 'Bài viết và chủ đề thảo luận có tương tác sôi động nhất', icon: Flame, color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
-                    { id: 'saved', label: 'Kho lưu trữ cá nhân', desc: 'Tất cả các bài viết & khoảnh khắc bạn đã đánh dấu lưu', icon: Bookmark, color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
-                    { id: 'rooms', label: `Phòng thoại (${safeRooms.length})`, desc: 'Phòng thoại trò chuyện âm thanh & tán gẫu trực tiếp', icon: Radio, color: 'text-rose-400 bg-rose-500/10 border-rose-500/20' },
-                  ].map((space) => {
-                    const IconComp = space.icon;
-                    const isActive = activeTab === space.id;
-                    return (
-                      <button
-                        key={space.id}
-                        type="button"
-                        onClick={() => handleSwitchTab(space.id)}
-                        className={`w-full flex items-center justify-between p-3 rounded-2xl border transition-all text-left ${
-                          isActive 
-                            ? 'bg-zinc-800/90 border-emerald-500/50 shadow-md shadow-emerald-500/5' 
-                            : 'bg-[#181c2b] border-[#262c3e] hover:bg-[#1f2437] text-zinc-300'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center border flex-shrink-0 ${space.color}`}>
-                            <IconComp size={18} />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className={`text-xs font-bold ${isActive ? 'text-white' : 'text-zinc-200'} truncate`}>
-                                {space.label}
-                              </span>
-                              {isActive && (
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse flex-shrink-0"></span>
-                              )}
-                            </div>
-                            <p className="text-[11px] text-zinc-400 line-clamp-1 mt-0.5 font-normal">
-                              {space.desc}
-                            </p>
-                          </div>
-                        </div>
-                        {isActive && (
-                          <div className="flex-shrink-0 ml-2 text-emerald-400">
-                            <Check size={16} strokeWidth={2.5} />
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* THANH BÁO HIỆU SOFT TRANSITION KHI CHUYỂN TAB */}
           {isTabSwitching && (
             <div className="tab-switching-indicator flex items-center justify-center gap-2 py-2 px-3 mb-2 rounded-xl bg-zinc-900/90 border border-zinc-800 text-xs text-zinc-300 animate-pulse">
@@ -2272,14 +2191,14 @@ const Home = () => {
                 </div>
               ) : null}
 
-              {/* Chọn Vibe Tags (Động từ Admin Dashboard) - Hỗ trợ mở rộng & Responsive toàn diện */}
+              {/* Chọn Vibe Tags: Icon thật có màu sắc trang nhã, không màu mè AI bóng bẩy */}
               <div className="composer-vibes-wrapper my-2">
                 <div className="flex items-center justify-between mb-1.5 px-0.5">
-                  <span className="text-[11px] font-semibold text-zinc-400 flex items-center gap-1.5 flex-wrap">
-                    <Sparkles size={12} className="text-amber-400 flex-shrink-0" />
-                    <span>Cảm xúc bài viết ({dynamicVibes.length})</span>
+                  <span className="text-[11.5px] font-medium text-zinc-400 flex items-center gap-1.5 flex-wrap">
+                    <Smile size={13} className="text-zinc-400 flex-shrink-0" />
+                    <span>Chủ đề & Cảm xúc ({dynamicVibes.length})</span>
                     {selectedVibe && (
-                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-200 border border-zinc-700">
                         Đang chọn: {dynamicVibes.find(v => v.id === selectedVibe)?.label}
                       </span>
                     )}
@@ -2288,17 +2207,18 @@ const Home = () => {
                     <button
                       type="button"
                       onClick={() => setIsVibesExpanded(!isVibesExpanded)}
-                      className="text-[11px] font-medium text-emerald-400 hover:text-emerald-300 flex items-center gap-0.5 py-0.5 px-2 rounded-lg bg-zinc-800/60 hover:bg-zinc-800 border border-zinc-700/60 transition-all flex-shrink-0 active:scale-95"
+                      className="text-xs text-zinc-400 hover:text-zinc-200 flex items-center gap-1 transition-colors flex-shrink-0"
                     >
-                      <span>{isVibesExpanded ? 'Thu gọn ▲' : 'Xem tất cả ▼'}</span>
+                      <span>{isVibesExpanded ? 'Thu gọn' : 'Xem tất cả'}</span>
+                      <ChevronDown size={13} className={`transition-transform duration-200 ${isVibesExpanded ? 'rotate-180' : ''}`} />
                     </button>
                   )}
                 </div>
 
                 {isVibesExpanded ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1.5 pt-0.5 pb-1 animate-fade-in">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-1.5 pt-0.5 pb-1 animate-fade-in">
                     {dynamicVibes.map(v => {
-                      const IconComponent = v.icon || Sparkles;
+                      const IconComponent = v.icon || Tag;
                       const isSelected = selectedVibe === v.id;
                       return (
                         <button
@@ -2307,7 +2227,7 @@ const Home = () => {
                           onClick={() => setSelectedVibe(isSelected ? null : v.id)}
                           className={`vibe-tag-pill w-full justify-center ${isSelected ? 'active' : ''}`}
                         >
-                          <IconComponent size={13} strokeWidth={1.5} className="vibe-icon flex-shrink-0" />
+                          <IconComponent size={13} strokeWidth={1.75} className={`vibe-icon flex-shrink-0 ${v.color || 'text-zinc-400'}`} />
                           <span className="truncate">{v.label}</span>
                         </button>
                       );
@@ -2316,7 +2236,7 @@ const Home = () => {
                 ) : (
                   <div className="vibe-tags-row flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
                     {dynamicVibes.map(v => {
-                      const IconComponent = v.icon || Sparkles;
+                      const IconComponent = v.icon || Tag;
                       const isSelected = selectedVibe === v.id;
                       return (
                         <button
@@ -2325,7 +2245,7 @@ const Home = () => {
                           onClick={() => setSelectedVibe(isSelected ? null : v.id)}
                           className={`vibe-tag-pill flex-shrink-0 ${isSelected ? 'active' : ''}`}
                         >
-                          <IconComponent size={13} strokeWidth={1.5} className="vibe-icon" />
+                          <IconComponent size={13} strokeWidth={1.75} className={`vibe-icon flex-shrink-0 ${v.color || 'text-zinc-400'}`} />
                           <span>{v.label}</span>
                         </button>
                       );
@@ -2405,7 +2325,7 @@ const Home = () => {
                     className={`btn-subtool ${attachedMedia ? 'active' : ''}`}
                     title="Đính kèm hình ảnh hoặc video clip ngắn"
                   >
-                    <ImageIcon size={15} strokeWidth={1.5} />
+                    <ImageIcon size={15} strokeWidth={1.5} className="text-sky-400 flex-shrink-0" />
                     <span>Ảnh / Video</span>
                   </button>
 
@@ -2415,7 +2335,7 @@ const Home = () => {
                     className={`btn-subtool ${isRecordingVoice || voiceBase64 ? 'active-rose' : ''}`}
                     title="Ghi âm giọng nói 15 giây"
                   >
-                    <Mic size={15} strokeWidth={1.5} />
+                    <Mic size={15} strokeWidth={1.5} className="text-rose-400 flex-shrink-0" />
                     <span>{isRecordingVoice ? 'Đang thu âm...' : (voiceBase64 ? 'Đã thu 15s' : 'Ghi âm 15s')}</span>
                   </button>
 
@@ -2425,7 +2345,7 @@ const Home = () => {
                     className={`btn-subtool ${showSparkInput || selectedTags.length > 0 ? 'active' : ''}`}
                     title="Gắn thẻ chủ đề bài viết"
                   >
-                    <Tag size={15} strokeWidth={1.5} />
+                    <Tag size={15} strokeWidth={1.5} className="text-amber-400 flex-shrink-0" />
                     <span>Gắn chủ đề</span>
                   </button>
                 </div>
@@ -4051,44 +3971,51 @@ const Home = () => {
         .stream-header {
           position: sticky;
           top: 0;
-          background: rgba(16, 18, 26, 0.95);
+          background: rgba(18, 18, 20, 0.95);
           backdrop-filter: blur(12px);
           border-bottom: 1px solid var(--card-border);
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding: 10px 18px;
+          padding: 8px 14px;
           z-index: 30;
         }
         .stream-tabs {
           display: flex;
+          align-items: center;
           gap: 6px;
           overflow-x: auto;
           scrollbar-width: none;
+          -webkit-overflow-scrolling: touch;
+          flex: 1;
+          min-width: 0;
         }
         .stream-tabs::-webkit-scrollbar { display: none; }
         .stream-tab {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
           background: transparent;
           border: 1px solid transparent;
-          color: var(--text-muted);
+          color: #94a3b8;
           font-size: 13px;
           font-weight: 500;
           padding: 6px 12px;
-          border-radius: 8px;
+          border-radius: 9px;
           cursor: pointer;
           white-space: nowrap;
-          transition: all 0.15s;
+          flex-shrink: 0;
+          transition: all 0.15s ease;
         }
         .stream-tab:hover {
-          color: var(--text-main);
+          color: #f1f5f9;
           background: rgba(255, 255, 255, 0.05);
         }
         .stream-tab.active {
-          background: #23283c;
-          border: 1px solid #3b4360;
+          background: #27272a;
+          border: 1px solid #3f3f46;
           color: #ffffff;
           font-weight: 600;
-          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
         }
         .btn-header-notif {
           background: rgba(255, 255, 255, 0.03);
@@ -4652,28 +4579,28 @@ const Home = () => {
         }
         .vibe-tags-row::-webkit-scrollbar { display: none; }
         .vibe-tag-pill {
-          background: #1c2030;
-          border: 1px solid #2d344d;
-          color: #94a3b8;
-          font-size: 11px;
+          background: #18181b;
+          border: 1px solid #27272a;
+          color: #a1a1aa;
+          font-size: 11.5px;
           font-weight: 500;
           padding: 4px 10px;
           border-radius: 8px;
           cursor: pointer;
           display: flex;
           align-items: center;
-          gap: 4px;
+          gap: 5px;
           white-space: nowrap;
-          transition: all 0.15s;
+          transition: all 0.15s ease;
         }
         .vibe-tag-pill:hover {
-          background: #252a3f;
+          background: #27272a;
           color: #ffffff;
-          border-color: #414b6e;
+          border-color: #3f3f46;
         }
         .vibe-tag-pill.active {
-          background: #2b334d;
-          border-color: #60a5fa;
+          background: #27272a;
+          border-color: #52525b;
           color: #ffffff;
           font-weight: 600;
         }
@@ -4802,37 +4729,35 @@ const Home = () => {
           color: #fb7185;
         }
 
-        /* Nút CTA Đăng bài: Nền Emerald rực rỡ - Đầy tương phản & phân cấp rõ ràng */
+        /* Nút CTA Đăng bài: Tối giản, tương phản cao chuẩn dark mode (Không dùng màu neon bóng chói mắt) */
         .btn-publish-submit {
-          background: #10b981;
-          color: #022c22;
+          background: #f4f4f5;
+          color: #09090b;
           border: none;
           padding: 7px 18px;
-          border-radius: 10px;
+          border-radius: 9px;
           font-size: 12px;
-          font-weight: 700;
+          font-weight: 600;
           cursor: pointer;
-          transition: all 0.15s;
-          box-shadow: 0 3px 12px rgba(16, 185, 129, 0.28);
+          transition: all 0.15s ease;
           white-space: nowrap;
           flex-shrink: 0;
           min-width: max-content;
         }
         .btn-publish-submit:hover:not(:disabled) {
-          background: #34d399;
+          background: #ffffff;
           transform: translateY(-1px);
-          box-shadow: 0 5px 16px rgba(16, 185, 129, 0.38);
         }
         .btn-publish-submit:active:not(:disabled) {
-          transform: scale(0.96);
+          transform: scale(0.97);
         }
         .btn-publish-submit:disabled {
-          background: #1c202d;
-          color: #525a70;
-          border: 1px solid #282f42;
+          background: #18181b;
+          color: #71717a;
+          border: 1px solid #27272a;
           box-shadow: none;
           cursor: not-allowed;
-          opacity: 0.7;
+          opacity: 0.6;
         }
 
         /* ================= THẺ BÀI VIẾT (TALOVIN HIGH-CONTRAST CARD) ================= */
@@ -6014,6 +5939,18 @@ const Home = () => {
             max-width: 100%; 
             min-width: 0; 
             padding-bottom: calc(120px + env(safe-area-inset-bottom, 24px)); 
+          }
+          .stream-header {
+            padding: 6px 10px;
+          }
+          .stream-tabs {
+            gap: 4px;
+            padding-bottom: 2px;
+          }
+          .stream-tab {
+            padding: 5px 9px;
+            font-size: 11.5px;
+            gap: 4px;
           }
           .rooms-active-grid { grid-template-columns: 1fr; }
           .vibe-tags-row {
