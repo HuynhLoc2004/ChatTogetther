@@ -59,22 +59,29 @@ public class ChatService {
                 throw new AppException(ErrorCode.ROOM_NOT_FOUND.getCode(),  "phòng không tồn tại" , ErrorCode.ROOM_NOT_FOUND.getStatusCode().value());
             });
 
-            // Tự động đảm bảo thành viên đang hoạt động trong phòng trước khi gửi
-            UserRoomEntity myUr = roomEntity.getUserRoomEntityList().stream()
-                    .filter(ur -> ur.getUserEntity() != null && ur.getUserEntity().getId().equals(userId))
-                    .findFirst()
-                    .orElse(null);
+            // Tự động đảm bảo quyền và trạng thái hoạt động trong phòng trước khi gửi
+            boolean isDm = roomEntity.getPassword() != null && roomEntity.getPassword().startsWith("DM_");
+            if (isDm) {
+                String[] parts = roomEntity.getPassword().split("_");
+                if (parts.length >= 3) {
+                    try {
+                        Long u1 = Long.parseLong(parts[1]);
+                        Long u2 = Long.parseLong(parts[2]);
+                        if (!userId.equals(u1) && !userId.equals(u2)) {
+                            throw new AppException(403, "Bạn không có quyền gửi tin nhắn trong cuộc trò chuyện riêng tư này", 403);
+                        }
+                    } catch (NumberFormatException ignored) {}
+                }
+            } else {
+                UserRoomEntity myUr = roomEntity.getUserRoomEntityList().stream()
+                        .filter(ur -> ur.getUserEntity() != null && ur.getUserEntity().getId().equals(userId))
+                        .findFirst()
+                        .orElse(null);
 
-            if (myUr == null) {
-                myUr = new UserRoomEntity();
-                myUr.setRoomEntity(roomEntity);
-                myUr.setUserEntity(userEntity);
-                myUr.setActive(true);
-                roomEntity.getUserRoomEntityList().add(myUr);
-                this.roomRepository.save(roomEntity);
-            } else if (!Boolean.TRUE.equals(myUr.getActive())) {
-                myUr.setActive(true);
-                this.roomRepository.save(roomEntity);
+                if (myUr != null && !Boolean.TRUE.equals(myUr.getActive())) {
+                    myUr.setActive(true);
+                    this.roomRepository.save(roomEntity);
+                }
             }
 
             LocalDateTime now = LocalDateTime.now();
@@ -176,23 +183,8 @@ public class ChatService {
             dmRoom.setAvatar(target.getAvatar());
             dmRoom.setLocalDateTime(LocalDateTime.now());
 
-            UserRoomEntity urMe = new UserRoomEntity();
-            urMe.setUserEntity(me);
-            urMe.setRoomEntity(dmRoom);
-            urMe.setActive(true);
-            urMe.setIsAdmin(true);
-            urMe.getTimeJoin().add(LocalDateTime.now());
-            dmRoom.getUserRoomEntityList().add(urMe);
-
-            UserRoomEntity urTarget = new UserRoomEntity();
-            urTarget.setUserEntity(target);
-            urTarget.setRoomEntity(dmRoom);
-            urTarget.setActive(true);
-            urTarget.setIsAdmin(false);
-            urTarget.getTimeJoin().add(LocalDateTime.now());
-            dmRoom.getUserRoomEntityList().add(urTarget);
-
-            roomRepository.saveAndFlush(dmRoom);
+            // Lưu trực tiếp dmRoom mà không tạo UserRoomEntity để tránh xung đột unique key user_room_user_id
+            dmRoom = roomRepository.saveAndFlush(dmRoom);
         }
 
         Map<String, Object> targetData = new HashMap<>();

@@ -120,8 +120,10 @@ export const DirectMessagePage = () => {
   }, [currentUserId, scrollToBottom]);
 
   // Kích hoạt khi URL param thay đổi
+  const lastTargetIdRef = useRef(null);
   useEffect(() => {
-    if (urlTargetUserId) {
+    if (urlTargetUserId && urlTargetUserId !== lastTargetIdRef.current) {
+      lastTargetIdRef.current = urlTargetUserId;
       const foundInFriends = friends.find(f => f.id?.toString() === urlTargetUserId?.toString());
       openDirectChat(urlTargetUserId, foundInFriends);
     }
@@ -426,11 +428,23 @@ export const DirectMessagePage = () => {
     }
   };
 
-  // Lọc bạn bè
-  const filteredFriends = friends.filter(f => {
+  // Danh sách hội thoại = Friends + ActivePartner nếu chưa có trong Friends
+  const allConversations = useMemo(() => {
+    let list = Array.isArray(friends) ? [...friends] : [];
+    if (activePartner && !list.some(f => f.id?.toString() === activePartner.id?.toString())) {
+      list.unshift(activePartner);
+    }
+    return list;
+  }, [friends, activePartner]);
+
+  // Lọc hội thoại
+  const filteredConversations = allConversations.filter(f => {
     if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (f.nickname && f.nickname.toLowerCase().includes(q)) || (f.account && f.account.toLowerCase().includes(q));
+    const q = searchQuery.toLowerCase().trim();
+    const cleanQ = q.replace(/^@+/, '');
+    return (f.nickname && f.nickname.toLowerCase().includes(q)) || 
+           (f.account && f.account.toLowerCase().includes(q)) ||
+           (f.account && f.account.toLowerCase().includes(cleanQ));
   });
 
   return (
@@ -494,26 +508,26 @@ export const DirectMessagePage = () => {
           {/* List items */}
           <div className="flex-1 overflow-y-auto overscroll-contain p-2 space-y-1 custom-scrollbar">
             <div className="px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-semibold">
-              Danh bạ trò chuyện ({filteredFriends.length})
+              Danh sách trò chuyện ({filteredConversations.length})
             </div>
 
-            {loadingFriends ? (
+            {loadingFriends && filteredConversations.length === 0 ? (
               <div className="py-12 text-center text-zinc-500 text-xs font-mono">
-                Đang nạp danh bạ bạn bè...
+                Đang nạp danh sách trò chuyện...
               </div>
-            ) : filteredFriends.length === 0 ? (
+            ) : filteredConversations.length === 0 ? (
               <div className="py-12 px-4 text-center text-zinc-500 text-xs">
-                Chưa có bạn bè nào. Hãy vào Sảnh hoặc Phòng đàm thoại để kết nối thêm bạn mới!
+                Chưa có cuộc trò chuyện nào. Hãy chọn thành viên từ Sảnh hoặc phòng đàm thoại để nhắn tin!
               </div>
             ) : (
-              filteredFriends.map((friend) => {
-                const isSelected = activePartner?.id?.toString() === friend.id?.toString();
+              filteredConversations.map((partner) => {
+                const isSelected = activePartner?.id?.toString() === partner.id?.toString();
                 return (
                   <div
-                    key={friend.id}
+                    key={partner.id}
                     onClick={() => {
-                      navigate(`/messages/${friend.id}`);
-                      openDirectChat(friend.id, friend);
+                      navigate(`/messages/${partner.id}`);
+                      openDirectChat(partner.id, partner);
                     }}
                     className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all ${
                       isSelected
@@ -522,19 +536,19 @@ export const DirectMessagePage = () => {
                     }`}
                   >
                     <div className="relative shrink-0">
-                      <UserAvatar avatar={friend.avatar} name={friend.nickname || friend.account} size={42} />
+                      <UserAvatar avatar={partner.avatar} name={partner.nickname || partner.account} size={42} />
                       <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-zinc-950" />
                     </div>
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between mb-0.5">
                         <h4 className="font-semibold text-xs truncate text-zinc-100">
-                          {friend.nickname || friend.account}
+                          {partner.nickname || partner.account}
                         </h4>
                         <span className="text-[10px] font-mono text-zinc-500">Trực tuyến</span>
                       </div>
                       <p className="text-[11px] text-zinc-400 truncate">
-                        @{friend.account} • Nhấp để mở trò chuyện
+                        @{partner.account} • Nhấp để mở trò chuyện
                       </p>
                     </div>
                   </div>

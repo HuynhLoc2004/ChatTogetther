@@ -557,36 +557,36 @@ const ProfilePage = () => {
                 </div>
               </div>
 
-              {/* Hàng nút hành động (Touch-friendly h-11) */}
+              {/* Hàng nút hành động (Touch-friendly h-10) */}
               <div>
                 {!isMe ? (
-                  <div className="grid grid-cols-2 gap-2.5">
+                  <div className="grid grid-cols-3 gap-2">
                     {friendStatus === 'ACCEPTED' ? (
-                      <div className="h-11 rounded-xl bg-zinc-800 text-zinc-200 border border-zinc-700 text-xs font-semibold flex items-center justify-center gap-1.5 select-none">
-                        <UserCheck size={15} className="text-emerald-400" />
+                      <div className="h-10 rounded-xl bg-zinc-800 text-zinc-200 border border-zinc-700 text-xs font-semibold flex items-center justify-center gap-1.5 select-none">
+                        <UserCheck size={14} className="text-emerald-400" />
                         <span>Bạn bè</span>
                       </div>
                     ) : friendStatus === 'PENDING_SENT' ? (
-                      <div className="h-11 rounded-xl bg-zinc-800 text-zinc-400 border border-zinc-700 text-xs font-semibold flex items-center justify-center gap-1.5 select-none">
-                        <Clock size={15} />
-                        <span>Đã gửi lời mời</span>
+                      <div className="h-10 rounded-xl bg-zinc-800 text-zinc-400 border border-zinc-700 text-xs font-semibold flex items-center justify-center gap-1.5 select-none">
+                        <Clock size={14} />
+                        <span>Đã gửi</span>
                       </div>
                     ) : (
                       <button
                         type="button"
                         onClick={handleSendFriendRequest}
                         disabled={processingFriend}
-                        className="h-11 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-md disabled:opacity-50"
+                        className="h-10 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-md disabled:opacity-50"
                       >
-                        <UserPlus size={15} />
-                        <span>{processingFriend ? 'Đang gửi...' : 'Kết bạn'}</span>
+                        <UserPlus size={14} />
+                        <span>{processingFriend ? '...' : 'Kết bạn'}</span>
                       </button>
                     )}
 
                     <button
                       type="button"
                       onClick={() => navigate(`/messages/${targetUserId}`)}
-                      className="h-10 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs transition-colors duration-150 active:scale-[0.98] flex items-center justify-center gap-1.5 shadow-sm"
+                      className="h-10 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 font-medium text-xs transition-colors duration-150 active:scale-[0.98] flex items-center justify-center gap-1.5"
                       title="Gửi tin nhắn cho người này"
                     >
                       <MessageSquare size={14} />
@@ -596,7 +596,7 @@ const ProfilePage = () => {
                     <button
                       type="button"
                       onClick={() => navigate(`/call/direct/${targetUserId}?type=audio`)}
-                      className="h-10 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-200 font-medium text-xs transition-colors duration-150 active:scale-[0.98] flex items-center justify-center gap-1.5"
+                      className="h-10 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 font-medium text-xs transition-colors duration-150 active:scale-[0.98] flex items-center justify-center gap-1.5"
                       title="Gọi ngay với người này"
                     >
                       <PhoneCall size={14} className="text-zinc-300" />

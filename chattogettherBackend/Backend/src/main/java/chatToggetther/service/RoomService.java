@@ -105,6 +105,10 @@ public class RoomService {
         List<RoomEntity> roomEntityList = this.roomRepository.getallRoomActive(true);
         List<RoomDTO> roomDTOList = roomEntityList.stream()
                 .filter(item -> {
+                    // Tuyệt đối loại bỏ các phòng trò chuyện riêng tư 1-1 (DM) khỏi danh sách phòng sảnh
+                    if (item.getPassword() != null && item.getPassword().startsWith("DM_")) {
+                        return false;
+                    }
                     boolean hasPassword = item.getPassword() != null && !item.getPassword().trim().isEmpty();
                     // Nếu là phòng riêng tư (có mật khẩu): chỉ trả về nếu người dùng hiện tại là thành viên trong phòng
                     if (hasPassword) {
