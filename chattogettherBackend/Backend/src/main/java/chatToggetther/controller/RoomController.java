@@ -10,6 +10,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
 
@@ -30,8 +31,9 @@ public class RoomController {
     }
 
     @GetMapping("/info-rooms")
-    public ResponseEntity<ResponseData<List<RoomDTO>>> getallRoomActive(){
-        return ResponseEntity.ok(this.roomService.getAllRoomActive());
+    public ResponseEntity<ResponseData<List<RoomDTO>>> getallRoomActive(Authentication authentication){
+        JwtAuthenticationToken jwtAuth = (authentication instanceof JwtAuthenticationToken) ? (JwtAuthenticationToken) authentication : null;
+        return ResponseEntity.ok(this.roomService.getAllRoomActive(jwtAuth));
     }
 
     @GetMapping("/detail")

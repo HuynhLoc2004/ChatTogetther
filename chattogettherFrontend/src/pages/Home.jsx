@@ -752,18 +752,20 @@ const Home = ({ initialTab }) => {
     setConfirmDialog(prev => ({ ...prev, isOpen: false, onConfirm: null }));
   };
 
-  // Kiểm tra phòng đang tham gia hoặc đã từng vào
+  // Kiểm tra tài khoản hiện tại có thực sự là thành viên trong phòng đàm thoại
   const isUserInRoom = (room) => {
     if (!room) return false;
     const account = localStorage.getItem('account');
-    if (room.userRoomDTOList && room.userRoomDTOList.some(ur => ur.userDTO && (ur.userDTO.account === account || ur.userDTO.id?.toString() === currentUserId?.toString()))) {
+    const uid = currentUserId?.toString() || localStorage.getItem('user_id')?.toString();
+    if (room.userRoomDTOList && room.userRoomDTOList.some(ur => {
+      const u = ur.userDTO || ur;
+      return u && (
+        (account && u.account === account) || 
+        (uid && u.id?.toString() === uid)
+      );
+    })) {
       return true;
     }
-    try {
-      const raw = localStorage.getItem('talovin_entered_rooms') || '[]';
-      const entered = JSON.parse(raw);
-      if (Array.isArray(entered) && entered.includes(room.id)) return true;
-    } catch (e) {}
     return false;
   };
 
@@ -2014,6 +2016,8 @@ const Home = ({ initialTab }) => {
   const safePosts = Array.isArray(posts) ? posts.filter(Boolean) : [];
   const safeRooms = Array.isArray(rooms) ? rooms.filter(Boolean) : [];
   const safeFriends = Array.isArray(friends) ? friends.filter(Boolean) : [];
+  // Các phòng đàm thoại người dùng có quyền nhìn thấy: Phòng đã tham gia HOẶC phòng công khai
+  const userAccessibleRooms = safeRooms.filter(r => isUserInRoom(r) || (!r.hasPassword && !r.isPrivate));
 
   // Nguồn cấp bài viết: Nếu người dùng đã Enter tìm kiếm thì nạp kết quả server (Elastic-like), ngược lại dùng feed bình thường
   const basePostsList = (activeSearchQuery && Array.isArray(searchResults)) 
@@ -2545,7 +2549,7 @@ const Home = ({ initialTab }) => {
                 onClick={() => handleSwitchTab('rooms')}
               >
                 <Radio size={14} className="tab-icon flex-shrink-0" />
-                <span>Phòng thoại ({safeRooms.length})</span>
+                <span>Phòng thoại ({userAccessibleRooms.length})</span>
               </button>
             </div>
 
@@ -2566,7 +2570,7 @@ const Home = ({ initialTab }) => {
                    activeTab === 'groups' ? 'Cộng đồng' :
                    activeTab === 'trending' ? 'Thịnh hành' :
                    activeTab === 'saved' ? 'Đã lưu' :
-                   `Phòng thoại (${safeRooms.length})`}
+                   `Phòng thoại (${userAccessibleRooms.length})`}
                 </span>
                 <ChevronDown size={13} className="text-slate-400 ml-auto flex-shrink-0" />
               </button>
@@ -2642,7 +2646,7 @@ const Home = ({ initialTab }) => {
                     { id: 'groups', label: 'Cộng đồng', desc: 'Khám phá các hội nhóm & chủ đề chuyên biệt', icon: Users },
                     { id: 'trending', label: 'Thịnh hành', desc: 'Bài viết nhiều tương tác & chủ đề sôi nổi nhất', icon: Flame },
                     { id: 'saved', label: 'Đã lưu', desc: 'Xem lại bài viết bạn đã bookmark đánh dấu', icon: Bookmark },
-                    { id: 'rooms', label: `Phòng thoại (${safeRooms.length})`, desc: 'Đàm thoại âm thanh trực tiếp độ trễ cực thấp', icon: Radio }
+                    { id: 'rooms', label: `Phòng thoại (${userAccessibleRooms.length})`, desc: 'Đàm thoại âm thanh trực tiếp độ trễ cực thấp', icon: Radio }
                   ].map(item => {
                     const isActive = activeTab === item.id;
                     const IconComponent = item.icon;
@@ -3658,7 +3662,9 @@ const Home = ({ initialTab }) => {
           {/* TAB 2: DANH SÁCH PHÒNG ĐÀM THOẠI TRỰC TIẾP                    */}
           {/* ============================================================== */}
           {activeTab === 'rooms' && (() => {
-            const privateOrMyRooms = safeRooms.filter(r => isUserInRoom(r) || r.hasPassword || r.isPrivate);
+            // Phòng đàm thoại của bạn: Chỉ những phòng mà tài khoản hiện tại THỰC SỰ là thành viên / đã tham gia
+            const myRooms = safeRooms.filter(r => isUserInRoom(r));
+            // Phòng công khai đang mở: Phòng không có mật khẩu, không riêng tư, và bạn chưa tham gia
             const publicRooms = safeRooms.filter(r => !isUserInRoom(r) && !r.hasPassword && !r.isPrivate);
 
             const renderRoomCard = (room, isJoined) => (
@@ -3766,25 +3772,25 @@ const Home = ({ initialTab }) => {
                   </div>
                 ) : (
                   <div className="space-y-6">
-                    {/* 1. PHÒNG CỦA BẠN (RIÊNG TƯ) */}
+                    {/* 1. PHÒNG ĐÀM THOẠI CỦA BẠN (ĐÃ THAM GIA) */}
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 text-xs font-bold text-zinc-200 tracking-wide font-mono">
-                          <Lock size={14} className="text-amber-400" />
-                          <span>Phòng của bạn (Riêng tư)</span>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20 font-mono font-semibold">
-                            {privateOrMyRooms.length}
+                          <Users size={14} className="text-emerald-400" />
+                          <span>Phòng đàm thoại của bạn</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-mono font-semibold">
+                            {myRooms.length}
                           </span>
                         </div>
                       </div>
 
-                      {privateOrMyRooms.length === 0 ? (
+                      {myRooms.length === 0 ? (
                         <div className="p-4 rounded-2xl bg-[#141414]/60 border border-dashed border-[#222222] text-center text-zinc-500 text-xs">
-                          Chưa có phòng riêng tư nào của bạn. Hãy bấm "Tạo phòng mới" ở trên và đặt mật khẩu để tạo không gian riêng!
+                          Bạn chưa tham gia phòng đàm thoại nào. Hãy bấm "Tạo phòng mới" để tạo nhóm cùng bạn bè, hoặc chọn phòng công khai bên dưới!
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {privateOrMyRooms.map(room => renderRoomCard(room, isUserInRoom(room)))}
+                          {myRooms.map(room => renderRoomCard(room, true))}
                         </div>
                       )}
                     </div>
@@ -3793,9 +3799,9 @@ const Home = ({ initialTab }) => {
                     <div className="space-y-3 pt-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 text-xs font-bold text-zinc-200 tracking-wide font-mono">
-                          <Radio size={14} className="text-emerald-400" />
+                          <Radio size={14} className="text-zinc-400" />
                           <span>Phòng công khai đang mở</span>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-mono font-semibold">
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 border border-zinc-700 font-mono font-semibold">
                             {publicRooms.length}
                           </span>
                         </div>

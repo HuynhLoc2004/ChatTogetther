@@ -96,8 +96,27 @@ public class RoomService {
 
     @Transactional
     public ResponseData<List<RoomDTO>> getAllRoomActive(){
+        return getAllRoomActive(null);
+    }
+
+    @Transactional
+    public ResponseData<List<RoomDTO>> getAllRoomActive(JwtAuthenticationToken jwtAuthenticationToken){
+        Long currentUserId = SecurityUtils.extractUserId(jwtAuthenticationToken);
         List<RoomEntity> roomEntityList = this.roomRepository.getallRoomActive(true);
-        List<RoomDTO> roomDTOList = roomEntityList.stream().map(item->{
+        List<RoomDTO> roomDTOList = roomEntityList.stream()
+                .filter(item -> {
+                    boolean hasPassword = item.getPassword() != null && !item.getPassword().trim().isEmpty();
+                    // Nếu là phòng riêng tư (có mật khẩu): chỉ trả về nếu người dùng hiện tại là thành viên trong phòng
+                    if (hasPassword) {
+                        if (currentUserId == null) return false;
+                        return item.getUserRoomEntityList() != null && item.getUserRoomEntityList().stream()
+                                .anyMatch(ur -> ur.getUserEntity() != null 
+                                        && currentUserId.equals(ur.getUserEntity().getId()));
+                    }
+                    // Phòng mở công khai (không mật khẩu) thì mọi người đều thấy
+                    return true;
+                })
+                .map(item->{
                 RoomDTO roomDTO = new RoomDTO();
                 roomDTO.setId(item.getId());
                 roomDTO.setNameroom(item.getRoomName());
