@@ -156,7 +156,19 @@ export const AdminDashboard = () => {
 
   // Quản lý Cộng đồng & Danh mục Lý do Từ chối
   const [adminGroups, setAdminGroups] = useState([]);
-  const [communityAdminSubTab, setCommunityAdminSubTab] = useState('list'); // 'list' | 'reports'
+  const [communityAdminSubTab, setCommunityAdminSubTab] = useState('list'); // 'list' | 'categories' | 'reports'
+  const [adminCommunityCategories, setAdminCommunityCategories] = useState([]);
+  const [loadingCommunityCategories, setLoadingCommunityCategories] = useState(false);
+  const [isCommunityCatModalOpen, setIsCommunityCatModalOpen] = useState(false);
+  const [editingCommunityCat, setEditingCommunityCat] = useState(null);
+  const [communityCatForm, setCommunityCatForm] = useState({
+    name: '',
+    slug: '',
+    displayOrder: 0,
+    isActive: true,
+    iconName: 'Globe',
+    description: ''
+  });
   const [communityReports, setCommunityReports] = useState([]);
   const [loadingCommunityReports, setLoadingCommunityReports] = useState(false);
   const [communityReportFilter, setCommunityReportFilter] = useState('ALL');
@@ -269,6 +281,7 @@ export const AdminDashboard = () => {
       await fetchTracks();
       await fetchUsers();
       await fetchAdminGroups();
+      await fetchAdminCommunityCategories();
       await fetchCommunityReports();
       await fetchReports();
       await fetchAdminPosts();
@@ -486,6 +499,89 @@ export const AdminDashboard = () => {
       console.warn("Không thể nạp danh sách báo cáo cộng đồng:", e);
     } finally {
       setLoadingCommunityReports(false);
+    }
+  };
+
+  const fetchAdminCommunityCategories = async () => {
+    try {
+      setLoadingCommunityCategories(true);
+      const res = await axiosClient.get('/admin/community-categories');
+      if (res.data?.data && Array.isArray(res.data.data)) {
+        setAdminCommunityCategories(res.data.data);
+      }
+    } catch (err) {
+      console.warn("Lỗi nạp danh mục cộng đồng admin:", err);
+    } finally {
+      setLoadingCommunityCategories(false);
+    }
+  };
+
+  const handleOpenCreateCommunityCat = () => {
+    setEditingCommunityCat(null);
+    setCommunityCatForm({
+      name: '',
+      slug: '',
+      displayOrder: adminCommunityCategories.length + 1,
+      isActive: true,
+      iconName: 'Globe',
+      description: ''
+    });
+    setIsCommunityCatModalOpen(true);
+  };
+
+  const handleOpenEditCommunityCat = (cat) => {
+    setEditingCommunityCat(cat);
+    setCommunityCatForm({
+      name: cat.name || '',
+      slug: cat.slug || '',
+      displayOrder: cat.displayOrder || 0,
+      isActive: cat.isActive !== false,
+      iconName: cat.iconName || 'Globe',
+      description: cat.description || ''
+    });
+    setIsCommunityCatModalOpen(true);
+  };
+
+  const handleSaveCommunityCat = async (e) => {
+    e.preventDefault();
+    if (!communityCatForm.name.trim()) {
+      toast.error("Vui lòng nhập tên danh mục!");
+      return;
+    }
+    try {
+      if (editingCommunityCat) {
+        await axiosClient.put(`/admin/community-categories/${editingCommunityCat.id}`, communityCatForm);
+        toast.success("Cập nhật danh mục thành công!");
+      } else {
+        await axiosClient.post('/admin/community-categories', communityCatForm);
+        toast.success("Tạo danh mục mới thành công!");
+      }
+      setIsCommunityCatModalOpen(false);
+      setEditingCommunityCat(null);
+      fetchAdminCommunityCategories();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Lỗi lưu danh mục!");
+    }
+  };
+
+  const handleToggleCommunityCat = async (catId) => {
+    try {
+      await axiosClient.patch(`/admin/community-categories/${catId}/toggle`);
+      setAdminCommunityCategories(prev => prev.map(c => c.id === catId ? { ...c, isActive: !c.isActive } : c));
+      toast.success("Đã cập nhật trạng thái danh mục!");
+    } catch (err) {
+      toast.error("Lỗi cập nhật trạng thái danh mục!");
+    }
+  };
+
+  const handleDeleteCommunityCat = async (catId, catName) => {
+    if (!window.confirm(`Xác nhận xóa danh mục "${catName}"?`)) return;
+    try {
+      await axiosClient.delete(`/admin/community-categories/${catId}`);
+      setAdminCommunityCategories(prev => prev.filter(c => c.id !== catId));
+      toast.success("Đã xóa danh mục thành công!");
+    } catch (err) {
+      toast.error("Lỗi xóa danh mục!");
     }
   };
 
@@ -2706,8 +2802,8 @@ export const AdminDashboard = () => {
                   </div>
                 </div>
 
-                {/* Sub-tab Switcher: Danh sách Cộng đồng vs Hộp thư Báo cáo */}
-                <div className="flex items-center gap-2 p-1 bg-zinc-900 rounded-xl border border-zinc-800 w-fit">
+                {/* Sub-tab Switcher: Danh sách Cộng đồng vs Danh mục vs Hộp thư Báo cáo */}
+                <div className="flex items-center gap-2 p-1 bg-zinc-900 rounded-xl border border-zinc-800 w-fit flex-wrap">
                   <button
                     type="button"
                     onClick={() => setCommunityAdminSubTab('list')}
@@ -2719,6 +2815,22 @@ export const AdminDashboard = () => {
                   >
                     <Globe size={14} />
                     <span>Danh sách Cộng đồng ({adminGroups.length})</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCommunityAdminSubTab('categories');
+                      fetchAdminCommunityCategories();
+                    }}
+                    className={`px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all ${
+                      communityAdminSubTab === 'categories'
+                        ? 'bg-zinc-800 text-white shadow-sm'
+                        : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    <Layers size={14} />
+                    <span>Danh mục cộng đồng ({adminCommunityCategories.length})</span>
                   </button>
 
                   <button
@@ -3146,6 +3258,199 @@ export const AdminDashboard = () => {
                           {isResolvingCommunityReport ? "Đang xử lý..." : "Xác nhận giải quyết"}
                         </button>
                       </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ==================================================== */}
+                {/* SUB-TAB 3: QUẢN LÝ DANH MỤC CỘNG ĐỒNG (CATEGORIES) */}
+                {/* ==================================================== */}
+                {communityAdminSubTab === 'categories' && (
+                  <div className="space-y-6 animate-fade-in">
+                    <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                          <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
+                            <Layers size={16} className="text-zinc-400" />
+                            <span>Danh mục chuyên biệt ({adminCommunityCategories.length})</span>
+                          </h3>
+                          <p className="text-xs text-zinc-400 mt-0.5">
+                            Quản lý các thể loại cộng đồng hiển thị trên thanh lọc và form tạo nhóm
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleOpenCreateCommunityCat}
+                          className="px-3.5 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs flex items-center gap-1.5 transition-all active:scale-95 shadow-sm"
+                        >
+                          <Plus size={14} />
+                          <span>Thêm danh mục mới</span>
+                        </button>
+                      </div>
+
+                      {loadingCommunityCategories ? (
+                        <div className="py-12 text-center text-zinc-500 font-mono text-xs">Đang tải danh mục cộng đồng...</div>
+                      ) : adminCommunityCategories.length === 0 ? (
+                        <div className="py-12 text-center text-zinc-500 text-xs">Chưa có danh mục nào. Hãy tạo danh mục đầu tiên!</div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                          {adminCommunityCategories.map(cat => (
+                            <div 
+                              key={cat.id} 
+                              className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 transition-all space-y-2.5 shadow-sm"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-8 h-8 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-200 font-bold text-xs">
+                                    {cat.iconName ? cat.iconName.charAt(0) : '#'}
+                                  </div>
+                                  <div>
+                                    <h4 className="text-sm font-semibold text-zinc-100">{cat.name}</h4>
+                                    <span className="text-[10px] text-zinc-500 font-mono">slug: {cat.slug}</span>
+                                  </div>
+                                </div>
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-mono ${
+                                  cat.isActive ? 'bg-zinc-800 text-zinc-200 border border-zinc-700' : 'bg-zinc-900 text-zinc-500 border border-zinc-800'
+                                }`}>
+                                  {cat.isActive ? 'Hoạt động' : 'Tạm ẩn'}
+                                </span>
+                              </div>
+
+                              <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">
+                                {cat.description || 'Chưa cập nhật mô tả danh mục.'}
+                              </p>
+
+                              <div className="flex items-center justify-between pt-2.5 border-t border-zinc-800/80 text-xs text-zinc-500 font-mono">
+                                <span>Thứ tự: {cat.displayOrder ?? 0}</span>
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleCommunityCat(cat.id)}
+                                    className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors"
+                                    title={cat.isActive ? "Tạm ẩn danh mục" : "Kích hoạt danh mục"}
+                                  >
+                                    <Check size={13} className={cat.isActive ? "text-emerald-400" : "text-zinc-500"} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenEditCommunityCat(cat)}
+                                    className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors"
+                                    title="Chỉnh sửa danh mục"
+                                  >
+                                    <Edit3 size={13} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteCommunityCat(cat.id, cat.name)}
+                                    className="p-1.5 rounded-lg bg-zinc-800 hover:bg-rose-950/40 text-zinc-400 hover:text-rose-400 transition-colors"
+                                    title="Xóa danh mục"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* MODAL THÊM / SỬA DANH MỤC CỘNG ĐỒNG */}
+                {isCommunityCatModalOpen && (
+                  <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+                    <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-2xl">
+                      <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+                        <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                          <Layers size={16} className="text-zinc-400" />
+                          <span>{editingCommunityCat ? 'Chỉnh sửa danh mục' : 'Thêm danh mục mới'}</span>
+                        </h3>
+                        <button
+                          type="button"
+                          onClick={() => setIsCommunityCatModalOpen(false)}
+                          className="w-7 h-7 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white flex items-center justify-center transition-colors"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+
+                      <form onSubmit={handleSaveCommunityCat} className="space-y-3.5">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-zinc-300">Tên danh mục *</label>
+                          <input
+                            type="text"
+                            required
+                            value={communityCatForm.name}
+                            onChange={e => setCommunityCatForm(prev => ({ ...prev, name: e.target.value }))}
+                            placeholder="VD: Công nghệ & AI, Âm nhạc & Lo-Fi..."
+                            className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white text-xs placeholder-zinc-500 focus:outline-none focus:border-zinc-600"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-zinc-300">Slug</label>
+                            <input
+                              type="text"
+                              value={communityCatForm.slug}
+                              onChange={e => setCommunityCatForm(prev => ({ ...prev, slug: e.target.value }))}
+                              placeholder="VD: tech-ai (để trống tự tạo)"
+                              className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white text-xs placeholder-zinc-500 focus:outline-none focus:border-zinc-600 font-mono"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-zinc-300">Thứ tự hiển thị</label>
+                            <input
+                              type="number"
+                              value={communityCatForm.displayOrder}
+                              onChange={e => setCommunityCatForm(prev => ({ ...prev, displayOrder: parseInt(e.target.value) || 0 }))}
+                              className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white text-xs focus:outline-none focus:border-zinc-600 font-mono"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-zinc-300">Mô tả ngắn</label>
+                          <textarea
+                            rows={3}
+                            value={communityCatForm.description}
+                            onChange={e => setCommunityCatForm(prev => ({ ...prev, description: e.target.value }))}
+                            placeholder="Mô tả định hướng của danh mục cộng đồng này..."
+                            className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white text-xs placeholder-zinc-500 focus:outline-none focus:border-zinc-600 resize-none"
+                          />
+                        </div>
+
+                        <div className="flex items-center gap-2 pt-1">
+                          <input
+                            type="checkbox"
+                            id="cat_active"
+                            checked={communityCatForm.isActive}
+                            onChange={e => setCommunityCatForm(prev => ({ ...prev, isActive: e.target.checked }))}
+                            className="w-4 h-4 rounded bg-zinc-950 border-zinc-800 text-zinc-100 focus:ring-0"
+                          />
+                          <label htmlFor="cat_active" className="text-xs text-zinc-300 cursor-pointer">
+                            Kích hoạt hiển thị cho người dùng
+                          </label>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-800">
+                          <button
+                            type="button"
+                            onClick={() => setIsCommunityCatModalOpen(false)}
+                            className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold"
+                          >
+                            Hủy bỏ
+                          </button>
+                          <button
+                            type="submit"
+                            className="px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-bold transition-all shadow-md active:scale-95"
+                          >
+                            {editingCommunityCat ? 'Lưu thay đổi' : 'Tạo danh mục'}
+                          </button>
+                        </div>
+                      </form>
                     </div>
                   </div>
                 )}

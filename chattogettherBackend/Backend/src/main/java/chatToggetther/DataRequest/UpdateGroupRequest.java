@@ -24,8 +24,15 @@ public class UpdateGroupRequest {
     private String avatarUrl;
     private Boolean isPrivate;
     private Boolean requiresApproval;
+    private Boolean requireMemberApproval;
     private Boolean isPublicToFeed;
+    private Boolean allowFeedPromotion;
     private Boolean requiresPostApproval;
+    private Boolean requirePostApproval;
+    private Long categoryId;
     private String categoryCode;
+    private String status;
+    private Boolean isFeatured;
+    private Boolean isPinnedFeatured;
     private Long activeVoiceRoomId;
 }

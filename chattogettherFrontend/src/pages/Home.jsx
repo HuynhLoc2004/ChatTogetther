@@ -43,28 +43,31 @@ const getAudioCtx = () => {
   return window._talovinAudioCtx;
 };
 
-// Âm thanh khi thả Tim / Bày tỏ cảm xúc (Pop bubble nảy êm tai)
+// Âm thanh khi thả Tim / Bày tỏ cảm xúc (Pop bubble nảy êm tai, âm lượng rõ nét)
 export const playHeartSound = () => {
   try {
     const ctx = getAudioCtx();
     if (!ctx) return;
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
 
     osc.type = 'sine';
     const now = ctx.currentTime;
 
-    osc.frequency.setValueAtTime(380, now);
-    osc.frequency.exponentialRampToValueAtTime(780, now + 0.11);
+    osc.frequency.setValueAtTime(420, now);
+    osc.frequency.exponentialRampToValueAtTime(880, now + 0.12);
 
-    gain.gain.setValueAtTime(0.22, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
+    gain.gain.setValueAtTime(0.35, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
 
     osc.connect(gain);
     gain.connect(ctx.destination);
 
     osc.start(now);
-    osc.stop(now + 0.14);
+    osc.stop(now + 0.15);
   } catch (_) {}
 };
 
@@ -73,24 +76,27 @@ export const playCommentSuccessSound = () => {
   try {
     const ctx = getAudioCtx();
     if (!ctx) return;
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
     const now = ctx.currentTime;
 
-    [523.25, 783.99].forEach((freq, idx) => {
+    [587.33, 880.00].forEach((freq, idx) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
 
       osc.type = 'triangle';
-      const startAt = now + idx * 0.07;
+      const startAt = now + idx * 0.08;
       osc.frequency.setValueAtTime(freq, startAt);
 
-      gain.gain.setValueAtTime(0.18, startAt);
-      gain.gain.exponentialRampToValueAtTime(0.001, startAt + 0.22);
+      gain.gain.setValueAtTime(0.30, startAt);
+      gain.gain.exponentialRampToValueAtTime(0.001, startAt + 0.24);
 
       osc.connect(gain);
       gain.connect(ctx.destination);
 
       osc.start(startAt);
-      osc.stop(startAt + 0.23);
+      osc.stop(startAt + 0.25);
     });
   } catch (_) {}
 };
@@ -279,15 +285,28 @@ const buildCommentThreads = (comments) => {
   return rootComments;
 };
 
-const Home = () => {
+const Home = ({ initialTab }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const currentUserId = localStorage.getItem('user_id');
   const currentUserName = localStorage.getItem('nickname') || localStorage.getItem('account') || localStorage.getItem('username') || 'Thành viên';
   const currentUserAccount = localStorage.getItem('account') || localStorage.getItem('username') || 'user';
   const currentUserAvatar = localStorage.getItem('user_avatar') || '';
 
-  // Navigation tab chính: 'feed' | 'rooms' | 'trending' | 'saved'
-  const [activeTab, setActiveTab] = useState('feed');
+  // Navigation tab chính: 'feed' | 'rooms' | 'trending' | 'saved' | 'groups'
+  const [activeTab, setActiveTab] = useState(() => {
+    if (initialTab) return initialTab;
+    if (typeof window !== 'undefined' && (window.location.pathname.startsWith('/communities') || window.location.pathname.startsWith('/groups'))) {
+      return 'groups';
+    }
+    return 'feed';
+  });
+
+  useEffect(() => {
+    if (location.pathname.startsWith('/communities') || location.pathname.startsWith('/groups')) {
+      setActiveTab('groups');
+    }
+  }, [location.pathname]);
   const [isSpaceDrawerOpen, setIsSpaceDrawerOpen] = useState(false);
   const [isVibesExpanded, setIsVibesExpanded] = useState(false);
   const [isTabSwitching, setIsTabSwitching] = useState(false);
@@ -384,23 +403,38 @@ const Home = () => {
   const [activeReactionPicker, setActiveReactionPicker] = useState(null);
   const reactionTimeoutRef = useRef(null);
 
-  // Lắng nghe click bên ngoài và cuộn trang để đóng ngay reactions popup
+  // Lắng nghe click bên ngoài, di chuột ra ngoài và cuộn trang để đóng ngay reactions popup
   useEffect(() => {
+    if (!activeReactionPicker) return;
+
     const handleGlobalClick = (e) => {
       if (!e.target.closest('.reaction-drop-wrapper') && !e.target.closest('.reactions-popup-menu')) {
         setActiveReactionPicker(null);
       }
     };
+    const handleGlobalPointerMove = (e) => {
+      if (!e.target.closest('.reaction-drop-wrapper') && !e.target.closest('.reactions-popup-menu')) {
+        if (reactionTimeoutRef.current) clearTimeout(reactionTimeoutRef.current);
+        reactionTimeoutRef.current = setTimeout(() => {
+          setActiveReactionPicker(null);
+        }, 120);
+      } else {
+        if (reactionTimeoutRef.current) clearTimeout(reactionTimeoutRef.current);
+      }
+    };
     const handleGlobalScroll = () => {
       setActiveReactionPicker(null);
     };
+
     document.addEventListener('pointerdown', handleGlobalClick);
+    window.addEventListener('pointermove', handleGlobalPointerMove);
     window.addEventListener('scroll', handleGlobalScroll, { passive: true });
     return () => {
       document.removeEventListener('pointerdown', handleGlobalClick);
+      window.removeEventListener('pointermove', handleGlobalPointerMove);
       window.removeEventListener('scroll', handleGlobalScroll);
     };
-  }, []);
+  }, [activeReactionPicker]);
 
   // Multimedia Signals State (Ảnh/Film webp + Ghi âm giọng nói 15s)
   const [attachedMedia, setAttachedMedia] = useState(null); // { url, type, name }

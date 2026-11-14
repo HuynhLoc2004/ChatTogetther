@@ -11,12 +11,14 @@ import chatToggetther.Customize.AppException;
 import chatToggetther.Customize.ResponseData;
 import chatToggetther.Customize.SecurityUtils;
 import chatToggetther.modelEntity.CommunityGroupEntity;
+import chatToggetther.modelEntity.CommunityCategoryEntity;
 import chatToggetther.modelEntity.CommunityMemberEntity;
 import chatToggetther.modelEntity.CommunityReportEntity;
 import chatToggetther.modelEntity.UserEntity;
 import chatToggetther.repository.CommunityGroupRepository;
 import chatToggetther.repository.CommunityMemberRepository;
 import chatToggetther.repository.CommunityReportRepository;
+import chatToggetther.repository.CommunityCategoryRepository;
 import chatToggetther.repository.PostRepository;
 import chatToggetther.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +39,7 @@ public class CommunityGroupService {
     private final CommunityGroupRepository groupRepository;
     private final CommunityMemberRepository memberRepository;
     private final CommunityReportRepository reportRepository;
+    private final CommunityCategoryRepository categoryRepository;
     private final UserRepository userRepository;
     private final PostRepository postRepository;
 
@@ -108,12 +111,39 @@ public class CommunityGroupService {
         group.setCoverUrl(request.getCoverUrl());
         group.setAvatarUrl(request.getAvatarUrl());
         group.setIsPrivate(Boolean.TRUE.equals(request.getIsPrivate()));
-        group.setRequiresApproval(Boolean.TRUE.equals(request.getRequiresApproval()));
-        group.setIsPublicToFeed(request.getIsPublicToFeed() != null ? request.getIsPublicToFeed() : true);
-        group.setRequiresPostApproval(Boolean.TRUE.equals(request.getRequiresPostApproval()));
-        group.setCategoryCode(request.getCategoryCode() != null && !request.getCategoryCode().trim().isEmpty() ? request.getCategoryCode().trim() : "GENERAL");
+        boolean reqApproval = request.getRequireMemberApproval() != null 
+            ? request.getRequireMemberApproval() 
+            : Boolean.TRUE.equals(request.getRequiresApproval());
+        group.setRequiresApproval(reqApproval);
+
+        boolean pubFeed = request.getAllowFeedPromotion() != null 
+            ? request.getAllowFeedPromotion() 
+            : (request.getIsPublicToFeed() != null ? request.getIsPublicToFeed() : true);
+        group.setIsPublicToFeed(pubFeed);
+
+        boolean reqPostApproval = request.getRequirePostApproval() != null 
+            ? request.getRequirePostApproval() 
+            : Boolean.TRUE.equals(request.getRequiresPostApproval());
+        group.setRequiresPostApproval(reqPostApproval);
+
+        if (request.getCategoryId() != null) {
+            group.setCategoryId(request.getCategoryId());
+            Optional<CommunityCategoryEntity> catOpt = this.categoryRepository.findById(request.getCategoryId());
+            if (catOpt.isPresent()) {
+                group.setCategoryCode(catOpt.get().getSlug());
+            }
+        } else if (request.getCategoryCode() != null && !request.getCategoryCode().trim().isEmpty()) {
+            group.setCategoryCode(request.getCategoryCode().trim());
+            Optional<CommunityCategoryEntity> catOpt = this.categoryRepository.findBySlug(request.getCategoryCode().trim().toLowerCase());
+            if (catOpt.isPresent()) {
+                group.setCategoryId(catOpt.get().getId());
+            }
+        } else {
+            group.setCategoryCode("GENERAL");
+        }
+
         group.setStatus("ACTIVE");
-        group.setIsFeatured(false);
+        group.setIsFeatured(Boolean.TRUE.equals(request.getIsPinnedFeatured()));
         group.setActiveVoiceRoomId(request.getActiveVoiceRoomId());
         group.setOwner(currentUser);
         group.setCreatedAt(LocalDateTime.now());
@@ -165,17 +195,41 @@ public class CommunityGroupService {
         if (request.getIsPrivate() != null) {
             group.setIsPrivate(request.getIsPrivate());
         }
-        if (request.getRequiresApproval() != null) {
+        if (request.getRequireMemberApproval() != null) {
+            group.setRequiresApproval(request.getRequireMemberApproval());
+        } else if (request.getRequiresApproval() != null) {
             group.setRequiresApproval(request.getRequiresApproval());
         }
-        if (request.getIsPublicToFeed() != null) {
+        if (request.getAllowFeedPromotion() != null) {
+            group.setIsPublicToFeed(request.getAllowFeedPromotion());
+        } else if (request.getIsPublicToFeed() != null) {
             group.setIsPublicToFeed(request.getIsPublicToFeed());
         }
-        if (request.getRequiresPostApproval() != null) {
+        if (request.getRequirePostApproval() != null) {
+            group.setRequiresPostApproval(request.getRequirePostApproval());
+        } else if (request.getRequiresPostApproval() != null) {
             group.setRequiresPostApproval(request.getRequiresPostApproval());
         }
-        if (request.getCategoryCode() != null && !request.getCategoryCode().trim().isEmpty()) {
+        if (request.getCategoryId() != null) {
+            group.setCategoryId(request.getCategoryId());
+            Optional<CommunityCategoryEntity> catOpt = this.categoryRepository.findById(request.getCategoryId());
+            if (catOpt.isPresent()) {
+                group.setCategoryCode(catOpt.get().getSlug());
+            }
+        } else if (request.getCategoryCode() != null && !request.getCategoryCode().trim().isEmpty()) {
             group.setCategoryCode(request.getCategoryCode().trim());
+            Optional<CommunityCategoryEntity> catOpt = this.categoryRepository.findBySlug(request.getCategoryCode().trim().toLowerCase());
+            if (catOpt.isPresent()) {
+                group.setCategoryId(catOpt.get().getId());
+            }
+        }
+        if (request.getIsPinnedFeatured() != null) {
+            group.setIsFeatured(request.getIsPinnedFeatured());
+        } else if (request.getIsFeatured() != null) {
+            group.setIsFeatured(request.getIsFeatured());
+        }
+        if (request.getStatus() != null && !request.getStatus().trim().isEmpty()) {
+            group.setStatus(request.getStatus().trim().toUpperCase());
         }
         if (request.getActiveVoiceRoomId() != null) {
             group.setActiveVoiceRoomId(request.getActiveVoiceRoomId());
@@ -577,11 +631,24 @@ public class CommunityGroupService {
         dto.setAvatarUrl(g.getAvatarUrl());
         dto.setIsPrivate(g.getIsPrivate());
         dto.setRequiresApproval(g.getRequiresApproval());
+        dto.setRequireMemberApproval(Boolean.TRUE.equals(g.getRequiresApproval()));
         dto.setIsPublicToFeed(Boolean.TRUE.equals(g.getIsPublicToFeed()));
+        dto.setAllowFeedPromotion(Boolean.TRUE.equals(g.getIsPublicToFeed()));
         dto.setRequiresPostApproval(Boolean.TRUE.equals(g.getRequiresPostApproval()));
+        dto.setRequirePostApproval(Boolean.TRUE.equals(g.getRequiresPostApproval()));
+        dto.setCategoryId(g.getCategoryId());
         dto.setCategoryCode(g.getCategoryCode() != null ? g.getCategoryCode() : "GENERAL");
+        if (g.getCategoryId() != null) {
+            this.categoryRepository.findById(g.getCategoryId()).ifPresent(cat -> dto.setCategoryName(cat.getName()));
+        } else if (g.getCategoryCode() != null) {
+            this.categoryRepository.findBySlug(g.getCategoryCode().toLowerCase()).ifPresent(cat -> {
+                dto.setCategoryId(cat.getId());
+                dto.setCategoryName(cat.getName());
+            });
+        }
         dto.setStatus(g.getStatus() != null ? g.getStatus() : "ACTIVE");
         dto.setIsFeatured(Boolean.TRUE.equals(g.getIsFeatured()));
+        dto.setIsPinnedFeatured(Boolean.TRUE.equals(g.getIsFeatured()));
         dto.setActiveVoiceRoomId(g.getActiveVoiceRoomId());
         dto.setPostsCount(this.postRepository != null ? this.postRepository.countByGroupIdAndStatus(g.getId(), "APPROVED") : 0L);
 

@@ -26,8 +26,13 @@ public class CreateGroupRequest {
     private String avatarUrl;
     private Boolean isPrivate = false;
     private Boolean requiresApproval = false;
+    private Boolean requireMemberApproval;
     private Boolean isPublicToFeed = true;
+    private Boolean allowFeedPromotion;
     private Boolean requiresPostApproval = false;
+    private Boolean requirePostApproval;
+    private Long categoryId;
     private String categoryCode = "GENERAL";
+    private Boolean isPinnedFeatured;
     private Long activeVoiceRoomId;
 }

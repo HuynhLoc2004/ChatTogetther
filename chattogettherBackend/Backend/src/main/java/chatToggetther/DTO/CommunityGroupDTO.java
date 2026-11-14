@@ -24,9 +24,15 @@ public class CommunityGroupDTO {
     private Boolean requiresApproval;
     private Boolean isPublicToFeed;
     private Boolean requiresPostApproval;
+    private Long categoryId;
+    private String categoryName;
     private String categoryCode;
     private String status;
     private Boolean isFeatured;
+    private Boolean requireMemberApproval;
+    private Boolean requirePostApproval;
+    private Boolean allowFeedPromotion;
+    private Boolean isPinnedFeatured;
     private Long activeVoiceRoomId;
     private Long postsCount;
     private Long ownerId;

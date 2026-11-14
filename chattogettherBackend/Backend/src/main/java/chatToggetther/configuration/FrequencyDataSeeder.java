@@ -1,10 +1,12 @@
 package chatToggetther.configuration;
 
 import chatToggetther.modelEntity.AudioChannelEntity;
+import chatToggetther.modelEntity.CommunityCategoryEntity;
 import chatToggetther.modelEntity.MatchIntentEntity;
 import chatToggetther.modelEntity.MusicTrackEntity;
 import chatToggetther.modelEntity.SystemConfigEntity;
 import chatToggetther.repository.AudioChannelRepository;
+import chatToggetther.repository.CommunityCategoryRepository;
 import chatToggetther.repository.MatchIntentRepository;
 import chatToggetther.repository.MusicTrackRepository;
 import chatToggetther.repository.SystemConfigRepository;
@@ -24,17 +26,20 @@ public class FrequencyDataSeeder implements CommandLineRunner {
     private final AudioChannelRepository audioChannelRepository;
     private final MusicTrackRepository musicTrackRepository;
     private final SystemConfigRepository systemConfigRepository;
+    private final CommunityCategoryRepository communityCategoryRepository;
 
     public FrequencyDataSeeder(
             MatchIntentRepository matchIntentRepository,
             AudioChannelRepository audioChannelRepository,
             MusicTrackRepository musicTrackRepository,
-            SystemConfigRepository systemConfigRepository
+            SystemConfigRepository systemConfigRepository,
+            CommunityCategoryRepository communityCategoryRepository
     ) {
         this.matchIntentRepository = matchIntentRepository;
         this.audioChannelRepository = audioChannelRepository;
         this.musicTrackRepository = musicTrackRepository;
         this.systemConfigRepository = systemConfigRepository;
+        this.communityCategoryRepository = communityCategoryRepository;
     }
 
     @Override
@@ -43,6 +48,7 @@ public class FrequencyDataSeeder implements CommandLineRunner {
         seedAudioChannels();
         seedMusicTracks();
         seedSystemConfigs();
+        seedCommunityCategories();
     }
 
     private void seedMatchIntents() {
@@ -206,6 +212,62 @@ public class FrequencyDataSeeder implements CommandLineRunner {
                     .configValue(value)
                     .build());
             log.info(">>> Đã nạp cấu hình hệ thống: {} = {}", key, value);
+        }
+    }
+
+    private void seedCommunityCategories() {
+        if (this.communityCategoryRepository.count() == 0) {
+            log.info(">>> Khởi tạo 5 danh mục cộng đồng mặc định...");
+
+            List<CommunityCategoryEntity> defaultCategories = List.of(
+                    CommunityCategoryEntity.builder()
+                            .name("Âm nhạc & Lo-Fi")
+                            .slug("music")
+                            .displayOrder(1)
+                            .isActive(true)
+                            .iconName("Headphones")
+                            .description("Không gian dành cho người yêu âm nhạc, thư giãn và chia sẻ giai điệu")
+                            .build(),
+
+                    CommunityCategoryEntity.builder()
+                            .name("Học tập & Tech")
+                            .slug("tech")
+                            .displayOrder(2)
+                            .isActive(true)
+                            .iconName("Laptop")
+                            .description("Chia sẻ kiến thức công nghệ, lập trình, học thuật và ngoại ngữ")
+                            .build(),
+
+                    CommunityCategoryEntity.builder()
+                            .name("Tâm sự & Chill")
+                            .slug("lifestyle")
+                            .displayOrder(3)
+                            .isActive(true)
+                            .iconName("Coffee")
+                            .description("Góc lắng đọng, sẻ chia câu chuyện cuộc sống và tìm người đồng điệu")
+                            .build(),
+
+                    CommunityCategoryEntity.builder()
+                            .name("Game & Giải trí")
+                            .slug("gaming")
+                            .displayOrder(4)
+                            .isActive(true)
+                            .iconName("Gamepad2")
+                            .description("Cộng đồng game thủ, eSports, phim ảnh và văn hóa giải trí")
+                            .build(),
+
+                    CommunityCategoryEntity.builder()
+                            .name("Đời sống & Sáng tạo")
+                            .slug("art")
+                            .displayOrder(5)
+                            .isActive(true)
+                            .iconName("Palette")
+                            .description("Hội họa, nhiếp ảnh, thiết kế, sách báo và phong cách sống")
+                            .build()
+            );
+
+            this.communityCategoryRepository.saveAll(defaultCategories);
+            log.info(">>> Đã nạp thành công 5 danh mục cộng đồng mặc định!");
         }
     }
 }

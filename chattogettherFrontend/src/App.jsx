@@ -219,6 +219,22 @@ function App() {
               } 
             />
             <Route 
+              path="/communities" 
+              element={
+                <ProtectedRoute>
+                  <Home initialTab="groups" />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/communities/:id" 
+              element={
+                <ProtectedRoute>
+                  <Home initialTab="groups" />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
               path="/room/:roomId" 
               element={
                 <ProtectedRoute>
