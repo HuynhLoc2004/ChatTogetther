@@ -57,8 +57,9 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
     const timer = setTimeout(async () => {
       try {
         setIsSearchingGlobal(true);
+        const cleanQ = q.replace(/^@+/, '').trim();
         const res = await axiosClient.get('/users/search', {
-          params: { q }
+          params: { q: cleanQ || q }
         });
         setGlobalSearchResults(res.data?.data || []);
       } catch (err) {
@@ -66,7 +67,7 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
       } finally {
         setIsSearchingGlobal(false);
       }
-    }, 250);
+    }, 200);
 
     return () => clearTimeout(timer);
   }, [searchQuery]);
@@ -199,10 +200,11 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
   // Lọc bạn bè hiện có theo ô tìm kiếm
   const filteredFriends = friends.filter(f => {
     if (!searchQuery.trim()) return true;
+    const cleanQ = searchQuery.trim().replace(/^@+/, '').toLowerCase();
     const q = searchQuery.toLowerCase().trim();
     const name = (f.nickname || '').toLowerCase();
     const acc = (f.account || '').toLowerCase();
-    return name.includes(q) || acc.includes(q);
+    return name.includes(q) || acc.includes(q) || acc.includes(cleanQ) || name.includes(cleanQ);
   });
 
   return (
@@ -326,7 +328,7 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
           ) : activeTab === 'friends' ? (
             /* TAB: BẠN BÈ HIỆN TẠI */
             filteredFriends.length === 0 ? (
-              <div className="py-14 px-4 flex flex-col items-center justify-center text-center">
+              <div className="py-8 px-4 flex flex-col items-center justify-center text-center">
                 <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-600 mb-2.5">
                   <Users size={22} />
                 </div>
@@ -335,25 +337,111 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
                 </h4>
                 <p className="text-zinc-500 text-xs mt-1 max-w-xs leading-relaxed">
                   {searchQuery 
-                    ? "Bạn có thể chuyển sang mục 'Khám phá mới' để tìm người dùng này trên hệ thống."
+                    ? "Người dùng này chưa có trong danh sách bạn bè của bạn."
                     : "Tham gia các phòng đàm thoại hoặc tìm kiếm thành viên mới để mở rộng kết nối!"}
                 </p>
                 {searchQuery ? (
                   <button 
                     type="button" 
                     onClick={() => setActiveTab('search')}
-                    className="mt-3 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-md active:scale-95"
+                    className="mt-3 px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-semibold transition-all shadow-md active:scale-95 flex items-center gap-1.5"
                   >
-                    Tìm trên toàn Talovin →
+                    <span>Mở mục Khám phá toàn Talovin</span>
+                    <ArrowRight size={13} />
                   </button>
                 ) : (
                   <button 
                     type="button" 
                     onClick={() => setActiveTab('search')}
-                    className="mt-3 px-4 py-2 rounded-xl bg-zinc-100 hover:bg-white text-zinc-950 text-xs font-bold transition-all shadow-md active:scale-95"
+                    className="mt-3 px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-semibold transition-all shadow-md active:scale-95"
                   >
                     Khám phá thành viên mới
                   </button>
+                )}
+
+                {/* HIỂN THỊ TRỰC TIẾP KẾT QUẢ TÌM THẤY TRÊN HỆ THỐNG NẾU CÓ */}
+                {searchQuery && globalSearchResults.length > 0 && (
+                  <div className="w-full mt-6 text-left border-t border-zinc-800/80 pt-4">
+                    <div className="flex items-center justify-between mb-2.5 px-1">
+                      <span className="text-zinc-300 text-xs font-semibold">Tìm thấy trên Talovin ({globalSearchResults.length})</span>
+                      <button 
+                        type="button" 
+                        onClick={() => setActiveTab('search')}
+                        className="text-[11px] text-zinc-400 hover:text-white transition-colors"
+                      >
+                        Xem tất cả →
+                      </button>
+                    </div>
+                    <div className="space-y-2">
+                      {globalSearchResults.slice(0, 5).map((user) => {
+                        const hasPhotoAvatar = user.avatar && !user.avatar.includes('dicebear') && !user.avatar.includes('bottts');
+                        const uName = user.nickname || user.account || 'Thành viên';
+                        const isBusy = actionInProgress[user.id];
+                        return (
+                          <div 
+                            key={`search-preview-${user.id}`}
+                            className="p-3 rounded-2xl bg-zinc-900/90 border border-zinc-800 flex items-center justify-between gap-2.5 shadow-sm"
+                          >
+                            <div 
+                              className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
+                              onClick={() => {
+                                if (onSelectUser) onSelectUser(user.id);
+                              }}
+                            >
+                              <div className="w-10 h-10 rounded-xl bg-zinc-800 border border-zinc-700 overflow-hidden flex items-center justify-center flex-shrink-0 shadow-sm">
+                                {hasPhotoAvatar ? (
+                                  <img src={user.avatar} alt={uName} className="w-full h-full object-cover" />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-700 to-zinc-900 text-white font-bold text-xs">
+                                    {uName.charAt(0).toUpperCase()}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-zinc-100 font-bold text-xs truncate">{uName}</span>
+                                <span className="text-zinc-500 font-mono text-[11px] truncate">@{user.account}</span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                              {user.friendshipStatus === 'ACCEPTED' ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenDirectChat(user)}
+                                  className="px-2.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium border border-zinc-700"
+                                >
+                                  Nhắn tin
+                                </button>
+                              ) : user.friendshipStatus === 'PENDING_SENT' ? (
+                                <span className="px-2.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-500 text-xs font-medium font-mono">
+                                  Đã gửi lời mời
+                                </span>
+                              ) : user.friendshipStatus === 'PENDING_RECEIVED' ? (
+                                <button
+                                  type="button"
+                                  disabled={isBusy}
+                                  onClick={() => handleAccept(user.id, uName)}
+                                  className="px-3 py-1.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-semibold"
+                                >
+                                  Đồng ý
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled={isBusy}
+                                  onClick={() => handleSendFriendRequest(user.id, uName)}
+                                  className="px-3 py-1.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-semibold flex items-center gap-1 shadow-sm active:scale-95"
+                                >
+                                  <UserPlus size={13} />
+                                  <span>Kết bạn</span>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 )}
               </div>
             ) : (

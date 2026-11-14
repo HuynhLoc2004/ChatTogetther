@@ -20,6 +20,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -223,13 +224,30 @@ public class UserService {
         if (currentUserId == null) {
             throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
         }
-        String q = (query != null ? query.trim() : "");
-        if (q.isEmpty()) {
+        String rawQ = (query != null ? query.trim() : "");
+        if (rawQ.isEmpty()) {
             return new ResponseData<>(200, "Vui lòng nhập từ khóa tìm kiếm", List.of());
         }
 
+        // Tự động loại bỏ tiền tố '@' nếu người dùng tìm kiếm theo định dạng @account
+        String cleanQ = rawQ.replaceAll("^@+", "").trim();
+        String searchParam = cleanQ.isEmpty() ? rawQ : cleanQ;
+
         UserEntity currentUser = this.userRepository.findById(currentUserId).orElse(null);
-        List<UserEntity> results = this.userRepository.searchUsers(q);
+        List<UserEntity> results = new ArrayList<>(this.userRepository.searchUsers(searchParam));
+
+        // Ưu tiên đưa người dùng khớp chính xác username hoặc nickname lên vị trí đầu tiên
+        results.sort((a, b) -> {
+            boolean aExact = a.getAccount().equalsIgnoreCase(searchParam) || (a.getNickname() != null && a.getNickname().equalsIgnoreCase(searchParam));
+            boolean bExact = b.getAccount().equalsIgnoreCase(searchParam) || (b.getNickname() != null && b.getNickname().equalsIgnoreCase(searchParam));
+            if (aExact != bExact) return aExact ? -1 : 1;
+
+            boolean aStarts = a.getAccount().toLowerCase().startsWith(searchParam.toLowerCase()) || (a.getNickname() != null && a.getNickname().toLowerCase().startsWith(searchParam.toLowerCase()));
+            boolean bStarts = b.getAccount().toLowerCase().startsWith(searchParam.toLowerCase()) || (b.getNickname() != null && b.getNickname().toLowerCase().startsWith(searchParam.toLowerCase()));
+            if (aStarts != bStarts) return aStarts ? -1 : 1;
+
+            return 0;
+        });
 
         List<UserDTO> dtoList = results.stream()
                 .filter(u -> !u.getId().equals(currentUserId))

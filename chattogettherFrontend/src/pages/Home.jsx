@@ -1519,6 +1519,7 @@ const Home = ({ initialTab }) => {
     const kw = (rawKw || '').trim();
     setIsSearchDropdownOpen(false);
     setShowMobileSearchBar(false);
+    setActiveFilterTag(null);
 
     if (!kw) {
       setActiveSearchQuery('');
@@ -1557,6 +1558,7 @@ const Home = ({ initialTab }) => {
     setSearchInput('');
     setActiveSearchQuery('');
     setSearchResults(null);
+    setActiveFilterTag(null);
     setIsSearchDropdownOpen(false);
   };
 

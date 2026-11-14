@@ -839,6 +839,8 @@ public class PostService {
         // Lấy danh sách bài viết hợp lệ để tính điểm phân tích ngữ nghĩa (Elastic-like relevance ranking)
         List<PostEntity> allPosts = this.postRepository.findAllPostsWithDetails();
         String kwLower = kw.toLowerCase();
+        boolean isUsernameQuery = kwLower.startsWith("@");
+        String cleanKw = kwLower.replaceAll("^@+", "").trim();
         String[] tokens = kwLower.split("\\s+");
 
         List<ScoredPost> scoredList = new ArrayList<>();
@@ -853,25 +855,45 @@ public class PostService {
 
             double score = 0.0;
 
-            // 1. Khớp nguyên cụm từ khóa (Exact phrase match)
-            if (content.contains(kwLower)) {
-                score += 50.0;
-                if (content.startsWith(kwLower)) score += 20.0;
-            }
-            if (vibe.contains(kwLower)) score += 40.0;
-            if (authorNick.contains(kwLower) || authorAccount.contains(kwLower)) score += 35.0;
-            if (groupName.contains(kwLower)) score += 25.0;
+            // 1. Khớp theo tác giả bài viết (@account hoặc nickname)
+            if (!cleanKw.isEmpty()) {
+                if (authorAccount.equalsIgnoreCase(cleanKw)) {
+                    score += 250.0; // Ưu tiên số 1: Tác giả chính là username cần tìm
+                } else if (authorAccount.contains(cleanKw)) {
+                    score += 120.0;
+                }
 
-            // 2. Khớp từng từ đơn / token (Tokenized multi-field match)
+                if (authorNick.equalsIgnoreCase(cleanKw)) {
+                    score += 200.0; // Tác giả chính là nickname cần tìm
+                } else if (authorNick.contains(cleanKw)) {
+                    score += 100.0;
+                }
+            }
+
+            // 2. Khớp theo nội dung, nhắc tên (@mention), hashtag
+            if (content.contains(kwLower) || (!cleanKw.isEmpty() && content.contains("@" + cleanKw))) {
+                score += 80.0;
+                if (content.startsWith(kwLower) || (!cleanKw.isEmpty() && content.startsWith("@" + cleanKw))) {
+                    score += 20.0;
+                }
+            } else if (!cleanKw.isEmpty() && content.contains(cleanKw)) {
+                score += 40.0;
+            }
+
+            if (vibe.contains(kwLower) || (!cleanKw.isEmpty() && vibe.contains(cleanKw))) score += 40.0;
+            if (groupName.contains(kwLower) || (!cleanKw.isEmpty() && groupName.contains(cleanKw))) score += 25.0;
+
+            // 3. Khớp từng từ đơn / token (Tokenized multi-field match)
             for (String t : tokens) {
                 if (t.length() < 2) continue;
-                if (content.contains(t)) score += 15.0;
-                if (vibe.contains(t)) score += 15.0;
-                if (authorNick.contains(t) || authorAccount.contains(t)) score += 12.0;
-                if (groupName.contains(t)) score += 10.0;
+                String cleanT = t.replaceAll("^@+", "").trim();
+                if (content.contains(t) || (!cleanT.isEmpty() && content.contains(cleanT))) score += 15.0;
+                if (vibe.contains(t) || (!cleanT.isEmpty() && vibe.contains(cleanT))) score += 15.0;
+                if (!cleanT.isEmpty() && (authorNick.contains(cleanT) || authorAccount.contains(cleanT))) score += 30.0;
+                if (groupName.contains(t) || (!cleanT.isEmpty() && groupName.contains(cleanT))) score += 10.0;
             }
 
-            // 3. Tăng điểm dựa trên mức độ tương tác cộng đồng (Engagement Signals)
+            // 4. Tăng điểm dựa trên mức độ tương tác cộng đồng (Engagement Signals)
             int likes = post.getLikes() != null ? post.getLikes().size() : 0;
             int comments = post.getComments() != null ? post.getComments().size() : 0;
             long searchHits = post.getSearchHits() != null ? post.getSearchHits() : 0L;
@@ -879,7 +901,7 @@ public class PostService {
 
             if (score > 0.0) {
                 scoredList.add(new ScoredPost(post, score, false, null));
-            } else {
+            } else if (!isUsernameQuery) {
                 potentialRecommendations.add(post);
             }
         }
@@ -898,9 +920,9 @@ public class PostService {
             this.postRepository.saveAll(toUpdateHits);
         }
 
-        // 4. Thuật toán mở rộng đề xuất chủ đề liên quan (Deep Semantic & Related Topic Expansion)
-        // Nếu kết quả trực tiếp ít hơn 6 bài: Gợi ý thêm các bài cùng chủ đề hoặc thịnh hành để người dùng lướt phong phú
-        if (scoredList.size() < 6 && !potentialRecommendations.isEmpty()) {
+        // 5. Thuật toán mở rộng đề xuất chủ đề liên quan (Deep Semantic & Related Topic Expansion)
+        // Chỉ mở rộng đề xuất nếu KHÔNG PHẢI tìm đích danh theo @username và kết quả trực tiếp ít hơn 6 bài
+        if (!isUsernameQuery && scoredList.size() < 6 && !potentialRecommendations.isEmpty()) {
             Set<String> matchedVibes = scoredList.stream()
                     .map(sp -> sp.post.getVibe())
                     .filter(v -> v != null && !v.trim().isEmpty())
