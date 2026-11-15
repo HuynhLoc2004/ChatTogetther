@@ -34,9 +34,24 @@ public class ChallengeEntity {
     @Column(name = "author_id")
     private Long authorId;
 
+    @Column(name = "author_username", length = 100)
+    private String authorUsername;
+
     @Column(name = "usage_count")
     @Builder.Default
     private Integer usageCount = 0;
+
+    @Column(name = "draw_count")
+    @Builder.Default
+    private Integer drawCount = 0;
+
+    @Column(name = "status", length = 20)
+    @Builder.Default
+    private String status = "ACTIVE"; // "ACTIVE", "PENDING", "HIDDEN"
+
+    @Column(name = "sort_order")
+    @Builder.Default
+    private Integer sortOrder = 0;
 
     @Column(name = "active")
     @Builder.Default
@@ -45,5 +60,21 @@ public class ChallengeEntity {
     @Column(name = "created_at")
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
-}
 
+    @PostLoad
+    public void postLoad() {
+        if (this.drawCount == null || this.drawCount == 0) {
+            if (this.usageCount != null && this.usageCount > 0) {
+                this.drawCount = this.usageCount;
+            }
+        }
+        if (this.status == null || this.status.trim().isEmpty()) {
+            this.status = (this.active != null && !this.active) ? "HIDDEN" : "ACTIVE";
+        }
+    }
+
+    public Integer getEffectiveDrawCount() {
+        if (this.drawCount != null && this.drawCount > 0) return this.drawCount;
+        return this.usageCount != null ? this.usageCount : 0;
+    }
+}

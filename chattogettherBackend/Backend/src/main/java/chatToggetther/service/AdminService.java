@@ -376,8 +376,33 @@ public class AdminService {
 
     @Transactional(readOnly = true)
     public ResponseData<List<ChallengeEntity>> getAllChallenges(JwtAuthenticationToken token) {
+        return getAllChallenges(token, "ALL");
+    }
+
+    @Transactional(readOnly = true)
+    public ResponseData<List<ChallengeEntity>> getAllChallenges(JwtAuthenticationToken token, String status) {
         verifyAdmin(token, "TL_PERM_CHALLENGE_MANAGE");
-        return new ResponseData<>(200, "Lấy danh sách câu hỏi thử thách thành công", challengeRepository.findAll());
+        List<ChallengeEntity> list;
+        if (status == null || status.trim().isEmpty() || "ALL".equalsIgnoreCase(status.trim())) {
+            list = challengeRepository.findAll(org.springframework.data.domain.Sort.by(
+                    org.springframework.data.domain.Sort.Direction.DESC, "createdAt"
+            ));
+        } else {
+            list = challengeRepository.findByStatusOrderByCreatedAtDesc(status.trim().toUpperCase());
+        }
+        return new ResponseData<>(200, "Lấy danh sách câu hỏi thử thách thành công", list);
+    }
+
+    @Transactional(readOnly = true)
+    public ResponseData<java.util.Map<String, Object>> getChallengeStats(JwtAuthenticationToken token) {
+        verifyAdmin(token, "TL_PERM_CHALLENGE_MANAGE");
+        java.util.Map<String, Object> stats = new java.util.HashMap<>();
+        stats.put("totalActive", challengeRepository.countByStatus("ACTIVE"));
+        stats.put("totalPending", challengeRepository.countByStatus("PENDING"));
+        stats.put("totalHidden", challengeRepository.countByStatus("HIDDEN"));
+        stats.put("totalDrawCount", challengeRepository.getTotalDrawCount());
+        stats.put("totalCards", challengeRepository.count());
+        return new ResponseData<>(200, "Thống kê Thẻ Bài Thử Thách", stats);
     }
 
     @Transactional
@@ -396,9 +421,13 @@ public class AdminService {
             challenge.setCategoryName("Tâm sự sâu lắng");
         }
         if (challenge.getBadgeColor() == null) challenge.setBadgeColor("#818cf8");
-        challenge.setAuthor("Quản trị viên");
-        challenge.setActive(true);
+        challenge.setAuthor(challenge.getAuthor() != null && !challenge.getAuthor().trim().isEmpty() ? challenge.getAuthor() : "Quản trị viên");
+        challenge.setAuthorUsername("admin");
+        challenge.setStatus(challenge.getStatus() != null ? challenge.getStatus().toUpperCase() : "ACTIVE");
+        challenge.setActive("ACTIVE".equalsIgnoreCase(challenge.getStatus()));
         challenge.setUsageCount(0);
+        challenge.setDrawCount(0);
+        challenge.setSortOrder(challenge.getSortOrder() != null ? challenge.getSortOrder() : 0);
         challenge.setCreatedAt(LocalDateTime.now());
 
         ChallengeEntity saved = challengeRepository.save(challenge);
@@ -419,10 +448,41 @@ public class AdminService {
         if (updated.getCategory() != null) existing.setCategory(updated.getCategory());
         if (updated.getCategoryName() != null) existing.setCategoryName(updated.getCategoryName());
         if (updated.getBadgeColor() != null) existing.setBadgeColor(updated.getBadgeColor());
-        if (updated.getActive() != null) existing.setActive(updated.getActive());
+        if (updated.getStatus() != null && !updated.getStatus().trim().isEmpty()) {
+            existing.setStatus(updated.getStatus().trim().toUpperCase());
+            existing.setActive("ACTIVE".equalsIgnoreCase(existing.getStatus()));
+        } else if (updated.getActive() != null) {
+            existing.setActive(updated.getActive());
+            existing.setStatus(updated.getActive() ? "ACTIVE" : "HIDDEN");
+        }
+        if (updated.getSortOrder() != null) existing.setSortOrder(updated.getSortOrder());
 
         ChallengeEntity saved = challengeRepository.save(existing);
         return new ResponseData<>(200, "Cập nhật câu hỏi thành công", saved);
+    }
+
+    @Transactional
+    public ResponseData<ChallengeEntity> approveChallenge(JwtAuthenticationToken token, Long id) {
+        verifyAdmin(token, "TL_PERM_CHALLENGE_MANAGE");
+        ChallengeEntity existing = challengeRepository.findById(id).orElseThrow(() ->
+                new AppException(404, "Câu hỏi không tồn tại", 404)
+        );
+        existing.setStatus("ACTIVE");
+        existing.setActive(true);
+        ChallengeEntity saved = challengeRepository.save(existing);
+        return new ResponseData<>(200, "Đã duyệt câu hỏi thử thách lên sóng", saved);
+    }
+
+    @Transactional
+    public ResponseData<ChallengeEntity> rejectChallenge(JwtAuthenticationToken token, Long id) {
+        verifyAdmin(token, "TL_PERM_CHALLENGE_MANAGE");
+        ChallengeEntity existing = challengeRepository.findById(id).orElseThrow(() ->
+                new AppException(404, "Câu hỏi không tồn tại", 404)
+        );
+        existing.setStatus("HIDDEN");
+        existing.setActive(false);
+        ChallengeEntity saved = challengeRepository.save(existing);
+        return new ResponseData<>(200, "Đã từ chối câu hỏi thử thách", saved);
     }
 
     @Transactional

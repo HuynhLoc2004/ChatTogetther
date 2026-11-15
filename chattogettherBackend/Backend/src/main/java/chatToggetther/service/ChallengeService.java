@@ -3,6 +3,7 @@ package chatToggetther.service;
 import chatToggetther.Customize.SecurityUtils;
 import chatToggetther.DTO.ChallengeDTO;
 import chatToggetther.DataRequest.CreateChallengeRequest;
+import chatToggetther.DataRequest.IcebreakerSubmitRequest;
 import chatToggetther.modelEntity.ChallengeEntity;
 import chatToggetther.modelEntity.UserEntity;
 import chatToggetther.repository.ChallengeRepository;
@@ -108,39 +109,188 @@ public class ChallengeService {
                 .badgeColor(meta.color())
                 .question(question)
                 .author("Hệ thống Talovin")
+                .authorUsername("talovin")
                 .usageCount(ThreadLocalRandom.current().nextInt(5, 35))
+                .drawCount(ThreadLocalRandom.current().nextInt(5, 35))
+                .status("ACTIVE")
+                .sortOrder(0)
                 .active(true)
                 .createdAt(LocalDateTime.now())
                 .build());
+    }
+
+    /**
+     * Atomic Draw Counter (Chống Race Condition)
+     */
+    @Transactional
+    public Map<String, Object> atomicDraw(Long id) {
+        challengeRepository.atomicIncrementDrawCount(id);
+        Integer updatedDrawCount = challengeRepository.getDrawCountById(id);
+        Map<String, Object> res = new HashMap<>();
+        res.put("id", id);
+        res.put("drawCount", updatedDrawCount != null ? updatedDrawCount : 1);
+        return res;
+    }
+
+    /**
+     * GET /api/public/icebreakers - Chỉ trả về các thẻ có status = "ACTIVE", sắp xếp sortOrder ASC, createdAt DESC
+     */
+    @Transactional(readOnly = true)
+    public List<ChallengeDTO> getActiveIcebreakers(String category) {
+        List<ChallengeEntity> entities;
+        if (category != null && !category.trim().isEmpty() && !"ALL".equalsIgnoreCase(category.trim())) {
+            entities = challengeRepository.findActiveIcebreakersByCategory(category.trim());
+        } else {
+            entities = challengeRepository.findActiveIcebreakers();
+        }
+        return entities.stream().map(this::toDTO).toList();
+    }
+
+    /**
+     * POST /api/icebreakers/submit (yêu cầu JWT):
+     * Validate độ dài 10 - 220 ký tự, giới hạn tối đa 3 câu / 1 giờ / user.
+     * Lưu với status = "PENDING", authorId = user.id, drawCount = 0.
+     */
+    @Transactional
+    public ChallengeDTO submitUserIcebreaker(JwtAuthenticationToken token, IcebreakerSubmitRequest request) {
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, userRepository);
+        if (currentUser == null) {
+            throw new IllegalArgumentException("Yêu cầu đăng nhập để đóng góp câu hỏi.");
+        }
+
+        if (request == null) {
+            throw new IllegalArgumentException("Dữ liệu gửi lên không hợp lệ.");
+        }
+
+        String content = request.getEffectiveContent();
+        if (content.length() < 10 || content.length() > 220) {
+            throw new IllegalArgumentException("Nội dung câu hỏi phải có độ dài từ 10 đến 220 ký tự.");
+        }
+
+        // Kiểm tra rate limit: tối đa 3 câu đóng góp / 1 giờ / user
+        LocalDateTime oneHourAgo = LocalDateTime.now().minusHours(1);
+        long countLastHour = challengeRepository.countByAuthorIdAndCreatedAtAfter(currentUser.getId(), oneHourAgo);
+        if (countLastHour >= 3) {
+            throw new IllegalArgumentException("Bạn đã đạt giới hạn tối đa 3 câu đóng góp trong 1 giờ. Vui lòng thử lại sau!");
+        }
+
+        String cat = (request.getCategory() != null && !request.getCategory().trim().isEmpty())
+                ? request.getCategory().trim().toUpperCase() : "DEEP_TALK";
+        CategoryMeta meta = CATEGORIES_META.getOrDefault(cat, CATEGORIES_META.get("DEEP_TALK"));
+
+        String authorName = (currentUser.getNickname() != null && !currentUser.getNickname().isEmpty())
+                ? currentUser.getNickname() : currentUser.getAccount();
+        String authorAccount = currentUser.getAccount() != null ? currentUser.getAccount() : "user";
+
+        ChallengeEntity entity = ChallengeEntity.builder()
+                .question(content)
+                .category(meta.key())
+                .categoryName(meta.label())
+                .badgeColor(meta.color())
+                .author(authorName)
+                .authorId(currentUser.getId())
+                .authorUsername(authorAccount)
+                .usageCount(0)
+                .drawCount(0)
+                .status("PENDING")
+                .sortOrder(0)
+                .active(false) // PENDING -> chưa hiển thị trên sảnh
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        ChallengeEntity saved = challengeRepository.save(entity);
+        return toDTO(saved);
+    }
+
+    /**
+     * Admin: Lấy danh sách thẻ bài lọc theo status ("ALL", "ACTIVE", "PENDING", "HIDDEN")
+     */
+    @Transactional(readOnly = true)
+    public List<ChallengeDTO> getAdminIcebreakers(String statusFilter) {
+        List<ChallengeEntity> list;
+        if (statusFilter == null || statusFilter.trim().isEmpty() || "ALL".equalsIgnoreCase(statusFilter.trim())) {
+            list = challengeRepository.findAll(org.springframework.data.domain.Sort.by(
+                    org.springframework.data.domain.Sort.Direction.DESC, "createdAt"
+            ));
+        } else {
+            list = challengeRepository.findByStatusOrderByCreatedAtDesc(statusFilter.trim().toUpperCase());
+        }
+        return list.stream().map(this::toDTO).toList();
+    }
+
+    /**
+     * Admin: Thống kê nhanh Thẻ Bài Thử Thách
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> getIcebreakerStats() {
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("totalActive", challengeRepository.countByStatus("ACTIVE"));
+        stats.put("totalPending", challengeRepository.countByStatus("PENDING"));
+        stats.put("totalHidden", challengeRepository.countByStatus("HIDDEN"));
+        stats.put("totalDrawCount", challengeRepository.getTotalDrawCount());
+        stats.put("totalCards", challengeRepository.count());
+        return stats;
+    }
+
+    /**
+     * Admin: Duyệt câu hỏi (ACTIVE)
+     */
+    @Transactional
+    public ChallengeDTO approveIcebreaker(Long id) {
+        ChallengeEntity c = challengeRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy thẻ bài với ID: " + id));
+        c.setStatus("ACTIVE");
+        c.setActive(true);
+        ChallengeEntity saved = challengeRepository.save(c);
+        return toDTO(saved);
+    }
+
+    /**
+     * Admin: Ẩn / Từ chối câu hỏi (HIDDEN)
+     */
+    @Transactional
+    public ChallengeDTO rejectIcebreaker(Long id) {
+        ChallengeEntity c = challengeRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy thẻ bài với ID: " + id));
+        c.setStatus("HIDDEN");
+        c.setActive(false);
+        ChallengeEntity saved = challengeRepository.save(c);
+        return toDTO(saved);
     }
 
     @Transactional
     public ChallengeDTO getRandomChallenge(String category) {
         List<ChallengeEntity> pool;
         if (category == null || category.trim().isEmpty() || "ALL".equalsIgnoreCase(category.trim())) {
-            pool = challengeRepository.findByActiveTrue();
+            pool = challengeRepository.findActiveIcebreakers();
         } else {
-            pool = challengeRepository.findByCategoryAndActiveTrue(category.trim().toUpperCase());
+            pool = challengeRepository.findActiveIcebreakersByCategory(category.trim());
             if (pool.isEmpty()) {
-                pool = challengeRepository.findByActiveTrue();
+                pool = challengeRepository.findActiveIcebreakers();
             }
         }
 
         if (pool.isEmpty()) {
             return ChallengeDTO.builder()
                     .id(0L)
+                    .question("Khoảnh khắc nào trong ngày bạn cảm thấy bình yên và là chính mình nhất?")
+                    .content("Khoảnh khắc nào trong ngày bạn cảm thấy bình yên và là chính mình nhất?")
                     .category("DEEP_TALK")
                     .categoryName("Tâm sự")
                     .badgeColor("#818cf8")
-                    .question("Khoảnh khắc nào trong ngày bạn cảm thấy bình yên và là chính mình nhất?")
                     .author("Hệ thống Talovin")
+                    .authorUsername("talovin")
                     .usageCount(1)
+                    .drawCount(1)
+                    .status("ACTIVE")
                     .build();
         }
 
         ChallengeEntity selected = pool.get(ThreadLocalRandom.current().nextInt(pool.size()));
-        selected.setUsageCount((selected.getUsageCount() == null ? 0 : selected.getUsageCount()) + 1);
-        challengeRepository.save(selected);
+        challengeRepository.atomicIncrementDrawCount(selected.getId());
+        Integer updatedCount = challengeRepository.getDrawCountById(selected.getId());
+        selected.setDrawCount(updatedCount != null ? updatedCount : 1);
+        selected.setUsageCount(selected.getDrawCount());
 
         return toDTO(selected);
     }
@@ -148,15 +298,13 @@ public class ChallengeService {
     public List<Map<String, Object>> getCategories() {
         List<Map<String, Object>> res = new ArrayList<>();
 
-        // 1. Thêm mục "TẤT CẢ"
         Map<String, Object> allMap = new LinkedHashMap<>();
         allMap.put("key", "ALL");
         allMap.put("label", "Tất cả");
         allMap.put("color", "#a1a1aa");
-        allMap.put("count", challengeRepository.countByActiveTrue());
+        allMap.put("count", challengeRepository.countByStatus("ACTIVE"));
         res.add(allMap);
 
-        // 2. Nạp categories động từ DB nếu có cấu hình
         boolean loadedFromDb = false;
         try {
             Optional<chatToggetther.modelEntity.SystemConfigEntity> cfg = systemConfigRepository.findById("challenge_categories");
@@ -176,7 +324,7 @@ public class ChallengeService {
                         map.put("key", key);
                         map.put("label", label);
                         map.put("color", color);
-                        map.put("count", challengeRepository.findByCategoryAndActiveTrue(key).size());
+                        map.put("count", challengeRepository.findActiveIcebreakersByCategory(key).size());
                         res.add(map);
                     }
                     loadedFromDb = true;
@@ -186,7 +334,6 @@ public class ChallengeService {
             log.warn("Không thể nạp challenge_categories từ DB: {}", e.getMessage());
         }
 
-        // 3. Fallback nếu DB chưa có
         if (!loadedFromDb) {
             for (Map.Entry<String, CategoryMeta> entry : CATEGORIES_META.entrySet()) {
                 if ("ALL".equalsIgnoreCase(entry.getKey())) continue;
@@ -194,7 +341,7 @@ public class ChallengeService {
                 map.put("key", entry.getKey());
                 map.put("label", entry.getValue().label());
                 map.put("color", entry.getValue().color());
-                map.put("count", challengeRepository.findByCategoryAndActiveTrue(entry.getKey()).size());
+                map.put("count", challengeRepository.findActiveIcebreakersByCategory(entry.getKey()).size());
                 res.add(map);
             }
         }
@@ -203,52 +350,31 @@ public class ChallengeService {
 
     @Transactional
     public ChallengeDTO createChallenge(JwtAuthenticationToken token, CreateChallengeRequest request) {
-        if (request == null || request.getQuestion() == null || request.getQuestion().trim().isEmpty()) {
-            throw new IllegalArgumentException("Nội dung câu hỏi không được để trống");
-        }
-
-        String question = request.getQuestion().trim();
-        String cat = (request.getCategory() != null && !request.getCategory().trim().isEmpty()) 
-                ? request.getCategory().trim().toUpperCase() : "DEEP_TALK";
-
-        CategoryMeta meta = CATEGORIES_META.getOrDefault(cat, CATEGORIES_META.get("DEEP_TALK"));
-
-        String authorName = "Thành viên cộng đồng";
-        Long authorId = null;
-
-        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, userRepository);
-        if (currentUser != null) {
-            authorName = (currentUser.getNickname() != null && !currentUser.getNickname().isEmpty())
-                    ? currentUser.getNickname() : currentUser.getAccount();
-            authorId = currentUser.getId();
-        }
-
-        ChallengeEntity entity = ChallengeEntity.builder()
-                .question(question)
-                .category(meta.key())
-                .categoryName(meta.label())
-                .badgeColor(meta.color())
-                .author(authorName)
-                .authorId(authorId)
-                .usageCount(1)
-                .active(true)
-                .createdAt(LocalDateTime.now())
+        IcebreakerSubmitRequest submitReq = IcebreakerSubmitRequest.builder()
+                .question(request != null ? request.getQuestion() : "")
+                .category(request != null ? request.getCategory() : "DEEP_TALK")
                 .build();
-
-        ChallengeEntity saved = challengeRepository.save(entity);
-        return toDTO(saved);
+        return submitUserIcebreaker(token, submitReq);
     }
 
-    private ChallengeDTO toDTO(ChallengeEntity e) {
+    public ChallengeDTO toDTO(ChallengeEntity e) {
+        if (e == null) return null;
+        Integer effectiveCount = e.getEffectiveDrawCount();
         return ChallengeDTO.builder()
                 .id(e.getId())
                 .question(e.getQuestion())
+                .content(e.getQuestion())
                 .category(e.getCategory())
-                .categoryName(e.getCategoryName())
+                .categoryName(e.getCategoryName() != null ? e.getCategoryName() : e.getCategory())
                 .badgeColor(e.getBadgeColor())
                 .author(e.getAuthor())
                 .authorId(e.getAuthorId())
-                .usageCount(e.getUsageCount())
+                .authorUsername(e.getAuthorUsername())
+                .usageCount(effectiveCount)
+                .drawCount(effectiveCount)
+                .status(e.getStatus())
+                .sortOrder(e.getSortOrder() != null ? e.getSortOrder() : 0)
+                .createdAt(e.getCreatedAt())
                 .build();
     }
 }

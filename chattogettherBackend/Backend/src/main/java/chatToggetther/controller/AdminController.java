@@ -99,12 +99,20 @@ public class AdminController {
     // QUẢN LÝ CÂU HỎI THỬ THÁCH (CHALLENGES)
     // ==========================================
 
-    @GetMapping("/challenges")
-    public ResponseEntity<ResponseData<List<chatToggetther.modelEntity.ChallengeEntity>>> getAllChallenges(JwtAuthenticationToken token) {
-        return ResponseEntity.ok(this.adminService.getAllChallenges(token));
+    @GetMapping({"/challenges", "/icebreakers"})
+    public ResponseEntity<ResponseData<List<chatToggetther.modelEntity.ChallengeEntity>>> getAllChallenges(
+            JwtAuthenticationToken token,
+            @RequestParam(value = "status", required = false) String status
+    ) {
+        return ResponseEntity.ok(this.adminService.getAllChallenges(token, status));
     }
 
-    @PostMapping("/challenges")
+    @GetMapping({"/challenges/stats", "/icebreakers/stats"})
+    public ResponseEntity<ResponseData<java.util.Map<String, Object>>> getChallengeStats(JwtAuthenticationToken token) {
+        return ResponseEntity.ok(this.adminService.getChallengeStats(token));
+    }
+
+    @PostMapping({"/challenges", "/icebreakers"})
     public ResponseEntity<ResponseData<chatToggetther.modelEntity.ChallengeEntity>> addChallenge(
             JwtAuthenticationToken token,
             @RequestBody chatToggetther.modelEntity.ChallengeEntity challenge
@@ -112,7 +120,7 @@ public class AdminController {
         return ResponseEntity.ok(this.adminService.addChallenge(token, challenge));
     }
 
-    @PutMapping("/challenges/{id}")
+    @PutMapping({"/challenges/{id}", "/icebreakers/{id}"})
     public ResponseEntity<ResponseData<chatToggetther.modelEntity.ChallengeEntity>> updateChallenge(
             JwtAuthenticationToken token,
             @PathVariable("id") Long id,
@@ -121,7 +129,23 @@ public class AdminController {
         return ResponseEntity.ok(this.adminService.updateChallenge(token, id, challenge));
     }
 
-    @DeleteMapping("/challenges/{id}")
+    @PutMapping({"/challenges/{id}/approve", "/icebreakers/{id}/approve"})
+    public ResponseEntity<ResponseData<chatToggetther.modelEntity.ChallengeEntity>> approveChallenge(
+            JwtAuthenticationToken token,
+            @PathVariable("id") Long id
+    ) {
+        return ResponseEntity.ok(this.adminService.approveChallenge(token, id));
+    }
+
+    @PutMapping({"/challenges/{id}/reject", "/icebreakers/{id}/reject"})
+    public ResponseEntity<ResponseData<chatToggetther.modelEntity.ChallengeEntity>> rejectChallenge(
+            JwtAuthenticationToken token,
+            @PathVariable("id") Long id
+    ) {
+        return ResponseEntity.ok(this.adminService.rejectChallenge(token, id));
+    }
+
+    @DeleteMapping({"/challenges/{id}", "/icebreakers/{id}"})
     public ResponseEntity<ResponseData<Boolean>> deleteChallenge(
             JwtAuthenticationToken token,
             @PathVariable("id") Long id

@@ -125,6 +125,7 @@ export const AdminDashboard = () => {
   // Thẻ bài thử thách (Challenges)
   const [challenges, setChallenges] = useState([]);
   const [challengeFilter, setChallengeFilter] = useState('ALL');
+  const [challengeStatusFilter, setChallengeStatusFilter] = useState('ALL'); // 'ALL' | 'ACTIVE' | 'PENDING' | 'HIDDEN'
   const [challengeSearch, setChallengeSearch] = useState('');
   const [isAddChallengeOpen, setIsAddChallengeOpen] = useState(false);
   const [editingChallengeItem, setEditingChallengeItem] = useState(null);
@@ -132,7 +133,8 @@ export const AdminDashboard = () => {
     question: '',
     category: 'DEEP_TALK',
     categoryName: 'Tâm sự sâu lắng',
-    badgeColor: '#818cf8'
+    badgeColor: '#818cf8',
+    status: 'ACTIVE'
   });
 
   // Âm nhạc
@@ -931,11 +933,33 @@ export const AdminDashboard = () => {
 
   const handleToggleChallenge = async (item) => {
     try {
-      await axiosClient.put(`/admin/challenges/${item.id}`, { active: !item.active });
-      toast.success(`Đã ${item.active ? 'ẩn' : 'kích hoạt'} câu hỏi!`);
+      const nextActive = !item.active;
+      const nextStatus = nextActive ? 'ACTIVE' : 'HIDDEN';
+      await axiosClient.put(`/admin/challenges/${item.id}`, { active: nextActive, status: nextStatus });
+      toast.success(`Đã ${nextActive ? 'kích hoạt' : 'ẩn'} câu hỏi!`);
       fetchChallenges();
     } catch {
       toast.error("Không thể cập nhật trạng thái");
+    }
+  };
+
+  const handleApproveChallenge = async (item) => {
+    try {
+      await axiosClient.put(`/admin/challenges/${item.id}/approve`);
+      toast.success("Đã duyệt câu hỏi thử thách lên sóng!");
+      fetchChallenges();
+    } catch {
+      toast.error("Không thể duyệt câu hỏi");
+    }
+  };
+
+  const handleRejectChallenge = async (item) => {
+    try {
+      await axiosClient.put(`/admin/challenges/${item.id}/reject`);
+      toast.success("Đã từ chối câu hỏi thử thách!");
+      fetchChallenges();
+    } catch {
+      toast.error("Không thể từ chối câu hỏi");
     }
   };
 
@@ -1320,11 +1344,25 @@ const handleAddTrack = async (e) => {
   // --- Lọc dữ liệu hiển thị ---
   const filteredChallenges = useMemo(() => {
     return challenges.filter(c => {
+      const itemStatus = c.status || (c.active ? 'ACTIVE' : 'HIDDEN');
+      const matchStatus = challengeStatusFilter === 'ALL' || itemStatus === challengeStatusFilter;
       const matchCat = challengeFilter === 'ALL' || c.category === challengeFilter;
-      const matchSearch = !challengeSearch.trim() || (c.question || '').toLowerCase().includes(challengeSearch.toLowerCase());
-      return matchCat && matchSearch;
+      const q = challengeSearch.toLowerCase().trim();
+      const matchSearch = !q || 
+        (c.question || '').toLowerCase().includes(q) ||
+        (c.author || '').toLowerCase().includes(q) ||
+        (c.authorUsername || '').toLowerCase().includes(q);
+      return matchStatus && matchCat && matchSearch;
     });
-  }, [challenges, challengeFilter, challengeSearch]);
+  }, [challenges, challengeStatusFilter, challengeFilter, challengeSearch]);
+
+  const challengeStats = useMemo(() => {
+    const activeCount = challenges.filter(c => c.status === 'ACTIVE' || (!c.status && c.active)).length;
+    const pendingCount = challenges.filter(c => c.status === 'PENDING').length;
+    const hiddenCount = challenges.filter(c => c.status === 'HIDDEN' || (!c.status && !c.active)).length;
+    const totalDraws = challenges.reduce((sum, c) => sum + (c.drawCount ?? c.usageCount ?? 0), 0);
+    return { activeCount, pendingCount, hiddenCount, totalDraws };
+  }, [challenges]);
 
   const filteredUsers = useMemo(() => {
     return users.filter(u => {
@@ -2218,14 +2256,14 @@ const handleAddTrack = async (e) => {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <h2 className="text-xl font-bold text-zinc-100 tracking-tight">Quản Lý Thẻ Bài Thử Thách</h2>
-                    <p className="text-xs text-zinc-400 mt-0.5">Thêm, sửa, xóa các câu hỏi tâm lý & tương tác cho người dùng trên Sảnh</p>
+                    <p className="text-xs text-zinc-400 mt-0.5">Thêm, sửa, xóa, duyệt các câu hỏi thử thách & tương tác từ thành viên và hệ thống</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setIsCategoryModalOpen(true)}
                       className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-bold text-xs flex items-center gap-1.5 border border-zinc-800 transition-all"
                     >
-                      <FolderCog size={14} className="text-indigo-400" />
+                      <FolderCog size={14} className="text-zinc-400" />
                       <span>Quản lý Thể loại ({challengeCategories.length})</span>
                     </button>
                     <button
@@ -2238,16 +2276,102 @@ const handleAddTrack = async (e) => {
                   </div>
                 </div>
 
+                {/* THỐNG KÊ NHANH THẺ BÀI THỬ THÁCH (DARK ZINC MATTE) */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-1">
+                    <span className="text-[11px] text-zinc-400 font-medium block">Tổng thẻ đang bật</span>
+                    <div className="text-2xl font-bold font-mono text-zinc-100 tabular-nums">
+                      {challengeStats.activeCount}
+                    </div>
+                  </div>
+
+                  <div className={`p-4 rounded-2xl border space-y-1 transition-all ${
+                    challengeStats.pendingCount > 0 
+                      ? 'bg-zinc-900 border-amber-500/40 ring-1 ring-amber-500/20' 
+                      : 'bg-zinc-900/60 border-zinc-800/80'
+                  }`}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-zinc-400 font-medium block">Chờ duyệt (User đóng góp)</span>
+                      {challengeStats.pendingCount > 0 && (
+                        <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                      )}
+                    </div>
+                    <div className={`text-2xl font-bold font-mono tabular-nums ${challengeStats.pendingCount > 0 ? 'text-amber-400' : 'text-zinc-100'}`}>
+                      {challengeStats.pendingCount}
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-1">
+                    <span className="text-[11px] text-zinc-400 font-medium block">Tổng lượt bốc toàn hệ thống</span>
+                    <div className="text-2xl font-bold font-mono text-zinc-100 tabular-nums">
+                      {challengeStats.totalDraws.toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+
                 {/* Filter and Search Bar */}
                 <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-3">
+                  {/* Status Filter Tabs (Tất cả, Đang bật, Chờ duyệt, Đã ẩn) */}
+                  <div className="flex items-center gap-1.5 border-b border-zinc-800/80 pb-3 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <button
+                      type="button"
+                      onClick={() => setChallengeStatusFilter('ALL')}
+                      className={`h-8 px-3 rounded-xl text-xs font-medium transition-all ${
+                        challengeStatusFilter === 'ALL'
+                          ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                          : 'bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800'
+                      }`}
+                    >
+                      Tất cả ({challenges.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setChallengeStatusFilter('ACTIVE')}
+                      className={`h-8 px-3 rounded-xl text-xs font-medium transition-all ${
+                        challengeStatusFilter === 'ACTIVE'
+                          ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                          : 'bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800'
+                      }`}
+                    >
+                      Đang bật ({challengeStats.activeCount})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setChallengeStatusFilter('PENDING')}
+                      className={`h-8 px-3 rounded-xl text-xs font-medium transition-all flex items-center gap-1.5 ${
+                        challengeStatusFilter === 'PENDING'
+                          ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                          : 'bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800'
+                      }`}
+                    >
+                      <span>Chờ duyệt</span>
+                      <span className={`font-mono text-[10px] px-1.5 py-0.2 rounded-full ${
+                        challengeStats.pendingCount > 0 ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30' : 'bg-zinc-800 text-zinc-400'
+                      }`}>
+                        {challengeStats.pendingCount}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setChallengeStatusFilter('HIDDEN')}
+                      className={`h-8 px-3 rounded-xl text-xs font-medium transition-all ${
+                        challengeStatusFilter === 'HIDDEN'
+                          ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                          : 'bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800'
+                      }`}
+                    >
+                      Đã ẩn ({challengeStats.hiddenCount})
+                    </button>
+                  </div>
+
                   <div className="relative">
                     <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
                     <input
                       type="text"
-                      placeholder="Tìm kiếm nội dung câu hỏi thử thách..."
+                      placeholder="Tìm kiếm nội dung câu hỏi hoặc tác giả..."
                       value={challengeSearch}
                       onChange={(e) => setChallengeSearch(e.target.value)}
-                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-10 pr-4 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-10 pr-4 py-2 text-xs text-white focus:outline-none focus:border-zinc-500"
                     />
                   </div>
 
@@ -2257,11 +2381,11 @@ const handleAddTrack = async (e) => {
                       onClick={() => setChallengeFilter('ALL')}
                       className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
                         challengeFilter === 'ALL' 
-                          ? 'bg-white text-black font-bold' 
+                          ? 'bg-zinc-800 text-white border border-zinc-600 font-bold' 
                           : 'bg-zinc-950 text-zinc-400 border border-zinc-800 hover:border-zinc-700'
                       }`}
                     >
-                      Tất cả ({challenges.length})
+                      Mọi thể loại
                     </button>
                     {challengeCategories.map((cat) => (
                       <button
@@ -2293,7 +2417,11 @@ const handleAddTrack = async (e) => {
                     filteredChallenges.map((item) => (
                       <div
                         key={item.id}
-                        className="p-4 rounded-xl bg-zinc-900/60 border border-zinc-800/80 hover:border-zinc-700 flex items-start justify-between gap-4 transition-all"
+                        className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all ${
+                          item.status === 'PENDING'
+                            ? 'bg-zinc-900/90 border-amber-500/30 ring-1 ring-amber-500/20'
+                            : 'bg-zinc-900/60 border-zinc-800/80 hover:border-zinc-700'
+                        }`}
                       >
                         <div className="space-y-1.5 flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
@@ -2307,8 +2435,20 @@ const handleAddTrack = async (e) => {
                             >
                               {item.categoryName || item.category}
                             </span>
-                            <span className="text-[11px] font-mono text-zinc-400">Đã bốc: {item.usageCount || 0} lần</span>
-                            {!item.active && (
+                            <span className="text-[11px] font-mono text-zinc-400 tabular-nums">
+                              Đã bốc: {item.drawCount ?? item.usageCount ?? 0} lần
+                            </span>
+                            <span className="text-[11px] font-sans text-zinc-400">
+                              • {item.authorUsername && item.authorUsername !== 'admin' && item.authorUsername !== 'talovin'
+                                ? `Đóng góp bởi @${item.authorUsername}`
+                                : 'Hệ thống'}
+                            </span>
+                            {item.status === 'PENDING' && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 animate-pulse">
+                                Chờ duyệt
+                              </span>
+                            )}
+                            {(item.status === 'HIDDEN' || (!item.status && !item.active)) && (
                               <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-zinc-800 text-zinc-400 border border-zinc-700">
                                 Đang ẩn
                               </span>
@@ -2319,24 +2459,47 @@ const handleAddTrack = async (e) => {
                           </p>
                         </div>
 
-                        <div className="flex items-center gap-1 flex-shrink-0 pt-1">
-                          <button
-                            onClick={() => handleToggleChallenge(item)}
-                            className={`p-1.5 rounded-lg text-xs transition-all ${item.active ? 'text-zinc-400 hover:text-white' : 'text-amber-400'}`}
-                            title={item.active ? "Ẩn câu hỏi" : "Kích hoạt câu hỏi"}
-                          >
-                            {item.active ? <Eye size={15} /> : <EyeOff size={15} />}
-                          </button>
+                        <div className="flex items-center gap-2 flex-shrink-0 pt-1 sm:pt-0">
+                          {item.status === 'PENDING' ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleApproveChallenge(item)}
+                                className="h-8 px-3 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs shadow-sm transition-all flex items-center gap-1 active:scale-95"
+                                title="Duyệt câu hỏi này lên sóng"
+                              >
+                                <Check size={13} />
+                                <span>Duyệt lên sóng</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRejectChallenge(item)}
+                                className="h-8 px-2.5 rounded-xl text-rose-500 hover:text-rose-400 hover:bg-rose-500/10 text-xs font-medium transition-all flex items-center gap-1 active:scale-95"
+                                title="Từ chối câu hỏi"
+                              >
+                                <X size={13} />
+                                <span>Từ chối</span>
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              onClick={() => handleToggleChallenge(item)}
+                              className={`p-1.5 rounded-lg text-xs transition-all ${item.active ? 'text-zinc-400 hover:text-white' : 'text-amber-400'}`}
+                              title={item.active ? "Ẩn câu hỏi" : "Kích hoạt câu hỏi"}
+                            >
+                              {item.active ? <Eye size={15} /> : <EyeOff size={15} />}
+                            </button>
+                          )}
                           <button
                             onClick={() => handleOpenEditChallenge(item)}
-                            className="p-1.5 rounded-lg text-zinc-400 hover:text-indigo-400 transition-all"
+                            className="p-1.5 rounded-lg text-zinc-400 hover:text-white transition-all"
                             title="Chỉnh sửa câu hỏi"
                           >
                             <Edit3 size={15} />
                           </button>
                           <button
                             onClick={() => handleDeleteChallenge(item.id)}
-                            className="p-1.5 rounded-lg text-zinc-400 hover:text-red-400 transition-all"
+                            className="p-1.5 rounded-lg text-zinc-400 hover:text-rose-400 transition-all"
                             title="Xóa câu hỏi"
                           >
                             <Trash2 size={15} />
