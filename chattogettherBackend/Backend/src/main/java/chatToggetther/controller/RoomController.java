@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/rooms")
+@RequestMapping({"/api/rooms", "/rooms"})
 public class RoomController {
     private final RoomService roomService;
 
@@ -34,6 +34,12 @@ public class RoomController {
     public ResponseEntity<ResponseData<List<RoomDTO>>> getallRoomActive(Authentication authentication){
         JwtAuthenticationToken jwtAuth = (authentication instanceof JwtAuthenticationToken) ? (JwtAuthenticationToken) authentication : null;
         return ResponseEntity.ok(this.roomService.getAllRoomActive(jwtAuth));
+    }
+
+    @GetMapping({"/my-active-room", "/active"})
+    public ResponseEntity<ResponseData<RoomDTO>> getMyActiveRoom(Authentication authentication) {
+        JwtAuthenticationToken jwtAuth = (authentication instanceof JwtAuthenticationToken) ? (JwtAuthenticationToken) authentication : null;
+        return ResponseEntity.ok(this.roomService.getMyActiveRoom(jwtAuth));
     }
 
     @GetMapping("/detail")

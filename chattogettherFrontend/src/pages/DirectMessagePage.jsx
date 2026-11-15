@@ -155,7 +155,7 @@ export const DirectMessagePage = () => {
 
     try {
       const socketUrl = BACKEND_URL ? `${BACKEND_URL}/ws-gs-guide` : '/ws-gs-guide';
-      const socket = new SockJS(socketUrl);
+      const socket = new SockJS(socketUrl, null, { transports: ['websocket'] });
       client = Stomp.over(socket);
       client.debug = () => {};
 

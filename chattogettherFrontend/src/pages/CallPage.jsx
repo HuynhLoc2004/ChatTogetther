@@ -399,7 +399,7 @@ const CallPage = () => {
 
         // Kết nối WebSocket STOMP chuẩn không kèm đuôi /api
         const socketUrl = BACKEND_URL ? `${BACKEND_URL}/ws-gs-guide` : '/ws-gs-guide';
-        const socket = new SockJS(socketUrl);
+        const socket = new SockJS(socketUrl, null, { transports: ['websocket'] });
         const stomp = Stomp.over(socket);
         stomp.debug = null; // Tắt log console
         stompClient.current = stomp;

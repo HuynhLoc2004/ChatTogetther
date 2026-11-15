@@ -99,7 +99,7 @@ const GlobalCallBanner = () => {
 
     let isMounted = true;
     const socketUrl = BACKEND_URL ? `${BACKEND_URL}/ws-gs-guide` : '/ws-gs-guide';
-    const socket = new SockJS(socketUrl);
+    const socket = new SockJS(socketUrl, null, { transports: ['websocket'] });
     const client = Stomp.over(socket);
     client.debug = null;
     stompClient.current = client;

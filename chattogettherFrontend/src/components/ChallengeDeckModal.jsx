@@ -6,6 +6,14 @@ import {
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
 
+const FALLBACK_STARTER_CARDS = [
+  { id: 101, question: "Nếu có một chiếc gương soi thấy tâm tư thầm kín nhất của bạn lúc này, nó sẽ phản chiếu điều gì?", category: "DEEP_TALK", categoryName: "Tâm sự sâu lắng", badgeColor: "#818cf8", drawCount: 25 },
+  { id: 102, question: "Kỷ niệm nào trong quá khứ khiến bạn mỉm cười mỗi khi bất chợt nhớ lại giữa đêm muộn?", category: "DEEP_TALK", categoryName: "Tâm sự sâu lắng", badgeColor: "#818cf8", drawCount: 18 },
+  { id: 103, question: "Điều điên rồ nhất bạn từng làm mà đến giờ vẫn chưa dám kể cho ai nghe là gì?", category: "TRUTH", categoryName: "Thú nhận", badgeColor: "#ec4899", drawCount: 42 },
+  { id: 104, question: "Đổi bio trang cá nhân thành một câu siêu sến trong vòng 1 tiếng!", category: "DARE", categoryName: "Thử thách vui", badgeColor: "#f59e0b", drawCount: 31 },
+  { id: 105, question: "Bài hát nào đang phản ánh chính xác nhất tâm trạng và nhịp sống của bạn tuần này?", category: "MUSIC", categoryName: "Gu âm nhạc", badgeColor: "#38bdf8", drawCount: 50 },
+];
+
 export const ChallengeDeckModal = ({ isOpen, onClose, onShareToFeed }) => {
   const [allCards, setAllCards] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('ALL');
@@ -127,24 +135,30 @@ export const ChallengeDeckModal = ({ isOpen, onClose, onShareToFeed }) => {
       try {
         setIsLoading(true);
         const res = await axiosClient.get('/public/icebreakers');
-        const cards = res.data?.data || [];
-        if (Array.isArray(cards) && cards.length > 0) {
-          setAllCards(cards);
-          const firstPick = pickCardFromPool(cards, selectedCategory, null);
-          if (firstPick) {
-            const currentCount = firstPick.drawCount ?? firstPick.usageCount ?? 0;
-            setCurrentChallenge({
-              ...firstPick,
-              drawCount: currentCount + 1,
-              usageCount: currentCount + 1
-            });
-            if (firstPick.id) {
-              axiosClient.post(`/public/icebreakers/${firstPick.id}/draw`).catch(() => {});
-            }
+        const cards = (res.data?.data && Array.isArray(res.data.data) && res.data.data.length > 0)
+          ? res.data.data
+          : FALLBACK_STARTER_CARDS;
+
+        setAllCards(cards);
+        const firstPick = pickCardFromPool(cards, selectedCategory, null);
+        if (firstPick) {
+          const currentCount = firstPick.drawCount ?? firstPick.usageCount ?? 0;
+          setCurrentChallenge({
+            ...firstPick,
+            drawCount: currentCount + 1,
+            usageCount: currentCount + 1
+          });
+          if (firstPick.id) {
+            axiosClient.post(`/public/icebreakers/${firstPick.id}/draw`).catch(() => {});
           }
         }
       } catch (err) {
-        console.error("Lỗi lấy danh sách thẻ bài:", err);
+        // Fallback êm đềm sang bộ thẻ mặc định nếu mạng chậm hoặc offline
+        setAllCards(prev => (prev.length > 0 ? prev : FALLBACK_STARTER_CARDS));
+        const firstPick = pickCardFromPool(FALLBACK_STARTER_CARDS, selectedCategory, null);
+        if (firstPick) {
+          setCurrentChallenge(firstPick);
+        }
       } finally {
         setIsLoading(false);
       }

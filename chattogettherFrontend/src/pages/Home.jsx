@@ -686,8 +686,8 @@ const Home = ({ initialTab }) => {
       if (res.data?.data?.notifications) {
         setNotifications(res.data.data.notifications);
       }
-    } catch (err) {
-      console.warn("Lỗi tải thông báo từ server:", err);
+    } catch (_) {
+      // Bỏ qua lỗi êm đềm khi server khởi động hoặc chưa có thông báo
     }
   }, [currentUserId]);
 
@@ -847,7 +847,7 @@ const Home = ({ initialTab }) => {
         const room = res.data.data;
         toast((t) => (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span>Bạn đang trong phòng: <strong>#{room.nameroom}</strong></span>
+            <span>Bạn đang trong phòng: <strong>#{room.nameroom || room.roomName}</strong></span>
             <button 
               onClick={() => { toast.dismiss(t.id); navigate(`/room/${room.id}`); }}
               style={{ background: '#f4f4f5', color: '#18181b', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontWeight: 600 }}
@@ -859,8 +859,8 @@ const Home = ({ initialTab }) => {
         sessionStorage.setItem('hasCheckedActiveRoom', 'true');
         return true;
       }
-    } catch (e) {
-      console.warn("Lỗi kiểm tra phòng:", e);
+    } catch (_) {
+      // Bỏ qua lỗi êm đềm nếu không có phòng hoạt động
     }
     sessionStorage.setItem('hasCheckedActiveRoom', 'true');
     return false;
@@ -1911,7 +1911,7 @@ const Home = ({ initialTab }) => {
     let stompClient = null;
     try {
       const socketUrl = BACKEND_URL ? `${BACKEND_URL}/ws-gs-guide` : '/ws-gs-guide';
-      const socket = new SockJS(socketUrl);
+      const socket = new SockJS(socketUrl, null, { transports: ['websocket'] });
       stompClient = Stomp.over(socket);
       stompClient.debug = () => {};
       stompClient.connect({}, () => {

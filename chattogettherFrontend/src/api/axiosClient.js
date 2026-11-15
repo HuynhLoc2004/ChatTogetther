@@ -128,7 +128,19 @@ axiosClient.interceptors.response.use(
     } else if (error.response.status === 429) {
       console.warn("Rate Limit (429):", error.response.data?.message || "Thao tác quá nhanh, vui lòng thử lại sau giây lát.");
     } else {
-      console.warn("API Error:", error.response.status, error.response.data?.message || error.response.statusText);
+      const isBackgroundPollApi = originalRequest?.url && (
+        originalRequest.url.includes('/notifications') ||
+        originalRequest.url.includes('/rooms/my-active-room') ||
+        originalRequest.url.includes('/rooms/active') ||
+        originalRequest.url.includes('/public/icebreakers') ||
+        originalRequest.url.includes('/public/challenges') ||
+        originalRequest.url.includes('/match/stations')
+      );
+
+      // Không spam console warning với các API nền khi máy chủ chưa có dữ liệu hoặc đang khởi động
+      if (!(error.response.status === 404 && isBackgroundPollApi)) {
+        console.warn("API Error:", error.response.status, error.response.data?.message || error.response.statusText);
+      }
     }
     return Promise.reject(error);
   }

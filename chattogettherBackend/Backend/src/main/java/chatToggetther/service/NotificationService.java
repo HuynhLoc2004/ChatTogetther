@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -117,9 +118,14 @@ public class NotificationService {
 
     @Transactional(readOnly = true)
     public ResponseData<NotificationListResponseDTO> getNotifications(JwtAuthenticationToken token) {
+        if (token == null) {
+            return new ResponseData<>(200, "Lấy danh sách thông báo thành công",
+                    NotificationListResponseDTO.builder().notifications(Collections.emptyList()).unreadCount(0L).build());
+        }
         Long currentUserId = SecurityUtils.extractUserId(token);
         if (currentUserId == null) {
-            throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
+            return new ResponseData<>(200, "Lấy danh sách thông báo thành công",
+                    NotificationListResponseDTO.builder().notifications(Collections.emptyList()).unreadCount(0L).build());
         }
 
         List<NotificationEntity> entities = notificationRepository.findByRecipientIdOrderByCreatedAtDesc(currentUserId);
@@ -135,6 +141,19 @@ public class NotificationService {
                 .build();
 
         return new ResponseData<>(200, "Lấy danh sách thông báo thành công", res);
+    }
+
+    @Transactional(readOnly = true)
+    public ResponseData<Long> getUnreadCount(JwtAuthenticationToken token) {
+        if (token == null) {
+            return new ResponseData<>(200, "Lấy số thông báo chưa đọc thành công", 0L);
+        }
+        Long currentUserId = SecurityUtils.extractUserId(token);
+        if (currentUserId == null) {
+            return new ResponseData<>(200, "Lấy số thông báo chưa đọc thành công", 0L);
+        }
+        long count = notificationRepository.countByRecipientIdAndIsReadFalse(currentUserId);
+        return new ResponseData<>(200, "Lấy số thông báo chưa đọc thành công", count);
     }
 
     @Transactional

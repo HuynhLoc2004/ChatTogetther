@@ -8,7 +8,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/notifications")
+@RequestMapping({"/api/notifications", "/notifications"})
 public class NotificationController {
     private final NotificationService notificationService;
 
@@ -19,6 +19,11 @@ public class NotificationController {
     @GetMapping
     public ResponseEntity<ResponseData<NotificationListResponseDTO>> getNotifications(JwtAuthenticationToken token) {
         return ResponseEntity.ok(notificationService.getNotifications(token));
+    }
+
+    @GetMapping("/unread-count")
+    public ResponseEntity<ResponseData<Long>> getUnreadCount(JwtAuthenticationToken token) {
+        return ResponseEntity.ok(notificationService.getUnreadCount(token));
     }
 
     @PutMapping("/read-all")

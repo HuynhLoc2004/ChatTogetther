@@ -210,6 +210,26 @@ public class RoomService {
     }
 
     @Transactional
+    public ResponseData<RoomDTO> getMyActiveRoom(JwtAuthenticationToken token) {
+        if (token == null) {
+            return new ResponseData<>(200, "Không có phòng hoạt động", null);
+        }
+        Long userId = SecurityUtils.extractUserId(token);
+        if (userId == null) {
+            return new ResponseData<>(200, "Không có phòng hoạt động", null);
+        }
+        UserEntity user = this.userRepository.findById(userId).orElse(null);
+        if (user == null || user.getUserRoomEntity() == null) {
+            return new ResponseData<>(200, "Không có phòng hoạt động", null);
+        }
+        UserRoomEntity userRoom = user.getUserRoomEntity();
+        if (Boolean.TRUE.equals(userRoom.getActive()) && userRoom.getRoomEntity() != null && Boolean.TRUE.equals(userRoom.getRoomEntity().getActive())) {
+            return getRoomDetail(userRoom.getRoomEntity().getId());
+        }
+        return new ResponseData<>(200, "Không có phòng hoạt động", null);
+    }
+
+    @Transactional
     public ResponseData<RoomDTO> updateRoomAvatar(JwtAuthenticationToken token, Long roomId, String avatar) {
         RoomEntity roomEntity = this.roomRepository.findById(roomId).orElseThrow(() ->
             new AppException(404, "Phòng không tồn tại", 404)
