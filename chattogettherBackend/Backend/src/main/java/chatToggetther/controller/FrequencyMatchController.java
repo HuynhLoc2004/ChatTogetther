@@ -40,14 +40,25 @@ public class FrequencyMatchController {
     }
 
     /**
-     * Lấy danh sách các trạm sóng FM trực tuyến (loại trừ chính user hiện tại)
+     * Lấy danh sách các trạm sóng FM trực tuyến kèm totalOnlineCount và activeIntents (Cold-Start Discovery)
      */
     @GetMapping("/stations")
-    public ResponseEntity<ResponseData<List<BroadcastStationDTO>>> getStations(
+    public ResponseEntity<ResponseData<chatToggetther.DTO.StationsResponseDTO>> getStations(
             JwtAuthenticationToken token,
             @RequestParam(value = "intentCode", required = false) String intentCode
     ) {
-        return ResponseEntity.ok(this.frequencyMatchService.getAllActiveStations(token, intentCode));
+        return ResponseEntity.ok(this.frequencyMatchService.getAllActiveStationsWithDiscovery(token, intentCode));
+    }
+
+    /**
+     * Cấp tần số chống va chạm (Collision-Free Slot Allocation)
+     */
+    @GetMapping("/allocate-frequency")
+    public ResponseEntity<ResponseData<Map<String, Object>>> allocateFrequency(
+            JwtAuthenticationToken token,
+            @RequestParam(value = "intentCode", required = false) String intentCode
+    ) {
+        return ResponseEntity.ok(this.frequencyMatchService.allocateCollisionFreeFrequency(token, intentCode));
     }
 
     /**

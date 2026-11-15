@@ -464,45 +464,102 @@ public class FrequencyMatchService {
     // HELPER METHODS
     // =========================================================================
 
-    private Double allocateUniqueFrequency(Double start, Double end, String intentCode, Long currentUserId) {
-        double min = start != null ? start + 0.3 : 88.5;
-        double max = end != null ? end - 0.3 : 92.5;
+    /**
+     * Thuật toán Cấp Tần Số Chống Va Chạm (Collision-Free Slot Allocation):
+     * Ưu tiên chọn một tần số lẻ (0.1 MHz) CHƯA có trạm nào đang chiếm trong khoảng [min, max].
+     * Nếu tất cả các khe đã kín khi quá đông người mới chia sẻ tần số có ít người nhất.
+     */
+    public Double allocateUniqueFrequency(Double start, Double end, String intentCode, Long currentUserId) {
+        double min = start != null ? start : 88.0;
+        double max = end != null ? end : 108.0;
         if (min >= max) {
-            min = start;
-            max = end;
+            min = 88.0;
+            max = 108.0;
         }
 
-        // Multi-User Stacking: Đếm số lượng trạm đang hoạt động tại từng tần số (tối đa 20 trạm/tần số)
-        Map<Double, Long> occupancyByFreq = ACTIVE_STATIONS.values().stream()
-                .filter(s -> !s.userId.equals(currentUserId))
-                .collect(Collectors.groupingBy(s -> s.frequency, Collectors.counting()));
+        long now = System.currentTimeMillis();
+        // Lấy tất cả các tần số đang có trạm hoạt động (TTL 15 phút) loại trừ chính user hiện tại
+        Set<Double> occupiedFreqs = ACTIVE_STATIONS.values().stream()
+                .filter(s -> (now - s.broadcastAt) <= STATION_TTL_MS)
+                .filter(s -> currentUserId == null || !s.userId.equals(currentUserId))
+                .map(s -> Math.round(s.frequency * 10.0) / 10.0)
+                .collect(Collectors.toSet());
 
-        // Thử tìm tần số ngẫu nhiên còn thoáng (< 20 trạm)
-        Random random = new Random();
-        for (int i = 0; i < 30; i++) {
-            double candidate = min + (random.nextDouble() * (max - min));
-            candidate = Math.round(candidate * 10.0) / 10.0; // Làm tròn 0.1 MHz
-
-            // Ưu tiên tần số hoàn toàn trống hoặc có ít hơn 20 trạm
-            long count = occupancyByFreq.getOrDefault(candidate, 0L);
-            if (count < 20L) {
-                return candidate;
+        // Lập danh sách toàn bộ các khe tần số 0.1 MHz khả dụng trong khoảng [min, max]
+        List<Double> freeSlots = new ArrayList<>();
+        List<Double> allSlots = new ArrayList<>();
+        for (double f = min; f <= max + 0.05; f += 0.1) {
+            double slot = Math.round(f * 10.0) / 10.0;
+            allSlots.add(slot);
+            if (!occupiedFreqs.contains(slot)) {
+                freeSlots.add(slot);
             }
         }
 
-        // Nếu tất cả các vị trí thử đều đầy, chọn tần số có ít người nhất
-        double bestFreq = min;
+        // 1. Còn slot trống chưa có trạm nào chiếm -> Chọn ngẫu nhiên 1 slot hoàn toàn trống
+        if (!freeSlots.isEmpty()) {
+            return freeSlots.get(java.util.concurrent.ThreadLocalRandom.current().nextInt(freeSlots.size()));
+        }
+
+        // 2. Nếu tất cả slot đều kín (quá đông người), tìm slot có số lượng trạm chiếm ít nhất
+        Map<Double, Long> occupancy = ACTIVE_STATIONS.values().stream()
+                .filter(s -> (now - s.broadcastAt) <= STATION_TTL_MS)
+                .filter(s -> currentUserId == null || !s.userId.equals(currentUserId))
+                .collect(Collectors.groupingBy(s -> Math.round(s.frequency * 10.0) / 10.0, Collectors.counting()));
+
+        double bestSlot = allSlots.get(0);
         long minCount = Long.MAX_VALUE;
-        for (double f = min; f <= max; f += 0.1) {
-            double currentF = Math.round(f * 10.0) / 10.0;
-            long count = occupancyByFreq.getOrDefault(currentF, 0L);
+        for (Double slot : allSlots) {
+            long count = occupancy.getOrDefault(slot, 0L);
             if (count < minCount) {
                 minCount = count;
-                bestFreq = currentF;
+                bestSlot = slot;
             }
         }
 
-        return Math.round(bestFreq * 10.0) / 10.0;
+        return bestSlot;
+    }
+
+    /**
+     * API cấp tần số chống va chạm và đồng bộ ngay với user.personalFrequency
+     */
+    @Transactional
+    public ResponseData<Map<String, Object>> allocateCollisionFreeFrequency(JwtAuthenticationToken token, String intentCode) {
+        Long currentUserId = SecurityUtils.extractUserId(token);
+        if (currentUserId == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
+        }
+
+        UserEntity user = this.userRepository.findById(currentUserId).orElseThrow(() ->
+                new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "Người dùng không tồn tại", 404)
+        );
+
+        String effectiveIntent = intentCode != null && !intentCode.trim().isEmpty() ? intentCode.trim().toUpperCase() : user.getMatchIntentCode();
+        MatchIntentEntity intent = null;
+        if (effectiveIntent != null) {
+            intent = this.matchIntentRepository.findByCode(effectiveIntent).orElse(null);
+        }
+        if (intent == null) {
+            intent = this.matchIntentRepository.findAll().stream().findFirst().orElse(null);
+        }
+
+        double min = intent != null && intent.getFreqStart() != null ? intent.getFreqStart() : 88.0;
+        double max = intent != null && intent.getFreqEnd() != null ? intent.getFreqEnd() : 108.0;
+
+        Double allocated = allocateUniqueFrequency(min, max, intent != null ? intent.getCode() : "ALL", currentUserId);
+
+        user.setPersonalFrequency(allocated);
+        if (intent != null) {
+            user.setMatchIntentCode(intent.getCode());
+        }
+        this.userRepository.save(user);
+
+        return new ResponseData<>(200, "Cấp tần số chống va chạm thành công", Map.of(
+                "frequency", allocated,
+                "intentCode", intent != null ? intent.getCode() : "ALL",
+                "minFreq", min,
+                "maxFreq", max
+        ));
     }
 
     private String maskDisplayName(String name) {
@@ -563,27 +620,60 @@ public class FrequencyMatchService {
     }
 
     public ResponseData<List<BroadcastStationDTO>> getAllActiveStations(JwtAuthenticationToken token, String intentCode) {
+        ResponseData<chatToggetther.DTO.StationsResponseDTO> discovery = getAllActiveStationsWithDiscovery(token, intentCode);
+        return new ResponseData<>(200, "Danh sách trạm phát sóng trực tuyến", discovery.getData().getStations());
+    }
+
+    /**
+     * Thuật toán Trải Nghiệm Thông Minh Lúc Ít Người (Cold-Start Discovery):
+     * Trả về danh sách trạm theo intentCode kèm totalOnlineCount và activeIntents
+     */
+    public ResponseData<chatToggetther.DTO.StationsResponseDTO> getAllActiveStationsWithDiscovery(JwtAuthenticationToken token, String intentCode) {
         Long currentUserId = SecurityUtils.extractUserId(token);
         long now = System.currentTimeMillis();
 
-        // Rate limit: 1 request / 5 giây / user để chống spam API
         if (currentUserId != null) {
             Long lastFetch = LAST_STATIONS_FETCH_BY_USER.get(currentUserId);
             if (lastFetch != null && (now - lastFetch) < 5000L) {
-                // Người dùng gọi quá nhanh, trả nhanh dữ liệu từ RAM
+                // Rate limited request -> return fast from memory
             } else {
                 LAST_STATIONS_FETCH_BY_USER.put(currentUserId, now);
             }
         }
 
-        List<BroadcastStationDTO> list = ACTIVE_STATIONS.values().stream()
+        List<StationRecord> allValid = ACTIVE_STATIONS.values().stream()
                 .filter(s -> (now - s.broadcastAt) <= STATION_TTL_MS)
                 .filter(s -> currentUserId == null || !s.userId.equals(currentUserId))
+                .toList();
+
+        int totalOnline = allValid.size();
+
+        // Nhóm các intent đang có trạm online
+        Map<String, List<StationRecord>> grouped = allValid.stream()
+                .collect(Collectors.groupingBy(s -> s.intentCode));
+
+        List<Map<String, Object>> activeIntents = new ArrayList<>();
+        for (Map.Entry<String, List<StationRecord>> entry : grouped.entrySet()) {
+            Map<String, Object> item = new HashMap<>();
+            item.put("code", entry.getKey());
+            item.put("title", entry.getValue().get(0).intentTitle);
+            item.put("count", entry.getValue().size());
+            activeIntents.add(item);
+        }
+
+        List<BroadcastStationDTO> list = allValid.stream()
                 .filter(s -> intentCode == null || intentCode.trim().isEmpty() || intentCode.equalsIgnoreCase("ALL") || s.intentCode.equalsIgnoreCase(intentCode.trim()))
                 .sorted(Comparator.comparingLong((StationRecord s) -> s.broadcastAt).reversed())
-                .limit(100) // Tối đa 100 trạm mới nhất để payload JSON siêu nhẹ < 15KB
+                .limit(100)
                 .map(this::mapToStationDTO)
                 .collect(Collectors.toList());
-        return new ResponseData<>(200, "Danh sách trạm phát sóng trực tuyến", list);
+
+        chatToggetther.DTO.StationsResponseDTO resDTO = chatToggetther.DTO.StationsResponseDTO.builder()
+                .stations(list)
+                .totalOnlineCount(totalOnline)
+                .activeIntents(activeIntents)
+                .build();
+
+        return new ResponseData<>(200, "Danh sách trạm phát sóng trực tuyến", resDTO);
     }
 }

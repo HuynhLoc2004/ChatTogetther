@@ -27,6 +27,9 @@ export const ResonanceMatchModal = ({
   const [musicTracks, setMusicTracks] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [userPersonalFrequency, setUserPersonalFrequency] = useState(96.4);
+  const [totalOnlineCount, setTotalOnlineCount] = useState(0);
+  const [activeIntents, setActiveIntents] = useState([]);
+  const seenStationIdsRef = useRef(new Set());
 
   // =========================================================================
   // TAB 1: DÒ SÓNG (TUNER STATES)
@@ -103,6 +106,12 @@ export const ResonanceMatchModal = ({
     });
   }, [stations, selectedIntentFilter, currentBand]);
 
+  // Cold-start Discovery: Gợi ý băng tần khác có người phát nếu băng tần hiện tại vắng
+  const suggestedIntent = useMemo(() => {
+    if (filteredStations.length > 0) return null;
+    return activeIntents.find(ai => ai.count > 0 && ai.code !== selectedIntentFilter) || null;
+  }, [filteredStations, activeIntents, selectedIntentFilter]);
+
   // Danh sách các trạm trùng tần số hiện tại (Multi-User Stacking trong khoảng ±0.08 MHz)
   const stationsAtFreq = useMemo(() => {
     return filteredStations.filter(s => {
@@ -133,7 +142,27 @@ export const ResonanceMatchModal = ({
     return Number((Math.round(rand * 10) / 10).toFixed(1));
   }, []);
 
-  // Khi chọn intent trong tab phát sóng: tự động đồng bộ tần số
+  // Backend Collision-Free Slot Allocation
+  const handleRequestCollisionFreeSlot = useCallback(async (intentCode) => {
+    const code = intentCode || broadcastIntentCode || 'DEEP_TALK';
+    try {
+      const res = await axiosClient.get(`/match/allocate-frequency?intentCode=${encodeURIComponent(code)}`);
+      if (res.data?.data) {
+        const allocated = Number(Number(res.data.data).toFixed(1));
+        setBroadcastFreqTarget(allocated);
+        setUserPersonalFrequency(allocated);
+        return allocated;
+      }
+    } catch (err) {
+      console.warn("Backend allocation fallback:", err);
+    }
+    const it = intents.find(i => i.code === code) || intents[0];
+    const fallback = getRandomFreqForIntent(it);
+    setBroadcastFreqTarget(fallback);
+    return fallback;
+  }, [broadcastIntentCode, intents, getRandomFreqForIntent]);
+
+  // Khi chọn intent trong tab phát sóng: tự động đồng bộ tần số tránh va chạm
   const handleSelectBroadcastIntent = (code) => {
     setBroadcastIntentCode(code);
     const targetIntent = intents.find(it => it.code === code);
@@ -142,11 +171,11 @@ export const ResonanceMatchModal = ({
     const min = targetIntent.freqStart != null ? targetIntent.freqStart : 88.0;
     const max = targetIntent.freqEnd != null ? targetIntent.freqEnd : 108.0;
 
-    // Nếu userPersonalFrequency nằm trong khoảng thì dùng luôn, ngược lại cấp số ngẫu nhiên hợp lệ
+    // Nếu userPersonalFrequency nằm trong khoảng thì dùng luôn, ngược lại cấp slot không trùng lặp
     if (userPersonalFrequency >= min && userPersonalFrequency <= max) {
       setBroadcastFreqTarget(Number(userPersonalFrequency.toFixed(1)));
     } else {
-      setBroadcastFreqTarget(getRandomFreqForIntent(targetIntent));
+      handleRequestCollisionFreeSlot(code);
     }
   };
 
@@ -160,11 +189,13 @@ export const ResonanceMatchModal = ({
         axiosClient.get('/users/profile')
       ]);
 
-      // Nạp trạm sóng online
+      // Nạp trạm sóng online & dữ liệu discovery
       if (stationsRes.status === 'fulfilled' && stationsRes.value?.data) {
         const raw = stationsRes.value.data;
-        const list = Array.isArray(raw.data) ? raw.data : (Array.isArray(raw) ? raw : []);
+        const list = raw.data?.stations || (Array.isArray(raw.data) ? raw.data : (Array.isArray(raw) ? raw : []));
         setStations(list);
+        setTotalOnlineCount(raw.data?.totalOnlineCount ?? list.length);
+        setActiveIntents(raw.data?.activeIntents || []);
       }
 
       // Nạp danh mục Băng tần từ Admin
@@ -391,58 +422,44 @@ export const ResonanceMatchModal = ({
     }
   }, [isMuted, currentStation]);
 
-  // 4. Thuật toán Quét Thông Minh (Smart Jump Auto-Scan)
+  // 4. Thuật toán Quét Thông Minh & Hàng đợi Trạm đã nghe (Smart Hop Scan & Seen-Queue)
   const stopAutoScan = useCallback(() => {
     if (autoScanTimerRef.current) {
+      clearInterval(autoScanTimerRef.current);
       clearTimeout(autoScanTimerRef.current);
       autoScanTimerRef.current = null;
     }
     setIsAutoScanning(false);
   }, []);
 
-  const runAutoScanStep = useCallback((startFreq, currentStep = 0) => {
-    setFrequency(prevFreq => {
-      const min = currentBand.min;
-      const max = currentBand.max;
+  const executeSmartHop = useCallback((targetStation) => {
+    stopAutoScan();
+    if (!targetStation || targetStation.frequency == null) return;
 
-      let next = Number((prevFreq + 0.1).toFixed(1));
-      if (next > max) {
-        next = min;
+    const targetFreq = Number(Number(targetStation.frequency).toFixed(1));
+    setIsAutoScanning(true);
+    setScanNotice(null);
+
+    const startF = frequency;
+    const steps = 12;
+    let cur = 0;
+
+    autoScanTimerRef.current = setInterval(() => {
+      cur++;
+      const p = cur / steps;
+      const intermediate = Number((startF + (targetFreq - startF) * p).toFixed(1));
+      setFrequency(intermediate);
+
+      if (cur >= steps) {
+        if (autoScanTimerRef.current) clearInterval(autoScanTimerRef.current);
+        autoScanTimerRef.current = null;
+        setFrequency(targetFreq);
+        setIsAutoScanning(false);
+        const sid = targetStation.id || targetStation.userId;
+        if (sid) seenStationIdsRef.current.add(String(sid));
       }
-
-      // Kiểm tra trạm sóng
-      const matched = filteredStations.find(s => Math.abs(Number(s.frequency) - next) <= 0.08);
-      if (matched) {
-        stopAutoScan();
-        setScanNotice(null);
-        return next;
-      }
-
-      // Đã quét trọn 1 vòng (vượt quá số nấc của băng tần) mà không có trạm nào
-      const totalStepsInBand = Math.round((max - min) * 10);
-      if (currentStep >= totalStepsInBand + 5) {
-        stopAutoScan();
-        setScanNotice(`Đã quét hết băng tần ${currentBand.title}. Hiện chưa có trạm nào online.`);
-        return next;
-      }
-
-      // Tăng tốc khi gặp khoảng trống lớn
-      const stationsAhead = filteredStations
-        .map(s => Number(s.frequency))
-        .filter(f => f > next && f <= max);
-
-      let stepDelay = 35;
-      if (stationsAhead.length > 0) {
-        const nextTargetFreq = Math.min(...stationsAhead);
-        if (nextTargetFreq - next > 2.0) {
-          stepDelay = 14;
-        }
-      }
-
-      autoScanTimerRef.current = setTimeout(() => runAutoScanStep(startFreq, currentStep + 1), stepDelay);
-      return next;
-    });
-  }, [currentBand, filteredStations, stopAutoScan]);
+    }, 40);
+  }, [frequency, stopAutoScan]);
 
   const startAutoScan = () => {
     if (isAutoScanning) {
@@ -451,33 +468,56 @@ export const ResonanceMatchModal = ({
     }
 
     if (filteredStations.length === 0) {
-      setScanNotice(`Không có trạm nào đang mở sóng trong băng tần ${currentBand.title}. Bạn hãy thử chuyển sang băng tần khác hoặc mở sóng của mình!`);
+      setScanNotice("Chưa có ai phát sóng ở băng tần này");
       return;
     }
 
-    setScanNotice(null);
-    setIsAutoScanning(true);
+    // Lọc các trạm chưa nghe trong dải và khác tần số hiện tại
+    let candidates = filteredStations.filter(s => {
+      const sid = String(s.id || s.userId);
+      const isDifferent = Math.abs(Number(s.frequency) - frequency) > 0.08;
+      return !seenStationIdsRef.current.has(sid) && isDifferent;
+    });
 
-    if (stationsAtFreq.length > 0) {
-      setFrequency(prev => {
-        let n = Number((prev + 0.2).toFixed(1));
-        if (n > currentBand.max) n = currentBand.min;
-        return n;
-      });
+    if (candidates.length === 0) {
+      seenStationIdsRef.current.clear();
+      candidates = filteredStations.filter(s => Math.abs(Number(s.frequency) - frequency) > 0.08);
     }
-    autoScanTimerRef.current = setTimeout(() => runAutoScanStep(frequency, 0), 35);
+
+    if (candidates.length === 0) {
+      const target = filteredStations[0];
+      const sid = String(target.id || target.userId);
+      seenStationIdsRef.current.add(sid);
+      toast("Đã bắt trúng trạm đang phát sóng!");
+      return;
+    }
+
+    const nextStation = candidates[Math.floor(Math.random() * candidates.length)];
+    executeSmartHop(nextStation);
   };
 
   const handleScanNext = () => {
     stopAutoScan();
     setScanNotice(null);
-    setIsAutoScanning(true);
-    setFrequency(prev => {
-      let n = Number((prev + 0.2).toFixed(1));
-      if (n > currentBand.max) n = currentBand.min;
-      return n;
+    if (filteredStations.length === 0) return;
+
+    let candidates = filteredStations.filter(s => {
+      const sid = String(s.id || s.userId);
+      const isDifferent = Math.abs(Number(s.frequency) - frequency) > 0.08;
+      return !seenStationIdsRef.current.has(sid) && isDifferent;
     });
-    autoScanTimerRef.current = setTimeout(() => runAutoScanStep(frequency, 0), 30);
+
+    if (candidates.length === 0) {
+      seenStationIdsRef.current.clear();
+      candidates = filteredStations.filter(s => Math.abs(Number(s.frequency) - frequency) > 0.08);
+    }
+
+    if (candidates.length === 0) {
+      candidates = filteredStations;
+    }
+
+    const nextStation = candidates[Math.floor(Math.random() * candidates.length)];
+    executeSmartHop(nextStation);
   };
 
   useEffect(() => {
@@ -691,25 +731,22 @@ export const ResonanceMatchModal = ({
       <audio ref={previewAudioRef} onEnded={() => setIsPlayingPreview(false)} className="hidden" />
 
       <div 
-        className="w-[92vw] max-w-md md:max-w-xl bg-zinc-900 border border-zinc-800 rounded-2xl md:rounded-3xl shadow-2xl overflow-hidden flex flex-col text-zinc-100 max-h-[85dvh]"
+        className="w-[92vw] max-w-md md:max-w-xl h-[600px] sm:h-[640px] max-h-[88dvh] bg-zinc-950 border border-zinc-800 rounded-2xl md:rounded-3xl shadow-2xl overflow-hidden flex flex-col text-zinc-100"
         onClick={(e) => e.stopPropagation()}
       >
         {/* ============================================================== */}
-        {/* 1. HEADER MODAL: TIÊU ĐỀ & NÚT ÂM THANH / ĐÓNG */}
+        {/* 1. HEADER MODAL: TIÊU ĐỀ GỌN 1 HÀNG & NÚT ÂM THANH / ĐÓNG */}
         {/* ============================================================== */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-zinc-800 bg-zinc-950/80">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-zinc-800 bg-zinc-950/80 shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-200">
+            <div className="w-8 h-8 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-200">
               <Radio size={16} />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-semibold text-sm text-white tracking-tight">Trạm Dò Sóng FM Thời Gian Thực</h3>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 border border-zinc-700">
-                  {stations.length} trạm online
-                </span>
-              </div>
-              <p className="text-[11px] text-zinc-400">Không gian kết nối âm thanh ngẫu nhiên qua tần số vô tuyến</p>
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold text-sm sm:text-base text-white tracking-tight whitespace-nowrap">Trạm Sóng FM</h3>
+              <span className="text-[11px] font-mono whitespace-nowrap px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 border border-zinc-700">
+                {totalOnlineCount ?? stations.length} online
+              </span>
             </div>
           </div>
 
@@ -738,7 +775,7 @@ export const ResonanceMatchModal = ({
         {/* ============================================================== */}
         {/* 2. CHUYỂN ĐỔI 2 CHẾ ĐỘ: DÒ SÓNG (TÌM NGƯỜI) vs PHÁT SÓNG CỦA TÔI */}
         {/* ============================================================== */}
-        <div className="grid grid-cols-2 border-b border-zinc-800 bg-zinc-950/60 p-1.5 gap-1.5">
+        <div className="grid grid-cols-2 border-b border-zinc-800 bg-zinc-950/60 p-1.5 gap-1.5 shrink-0">
           <button
             type="button"
             onClick={() => setActiveTab('tune')}
@@ -865,7 +902,7 @@ export const ResonanceMatchModal = ({
                 <div className="flex items-center justify-center min-h-[24px]">
                   {isAutoScanning ? (
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-900 text-zinc-200 border border-zinc-700 text-xs font-mono shadow-sm">
-                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                      <span className="w-2 h-2 rounded-full bg-zinc-200 animate-ping" />
                       <span>Đang quét tự động trong dải {currentBand.title}...</span>
                     </span>
                   ) : currentStation ? (
@@ -876,7 +913,7 @@ export const ResonanceMatchModal = ({
                   ) : (
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-900/60 text-zinc-500 border border-zinc-800 text-xs font-mono">
                       <span className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
-                      <span>Tần số tĩnh • Rà kim hoặc bấm Quét tự động</span>
+                      <span>Tần số tĩnh</span>
                     </span>
                   )}
                 </div>
@@ -958,54 +995,56 @@ export const ResonanceMatchModal = ({
                 </div>
 
                 {/* THANH ĐIỀU KHIỂN: +/- 0.1 MHz & NÚT QUÉT TỰ ĐỘNG */}
-                <div className="flex items-center gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      stopAutoScan();
-                      setScanNotice(null);
-                      setFrequency(prev => Math.max(currentBand.min, Number((prev - 0.1).toFixed(1))));
-                    }}
-                    className="h-8 px-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 text-xs font-mono transition-colors active:scale-95 flex items-center gap-1 shrink-0"
-                    title="Giảm 0.1 MHz"
-                  >
-                    <ChevronLeft size={14} /> -0.1
-                  </button>
+                <div className="pt-1 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        stopAutoScan();
+                        setScanNotice(null);
+                        setFrequency(prev => Math.max(currentBand.min, Number((prev - 0.1).toFixed(1))));
+                      }}
+                      className="h-8 px-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 text-xs font-mono transition-colors active:scale-95 flex items-center gap-1 shrink-0"
+                      title="Giảm 0.1 MHz"
+                    >
+                      <ChevronLeft size={14} /> -0.1
+                    </button>
 
-                  <input 
-                    type="range"
-                    min={currentBand.min}
-                    max={currentBand.max}
-                    step="0.1"
-                    value={frequency}
-                    onChange={(e) => {
-                      stopAutoScan();
-                      setScanNotice(null);
-                      setFrequency(Number(e.target.value));
-                    }}
-                    className="flex-1 accent-white h-1.5 bg-zinc-800 rounded-lg cursor-pointer"
-                  />
+                    <input 
+                      type="range"
+                      min={currentBand.min}
+                      max={currentBand.max}
+                      step="0.1"
+                      value={frequency}
+                      onChange={(e) => {
+                        stopAutoScan();
+                        setScanNotice(null);
+                        setFrequency(Number(e.target.value));
+                      }}
+                      className="flex-1 accent-white h-1.5 bg-zinc-800 rounded-lg cursor-pointer"
+                    />
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      stopAutoScan();
-                      setScanNotice(null);
-                      setFrequency(prev => Math.min(currentBand.max, Number((prev + 0.1).toFixed(1))));
-                    }}
-                    className="h-8 px-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 text-xs font-mono transition-colors active:scale-95 flex items-center gap-1 shrink-0"
-                    title="Tăng 0.1 MHz"
-                  >
-                    +0.1 <ChevronRight size={14} />
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        stopAutoScan();
+                        setScanNotice(null);
+                        setFrequency(prev => Math.min(currentBand.max, Number((prev + 0.1).toFixed(1))));
+                      }}
+                      className="h-8 px-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 text-xs font-mono transition-colors active:scale-95 flex items-center gap-1 shrink-0"
+                      title="Tăng 0.1 MHz"
+                    >
+                      +0.1 <ChevronRight size={14} />
+                    </button>
+                  </div>
 
-                  {/* Nút Quét Tự Động */}
+                  {/* Nút Quét Tự Động full-width riêng 1 hàng - Không bao giờ bị co text */}
                   <button
                     type="button"
                     onClick={startAutoScan}
-                    className={`h-8 px-3 rounded-xl border text-xs font-medium flex items-center gap-1.5 transition-all active:scale-95 shrink-0 ${
+                    className={`w-full h-10 rounded-xl border text-xs font-medium flex items-center justify-center gap-2 transition-all active:scale-[0.99] whitespace-nowrap ${
                       isAutoScanning 
-                        ? 'bg-amber-500/15 border-amber-500/40 text-amber-300 hover:bg-amber-500/25 animate-pulse'
+                        ? 'bg-zinc-800 border-zinc-600 text-white animate-pulse'
                         : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border-zinc-800'
                     }`}
                   >
@@ -1117,14 +1156,23 @@ export const ResonanceMatchModal = ({
                   </div>
                 </div>
               ) : (
-                <div className="p-4 rounded-2xl bg-zinc-950/40 border border-dashed border-zinc-800 text-center space-y-1.5">
-                  {scanNotice ? (
-                    <p className="text-xs text-amber-300/90 leading-relaxed font-medium">{scanNotice}</p>
-                  ) : (
-                    <>
-                      <p className="text-xs text-zinc-400">Không có tín hiệu người phát tại tần số <strong>{frequency.toFixed(1)} MHz</strong>.</p>
-                      <p className="text-[11px] text-zinc-500">Hãy bấm nút <strong>Quét tự động</strong> để kim lướt nhanh tới trạm có người, hoặc chuyển sang tab <strong>Phát Sóng Của Tôi</strong> để tự mở trạm phát!</p>
-                    </>
+                <div className="p-4 rounded-2xl bg-zinc-950/60 border border-zinc-800 text-center space-y-2.5 animate-fade-in">
+                  <p className="text-xs text-zinc-400">
+                    {scanNotice || (filteredStations.length === 0 ? "Chưa có ai phát sóng ở băng tần này" : `Không có tín hiệu người phát tại tần số ${frequency.toFixed(1)} MHz.`)}
+                  </p>
+                  {suggestedIntent && filteredStations.length === 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedIntentFilter(suggestedIntent.code);
+                        const it = intents.find(i => i.code === suggestedIntent.code);
+                        if (it?.freqStart != null) setFrequency(Number(it.freqStart.toFixed(1)));
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-medium text-zinc-200 transition-colors inline-flex items-center gap-1.5 active:scale-95"
+                    >
+                      <Radio size={13} className="text-emerald-400" />
+                      <span>Chuyển sang {suggestedIntent.title} ({suggestedIntent.count} trạm online)</span>
+                    </button>
                   )}
                 </div>
               )}
@@ -1208,9 +1256,6 @@ export const ResonanceMatchModal = ({
                     </span>
                     <span className="text-sm font-mono text-zinc-500 font-medium">MHz</span>
                   </div>
-                  <span className="text-[10px] text-zinc-500 block mt-0.5">
-                    Tần số này sẽ được đồng bộ hiển thị trên Hồ sơ cá nhân của bạn
-                  </span>
                 </div>
 
                 <div className="flex items-center gap-1.5 shrink-0">
@@ -1242,12 +1287,9 @@ export const ResonanceMatchModal = ({
 
                   <button 
                     type="button" 
-                    onClick={() => {
-                      const it = intents.find(i => i.code === broadcastIntentCode) || intents[0];
-                      setBroadcastFreqTarget(getRandomFreqForIntent(it));
-                    }}
+                    onClick={() => handleRequestCollisionFreeSlot(broadcastIntentCode)}
                     className="h-8 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 text-xs font-mono flex items-center gap-1.5 transition-colors active:scale-95 shrink-0"
-                    title="Chọn một tần số trống khác trong dải"
+                    title="Cấp một tần số trống chưa ai chiếm trong dải"
                   >
                     <RefreshCw size={13} />
                     <span>Đổi tần số khác</span>
@@ -1312,14 +1354,13 @@ export const ResonanceMatchModal = ({
                     <button
                       type="button"
                       onClick={startRecording5s}
-                      className="text-xs font-mono text-zinc-400 hover:text-white underline px-2"
+                      className="text-xs font-mono text-zinc-400 hover:text-white underline px-2 whitespace-nowrap shrink-0"
                     >
                       Thu lại
                     </button>
                   </div>
                 ) : (
                   <div className="text-center py-4 space-y-2.5">
-                    <p className="text-xs text-zinc-400">Thu âm 5 giây giọng nói hoặc lời chào để phát sóng</p>
                     <button
                       type="button"
                       onClick={startRecording5s}
@@ -1333,7 +1374,7 @@ export const ResonanceMatchModal = ({
               </div>
 
               {/* NÚT KÍCH HOẠT PHÁT SÓNG (Chỉ sáng trắng khi đã thu âm 5s) */}
-              <div className="pt-2">
+              <div className="sticky bottom-0 bg-zinc-950/90 pt-2 pb-1 backdrop-blur-sm shrink-0">
                 <button
                   type="button"
                   onClick={handlePublishBroadcast}
