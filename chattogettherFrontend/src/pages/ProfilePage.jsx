@@ -13,6 +13,7 @@ import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
 import TalovinLogo from '../components/TalovinLogo';
 import UserAvatar from '../components/UserAvatar';
+import MobileBottomNav from '../components/MobileBottomNav';
 import { playHeartSound } from './Home';
 import { useAuth } from '../context/AuthContext';
 
@@ -1891,53 +1892,8 @@ const ProfilePage = () => {
           </div>
         </div>
       )}
-      {/* THANH ĐIỀU HƯỚNG DÀNH CHO MOBILE (CÂN ĐỐI 5 CỘT) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-zinc-950/95 backdrop-blur-md border-t border-zinc-800 h-14 px-3 flex items-center justify-around">
-        <button
-          type="button"
-          className="flex flex-col items-center justify-center gap-1 text-zinc-400 hover:text-white text-[10px] font-medium"
-          onClick={() => navigate('/')}
-        >
-          <Compass size={18} strokeWidth={1.5} />
-          <span>Sảnh</span>
-        </button>
-
-        <button
-          type="button"
-          className="flex flex-col items-center justify-center gap-1 text-zinc-400 hover:text-white text-[10px] font-medium"
-          onClick={() => navigate('/communities')}
-        >
-          <Users size={18} strokeWidth={1.5} />
-          <span>Cộng đồng</span>
-        </button>
-
-        <button
-          type="button"
-          className="w-10 h-10 rounded-full bg-white text-zinc-950 flex items-center justify-center shadow-lg active:scale-95"
-          onClick={() => navigate('/')}
-          title="Đăng bài mới"
-        >
-          <Plus size={20} />
-        </button>
-
-        <button
-          type="button"
-          className="flex flex-col items-center justify-center gap-1 text-zinc-400 hover:text-white text-[10px] font-medium"
-          onClick={() => navigate('/')}
-        >
-          <Radio size={18} strokeWidth={1.5} />
-          <span>Phòng</span>
-        </button>
-
-        <button
-          type="button"
-          className="flex flex-col items-center justify-center gap-1 text-white text-[10px] font-semibold"
-          onClick={() => navigate('/profile')}
-        >
-          <User size={18} strokeWidth={1.8} className="text-white" />
-          <span>Hồ sơ</span>
-        </button>
-      </nav>
+      {/* THANH ĐIỀU HƯỚNG DÀNH CHO MOBILE (5 TAB CHUẨN THỰC DỤNG) */}
+      <MobileBottomNav activeTab="profile" />
     </div>
   );
 };

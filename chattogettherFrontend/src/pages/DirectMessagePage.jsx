@@ -11,6 +11,7 @@ import SockJS from 'sockjs-client';
 import Stomp from 'stompjs';
 import { UserAvatar } from './Home';
 import TalovinLogo from '../components/TalovinLogo';
+import MobileBottomNav from '../components/MobileBottomNav';
 import { PhoneCall, PhoneMissed } from 'lucide-react';
 
 const ICE_SERVERS = {
@@ -935,6 +936,11 @@ export const DirectMessagePage = () => {
             <PhoneOff size={14} />
           </button>
         </div>
+      )}
+
+      {/* THANH ĐIỀU HƯỚNG DÀNH CHO MOBILE TRÊN HỘP THƯ (5 TAB CHUẨN THỰC DỤNG) */}
+      {!activePartner && (
+        <MobileBottomNav activeTab="messages" />
       )}
 
     </div>
