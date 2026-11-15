@@ -6,10 +6,11 @@ import {
   ArrowLeft, MessageSquare, PhoneCall, Radio, Send, Image as ImageIcon,
   Heart, MessageCircle, Sparkles, Flame, Check, CornerDownRight, Play, Pause,
   Volume2, Share2, MoreVertical, UserPlus, Flag, Mic, Square, RotateCcw, Star,
-  Sliders, Edit3, AlertTriangle, Layers, Pin, Clock
+  Sliders, Edit3, AlertTriangle, Layers, Pin, Clock, Bookmark
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import GroupCollageAvatar from './GroupCollageAvatar';
+import UserAvatar from './UserAvatar';
 import toast from 'react-hot-toast';
 
 // Biểu thức chính quy phòng chống tấn công SQL Injection và Script Injection
@@ -35,6 +36,55 @@ const DEFAULT_REJECT_REASONS = [
   { id: 'COPYRIGHT', label: 'Vi phạm bản quyền nội dung / hình ảnh' }
 ];
 
+const REACTION_EMOJIS = [
+  { type: 'HEART', emoji: '❤️', label: 'Yêu thích' },
+  { type: 'FIRE', emoji: '🔥', label: 'Bùng nổ' },
+  { type: 'HAHA', emoji: '😂', label: 'Haha' },
+  { type: 'WOW', emoji: '😮', label: 'Wow' },
+  { type: 'LIKE', emoji: '👍', label: 'Thích' },
+  { type: 'CROWN', emoji: '👑', label: 'Đỉnh cao' }
+];
+
+const parsePostMedia = (raw, fallbackPost = null) => {
+  const directAudio = fallbackPost?.audioUrl || fallbackPost?.voiceUrl || fallbackPost?.audio || null;
+  const directDuration = fallbackPost?.audioDuration || null;
+
+  if (!raw && !directAudio) return { mediaUrl: null, mediaType: null, audioUrl: null, audioDuration: null };
+
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('{\\"') && trimmed.endsWith('\\"}'))) {
+      try {
+        let jsonStr = trimmed;
+        if (jsonStr.startsWith('{\\"')) {
+          jsonStr = JSON.parse(`"${jsonStr}"`);
+        }
+        const parsed = JSON.parse(jsonStr);
+        return {
+          mediaUrl: parsed.mediaUrl || null,
+          mediaType: parsed.mediaType || (parsed.mediaUrl?.includes('video') ? 'video' : 'image'),
+          audioUrl: parsed.audioUrl || directAudio || null,
+          audioDuration: parsed.audioDuration || directDuration || null
+        };
+      } catch (e) {}
+    }
+    const isExplicitAudio = trimmed.includes('voice') || trimmed.includes('audio') || trimmed.startsWith('data:audio/') || trimmed.match(/\.(mp3|wav|ogg|m4a|aac)(\?.*)?$/i);
+    const isVideo = !isExplicitAudio && (trimmed.match(/\.(mp4|mov)(\?.*)?$/i) || trimmed.startsWith('data:video/'));
+    const isAudio = isExplicitAudio || trimmed.match(/\.(mp3|wav|ogg|m4a|aac|webm)(\?.*)?$/i);
+    if (isAudio) {
+      return { mediaUrl: null, mediaType: 'audio', audioUrl: trimmed, audioDuration: directDuration || null };
+    }
+    return {
+      mediaUrl: trimmed,
+      mediaType: isVideo ? 'video' : 'image',
+      audioUrl: directAudio || null,
+      audioDuration: directDuration || null
+    };
+  }
+
+  return { mediaUrl: null, mediaType: null, audioUrl: directAudio || null, audioDuration: directDuration || null };
+};
+
 export const CommunitySection = ({ 
   currentUserId, 
   currentUserName, 
@@ -46,7 +96,12 @@ export const CommunitySection = ({
   navigate,
   onSelectUser,
   onStartPrivateCall,
-  onNavigateFeed 
+  onNavigateFeed,
+  onReactPost,
+  onPostCardClick,
+  onToggleSavePost,
+  savedPostIds = [],
+  onSharePost
 }) => {
   const safeAvatar = currentUserAvatar || localStorage.getItem('user_avatar') || '';
   const [groups, setGroups] = useState([]);
@@ -67,6 +122,103 @@ export const CommunitySection = ({
   const [pendingPosts, setPendingPosts] = useState([]);
   const [loadingPendingPosts, setLoadingPendingPosts] = useState(false);
   const [groupDedicatedPosts, setGroupDedicatedPosts] = useState([]);
+
+  // Tương tác bài viết trong nhóm
+  const [activeReactionPicker, setActiveReactionPicker] = useState(null);
+  const reactionTimeoutRef = useRef(null);
+
+  const handleReactPostInternal = async (postId, reactionType) => {
+    const targetType = reactionType || 'HEART';
+    setActiveReactionPicker(null);
+
+    setGroupDedicatedPosts(prev => prev.map(p => {
+      if (String(p.id) !== String(postId)) return p;
+      const wasLiked = p.isLikedByMe;
+      const sameType = p.myReaction === targetType;
+      return {
+        ...p,
+        isLikedByMe: wasLiked && sameType ? false : true,
+        myReaction: wasLiked && sameType ? null : targetType,
+        likesCount: wasLiked && sameType ? Math.max(0, (p.likesCount || 1) - 1) : (wasLiked ? p.likesCount : (p.likesCount || 0) + 1)
+      };
+    }));
+
+    if (onReactPost) {
+      onReactPost(postId, targetType);
+    } else {
+      try {
+        await axiosClient.post(`/posts/${postId}/like`, null, {
+          params: { type: targetType, reactionType: targetType }
+        });
+      } catch (err) {
+        console.warn("Lỗi thả cảm xúc:", err);
+      }
+    }
+  };
+
+  const handleToggleSavePostInternal = async (postId) => {
+    if (onToggleSavePost) {
+      onToggleSavePost(postId);
+    } else {
+      try {
+        await axiosClient.post(`/posts/${postId}/save`);
+        toast.success("Đã cập nhật lưu bài viết");
+      } catch (err) {
+        toast.error("Không thể lưu bài viết lúc này");
+      }
+    }
+  };
+
+  const handlePostClickInternal = (e, post, autoFocusComment = false) => {
+    const selection = window.getSelection()?.toString();
+    if (selection && selection.trim().length > 0) return;
+
+    if (onPostCardClick) {
+      onPostCardClick(e, post, autoFocusComment);
+    }
+  };
+
+  // Quản lý menu & audio bài viết trong nhóm
+  const [postMenuOpenId, setPostMenuOpenId] = useState(null);
+  const [playingVoicePostId, setPlayingVoicePostId] = useState(null);
+  const voiceAudioPlayerRef = useRef(null);
+
+  const handleTogglePlayPostVoice = (postId, audioUrl) => {
+    if (playingVoicePostId === postId) {
+      if (voiceAudioPlayerRef.current) {
+        voiceAudioPlayerRef.current.pause();
+      }
+      setPlayingVoicePostId(null);
+    } else {
+      if (voiceAudioPlayerRef.current) {
+        voiceAudioPlayerRef.current.pause();
+      }
+      const audio = new Audio(audioUrl);
+      audio.onended = () => setPlayingVoicePostId(null);
+      audio.onerror = () => {
+        toast.error("Không thể phát bản ghi âm");
+        setPlayingVoicePostId(null);
+      };
+      audio.play().catch(e => console.warn("Lỗi phát audio:", e));
+      voiceAudioPlayerRef.current = audio;
+      setPlayingVoicePostId(postId);
+    }
+  };
+
+  const handleDeletePostInternal = async (postId) => {
+    if (!window.confirm("Bạn có chắc chắn muốn xóa bài thảo luận này?")) return;
+    try {
+      await axiosClient.delete(`/posts/${postId}`);
+      toast.success("Đã xóa bài thảo luận");
+      setGroupDedicatedPosts(prev => prev.filter(p => p.id !== postId));
+      if (setPosts) {
+        setPosts(prev => prev.filter(p => p.id !== postId));
+      }
+      setPostMenuOpenId(null);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Không thể xóa bài viết");
+    }
+  };
 
   // Modal Từ chối bài viết kèm lý do
   const [rejectModalPost, setRejectModalPost] = useState(null);
@@ -911,24 +1063,6 @@ export const CommunitySection = ({
               <ArrowLeft size={14} />
               <span>Quay lại danh sách cộng đồng</span>
             </button>
-
-            <div className="flex items-center gap-2">
-              {isOwner && (
-                <span className="px-2.5 py-1 rounded-lg bg-zinc-800 text-zinc-200 border border-zinc-700 text-xs font-medium flex items-center gap-1.5 font-mono">
-                  <Crown size={12} /> Chủ nhóm
-                </span>
-              )}
-              {isDeputy && (
-                <span className="px-2.5 py-1 rounded-lg bg-zinc-800 text-zinc-300 border border-zinc-700 text-xs font-medium flex items-center gap-1.5 font-mono">
-                  <Shield size={12} /> Phó nhóm
-                </span>
-              )}
-              {isPendingMember && (
-                <span className="px-2.5 py-1 rounded-lg bg-zinc-900 text-zinc-400 border border-zinc-800 text-xs font-medium flex items-center gap-1.5 font-mono">
-                  <Clock size={12} /> Chờ duyệt
-                </span>
-              )}
-            </div>
           </div>
 
           {/* CẢNH BÁO NẾU CỘNG ĐỒNG ĐANG CHỜ ADMIN PHÊ DUYỆT */}
@@ -1000,11 +1134,15 @@ export const CommunitySection = ({
 
                   <div className="flex items-center gap-2 mt-1 text-xs text-zinc-500 font-mono tabular-nums">
                     <span>{selectedGroup.membersCount || groupDetail?.members?.length || 1} thành viên</span>
-                    <span>•</span>
-                    <span className={activeGroupRoom ? "text-emerald-400 font-medium flex items-center gap-1" : "text-zinc-500"}>
-                      {activeGroupRoom && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>}
-                      {activeGroupRoom ? 'Đang có phòng thoại trực tiếp' : 'Sẵn sàng kết nối'}
-                    </span>
+                    {activeGroupRoom && (
+                      <>
+                        <span>•</span>
+                        <span className="text-emerald-400 font-medium flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                          Đang có phòng thoại trực tiếp
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1377,57 +1515,290 @@ export const CommunitySection = ({
                 </div>
               ) : (
                 <div className="space-y-3.5">
-                  {groupPosts.map(post => (
-                    <div 
-                      key={post.id} 
-                      className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800/90 hover:border-zinc-700 transition-all shadow-sm space-y-3"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div 
-                          className="flex items-center gap-2.5 cursor-pointer"
-                          onClick={() => {
-                            if (navigate) navigate(`/profile/${post.authorId || post.userId}`);
-                            else if (onSelectUser) onSelectUser(post.authorId || post.userId);
-                          }}
-                        >
-                          <div className="w-8 h-8 rounded-full bg-zinc-800 overflow-hidden flex items-center justify-center font-bold text-xs text-white border border-zinc-700">
-                            {post.authorAvatar || post.avatar ? (
-                              <img src={post.authorAvatar || post.avatar} alt="" className="w-full h-full object-cover" />
+                  {groupPosts.map(post => {
+                    const isSaved = savedPostIds?.some(id => String(id) === String(post.id));
+                    const authorId = post.authorId || post.userId;
+                    const isMe = String(authorId) === String(currentUserId) || (currentUserName && (post.authorNickname === currentUserName || post.authorAccount === currentUserName));
+                    const isGroupCreator = selectedGroup?.creatorId === authorId;
+                    const isGroupDeputy = selectedGroup?.deputyId === authorId;
+                    const isCurrentUserGroupAdmin = selectedGroup?.creatorId === currentUserId || selectedGroup?.deputyId === currentUserId;
+                    const currentReaction = REACTION_EMOJIS.find(r => r.type === post.myReaction);
+                    const canShare = !(selectedGroup?.isPrivate || selectedGroup?.allowExternalShare === false || post.allowExternalShare === false);
+                    const parsedMedia = parsePostMedia(post.imageUrl || post.mediaUrls?.[0]?.url || post.mediaUrls?.[0], post);
+
+                    return (
+                      <article 
+                        key={post.id} 
+                        id={`group-post-${post.id}`}
+                        className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800/90 hover:border-zinc-700/80 transition-all shadow-sm space-y-3 cursor-pointer hover:bg-zinc-900/60"
+                        onClick={(e) => handlePostClickInternal(e, post)}
+                      >
+                        {/* Header: Avatar, Name, Badges, Time, Actions */}
+                        <div className="flex items-start justify-between gap-3">
+                          <div 
+                            className="flex items-center gap-2.5 cursor-pointer min-w-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (navigate) navigate(`/profile/${authorId}`);
+                              else if (onSelectUser) onSelectUser(authorId);
+                            }}
+                          >
+                            <UserAvatar 
+                              avatar={post.authorAvatar || post.avatar} 
+                              name={post.authorNickname || post.authorAccount} 
+                              size={36} 
+                            />
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-xs font-semibold text-zinc-100 hover:underline truncate">
+                                  {post.authorNickname || post.authorAccount || 'Thành viên'}
+                                </span>
+
+                                {isGroupCreator && (
+                                  <span className="font-mono text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-200 border border-zinc-700 shrink-0">
+                                    Chủ nhóm
+                                  </span>
+                                )}
+                                {isGroupDeputy && !isGroupCreator && (
+                                  <span className="font-mono text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700 shrink-0">
+                                    Phó nhóm
+                                  </span>
+                                )}
+
+                                <span className="text-zinc-500 font-mono text-[11px] truncate">
+                                  @{post.authorAccount || "user"}
+                                </span>
+                                <span className="text-zinc-600">·</span>
+                                <span className="text-[11px] text-zinc-500 font-mono shrink-0">
+                                  {post.formattedTime || (post.createdAt ? new Date(post.createdAt).toLocaleDateString('vi-VN') : 'Vừa xong')}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Save & More Options */}
+                          <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={() => handleToggleSavePostInternal(post.id)}
+                              className={`p-1.5 rounded-lg transition-colors ${
+                                isSaved 
+                                  ? 'text-white bg-zinc-800' 
+                                  : 'text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/60'
+                              }`}
+                              title={isSaved ? "Bỏ lưu bài viết" : "Lưu bài viết"}
+                            >
+                              <Bookmark size={15} strokeWidth={1.5} fill={isSaved ? "currentColor" : "none"} />
+                            </button>
+
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={() => setPostMenuOpenId(postMenuOpenId === post.id ? null : post.id)}
+                                className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/60 transition-colors"
+                                title="Tùy chọn"
+                              >
+                                <MoreVertical size={15} strokeWidth={1.5} />
+                              </button>
+
+                              {postMenuOpenId === post.id && (
+                                <div className="absolute right-0 top-full mt-1 w-40 py-1 bg-zinc-950 border border-zinc-800 rounded-xl shadow-xl z-30">
+                                  {(isMe || isCurrentUserGroupAdmin) ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeletePostInternal(post.id)}
+                                      className="w-full px-3 py-1.5 text-left text-xs text-rose-400 hover:bg-rose-950/30 flex items-center gap-2 transition-colors"
+                                    >
+                                      <Trash2 size={13} /> Xóa bài thảo luận
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        toast.success("Đã ghi nhận báo cáo bài viết");
+                                        setPostMenuOpenId(null);
+                                      }}
+                                      className="w-full px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-900 flex items-center gap-2 transition-colors"
+                                    >
+                                      <Flag size={13} /> Báo cáo vi phạm
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Content text */}
+                        {post.content && (post.content.trim() !== 'Ghi âm giọng nói' || !parsedMedia.audioUrl) && (
+                          <p className="text-xs sm:text-sm text-zinc-200 leading-relaxed whitespace-pre-line font-sans">
+                            {post.content}
+                          </p>
+                        )}
+
+                        {/* Media: Image or Video */}
+                        {parsedMedia.mediaUrl && (
+                          <div 
+                            className="rounded-xl overflow-hidden border border-zinc-800 max-h-80 relative cursor-pointer"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePostClickInternal(e, post);
+                            }}
+                          >
+                            {parsedMedia.mediaType === 'video' ? (
+                              <video 
+                                src={parsedMedia.mediaUrl} 
+                                autoPlay 
+                                loop 
+                                muted 
+                                playsInline 
+                                className="w-full h-full object-cover max-h-80" 
+                              />
                             ) : (
-                              (post.authorNickname || post.authorAccount || 'U').charAt(0).toUpperCase()
+                              <img 
+                                src={parsedMedia.mediaUrl} 
+                                alt="" 
+                                loading="lazy"
+                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                className="w-full h-full object-cover max-h-80" 
+                              />
                             )}
                           </div>
-                          <div>
-                            <span className="text-xs font-semibold text-zinc-200 block hover:text-white">
-                              {post.authorNickname || post.authorAccount || 'Thành viên'}
-                            </span>
-                            <span className="text-[10px] text-zinc-500 font-mono">
-                              {post.createdAt ? new Date(post.createdAt).toLocaleDateString('vi-VN') : 'Vừa xong'}
+                        )}
+
+                        {/* Voice Note player */}
+                        {parsedMedia.audioUrl && (
+                          <div 
+                            className="p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center gap-3"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => handleTogglePlayPostVoice(post.id, parsedMedia.audioUrl)}
+                              className="w-7 h-7 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-200 flex items-center justify-center transition-colors active:scale-95"
+                            >
+                              {playingVoicePostId === post.id ? <Pause size={12} /> : <Play size={12} />}
+                            </button>
+                            <span className="text-xs text-zinc-300 font-mono">
+                              {parsedMedia.audioDuration ? `Bản thu âm (${parsedMedia.audioDuration}s)` : 'Bản thu âm giọng nói (15s)'}
                             </span>
                           </div>
-                        </div>
-                      </div>
+                        )}
 
-                      <p className="text-xs sm:text-sm text-zinc-200 leading-relaxed whitespace-pre-line font-sans">
-                        {post.content}
-                      </p>
+                        {/* Actions Toolbar: Like, Comment, Share */}
+                        <div 
+                          className="flex items-center justify-between pt-2.5 border-t border-zinc-800/80 text-xs"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="flex items-center gap-4 sm:gap-6">
+                            {/* Like & Reaction Picker */}
+                            <div 
+                              className="relative"
+                              onMouseEnter={() => {
+                                if (reactionTimeoutRef.current) clearTimeout(reactionTimeoutRef.current);
+                                setActiveReactionPicker(post.id);
+                              }}
+                              onMouseLeave={() => {
+                                if (reactionTimeoutRef.current) clearTimeout(reactionTimeoutRef.current);
+                                reactionTimeoutRef.current = setTimeout(() => {
+                                  setActiveReactionPicker(null);
+                                }, 180);
+                              }}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => handleReactPostInternal(post.id, post.myReaction || 'HEART')}
+                                className={`flex items-center gap-1.5 transition-colors ${
+                                  post.isLikedByMe ? 'text-rose-400 font-semibold' : 'text-zinc-400 hover:text-rose-400'
+                                }`}
+                                title={currentReaction ? currentReaction.label : "Thả cảm xúc"}
+                              >
+                                {post.isLikedByMe && currentReaction ? (
+                                  <span className="text-sm select-none inline-block transform hover:scale-110 transition-transform">
+                                    {currentReaction.emoji}
+                                  </span>
+                                ) : (
+                                  <Heart 
+                                    size={15} 
+                                    strokeWidth={1.5} 
+                                    fill={post.isLikedByMe ? "#ef4444" : "none"} 
+                                    color={post.isLikedByMe ? "#ef4444" : "currentColor"} 
+                                  />
+                                )}
+                                <span className="font-mono text-xs">{post.likesCount || 0}</span>
+                              </button>
 
-                      {/* Ảnh bài thảo luận */}
-                      {post.mediaUrls && post.mediaUrls.length > 0 && (
-                        <div className="rounded-xl overflow-hidden border border-zinc-800 max-h-72">
-                          <img src={post.mediaUrls[0].url || post.mediaUrls[0]} alt="" className="w-full h-full object-cover" />
-                        </div>
-                      )}
+                              {activeReactionPicker === post.id && (
+                                <div 
+                                  className="absolute bottom-full left-0 mb-1.5 z-40 flex items-center gap-1 p-1 bg-zinc-900 border border-zinc-700 rounded-full shadow-2xl backdrop-blur-md"
+                                  onMouseEnter={() => {
+                                    if (reactionTimeoutRef.current) clearTimeout(reactionTimeoutRef.current);
+                                  }}
+                                  onMouseLeave={() => {
+                                    if (reactionTimeoutRef.current) clearTimeout(reactionTimeoutRef.current);
+                                    setActiveReactionPicker(null);
+                                  }}
+                                >
+                                  {REACTION_EMOJIS.map(item => (
+                                    <button
+                                      key={item.type}
+                                      type="button"
+                                      onClick={() => {
+                                        handleReactPostInternal(post.id, item.type);
+                                        setActiveReactionPicker(null);
+                                      }}
+                                      className="p-1.5 text-base hover:scale-125 transition-transform"
+                                      title={item.label}
+                                    >
+                                      {item.emoji}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
 
-                      {/* Audio đính kèm */}
-                      {post.audioUrl && (
-                        <div className="p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center gap-3">
-                          <Volume2 size={16} className="text-zinc-400" />
-                          <audio src={post.audioUrl} controls className="h-7 flex-1" />
+                            {/* Comment */}
+                            <button
+                              type="button"
+                              onClick={(e) => handlePostClickInternal(e, post, true)}
+                              className="flex items-center gap-1.5 text-zinc-400 hover:text-sky-400 transition-colors"
+                              title="Bình luận & Thảo luận"
+                            >
+                              <MessageSquare size={15} strokeWidth={1.5} />
+                              <span className="font-mono text-xs">{post.commentsCount || 0}</span>
+                            </button>
+
+                            {/* Share */}
+                            {canShare ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (onSharePost) onSharePost(post);
+                                  else {
+                                    navigator.clipboard?.writeText(`${window.location.origin}/communities/${selectedGroup?.id}`);
+                                    toast.success("Đã sao chép liên kết thảo luận!");
+                                  }
+                                }}
+                                className="flex items-center gap-1.5 text-zinc-400 hover:text-white transition-colors"
+                                title="Chia sẻ bài viết"
+                              >
+                                <Share2 size={15} strokeWidth={1.5} />
+                                <span className="text-xs hidden sm:inline">Chia sẻ</span>
+                              </button>
+                            ) : (
+                              <div 
+                                className="flex items-center gap-1 text-zinc-600 select-none cursor-not-allowed"
+                                title="Chủ nhóm đã khóa chia sẻ ra ngoài"
+                              >
+                                <Lock size={12} strokeWidth={1.5} />
+                                <span className="text-[11px] hidden sm:inline">Nội bộ nhóm</span>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  ))}
+                      </article>
+                    );
+                  })}
                 </div>
               )}
             </div>

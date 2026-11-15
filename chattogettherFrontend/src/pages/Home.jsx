@@ -3248,24 +3248,18 @@ const Home = ({ initialTab }) => {
                       onClick={(e) => handlePostCardClick(e, post)}
                     >
                       {post.groupId && (
-                        <div className="post-community-header-bar flex items-center justify-between pb-2 mb-2.5 border-b border-zinc-800/80 text-xs">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <span className="text-zinc-400 font-mono text-[11px] shrink-0">Tần số từ •</span>
-                            <span 
-                              className="text-zinc-100 font-semibold hover:underline cursor-pointer truncate" 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (post.groupId) navigate(`/communities/${post.groupId}`);
-                                else setActiveTab('groups');
-                              }}
-                            >
-                              {post.groupName || 'Cộng đồng'}
+                        <div className="flex items-center justify-between pb-1.5 mb-2 text-xs text-zinc-400 border-b border-zinc-800/60">
+                          <div 
+                            className="flex items-center gap-1.5 min-w-0 hover:text-zinc-200 cursor-pointer"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/communities/${post.groupId}`);
+                            }}
+                          >
+                            <Users size={13} className="text-zinc-400 shrink-0" />
+                            <span className="text-xs text-zinc-400 truncate">
+                              Đăng trong <strong className="font-semibold text-zinc-300 hover:underline">{post.groupName || 'Cộng đồng'}</strong>
                             </span>
-                            {post.recommendationReason && (
-                              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400 border border-zinc-700 shrink-0">
-                                {post.recommendationReason}
-                              </span>
-                            )}
                           </div>
 
                           {!post.isMemberOfGroup && (
@@ -3281,7 +3275,7 @@ const Home = ({ initialTab }) => {
                                   toast.error(err.response?.data?.message || 'Không thể gia nhập');
                                 }
                               }}
-                              className="px-2.5 py-1 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[11px] font-medium border border-zinc-700 transition-all flex items-center gap-1 active:scale-95 flex-shrink-0"
+                              className="px-2.5 py-1 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[11px] font-medium border border-zinc-700 transition-all flex items-center gap-1 active:scale-95 shrink-0"
                             >
                               <Plus size={11} />
                               <span>Tham gia</span>
@@ -3347,24 +3341,6 @@ const Home = ({ initialTab }) => {
                             </span>
                             <span className="text-zinc-600">·</span>
                             <span className="post-time-meta font-mono">{post.formattedTime || "Vừa xong"}</span>
-
-                            {post.groupId && post.groupName && (
-                              <span 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setActiveTab('groups');
-                                }}
-                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[#181818] border border-[#242424] text-[10px] text-zinc-300 hover:text-white cursor-pointer transition-colors"
-                                title={`Bài viết thuộc cộng đồng ${post.groupName}`}
-                              >
-                                <span>✦ {post.groupName}</span>
-                                {post.isMemberOfGroup ? (
-                                  <span className="text-emerald-400 font-mono text-[9px]">✓ Đã tham gia</span>
-                                ) : (
-                                  <span className="text-zinc-500 font-mono text-[9px]">• Đề xuất</span>
-                                )}
-                              </span>
-                            )}
 
                             {activeTab === 'trending' && (post.searchHits || 0) > 0 && (
                               <span className="font-mono text-[10px] text-zinc-300 bg-zinc-800/90 px-1.5 py-0.5 rounded border border-zinc-700/60 flex items-center gap-1" title="Lượt tìm kiếm bài viết theo thuật toán AI">
@@ -3909,6 +3885,11 @@ const Home = ({ initialTab }) => {
                 onSelectUser={(uid) => navigate(`/profile/${uid}`)}
                 onStartPrivateCall={handleStartPrivateCall}
                 onNavigateFeed={() => setActiveTab('feed')}
+                onReactPost={handleReactPost}
+                onPostCardClick={handlePostCardClick}
+                onToggleSavePost={handleToggleSavePost}
+                savedPostIds={savedPostIds}
+                onSharePost={(p) => setSharePost(p)}
               />
             </SectionErrorBoundary>
           )}

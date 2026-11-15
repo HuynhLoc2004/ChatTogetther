@@ -135,6 +135,23 @@ public class PostService {
         dto.setDeletedAt(post.getDeletedAt());
         dto.setDeletedReason(post.getDeletedReason());
 
+        if (post.getGroupId() != null) {
+            CommunityGroupEntity grp = this.groupRepository.findById(post.getGroupId()).orElse(null);
+            if (grp != null) {
+                dto.setIsGroupPublic(!Boolean.TRUE.equals(grp.getIsPrivate()));
+                dto.setAllowExternalShare(Boolean.TRUE.equals(grp.getIsPublicToFeed()) && !Boolean.TRUE.equals(grp.getIsPrivate()));
+                dto.setAllowPublicFeed(Boolean.TRUE.equals(grp.getIsPublicToFeed()));
+            } else {
+                dto.setIsGroupPublic(true);
+                dto.setAllowExternalShare(true);
+                dto.setAllowPublicFeed(true);
+            }
+        } else {
+            dto.setIsGroupPublic(true);
+            dto.setAllowExternalShare(true);
+            dto.setAllowPublicFeed(true);
+        }
+
         // Thuật toán AI Tính điểm Thịnh hành (Search Frequency Dominance Algorithm):
         // Ưu tiên cao nhất các bài viết được cộng đồng tìm kiếm nhiều nhất (Search Hits * 10),
         // kết hợp tần suất tương tác bình luận (Comments * 3) và cảm xúc (Likes * 1),
@@ -299,6 +316,26 @@ public class PostService {
             }
         }
 
+        // 3.2. Tính toán tốc độ tương tác trong 60 phút gần nhất (Viral Velocity Engine)
+        LocalDateTime oneHourAgo = LocalDateTime.now().minusMinutes(60);
+        Map<Long, Integer> recentVelocityMap = new HashMap<>();
+        try {
+            List<Object[]> recentLikes = this.postLikeRepository.countRecentLikesByPostIds(postIds, oneHourAgo);
+            for (Object[] r : recentLikes) {
+                Long pId = (Long) r[0];
+                Long cnt = (Long) r[1];
+                recentVelocityMap.merge(pId, cnt != null ? cnt.intValue() : 0, Integer::sum);
+            }
+            List<Object[]> recentCmts = this.commentRepository.countRecentCommentsByPostIds(postIds, oneHourAgo);
+            for (Object[] r : recentCmts) {
+                Long pId = (Long) r[0];
+                Long cnt = (Long) r[1];
+                recentVelocityMap.merge(pId, cnt != null ? cnt.intValue() : 0, Integer::sum);
+            }
+        } catch (Exception ex) {
+            log.warn("Không thể tính recent velocity: {}", ex.getMessage());
+        }
+
         // 4. Ánh xạ trực tiếp trên bộ nhớ RAM siêu tốc & Thuật toán Đề xuất Sảnh Trực Tuyến Thông Minh (Smart Feed Ranking)
         // Tìm các nhóm mà user đang bị BANNED để tuyệt đối không đề xuất bài
         Set<Long> bannedGroupIds = new HashSet<>();
@@ -374,51 +411,66 @@ public class PostService {
             dto.setCommentsCount(commentsCount);
             dto.setSearchHits(hits);
 
-            // 2. CÔNG THỨC CHẤM ĐIỂM XẾP HẠNG (Smart Feed Ranking Formula)
-            // Nhận diện tín hiệu âm thanh đặc trưng (Voice note 15s hoặc audio file)
-            boolean hasAudio = (p.getVibe() != null && (p.getVibe().contains(".mp3") || p.getVibe().contains(".webm") || p.getVibe().contains("voice") || p.getVibe().contains("audio")))
-                    || (p.getImageUrl() != null && (p.getImageUrl().endsWith(".mp3") || p.getImageUrl().endsWith(".webm") || p.getImageUrl().contains("audio")));
+            // 2. CÔNG THỨC CHẤM ĐIỂM XẾP HẠNG & LAN TỎA VIRAL (Viral & Social Graph Ranking)
+            // Score = (Likes * 1.5 + Comments * 3.0 + Shares * 4.5 + FriendBoost + VelocityBoost) / (AgeInHours + 2)^1.35
+            int sharesCount = (int) Math.min(hits, 50);
+            double engagementScore = (likesCount * 1.5) + (commentsCount * 3.0) + (sharesCount * 4.5);
 
-            // InteractionScore = (likeCount * 2) + (commentCount * 3) + (hasAudio ? 6 : 0)
-            double interactionScore = (likesCount * 2.0) + (commentsCount * 3.0) + (hasAudio ? 6.0 : 0.0);
-
-            // SocialAffinityBonus
-            double socialAffinityBonus = 0.0;
+            // FriendBoost (+12.0)
+            double friendBoost = 0.0;
             String recoReason = null;
+            String socialCtx = null;
             boolean isFriendInteracted = false;
 
             boolean isFriendAuthor = author != null && friendUserIds.contains(author.getId());
             boolean hasFriendInteraction = friendCommentSignalMap.containsKey(p.getId()) || friendLikeSignalMap.containsKey(p.getId());
 
             if (isFriendAuthor) {
-                socialAffinityBonus += 15.0;
+                friendBoost = 12.0;
                 recoReason = "Bài viết từ bạn bè @" + (dto.getAuthorAccount() != null ? dto.getAuthorAccount() : dto.getAuthorNickname());
-            }
-
-            if (isMemberOfThisGroup) {
-                socialAffinityBonus += 10.0;
-                if (recoReason == null) {
-                    recoReason = "Từ cộng đồng " + (grp != null ? grp.getName() : "bạn đã tham gia");
-                }
-            }
-
-            if (hasFriendInteraction) {
-                socialAffinityBonus += 8.0;
+                socialCtx = recoReason;
+            } else if (hasFriendInteraction) {
+                friendBoost = 12.0;
                 isFriendInteracted = true;
-                if (recoReason == null) {
-                    String friendName = friendCommentSignalMap.getOrDefault(p.getId(), friendLikeSignalMap.get(p.getId()));
-                    recoReason = "Bạn bè (" + friendName + ") đã tương tác";
-                }
+                String friendName = friendCommentSignalMap.getOrDefault(p.getId(), friendLikeSignalMap.get(p.getId()));
+                recoReason = "Bạn bè (" + friendName + ") đã tương tác";
+                socialCtx = recoReason;
+            }
+
+            if (isMemberOfThisGroup && recoReason == null) {
+                recoReason = "Từ cộng đồng " + (grp != null ? grp.getName() : "bạn đã tham gia");
+            }
+
+            // VelocityBoost (+15 đến +25 điểm khi tương tác tăng đột biến trong 60 phút gần nhất)
+            int recentSpeed = recentVelocityMap.getOrDefault(p.getId(), 0);
+            double velocityBoost = 0.0;
+            if (recentSpeed >= 5) {
+                velocityBoost = 25.0;
+            } else if (recentSpeed >= 2) {
+                velocityBoost = 15.0;
+            } else if (recentSpeed >= 1) {
+                velocityBoost = 8.0;
             }
 
             long hoursOld = p.getCreatedAt() != null ? Math.max(0, java.time.Duration.between(p.getCreatedAt(), LocalDateTime.now()).toHours()) : 0;
-            // TimeDecay: FinalScore = (InteractionScore + SocialAffinityBonus + 10) / Math.pow(hoursSinceCreated + 2, 1.5)
-            double timeDecay = Math.pow(hoursOld + 2.0, 1.5);
-            double finalScore = (interactionScore + socialAffinityBonus + 10.0) / timeDecay;
+            // TimeDecay: (AgeInHours + 2)^1.35
+            double timeDecay = Math.pow(hoursOld + 2.0, 1.35);
+            double finalScore = (engagementScore + friendBoost + velocityBoost) / timeDecay;
+
+            // Cold-Start Freshness Boost: Đảm bảo bài mới luôn có cơ hội lên top khi Sảnh ít bài
+            if (hoursOld < 6) {
+                finalScore += (6 - hoursOld) * 1.5;
+            }
 
             dto.setTrendingScore(finalScore);
             dto.setRecommendationReason(recoReason);
+            dto.setSocialContext(socialCtx);
             dto.setIsFriendInteraction(isFriendInteracted);
+
+            // Quyền chia sẻ & đề xuất ra sảnh ngoài
+            boolean allowShare = (grp == null) || (Boolean.TRUE.equals(grp.getIsPublicToFeed()) && !Boolean.TRUE.equals(grp.getIsPrivate()));
+            dto.setAllowExternalShare(allowShare);
+            dto.setAllowPublicFeed(grp == null || Boolean.TRUE.equals(grp.getIsPublicToFeed()));
 
             PostLikeEntity myLike = userLikeMap.get(p.getId());
             if (myLike != null) {
@@ -593,6 +645,9 @@ public class PostService {
             dto.setGroupName(group.getName());
             dto.setIsGroupPublic(!Boolean.TRUE.equals(group.getIsPrivate()));
             dto.setIsMemberOfGroup(memberOpt.isPresent() && "ACTIVE".equals(memberOpt.get().getStatus()));
+            boolean allowShare = Boolean.TRUE.equals(group.getIsPublicToFeed()) && !Boolean.TRUE.equals(group.getIsPrivate());
+            dto.setAllowExternalShare(allowShare);
+            dto.setAllowPublicFeed(Boolean.TRUE.equals(group.getIsPublicToFeed()));
             return dto;
         }).collect(Collectors.toList());
 
