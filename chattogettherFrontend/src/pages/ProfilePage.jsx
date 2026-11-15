@@ -16,6 +16,7 @@ import UserAvatar from '../components/UserAvatar';
 import MobileBottomNav from '../components/MobileBottomNav';
 import { playHeartSound } from './Home';
 import { useAuth } from '../context/AuthContext';
+import { usePresence } from '../context/PresenceContext';
 
 const parsePostMedia = (raw, fallbackPost = null) => {
   const directAudio = fallbackPost?.audioUrl || fallbackPost?.voiceUrl || fallbackPost?.audio || null;
@@ -740,7 +741,8 @@ const ProfilePage = () => {
     }
   };
 
-  const isOnline = Boolean(profile?.isOnline ?? true);
+  const { isUserOnline, getUserStatusText } = usePresence();
+  const isOnline = isMe ? true : (isUserOnline(effectiveUserId) || Boolean(profile?.isOnline));
   const matchedTrack = dynamicTracks.find(t => String(t.id) === String(profile?.favoriteMusicId || editData.favoriteMusicId));
   const userGenre = matchedTrack ? `${matchedTrack.title} • ${matchedTrack.artist || matchedTrack.genreTag || 'Lo-Fi'}` : (dynamicTracks[0] ? `${dynamicTracks[0].title} • ${dynamicTracks[0].artist || 'Lo-Fi'}` : 'Chưa chọn gu âm nhạc');
 
@@ -894,6 +896,14 @@ const ProfilePage = () => {
                   <p className="font-mono text-xs text-zinc-400 mt-0.5">
                     @{profile?.account || 'user'}
                   </p>
+
+                  {/* Trạng thái hoạt động thời gian thực */}
+                  <div className="flex items-center gap-1.5 mt-1.5 text-xs font-sans">
+                    <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-600'}`} />
+                    <span className={isOnline ? 'text-emerald-400 font-medium' : 'text-zinc-400'}>
+                      {isMe ? 'Đang hoạt động' : getUserStatusText(effectiveUserId, profile?.lastActiveAt)}
+                    </span>
+                  </div>
 
                   {/* Tiểu sử */}
                   <p className="text-xs text-zinc-300 mt-2.5 leading-relaxed whitespace-pre-wrap">

@@ -8,6 +8,7 @@ import lombok.Setter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -63,6 +64,12 @@ public class UserEntity {
 
     @Column(name = "match_intent_code", columnDefinition = "TEXT")
     private String matchIntentCode;
+
+    @Column(name = "show_active_status")
+    private Boolean showActiveStatus = true;
+
+    @Column(name = "last_active_at")
+    private LocalDateTime lastActiveAt;
 
     @PrePersist
     public void prePersistFrequency() {

@@ -205,12 +205,12 @@ const CallPage = () => {
   }, [currentUserId, currentUserName, currentUserAvatar, isDirectCall, isRoomCall, userId, roomId]);
 
   // 6. End Call Handler & Auto Post Call Log to Chat
-  const endCall = useCallback(async (notify = true) => {
+  const endCall = useCallback(async (shouldSendSignal = true) => {
     if (isCallEndedRef.current) return;
     isCallEndedRef.current = true;
 
     stopRingAudio();
-    if (notify) {
+    if (shouldSendSignal) {
       sendCallSignal({ type: 'END' });
     }
 
@@ -341,13 +341,27 @@ const CallPage = () => {
       try {
         setCallStatusText('Đang mở thiết bị Mic/Camera...');
         
-        // Xin quyền Media
-        const constraints = {
-          audio: true,
-          video: isVideoParam ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } : false
-        };
-
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        // Xin quyền Media an toàn (tự động fallback sang Audio-only nếu Camera không khả dụng)
+        let stream;
+        try {
+          const constraints = {
+            audio: true,
+            video: isVideoParam ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } : false
+          };
+          stream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (mediaErr) {
+          console.warn("Lỗi mở thiết bị theo cấu hình:", mediaErr);
+          if (isVideoParam) {
+            try {
+              stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+              toast("Không thể mở Camera, tự động chuyển sang cuộc gọi thoại.", { icon: '🎙️' });
+            } catch (audioErr) {
+              throw audioErr;
+            }
+          } else {
+            throw mediaErr;
+          }
+        }
         if (!isActive) {
           stream.getTracks().forEach(t => t.stop());
           return;

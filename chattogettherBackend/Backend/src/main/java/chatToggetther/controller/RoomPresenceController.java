@@ -18,57 +18,63 @@ import java.util.concurrent.ConcurrentHashMap;
 public class RoomPresenceController {
 
     private final SimpMessagingTemplate messagingTemplate;
+    private final chatToggetther.service.PresenceService presenceService;
+    private static chatToggetther.service.PresenceService staticPresenceService;
 
     // Lưu trữ theo phòng: roomId -> (userId -> lastHeartbeatTimestamp)
     private static final ConcurrentHashMap<Long, ConcurrentHashMap<Long, Long>> ROOM_PRESENCE = new ConcurrentHashMap<>();
     private static final long HEARTBEAT_TIMEOUT_MS = 35_000L; // 35 giây nếu mất kết nối thì coi như ngoại tuyến
 
-    // Lưu trữ người dùng trực tuyến toàn cục (Global Online Presence)
-    public static final ConcurrentHashMap<Long, Long> GLOBAL_USER_PRESENCE = new ConcurrentHashMap<>();
-    public static final long GLOBAL_HEARTBEAT_TIMEOUT_MS = 45_000L;
-
     public static boolean isUserOnline(Long userId) {
         if (userId == null) return false;
-        Long lastSeen = GLOBAL_USER_PRESENCE.get(userId);
-        if (lastSeen == null) return false;
-        return (System.currentTimeMillis() - lastSeen) <= GLOBAL_HEARTBEAT_TIMEOUT_MS;
+        if (staticPresenceService != null) {
+            return staticPresenceService.isUserOnline(userId);
+        }
+        return false;
     }
 
     public static void recordHeartbeat(Long userId) {
-        if (userId != null) {
-            GLOBAL_USER_PRESENCE.put(userId, System.currentTimeMillis());
+        if (userId != null && staticPresenceService != null) {
+            staticPresenceService.recordActive(userId, null);
         }
     }
 
-    public RoomPresenceController(SimpMessagingTemplate messagingTemplate) {
+    public RoomPresenceController(SimpMessagingTemplate messagingTemplate, chatToggetther.service.PresenceService presenceService) {
         this.messagingTemplate = messagingTemplate;
+        this.presenceService = presenceService;
+        staticPresenceService = presenceService;
     }
 
     /**
      * API gửi nhịp tim định kỳ (Heartbeat) của người dùng hiện tại
      */
-    @org.springframework.web.bind.annotation.PostMapping("/api/presence/heartbeat")
+    @org.springframework.web.bind.annotation.PostMapping({"/api/presence/heartbeat", "/presence/heartbeat"})
     public ResponseEntity<ResponseData<Boolean>> postGlobalHeartbeat(org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken token) {
         Long userId = chatToggetther.Customize.SecurityUtils.extractUserId(token);
         if (userId != null) {
-            recordHeartbeat(userId);
+            presenceService.recordActive(userId, null);
         }
         return ResponseEntity.ok(new ResponseData<>(200, "Heartbeat OK", true));
     }
 
     /**
+     * WebSocket: Nhận nhịp tim toàn cục định kỳ
+     */
+    @MessageMapping("/presence/heartbeat")
+    public void websocketHeartbeat(@Payload Map<String, Object> payload, org.springframework.messaging.simp.stomp.StompHeaderAccessor headerAccessor) {
+        Long userId = extractUserId(payload);
+        if (userId != null) {
+            String sessionId = headerAccessor != null ? headerAccessor.getSessionId() : null;
+            presenceService.recordActive(userId, sessionId);
+        }
+    }
+
+    /**
      * API lấy danh sách User IDs đang trực tuyến toàn hệ thống
      */
-    @GetMapping("/api/public/online-users")
+    @GetMapping({"/api/users/online-ids", "/users/online-ids", "/api/public/online-users", "/public/online-users"})
     public ResponseEntity<ResponseData<List<Long>>> getGlobalOnlineUsers() {
-        long now = System.currentTimeMillis();
-        List<Long> onlineList = new ArrayList<>();
-        GLOBAL_USER_PRESENCE.forEach((uid, ts) -> {
-            if (now - ts <= GLOBAL_HEARTBEAT_TIMEOUT_MS) {
-                onlineList.add(uid);
-            }
-        });
-        return ResponseEntity.ok(new ResponseData<>(200, "Danh sách người dùng trực tuyến", onlineList));
+        return ResponseEntity.ok(new ResponseData<>(200, "Danh sách người dùng trực tuyến", presenceService.getOnlineUserIds()));
     }
 
     /**

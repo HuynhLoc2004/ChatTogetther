@@ -826,7 +826,7 @@ const Home = ({ initialTab }) => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span>Bạn đang trong phòng: <strong>#{room.nameroom || room.roomName}</strong></span>
             <button
-              onClick={() => { toast.dismiss(t.id); navigate(`/room/${room.id}`); }}
+              onClick={() => { toast.dismiss(t.id); navigate(`/room/${room.id}`, { state: { room } }); }}
               style={{ background: '#f4f4f5', color: '#18181b', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontWeight: 600 }}
             >
               Quay lại
@@ -2183,7 +2183,7 @@ const Home = ({ initialTab }) => {
         setIsCreateModalOpen(false);
         setNewRoomData({ name: '', password: '' });
         fetchRooms();
-        navigate(`/room/${response.data.data.id}`);
+        navigate(`/room/${response.data.data.id}`, { state: { room: response.data.data } });
       }
     } catch (err) {
       toast.error(err.response?.data?.message || "Tạo phòng thất bại!");
@@ -2209,9 +2209,10 @@ const Home = ({ initialTab }) => {
 
       if (response.data && response.data.data) {
         toast.success("Tham gia phòng thành công!");
+        const enteredRoom = selectedRoom;
         setSelectedRoom(null);
         setJoinData({ nickname: '', password: '' });
-        navigate(`/room/${selectedRoom.id}`);
+        navigate(`/room/${enteredRoom.id}`, { state: { room: enteredRoom } });
       }
     } catch (err) {
       toast.error(err.response?.data?.message || "Mật khẩu phòng không chính xác!");
@@ -2230,7 +2231,7 @@ const Home = ({ initialTab }) => {
           localStorage.setItem('talovin_entered_rooms', JSON.stringify(entered));
         }
       } catch (e) { }
-      navigate(`/room/${room.id}`);
+      navigate(`/room/${room.id}`, { state: { room } });
       return;
     }
 
@@ -2248,7 +2249,7 @@ const Home = ({ initialTab }) => {
               localStorage.setItem('talovin_entered_rooms', JSON.stringify(entered));
             }
           } catch (e) { }
-          navigate(`/room/${room.id}`);
+          navigate(`/room/${room.id}`, { state: { room } });
         })
         .catch(() => {
           setSelectedRoom(room);

@@ -12,6 +12,7 @@ import { createStompClient } from '../utils/stompClient';
 import { UserAvatar } from './Home';
 import TalovinLogo from '../components/TalovinLogo';
 import MobileBottomNav from '../components/MobileBottomNav';
+import { usePresence } from '../context/PresenceContext';
 
 const ICE_SERVERS = {
   iceServers: [
@@ -25,6 +26,7 @@ export const DirectMessagePage = () => {
   const [searchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
+  const { isUserOnline } = usePresence();
 
   const urlTargetUserId = routeUserId || searchParams.get('userId') || searchParams.get('user_id');
   const passedTargetUser = location.state?.targetUser || location.state?.partner;
@@ -547,7 +549,7 @@ export const DirectMessagePage = () => {
             ) : (
               filteredConversations.map((partner) => {
                 const isSelected = activePartner?.id?.toString() === partner.id?.toString();
-                const isPartnerOnline = Boolean(partner.isOnline);
+                const isPartnerOnline = isUserOnline(partner.id) || Boolean(partner.isOnline);
                 return (
                   <div
                     key={partner.id}
@@ -628,9 +630,9 @@ export const DirectMessagePage = () => {
                       <h3 className="font-bold text-xs sm:text-sm text-zinc-100 group-hover:text-white truncate">
                         {activePartner.nickname || activePartner.account}
                       </h3>
-                      <span className={`text-[10px] font-mono flex items-center gap-1 ${activePartner.isOnline ? 'text-emerald-400' : 'text-zinc-500'}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${activePartner.isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-600'}`}></span>
-                        {activePartner.isOnline ? 'Đang hoạt động' : 'Ngoại tuyến'} • Xem hồ sơ
+                      <span className={`text-[10px] font-mono flex items-center gap-1 ${(isUserOnline(activePartner.id) || activePartner.isOnline) ? 'text-emerald-400' : 'text-zinc-500'}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${(isUserOnline(activePartner.id) || activePartner.isOnline) ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-600'}`}></span>
+                        {(isUserOnline(activePartner.id) || activePartner.isOnline) ? 'Trực tuyến' : 'Ngoại tuyến'} • Xem hồ sơ
                       </span>
                     </div>
                   </div>

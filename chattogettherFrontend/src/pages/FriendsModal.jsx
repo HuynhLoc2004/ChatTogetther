@@ -8,10 +8,12 @@ import {
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
+import { usePresence } from '../context/PresenceContext';
 
 export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, navigate: propNavigate }) => {
   const localNavigate = useNavigate();
   const navigate = propNavigate || localNavigate;
+  const { isUserOnline } = usePresence();
 
   const [activeTab, setActiveTab] = useState('friends'); // 'friends' | 'pending' | 'search'
   const [friends, setFriends] = useState([]);
@@ -456,7 +458,7 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
                               </div>
                             )}
                           </div>
-                          <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-zinc-950"></span>
+                          <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-zinc-950 ${isUserOnline(friend.id) ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-600'}`}></span>
                         </div>
 
                         <div className="flex flex-col min-w-0">

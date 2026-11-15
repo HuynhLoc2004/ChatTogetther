@@ -20,9 +20,22 @@ import java.util.List;
 @RequestMapping({"/api/rooms", "/rooms"})
 public class RoomController {
     private final RoomService roomService;
+    private final chatToggetther.service.ChatService chatService;
 
-    public RoomController(RoomService roomService) {
+    public RoomController(RoomService roomService, chatToggetther.service.ChatService chatService) {
         this.roomService = roomService;
+        this.chatService = chatService;
+    }
+
+    @GetMapping({"/{roomId}/messages", "/{roomId}/history"})
+    public ResponseEntity<ResponseData<List<chatToggetther.DTO.SendMessageDTO>>> getRoomMessages(
+            Authentication authentication,
+            @PathVariable("roomId") Long roomId,
+            @RequestParam(value = "before_id", required = false) Long beforeId,
+            @RequestParam(value = "size", required = false, defaultValue = "50") Integer size
+    ) {
+        JwtAuthenticationToken jwtAuth = (authentication instanceof JwtAuthenticationToken) ? (JwtAuthenticationToken) authentication : null;
+        return ResponseEntity.ok(this.chatService.getMessageHistory(jwtAuth, roomId, beforeId, size));
     }
 
     @PostMapping({"/create", "/create-room"})

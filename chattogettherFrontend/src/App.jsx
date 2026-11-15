@@ -11,6 +11,7 @@ import DirectMessagePage from './pages/DirectMessagePage';
 import CallPage from './pages/CallPage';
 import GlobalCallBanner from './components/GlobalCallBanner';
 import { AuthProvider } from './context/AuthContext';
+import { PresenceProvider } from './context/PresenceContext';
 import './App.css';
 
 // Error Boundary để ngăn chặn hoàn toàn màn hình đen (Blank Screen)
@@ -169,7 +170,8 @@ function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <Router>
+        <PresenceProvider>
+          <Router>
           <div className="app-root">
           <Toaster 
             position="top-center" 
@@ -319,6 +321,7 @@ function App() {
           </Routes>
         </div>
       </Router>
+      </PresenceProvider>
     </AuthProvider>
   </ErrorBoundary>
   );

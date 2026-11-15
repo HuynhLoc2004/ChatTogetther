@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @AllArgsConstructor
@@ -39,6 +40,8 @@ public class UserDTO {
 
     // Trạng thái trực tuyến Realtime
     private Boolean isOnline;
+    private Boolean showActiveStatus = true;
+    private LocalDateTime lastActiveAt;
 
     public String getAvatarUrl() {
         return this.avatar;

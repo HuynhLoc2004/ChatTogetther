@@ -112,6 +112,10 @@ public class UserService {
             dto.setCustomTitle("Thành viên");
         }
 
+        dto.setIsOnline(chatToggetther.controller.RoomPresenceController.isUserOnline(targetUser.getId()));
+        dto.setShowActiveStatus(targetUser.getShowActiveStatus() != null ? targetUser.getShowActiveStatus() : true);
+        dto.setLastActiveAt(targetUser.getLastActiveAt());
+
         if (currentUserId.equals(lookupId)) {
             dto.setFriendshipStatus("SELF");
         } else {
@@ -259,6 +263,7 @@ public class UserService {
                     dto.setAvatar(u.getAvatar());
                     dto.setLocation(u.getLocation());
                     dto.setBio(u.getBio());
+                    dto.setIsOnline(chatToggetther.controller.RoomPresenceController.isUserOnline(u.getId()));
 
                     if (currentUser != null) {
                         Optional<FriendshipEntity> fs = this.friendshipRepository.findFriendshipBetween(currentUser, u);

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { 
   Send, Users, LogOut, MessageCircle, Hash, Radio,
   MoreVertical, UserX, ChevronRight, Trash2, Crown, X, Menu, AlertTriangle,
@@ -16,6 +16,7 @@ import TalovinLogo from '../components/TalovinLogo';
 import GroupCollageAvatar from '../components/GroupCollageAvatar';
 import { UserAvatar } from './Home';
 import { createStompClient } from '../utils/stompClient';
+import { usePresence } from '../context/PresenceContext';
 import toast from 'react-hot-toast';
 import { CHAT_THEMES, getThemeById } from '../utils/chatThemes';
 
@@ -65,9 +66,11 @@ const COMMON_EMOJIS = ['😊', '❤️', '🔥', '😂', '👍', '🎉', '🙏',
 const ChatRoom = () => {
   const { roomId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { isUserOnline } = usePresence();
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
-  const [roomInfo, setRoomInfo] = useState(null);
+  const [roomInfo, setRoomInfo] = useState(() => location.state?.room || null);
   const [loading, setLoading] = useState(true);
   const [activeMenu, setActiveMenu] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -250,7 +253,7 @@ const ChatRoom = () => {
     const offline = [];
     list.forEach(ur => {
       const uId = ur.userDTO?.id?.toString();
-      const isOnline = (currentUserId && uId === currentUserId) || (uId && onlineUserIds.has(uId));
+      const isOnline = (currentUserId && uId === currentUserId) || (uId && (onlineUserIds.has(uId) || isUserOnline(uId)));
       if (isOnline) {
         online.push(ur);
       } else {
@@ -315,9 +318,20 @@ const ChatRoom = () => {
   // Lấy lịch sử tin nhắn
   const fetchHistory = useCallback(async (isLoadMore = false) => {
     try {
-      const response = await axiosClient.get(`/message/${roomId}`);
-      if (response.data && response.data.data) {
-        const rawHistory = response.data.data;
+      let rawHistory = [];
+      try {
+        const response = await axiosClient.get(`/rooms/${roomId}/messages`);
+        if (response.data && response.data.data) {
+          rawHistory = response.data.data;
+        }
+      } catch (_) {
+        const fallbackRes = await axiosClient.get(`/message/${roomId}`);
+        if (fallbackRes.data && fallbackRes.data.data) {
+          rawHistory = fallbackRes.data.data;
+        }
+      }
+
+      if (rawHistory && rawHistory.length >= 0) {
         const formatted = rawHistory.map((m) => ({
           id: m.id,
           text: m.message,
@@ -1406,7 +1420,13 @@ const ChatRoom = () => {
              size={52}
            />
            <div className="room-meta">
-              <h3>{roomInfo?.nameroom || `Phòng ${roomId}`}</h3>
+              <h3>
+                {roomInfo?.nameroom || roomInfo?.roomName ? (
+                  roomInfo.nameroom || roomInfo.roomName
+                ) : (
+                  <span className="inline-block h-4 w-28 bg-zinc-800 animate-pulse rounded" />
+                )}
+              </h3>
               <p className="font-mono text-xs text-zinc-400">Mã phòng: {roomId}</p>
            </div>
            {isAdminOfThisRoom && <div className="admin-badge">Chủ phòng</div>}
@@ -1582,7 +1602,11 @@ const ChatRoom = () => {
             />
             <div className="min-w-0">
               <h3 className="font-semibold text-sm text-zinc-100 flex items-center gap-2 truncate">
-                <span>{roomInfo?.nameroom || `Phòng #${roomId}`}</span>
+                {roomInfo?.nameroom || roomInfo?.roomName ? (
+                  <span>{roomInfo.nameroom || roomInfo.roomName}</span>
+                ) : (
+                  <span className="inline-block h-4 w-32 bg-zinc-800 animate-pulse rounded" />
+                )}
                 {isAdminOfThisRoom && (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-zinc-800 text-zinc-300 border border-zinc-700 shrink-0">
                     Chủ phòng
