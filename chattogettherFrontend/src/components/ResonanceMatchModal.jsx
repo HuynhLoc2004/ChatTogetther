@@ -1177,7 +1177,7 @@ export const ResonanceMatchModal = ({
                         onClick={() => handleSelectBroadcastIntent(it.code)}
                         className={`p-3 rounded-2xl border cursor-pointer transition-all ${
                           isSelected
-                            ? 'bg-zinc-900 border-white text-white shadow-sm ring-1 ring-white'
+                            ? 'border-white bg-zinc-800/90 text-white shadow-sm ring-1 ring-white'
                             : 'bg-zinc-950/80 border-zinc-800 text-zinc-300 hover:border-zinc-700'
                         }`}
                       >

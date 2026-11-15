@@ -39,4 +39,12 @@ public class UserDTO {
 
     // Trạng thái trực tuyến Realtime
     private Boolean isOnline;
+
+    public String getAvatarUrl() {
+        return this.avatar;
+    }
+
+    public void setAvatarUrl(String avatarUrl) {
+        this.avatar = avatarUrl;
+    }
 }

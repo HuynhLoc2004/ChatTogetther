@@ -199,8 +199,9 @@ const parsePostMedia = (raw, fallbackPost = null) => {
         // fallback
       }
     }
-    const isVideo = trimmed.match(/\.(mp4|webm|mov)(\?.*)?$/i) || trimmed.startsWith('data:video/');
-    const isAudio = trimmed.match(/\.(mp3|wav|ogg|m4a|aac|webm)(\?.*)?$/i) || trimmed.startsWith('data:audio/');
+    const isExplicitAudio = trimmed.includes('voice') || trimmed.includes('audio') || trimmed.startsWith('data:audio/') || trimmed.match(/\.(mp3|wav|ogg|m4a|aac)(\?.*)?$/i);
+    const isVideo = !isExplicitAudio && (trimmed.match(/\.(mp4|mov)(\?.*)?$/i) || trimmed.startsWith('data:video/'));
+    const isAudio = isExplicitAudio || trimmed.match(/\.(mp3|wav|ogg|m4a|aac|webm)(\?.*)?$/i);
     if (isAudio) {
       return {
         mediaUrl: null,
@@ -2645,7 +2646,7 @@ const Home = ({ initialTab }) => {
                 setIsNotifOpen(!isNotifOpen);
                 requestNotificationPermission();
               }} 
-              className="btn-header-notif hidden md:flex relative ml-2"
+              className="btn-header-notif !hidden md:!flex relative ml-2"
               title="Thông báo sảnh (Mở ngăn kéo)"
             >
               <Bell size={15} strokeWidth={1.5} />
@@ -2915,38 +2916,6 @@ const Home = ({ initialTab }) => {
           {/* ============================================================== */}
           {activeTab === 'feed' && (
             <div className="feed-composer-wrapper pt-1 sm:pt-3">
-              {/* THANH TRẠNG THÁI NHANH 1 DÒNG (COMPACT AUDIO BAR — xl:hidden) */}
-              <div className="h-10 px-3 mb-2 rounded-xl bg-zinc-900/90 border border-zinc-800/90 flex items-center justify-between gap-2 xl:hidden shadow-sm">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-6 h-6 rounded-lg bg-zinc-800 border border-zinc-700/80 flex items-center justify-center text-zinc-300 shrink-0">
-                    <Radio size={12} />
-                  </div>
-                  <span className="text-xs text-zinc-300 truncate font-sans">
-                    Trạm phát sóng FM • Khám phá tần số đồng điệu
-                  </span>
-                </div>
-                <div className="shrink-0 flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setIsSpeedMatchOpen(true)}
-                    className="bg-white hover:bg-zinc-200 text-zinc-950 text-[11px] font-medium px-2.5 h-7 rounded-lg transition-all active:scale-95 flex items-center gap-1 shadow-sm"
-                    title="Dò sóng FM"
-                  >
-                    <Radio size={11} />
-                    <span>Dò sóng</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsPartyWheelOpen(true)}
-                    className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 text-[11px] font-medium px-2.5 h-7 rounded-lg transition-all active:scale-95 flex items-center gap-1"
-                    title="Bốc thẻ bài thử thách"
-                  >
-                    <Dices size={11} />
-                    <span>Thẻ bài</span>
-                  </button>
-                </div>
-              </div>
-
               <div className="post-creator-box">
               <div className="creator-input-row">
                 <UserAvatar user={currentUser} size={36} />
@@ -3557,6 +3526,7 @@ const Home = ({ initialTab }) => {
                                   src={parsedMedia.mediaUrl} 
                                   alt="Khoảnh khắc" 
                                   loading="lazy" 
+                                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
                                   className="post-media-image group-hover/media:scale-[1.01] transition-transform duration-300" 
                                 />
                                 <div className="absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-lg bg-black/75 backdrop-blur-md text-[11px] font-mono text-white/95 flex items-center gap-1.5 shadow-lg opacity-0 group-hover/media:opacity-100 transition-opacity">
@@ -6327,6 +6297,11 @@ const Home = ({ initialTab }) => {
           justify-content: center;
           cursor: pointer;
           position: relative;
+        }
+        @media (max-width: 768px) {
+          .btn-header-notif {
+            display: none !important;
+          }
         }
         .notif-dot {
           width: 6px;

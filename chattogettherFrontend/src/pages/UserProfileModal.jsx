@@ -509,15 +509,6 @@ export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentU
                         <MessageSquare size={13} /> Nhắn tin
                       </button>
 
-                      {/* Nút Gọi ngay */}
-                      <button 
-                        type="button"
-                        onClick={() => { onClose(); navigate(`/call/direct/${effectiveUserId}?type=audio`); }}
-                        className="inline-flex items-center justify-center gap-1.5 h-8.5 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 text-xs font-medium transition-all active:scale-[0.98]"
-                        title="Gọi đàm thoại ngay"
-                      >
-                        <PhoneCall size={13} className="text-zinc-300" /> Gọi ngay
-                      </button>
 
                       {/* Nút xem trang cá nhân đầy đủ */}
                       <button

@@ -95,6 +95,8 @@ public class NotificationService {
             // Push to personal notification channel
             messagingTemplate.convertAndSend("/topic/user/" + recipientId + "/notifications", dto);
             messagingTemplate.convertAndSend("/topic/notifications/" + recipientId, dto);
+            messagingTemplate.convertAndSend("/user/" + recipientId + "/queue/notifications", dto);
+            messagingTemplate.convertAndSendToUser(String.valueOf(recipientId), "/queue/notifications", dto);
             messagingTemplate.convertAndSend("/topic/user/" + recipientId, type);
         } catch (Exception ignored) {}
 

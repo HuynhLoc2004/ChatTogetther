@@ -148,36 +148,35 @@ public class UserService {
             new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "Người dùng không tồn tại", 404)
         );
 
-        if (request.getNickname() != null && !request.getNickname().trim().isEmpty()) {
-            currentUser.setNickname(request.getNickname().trim());
+        if (request.getNickname() != null) {
+            currentUser.setNickname(request.getNickname().trim().isEmpty() ? null : request.getNickname().trim());
         }
-        if (request.getAvatar() != null) {
-            currentUser.setAvatar(request.getAvatar().trim());
+        String effectiveAvatar = request.getEffectiveAvatar();
+        if (effectiveAvatar != null) {
+            currentUser.setAvatar(effectiveAvatar.trim().isEmpty() ? null : effectiveAvatar.trim());
         }
-        if (request.getAge() != null) {
-            currentUser.setAge(request.getAge());
-        }
+        currentUser.setAge(request.getAge());
         if (request.getLocation() != null) {
-            currentUser.setLocation(request.getLocation().trim());
+            currentUser.setLocation(request.getLocation().trim().isEmpty() ? null : request.getLocation().trim());
         }
         if (request.getBio() != null) {
-            currentUser.setBio(request.getBio().trim());
+            currentUser.setBio(request.getBio().trim().isEmpty() ? null : request.getBio().trim());
         }
         if (request.getEmail() != null) {
-            currentUser.setEmail(request.getEmail().trim());
+            currentUser.setEmail(request.getEmail().trim().isEmpty() ? null : request.getEmail().trim());
         }
         if (request.getPhone() != null) {
-            currentUser.setPhone(request.getPhone().trim());
+            currentUser.setPhone(request.getPhone().trim().isEmpty() ? null : request.getPhone().trim());
         }
         if (request.getPersonalFrequency() != null) {
             double clamped = Math.max(88.0, Math.min(108.0, request.getPersonalFrequency()));
             currentUser.setPersonalFrequency(Math.round(clamped * 10.0) / 10.0);
         }
-        if (request.getFavoriteMusicId() != null) {
-            currentUser.setFavoriteMusicId(request.getFavoriteMusicId());
+        if (request.getEffectiveMusicId() != null) {
+            currentUser.setFavoriteMusicId(request.getEffectiveMusicId());
         }
-        if (request.getMatchIntentCode() != null) {
-            currentUser.setMatchIntentCode(request.getMatchIntentCode().trim());
+        if (request.getEffectiveIntentCode() != null) {
+            currentUser.setMatchIntentCode(request.getEffectiveIntentCode().trim().isEmpty() ? null : request.getEffectiveIntentCode().trim());
         }
 
         this.userRepository.save(currentUser);

@@ -6,7 +6,8 @@ import {
   Camera, Upload, Trash2, Heart, MessageSquare, Share2,
   Shield, Sparkles, Loader2, Users, Radio, Headphones,
   Mic, Play, Pause, Square, RotateCcw, AudioLines, Volume2,
-  VolumeX, Music, Tag, CornerDownRight, Send
+  VolumeX, Music, Tag, CornerDownRight, Send, ChevronDown,
+  Compass, Plus, User
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
@@ -32,19 +33,19 @@ const parsePostMedia = (raw, fallbackPost = null) => {
         const parsed = JSON.parse(jsonStr);
         let parsedMedia = parsed.mediaUrl || null;
         let parsedAudio = parsed.audioUrl || directAudio || null;
-        if (parsedMedia && (parsedMedia.match(/\.(mp3|wav|ogg|m4a|aac|webm)(\?.*)?$/i) || parsedMedia.startsWith('data:audio/'))) {
+        if (parsedMedia && (parsedMedia.match(/\.(mp3|wav|ogg|m4a|aac|webm)(\?.*)?$/i) || parsedMedia.startsWith('data:audio/') || parsed.mediaType === 'audio' || parsed.mediaType === 'AUDIO')) {
           if (!parsedAudio) parsedAudio = parsedMedia;
           parsedMedia = null;
         }
         return {
           mediaUrl: parsedMedia,
-          mediaType: parsed.mediaType || (parsedMedia?.includes('video') ? 'video' : 'image'),
+          mediaType: parsedMedia ? (parsed.mediaType || (parsedMedia.includes('video') ? 'video' : 'image')) : (parsedAudio ? 'audio' : null),
           audioUrl: parsedAudio,
           audioDuration: parsed.audioDuration || directDuration || null
         };
       } catch (e) {}
     }
-    const isAudio = trimmed.match(/\.(mp3|wav|ogg|m4a|aac|webm)(\?.*)?$/i) || trimmed.startsWith('data:audio/') || trimmed.includes('audio');
+    const isAudio = trimmed.match(/\.(mp3|wav|ogg|m4a|aac|webm)(\?.*)?$/i) || trimmed.startsWith('data:audio/') || trimmed.includes('audio') || trimmed.includes('voice');
     if (isAudio) {
       return {
         mediaUrl: null,
@@ -96,6 +97,9 @@ const ProfilePage = () => {
   const [activeTab, setActiveTab] = useState('posts'); // 'posts' | 'friends'
   const [isEditing, setIsEditing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [openIntentDropdown, setOpenIntentDropdown] = useState(false);
+  const [openMusicDropdown, setOpenMusicDropdown] = useState(false);
 
   // Dữ liệu bài viết, bạn bè
   const [userPosts, setUserPosts] = useState([]);
@@ -396,8 +400,8 @@ const ProfilePage = () => {
     setVoiceBioUrl(storedBio || null);
   }, [fetchProfile, fetchUserPosts, fetchUserFriends, effectiveUserId]);
 
-  // Xử lý nén ảnh đại diện WebP
-  const handleAvatarFileSelect = (e) => {
+  // Đổi Avatar: Upload file lên /api/media/upload (Cloudflare R2) -> gọi ngay PUT /api/users/profile lưu avatarUrl vào DB
+  const handleAvatarFileSelect = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -406,32 +410,69 @@ const ProfilePage = () => {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        const size = 400;
-        canvas.width = size;
-        canvas.height = size;
+    try {
+      setUploadingAvatar(true);
+      const formData = new FormData();
+      formData.append('file', file);
 
-        let srcX = 0, srcY = 0, srcW = img.width, srcH = img.height;
-        if (img.width > img.height) {
-          srcX = (img.width - img.height) / 2;
-          srcW = img.height;
+      let avatarUrl = '';
+      try {
+        const uploadRes = await axiosClient.post('/media/upload', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        avatarUrl = uploadRes.data?.data?.url || uploadRes.data?.data || '';
+      } catch (uploadErr) {
+        // Fallback: WebP canvas
+        avatarUrl = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              const ctx = canvas.getContext('2d');
+              const size = 400;
+              canvas.width = size;
+              canvas.height = size;
+
+              let srcX = 0, srcY = 0, srcW = img.width, srcH = img.height;
+              if (img.width > img.height) {
+                srcX = (img.width - img.height) / 2;
+                srcW = img.height;
+              } else {
+                srcY = (img.height - img.width) / 2;
+                srcH = img.width;
+              }
+
+              ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, size, size);
+              resolve(canvas.toDataURL('image/webp', 0.85));
+            };
+            img.src = event.target.result;
+          };
+          reader.readAsDataURL(file);
+        });
+      }
+
+      if (avatarUrl) {
+        const updateRes = await axiosClient.put('/users/profile', {
+          avatarUrl: avatarUrl,
+          avatar: avatarUrl
+        });
+        const updatedUser = updateRes.data?.data;
+        if (updatedUser) {
+          setProfile(prev => ({ ...prev, ...updatedUser }));
+          updateCurrentUser(updatedUser);
         } else {
-          srcY = (img.height - img.width) / 2;
-          srcH = img.width;
+          setProfile(prev => ({ ...prev, avatar: avatarUrl, avatarUrl: avatarUrl }));
+          updateCurrentUser({ avatar: avatarUrl, avatarUrl: avatarUrl });
         }
-
-        ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, size, size);
-        const webpData = canvas.toDataURL('image/webp', 0.85);
-        setEditData(prev => ({ ...prev, avatar: webpData }));
-      };
-      img.src = event.target.result;
-    };
-    reader.readAsDataURL(file);
+        localStorage.setItem('user_avatar', avatarUrl);
+        toast.success("Đã cập nhật ảnh đại diện mới!");
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Không thể tải lên ảnh đại diện");
+    } finally {
+      setUploadingAvatar(false);
+    }
   };
 
   // Lưu thông tin hồ sơ
@@ -677,7 +718,7 @@ const ProfilePage = () => {
       </header>
 
       {/* BỐ CỤC 2 CỘT CHUẨN: MOBILE 1 CỘT -> DESKTOP 12 CỘT */}
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-4 sm:py-8">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-4 sm:py-8 pb-24 md:pb-8">
         {loading && !profile ? (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start animate-pulse">
             <aside className="lg:col-span-4 space-y-5">
@@ -711,15 +752,20 @@ const ProfilePage = () => {
               {/* Header thẻ: Avatar vuông bo góc + Chấm Online + Tên */}
               <div className="flex flex-col sm:flex-row lg:flex-col items-start gap-4">
                 <div className="relative flex-shrink-0">
-                  <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden border border-zinc-700/80 bg-zinc-950 shadow-lg">
+                  <div className="w-24 h-24 rounded-[26px] overflow-hidden border-2 border-zinc-700/80 ring-4 ring-zinc-950 bg-zinc-950 shadow-lg relative">
                     <UserAvatar
                       user={isMe ? (currentUser || profile) : profile}
                       avatar={profile?.avatar || (isMe ? currentUser?.avatar : '')}
                       name={profile?.nickname || profile?.account || (isMe ? (currentUser?.displayName || currentUser?.account) : '')}
                       userId={effectiveUserId}
                       size={96}
-                      className="w-full h-full rounded-2xl object-cover"
+                      className="w-full h-full rounded-[26px] object-cover"
                     />
+                    {uploadingAvatar && (
+                      <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center rounded-[26px]">
+                        <Loader2 size={24} className="animate-spin text-white" />
+                      </div>
+                    )}
                   </div>
                   {/* Chấm Online / Offline */}
                   <span
@@ -1111,7 +1157,7 @@ const ProfilePage = () => {
                                       </span>
                                     </div>
                                     <span className="text-[11px] font-mono text-zinc-500">
-                                      {media.audioDuration ? `${media.audioDuration}s • ` : ''}Tín hiệu radio Talovin
+                                      {media.audioDuration ? `${media.audioDuration}s` : '00:15'}
                                     </span>
                                   </div>
                                 </div>
@@ -1226,7 +1272,7 @@ const ProfilePage = () => {
           onClick={() => setIsEditing(false)}
         >
           <div
-            className="w-full max-w-lg bg-zinc-900 border border-zinc-800/90 p-5 sm:p-6 rounded-2xl space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar"
+            className="w-full max-w-lg bg-zinc-900 border border-zinc-800/90 p-5 sm:p-6 rounded-2xl space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar animate-in fade-in slide-in-from-bottom-4 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
@@ -1327,54 +1373,121 @@ const ProfilePage = () => {
                 </div>
               </div>
 
-              {/* GU KẾT NỐI (matchIntentCode) */}
-              <div>
+              {/* GU KẾT NỐI (matchIntentCode) - CUSTOM DROPDOWN DARK ZINC */}
+              <div className="relative">
                 <label className="text-[11px] text-zinc-400 font-mono block mb-1">Gu kết nối (Băng tần mục tiêu)</label>
-                <select
-                  value={editData.matchIntentCode || ''}
-                  onChange={(e) => setEditData(prev => ({ ...prev, matchIntentCode: e.target.value }))}
-                  className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-xl px-3 text-xs text-white focus:outline-none focus:border-zinc-600 font-mono"
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpenIntentDropdown(!openIntentDropdown);
+                    setOpenMusicDropdown(false);
+                  }}
+                  className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 text-xs text-white flex items-center justify-between font-sans hover:border-zinc-700 transition-colors"
                 >
-                  <option value="" className="bg-zinc-900 text-zinc-500">-- Chọn gu kết nối --</option>
-                  {dynamicIntents.map(it => (
-                    <option key={it.code} value={it.code} className="bg-zinc-900 text-white">
-                      {it.title} ({it.freqStart?.toFixed(1)} - {it.freqEnd?.toFixed(1)} MHz)
-                    </option>
-                  ))}
-                </select>
+                  <span className={editData.matchIntentCode ? 'text-zinc-100 font-medium' : 'text-zinc-500'}>
+                    {dynamicIntents.find(it => it.code === editData.matchIntentCode)?.title || '-- Chọn gu kết nối --'}
+                  </span>
+                  <ChevronDown size={14} className={`text-zinc-400 transition-transform ${openIntentDropdown ? 'rotate-180' : ''}`} />
+                </button>
+                {openIntentDropdown && (
+                  <div className="absolute top-full left-0 right-0 mt-1 z-30 bg-zinc-900 border border-zinc-800 rounded-xl py-1 shadow-2xl max-h-48 overflow-y-auto custom-scrollbar">
+                    <div
+                      onClick={() => {
+                        setEditData(prev => ({ ...prev, matchIntentCode: '' }));
+                        setOpenIntentDropdown(false);
+                      }}
+                      className="px-3.5 py-2 text-xs text-zinc-400 hover:text-white hover:bg-zinc-800/80 cursor-pointer transition-colors"
+                    >
+                      -- Chọn gu kết nối --
+                    </div>
+                    {dynamicIntents.map(it => (
+                      <div
+                        key={it.code}
+                        onClick={() => {
+                          setEditData(prev => ({ ...prev, matchIntentCode: it.code }));
+                          setOpenIntentDropdown(false);
+                        }}
+                        className={`px-3.5 py-2 text-xs cursor-pointer flex items-center justify-between transition-colors ${
+                          editData.matchIntentCode === it.code ? 'bg-zinc-800 text-white font-medium' : 'text-zinc-300 hover:text-white hover:bg-zinc-800/50'
+                        }`}
+                      >
+                        <span>{it.title}</span>
+                        <span className="font-mono text-[10px] text-zinc-500">
+                          {it.freqStart?.toFixed(1)} - {it.freqEnd?.toFixed(1)} MHz
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              {/* KÊNH NHẠC LO-FI (favoriteMusicId) */}
-              <div>
+              {/* KÊNH NHẠC LO-FI (favoriteMusicId) - CUSTOM DROPDOWN DARK ZINC */}
+              <div className="relative">
                 <label className="text-[11px] text-zinc-400 font-mono block mb-1">Kênh nhạc Lo-Fi yêu thích</label>
-                <select
-                  value={editData.favoriteMusicId || ''}
-                  onChange={(e) => setEditData(prev => ({ ...prev, favoriteMusicId: e.target.value }))}
-                  className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-xl px-3 text-xs text-white focus:outline-none focus:border-zinc-600 font-sans"
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpenMusicDropdown(!openMusicDropdown);
+                    setOpenIntentDropdown(false);
+                  }}
+                  className="w-full h-10 bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 text-xs text-white flex items-center justify-between font-sans hover:border-zinc-700 transition-colors"
                 >
-                  <option value="" className="bg-zinc-900 text-zinc-500">-- Chọn kênh nhạc Lo-Fi --</option>
-                  {dynamicTracks.map(tr => (
-                    <option key={tr.id} value={tr.id} className="bg-zinc-900 text-white">
-                      {tr.title} • {tr.artist || tr.genreTag || 'Lo-Fi'}
-                    </option>
-                  ))}
-                </select>
+                  <span className={editData.favoriteMusicId ? 'text-zinc-100 font-medium' : 'text-zinc-500'}>
+                    {dynamicTracks.find(tr => String(tr.id) === String(editData.favoriteMusicId))?.title || '-- Chọn kênh nhạc Lo-Fi --'}
+                  </span>
+                  <ChevronDown size={14} className={`text-zinc-400 transition-transform ${openMusicDropdown ? 'rotate-180' : ''}`} />
+                </button>
+                {openMusicDropdown && (
+                  <div className="absolute top-full left-0 right-0 mt-1 z-30 bg-zinc-900 border border-zinc-800 rounded-xl py-1 shadow-2xl max-h-48 overflow-y-auto custom-scrollbar">
+                    <div
+                      onClick={() => {
+                        setEditData(prev => ({ ...prev, favoriteMusicId: null }));
+                        setOpenMusicDropdown(false);
+                      }}
+                      className="px-3.5 py-2 text-xs text-zinc-400 hover:text-white hover:bg-zinc-800/80 cursor-pointer transition-colors"
+                    >
+                      -- Chọn kênh nhạc Lo-Fi --
+                    </div>
+                    {dynamicTracks.map(tr => (
+                      <div
+                        key={tr.id}
+                        onClick={() => {
+                          setEditData(prev => ({ ...prev, favoriteMusicId: tr.id }));
+                          setOpenMusicDropdown(false);
+                        }}
+                        className={`px-3.5 py-2 text-xs cursor-pointer flex items-center justify-between transition-colors ${
+                          String(editData.favoriteMusicId) === String(tr.id) ? 'bg-zinc-800 text-white font-medium' : 'text-zinc-300 hover:text-white hover:bg-zinc-800/50'
+                        }`}
+                      >
+                        <span>{tr.title}</span>
+                        <span className="text-[11px] text-zinc-500 font-sans">{tr.artist || tr.genreTag || 'Lo-Fi'}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="pt-2 flex items-center justify-end gap-2 border-t border-zinc-800/80">
                 <button
                   type="button"
                   onClick={() => setIsEditing(false)}
-                  className="h-9 px-4 rounded-xl bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-300 text-xs font-medium transition-colors"
+                  className="h-10 px-4 rounded-xl bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-300 text-xs font-medium transition-colors"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="h-9 px-4 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs transition-colors duration-150 active:scale-[0.98] disabled:opacity-50 shadow-sm"
+                  className="h-10 px-5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs transition-colors duration-150 active:scale-[0.98] disabled:opacity-50 shadow-sm flex items-center gap-1.5"
                 >
-                  {submitting ? 'Đang lưu...' : 'Lưu thay đổi'}
+                  {submitting ? (
+                    <>
+                      <Loader2 size={13} className="animate-spin text-zinc-950" />
+                      <span>Đang lưu thay đổi...</span>
+                    </>
+                  ) : (
+                    <span>Lưu thay đổi</span>
+                  )}
                 </button>
               </div>
             </form>
@@ -1778,6 +1891,53 @@ const ProfilePage = () => {
           </div>
         </div>
       )}
+      {/* THANH ĐIỀU HƯỚNG DÀNH CHO MOBILE (CÂN ĐỐI 5 CỘT) */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-zinc-950/95 backdrop-blur-md border-t border-zinc-800 h-14 px-3 flex items-center justify-around">
+        <button
+          type="button"
+          className="flex flex-col items-center justify-center gap-1 text-zinc-400 hover:text-white text-[10px] font-medium"
+          onClick={() => navigate('/')}
+        >
+          <Compass size={18} strokeWidth={1.5} />
+          <span>Sảnh</span>
+        </button>
+
+        <button
+          type="button"
+          className="flex flex-col items-center justify-center gap-1 text-zinc-400 hover:text-white text-[10px] font-medium"
+          onClick={() => navigate('/communities')}
+        >
+          <Users size={18} strokeWidth={1.5} />
+          <span>Cộng đồng</span>
+        </button>
+
+        <button
+          type="button"
+          className="w-10 h-10 rounded-full bg-white text-zinc-950 flex items-center justify-center shadow-lg active:scale-95"
+          onClick={() => navigate('/')}
+          title="Đăng bài mới"
+        >
+          <Plus size={20} />
+        </button>
+
+        <button
+          type="button"
+          className="flex flex-col items-center justify-center gap-1 text-zinc-400 hover:text-white text-[10px] font-medium"
+          onClick={() => navigate('/')}
+        >
+          <Radio size={18} strokeWidth={1.5} />
+          <span>Phòng</span>
+        </button>
+
+        <button
+          type="button"
+          className="flex flex-col items-center justify-center gap-1 text-white text-[10px] font-semibold"
+          onClick={() => navigate('/profile')}
+        >
+          <User size={18} strokeWidth={1.8} className="text-white" />
+          <span>Hồ sơ</span>
+        </button>
+      </nav>
     </div>
   );
 };
