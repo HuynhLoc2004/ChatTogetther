@@ -47,16 +47,24 @@ public class NotificationService {
     public NotificationDTO mapToDTO(NotificationEntity entity) {
         if (entity == null) return null;
         boolean isUnread = entity.getIsRead() == null || !entity.getIsRead();
+        Long refId = entity.getReferenceId();
+        String uName = entity.getActorUsername() != null && !entity.getActorUsername().isEmpty()
+                ? entity.getActorUsername() : entity.getActorName();
         return NotificationDTO.builder()
                 .id(entity.getId())
                 .recipientId(entity.getRecipientId())
                 .actorId(entity.getActorId())
+                .actorUsername(uName)
                 .actorName(entity.getActorName())
+                .actorDisplayName(entity.getActorName())
                 .actorAvatar(entity.getActorAvatar())
                 .type(entity.getType())
-                .referenceId(entity.getReferenceId())
+                .referenceId(refId)
+                .targetPostId(refId)
+                .postId(refId)
                 .content(entity.getContent())
                 .text(entity.getContent())
+                .message(entity.getContent())
                 .status(entity.getStatus())
                 .isRead(!isUnread)
                 .unread(isUnread)
@@ -69,7 +77,8 @@ public class NotificationService {
     public NotificationDTO createAndSendNotification(
             Long recipientId,
             Long actorId,
-            String actorName,
+            String actorUsername,
+            String actorDisplayName,
             String actorAvatar,
             String type,
             Long referenceId,
@@ -79,7 +88,8 @@ public class NotificationService {
         NotificationEntity entity = new NotificationEntity();
         entity.setRecipientId(recipientId);
         entity.setActorId(actorId);
-        entity.setActorName(actorName);
+        entity.setActorUsername(actorUsername);
+        entity.setActorName(actorDisplayName != null && !actorDisplayName.isEmpty() ? actorDisplayName : actorUsername);
         entity.setActorAvatar(actorAvatar);
         entity.setType(type);
         entity.setReferenceId(referenceId);
@@ -102,6 +112,20 @@ public class NotificationService {
         } catch (Exception ignored) {}
 
         return dto;
+    }
+
+    @Transactional
+    public NotificationDTO createAndSendNotification(
+            Long recipientId,
+            Long actorId,
+            String actorName,
+            String actorAvatar,
+            String type,
+            Long referenceId,
+            String content,
+            String status
+    ) {
+        return createAndSendNotification(recipientId, actorId, actorName, actorName, actorAvatar, type, referenceId, content, status);
     }
 
     @Transactional

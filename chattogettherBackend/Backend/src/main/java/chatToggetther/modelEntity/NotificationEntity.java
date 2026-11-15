@@ -29,6 +29,9 @@ public class NotificationEntity {
     @Column(name = "actor_id")
     private Long actorId;
 
+    @Column(name = "actor_username", columnDefinition = "TEXT")
+    private String actorUsername;
+
     @Column(name = "actor_name", columnDefinition = "TEXT")
     private String actorName;
 

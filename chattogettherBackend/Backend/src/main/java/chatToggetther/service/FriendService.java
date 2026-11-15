@@ -117,15 +117,16 @@ public class FriendService {
 
         // Lưu thông báo persistent vào PostgreSQL và bắn Realtime qua STOMP
         try {
-            String senderName = sender.getNickname() != null && !sender.getNickname().isEmpty() ? sender.getNickname() : sender.getAccount();
+            String senderDisplayName = sender.getNickname() != null && !sender.getNickname().isEmpty() ? sender.getNickname() : sender.getAccount();
             notificationService.createAndSendNotification(
                     receiverId,
                     senderId,
-                    senderName,
+                    sender.getAccount(),
+                    senderDisplayName,
                     sender.getAvatar(),
                     "FRIEND_REQUEST",
                     friendship.getId(),
-                    senderName + " đã gửi cho bạn một lời mời kết bạn.",
+                    senderDisplayName + " đã gửi cho bạn một lời mời kết bạn.",
                     "PENDING"
             );
         } catch (Exception ignored) {}
@@ -164,15 +165,16 @@ public class FriendService {
             notificationService.updateFriendRequestStatus(receiverId, senderId, "ACCEPTED");
 
             // Báo cho sender ban đầu qua Notification persistent & realtime
-            String receiverName = receiver.getNickname() != null && !receiver.getNickname().isEmpty() ? receiver.getNickname() : receiver.getAccount();
+            String receiverDisplayName = receiver.getNickname() != null && !receiver.getNickname().isEmpty() ? receiver.getNickname() : receiver.getAccount();
             notificationService.createAndSendNotification(
                     senderId,
                     receiverId,
-                    receiverName,
+                    receiver.getAccount(),
+                    receiverDisplayName,
                     receiver.getAvatar(),
                     "FRIEND_ACCEPTED",
                     receiverId,
-                    receiverName + " đã đồng ý kết bạn với bạn.",
+                    receiverDisplayName + " đã đồng ý kết bạn với bạn.",
                     "COMPLETED"
             );
 

@@ -59,6 +59,7 @@ public class PostService {
     private final PostRepostRepository postRepostRepository;
     private final SearchTermRepository searchTermRepository;
     private final ReactionService reactionService;
+    private final NotificationService notificationService;
 
     // Cache danh sách tìm kiếm thịnh hành trong RAM để truy xuất siêu tốc <1ms
     private final List<java.util.Map<String, Object>> hotSearchesCache = new java.util.concurrent.CopyOnWriteArrayList<>();
@@ -80,7 +81,8 @@ public class PostService {
             CommentLikeRepository commentLikeRepository,
             PostRepostRepository postRepostRepository,
             SearchTermRepository searchTermRepository,
-            ReactionService reactionService
+            ReactionService reactionService,
+            NotificationService notificationService
     ) {
         this.postRepository = postRepository;
         this.postLikeRepository = postLikeRepository;
@@ -95,6 +97,7 @@ public class PostService {
         this.postRepostRepository = postRepostRepository;
         this.searchTermRepository = searchTermRepository;
         this.reactionService = reactionService;
+        this.notificationService = notificationService;
     }
 
     private PostDTO mapToPostDTO(PostEntity post, UserEntity currentUser) {
@@ -822,16 +825,19 @@ public class PostService {
         try {
             this.messagingTemplate.convertAndSend("/topic/posts", "POST_REACTION_UPDATED");
             if (finalUserReaction != null && post.getUser() != null && !post.getUser().getId().equals(currentUser.getId())) {
-                String senderName = currentUser.getNickname() != null && !currentUser.getNickname().isEmpty() ? currentUser.getNickname() : currentUser.getAccount();
-                Map<String, Object> notif = new HashMap<>();
-                notif.put("id", System.currentTimeMillis());
-                notif.put("type", "REACTION");
-                notif.put("postId", postId);
-                notif.put("reactionType", finalUserReaction);
-                notif.put("text", senderName + " đã bày tỏ cảm xúc với bài viết của bạn.");
-                notif.put("time", "Vừa xong");
-                notif.put("unread", true);
-                this.messagingTemplate.convertAndSend("/topic/user/" + post.getUser().getId() + "/notifications", notif);
+                String senderDisplayName = currentUser.getNickname() != null && !currentUser.getNickname().isEmpty() ? currentUser.getNickname() : currentUser.getAccount();
+                String content = senderDisplayName + " đã bày tỏ cảm xúc với bài viết của bạn.";
+                notificationService.createAndSendNotification(
+                        post.getUser().getId(),
+                        currentUser.getId(),
+                        currentUser.getAccount(),
+                        senderDisplayName,
+                        currentUser.getAvatar(),
+                        "POST_REACT",
+                        postId,
+                        content,
+                        "COMPLETED"
+                );
             }
         } catch (Exception ignored) {}
 
@@ -879,15 +885,19 @@ public class PostService {
         try {
             this.messagingTemplate.convertAndSend("/topic/posts", "POST_REACTION_UPDATED");
             if (desiredReaction != null && post.getUser() != null && !post.getUser().getId().equals(currentUser.getId())) {
-                String senderName = currentUser.getNickname() != null && !currentUser.getNickname().isEmpty() ? currentUser.getNickname() : currentUser.getAccount();
-                Map<String, Object> notif = new HashMap<>();
-                notif.put("id", System.currentTimeMillis());
-                notif.put("type", "REACTION");
-                notif.put("postId", postId);
-                notif.put("text", senderName + " đã bày tỏ cảm xúc với bài viết của bạn.");
-                notif.put("time", "Vừa xong");
-                notif.put("unread", true);
-                this.messagingTemplate.convertAndSend("/topic/user/" + post.getUser().getId() + "/notifications", notif);
+                String senderDisplayName = currentUser.getNickname() != null && !currentUser.getNickname().isEmpty() ? currentUser.getNickname() : currentUser.getAccount();
+                String content = senderDisplayName + " đã bày tỏ cảm xúc với bài viết của bạn.";
+                notificationService.createAndSendNotification(
+                        post.getUser().getId(),
+                        currentUser.getId(),
+                        currentUser.getAccount(),
+                        senderDisplayName,
+                        currentUser.getAvatar(),
+                        "POST_REACT",
+                        postId,
+                        content,
+                        "COMPLETED"
+                );
             }
         } catch (Exception ignored) {}
 
@@ -937,34 +947,42 @@ public class PostService {
 
         try {
             this.messagingTemplate.convertAndSend("/topic/posts", "POST_COMMENT_ADDED");
-            String senderName = currentUser.getNickname() != null && !currentUser.getNickname().isEmpty() ? currentUser.getNickname() : currentUser.getAccount();
+            String senderDisplayName = currentUser.getNickname() != null && !currentUser.getNickname().isEmpty() ? currentUser.getNickname() : currentUser.getAccount();
 
             // Nếu trả lời bình luận của ai đó -> Gửi thông báo đến tác giả bình luận cha
             if (request.getParentId() != null) {
                 this.commentRepository.findById(request.getParentId()).ifPresent(parentCmt -> {
                     if (parentCmt.getUser() != null && !parentCmt.getUser().getId().equals(currentUser.getId())) {
-                        Map<String, Object> replyNotif = new HashMap<>();
-                        replyNotif.put("id", System.currentTimeMillis());
-                        replyNotif.put("type", "COMMENT_REPLY");
-                        replyNotif.put("postId", postId);
-                        replyNotif.put("text", senderName + " đã trả lời bình luận của bạn.");
-                        replyNotif.put("time", "Vừa xong");
-                        replyNotif.put("unread", true);
-                        this.messagingTemplate.convertAndSend("/topic/user/" + parentCmt.getUser().getId() + "/notifications", replyNotif);
+                        String content = senderDisplayName + " đã trả lời bình luận của bạn.";
+                        notificationService.createAndSendNotification(
+                                parentCmt.getUser().getId(),
+                                currentUser.getId(),
+                                currentUser.getAccount(),
+                                senderDisplayName,
+                                currentUser.getAvatar(),
+                                "COMMENT_REPLY",
+                                postId,
+                                content,
+                                "COMPLETED"
+                        );
                     }
                 });
             }
 
             // Gửi thông báo cho tác giả bài viết nếu người bình luận khác tác giả bài
             if (post.getUser() != null && !post.getUser().getId().equals(currentUser.getId())) {
-                Map<String, Object> notif = new HashMap<>();
-                notif.put("id", System.currentTimeMillis() + 1);
-                notif.put("type", "COMMENT");
-                notif.put("postId", postId);
-                notif.put("text", senderName + " đã bình luận về bài viết của bạn.");
-                notif.put("time", "Vừa xong");
-                notif.put("unread", true);
-                this.messagingTemplate.convertAndSend("/topic/user/" + post.getUser().getId() + "/notifications", notif);
+                String content = senderDisplayName + " đã bình luận về bài viết của bạn.";
+                notificationService.createAndSendNotification(
+                        post.getUser().getId(),
+                        currentUser.getId(),
+                        currentUser.getAccount(),
+                        senderDisplayName,
+                        currentUser.getAvatar(),
+                        "POST_COMMENT",
+                        postId,
+                        content,
+                        "COMPLETED"
+                );
             }
         } catch (Exception ignored) {}
 
@@ -1343,17 +1361,21 @@ public class PostService {
             // Gửi realtime notification nếu người thả tim không phải tác giả bình luận
             if (comment.getUser() != null && !comment.getUser().getId().equals(currentUser.getId())) {
                 try {
-                    Map<String, Object> notif = new HashMap<>();
-                    notif.put("type", "COMMENT_LIKE");
-                    notif.put("title", "Cảm xúc phản hồi");
-                    String actor = currentUser.getNickname() != null ? currentUser.getNickname() : currentUser.getAccount();
+                    String senderDisplayName = currentUser.getNickname() != null ? currentUser.getNickname() : currentUser.getAccount();
                     String preview = comment.getContent().length() > 25 ? comment.getContent().substring(0, 25) + "..." : comment.getContent();
-                    notif.put("text", actor + " đã thích phản hồi của bạn: \"" + preview + "\"");
-                    notif.put("message", actor + " đã thích phản hồi của bạn: \"" + preview + "\"");
-                    notif.put("postId", comment.getPost() != null ? comment.getPost().getId() : null);
-                    notif.put("time", "Vừa xong");
-                    notif.put("unread", true);
-                    this.messagingTemplate.convertAndSend("/topic/user/" + comment.getUser().getId() + "/notifications", notif);
+                    String content = senderDisplayName + " đã thích phản hồi của bạn: \"" + preview + "\"";
+                    Long targetPostId = comment.getPost() != null ? comment.getPost().getId() : null;
+                    notificationService.createAndSendNotification(
+                            comment.getUser().getId(),
+                            currentUser.getId(),
+                            currentUser.getAccount(),
+                            senderDisplayName,
+                            currentUser.getAvatar(),
+                            "COMMENT_LIKE",
+                            targetPostId,
+                            content,
+                            "COMPLETED"
+                    );
                 } catch (Exception ignored) {}
             }
         }
@@ -1428,16 +1450,20 @@ public class PostService {
             // Gửi realtime notification cho tác giả bài viết nếu không phải chính mình
             if (!post.getUser().getId().equals(currentUser.getId())) {
                 try {
-                    String reposterName = currentUser.getNickname() != null && !currentUser.getNickname().trim().isEmpty()
+                    String reposterDisplayName = currentUser.getNickname() != null && !currentUser.getNickname().trim().isEmpty()
                             ? currentUser.getNickname() : currentUser.getAccount();
-                    Map<String, Object> notif = new HashMap<>();
-                    notif.put("id", UUID.randomUUID().toString());
-                    notif.put("type", "REPOST");
-                    notif.put("text", reposterName + " đã đăng lại bài viết của bạn!");
-                    notif.put("time", LocalDateTime.now().format(TIME_FORMATTER));
-                    notif.put("postId", post.getId());
-                    notif.put("unread", true);
-                    this.messagingTemplate.convertAndSend("/topic/user/" + post.getUser().getId() + "/notifications", notif);
+                    String content = reposterDisplayName + " đã chia sẻ bài viết của bạn.";
+                    notificationService.createAndSendNotification(
+                            post.getUser().getId(),
+                            currentUser.getId(),
+                            currentUser.getAccount(),
+                            reposterDisplayName,
+                            currentUser.getAvatar(),
+                            "POST_SHARE",
+                            post.getId(),
+                            content,
+                            "COMPLETED"
+                    );
                 } catch (Exception ignored) {}
             }
         }

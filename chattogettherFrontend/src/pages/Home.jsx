@@ -2049,21 +2049,30 @@ const Home = ({ initialTab }) => {
                 if (now - t > 30000) recentNotifKeysRef.current.delete(k);
               }
 
+              const targetPostId = notif.targetPostId || notif.postId || notif.referenceId;
               const normalizedNotif = {
                 id: notif.id || Date.now(),
                 actorId: notif.actorId,
-                actorName: notif.actorName,
+                actorUsername: notif.actorUsername || notif.actorName,
+                actorDisplayName: notif.actorDisplayName || notif.actorName,
+                actorName: notif.actorName || notif.actorDisplayName || notif.actorUsername,
                 actorAvatar: notif.actorAvatar,
-                referenceId: notif.referenceId,
+                referenceId: notif.referenceId || targetPostId,
+                targetPostId: targetPostId,
+                postId: targetPostId,
                 text: textContent,
                 title: notif.title || (notif.type === 'FRIEND_REQUEST' ? 'Lời mời kết bạn' :
                   notif.type === 'FRIEND_ACCEPTED' ? 'Chấp nhận kết bạn' :
-                    notif.type === 'POST_TAKEDOWN' ? 'Kiểm duyệt nội dung' : 'Thông báo hệ thống'),
+                    (notif.type === 'POST_REACT' || notif.type === 'REACTION') ? 'Cảm xúc bài viết' :
+                      (notif.type === 'POST_COMMENT' || notif.type === 'COMMENT') ? 'Bình luận mới' :
+                        notif.type === 'COMMENT_REPLY' ? 'Phản hồi bình luận' :
+                          notif.type === 'COMMENT_LIKE' ? 'Cảm xúc bình luận' :
+                            (notif.type === 'POST_SHARE' || notif.type === 'REPOST') ? 'Chia sẻ bài viết' :
+                              notif.type === 'POST_TAKEDOWN' ? 'Kiểm duyệt nội dung' : 'Thông báo hệ thống'),
                 type: notif.type || 'SYSTEM',
                 status: notif.status || (notif.type === 'FRIEND_REQUEST' ? 'PENDING' : 'COMPLETED'),
                 time: notif.time || 'Vừa xong',
                 unread: true,
-                postId: notif.postId,
                 reason: notif.reason,
                 adminNote: notif.adminNote || notif.note
               };
@@ -2252,6 +2261,39 @@ const Home = ({ initialTab }) => {
   const safeFriends = Array.isArray(friends) ? friends.filter(Boolean) : [];
   // Các phòng đàm thoại người dùng có quyền nhìn thấy: Phòng đã tham gia HOẶC phòng công khai
   const userAccessibleRooms = safeRooms.filter(r => isUserInRoom(r) || (!r.hasPassword && !r.isPrivate));
+
+  // Điều hướng và mở trực tiếp nội dung tương ứng khi click thông báo
+  const handleOpenNotification = useCallback(async (n) => {
+    if (!n) return;
+    if (n.unread) {
+      setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, unread: false, isRead: true } : item));
+      axiosClient.put(`/notifications/${n.id}/read`).catch(() => { });
+    }
+    setIsNotifOpen(false);
+
+    const targetPostId = n.targetPostId || n.postId || n.referenceId;
+    const isPostNotif = ['POST_REACT', 'POST_COMMENT', 'COMMENT_REPLY', 'COMMENT_LIKE', 'POST_SHARE', 'REACTION', 'COMMENT', 'REPOST'].includes(n.type) || !!targetPostId;
+
+    if (isPostNotif && targetPostId) {
+      const existing = safePosts.find(p => p.id === Number(targetPostId));
+      if (existing) {
+        setSelectedThreadPost(existing);
+        fetchComments(existing.id);
+      } else {
+        try {
+          const res = await axiosClient.get(`/posts/${targetPostId}`);
+          if (res.data?.data) {
+            setSelectedThreadPost(res.data.data);
+            fetchComments(res.data.data.id);
+          }
+        } catch (err) {
+          console.warn('Không thể tải bài viết từ thông báo:', err);
+        }
+      }
+    } else if (n.actorId) {
+      navigate(`/profile/${n.actorId}`);
+    }
+  }, [safePosts, navigate]);
 
   // Nguồn cấp bài viết: Nếu người dùng đã Enter tìm kiếm thì nạp kết quả server (Elastic-like), ngược lại dùng feed bình thường
   const basePostsList = (activeSearchQuery && Array.isArray(searchResults))
@@ -4740,21 +4782,48 @@ const Home = ({ initialTab }) => {
           className="fixed top-14 left-1/2 -translate-x-1/2 z-[9999] max-w-md w-[92vw] sm:w-[420px] bg-zinc-950/95 border border-zinc-700/80 rounded-2xl p-3.5 shadow-2xl backdrop-blur-xl flex flex-col gap-2.5 animate-in slide-in-from-top-3 duration-200"
           style={{ boxShadow: '0 20px 40px -8px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.08)' }}
         >
-          <div className="flex items-start gap-3">
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden ${floatingNotif.type === 'POST_TAKEDOWN'
-              ? 'bg-rose-500/15 border border-rose-500/30 text-rose-400'
-              : (floatingNotif.type === 'FRIEND_REQUEST' || floatingNotif.type === 'FRIEND')
-                ? 'bg-zinc-800 border border-zinc-700 text-zinc-200'
-                : 'bg-zinc-800 border border-zinc-700 text-zinc-300'
-              }`}>
-              {floatingNotif.actorAvatar ? (
-                <img src={floatingNotif.actorAvatar} alt="avatar" className="w-full h-full object-cover" />
-              ) : floatingNotif.type === 'POST_TAKEDOWN' ? (
-                <AlertTriangle size={16} />
-              ) : floatingNotif.type === 'FRIEND_REQUEST' ? (
-                <UserPlus size={16} />
+          <div
+            className="flex items-start gap-3 cursor-pointer"
+            onClick={() => {
+              handleOpenNotification(floatingNotif);
+              setFloatingNotif(null);
+            }}
+          >
+            <div className="flex-shrink-0">
+              {floatingNotif.actorId ? (
+                <div className="relative w-9 h-9 shrink-0">
+                  <UserAvatar
+                    user={{
+                      id: floatingNotif.actorId,
+                      userId: floatingNotif.actorId,
+                      username: floatingNotif.actorUsername || floatingNotif.actorName,
+                      account: floatingNotif.actorUsername || floatingNotif.actorName,
+                      avatarUrl: floatingNotif.actorAvatar,
+                      avatar: floatingNotif.actorAvatar
+                    }}
+                    size={36}
+                    className="w-9 h-9 rounded-full"
+                  />
+                  <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-zinc-900 border border-zinc-700/80 flex items-center justify-center text-zinc-300 shadow-sm pointer-events-none">
+                    {(floatingNotif.type === 'POST_REACT' || floatingNotif.type === 'REACTION' || floatingNotif.type === 'COMMENT_LIKE' || floatingNotif.text?.includes('cảm xúc') || floatingNotif.text?.includes('thích') || floatingNotif.text?.includes('tim')) ? (
+                      <Heart size={8} className="text-zinc-300 fill-zinc-300" />
+                    ) : (floatingNotif.type === 'POST_COMMENT' || floatingNotif.type === 'COMMENT' || floatingNotif.type === 'COMMENT_REPLY' || floatingNotif.text?.includes('bình luận') || floatingNotif.text?.includes('phản hồi')) ? (
+                      <MessageSquare size={8} className="text-zinc-300 fill-zinc-300" />
+                    ) : (floatingNotif.type === 'POST_SHARE' || floatingNotif.type === 'REPOST' || floatingNotif.text?.includes('chia sẻ') || floatingNotif.text?.includes('đăng lại')) ? (
+                      <Share2 size={8} className="text-zinc-300" />
+                    ) : (
+                      <UserPlus size={8} className="text-zinc-300" />
+                    )}
+                  </div>
+                </div>
               ) : (
-                <Bell size={16} />
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden bg-zinc-800 border border-zinc-700 text-zinc-300">
+                  {floatingNotif.type === 'POST_TAKEDOWN' ? (
+                    <AlertTriangle size={16} />
+                  ) : (
+                    <Bell size={16} />
+                  )}
+                </div>
               )}
             </div>
             <div className="flex-1 min-w-0">
@@ -4768,7 +4837,10 @@ const Home = ({ initialTab }) => {
             </div>
             <button
               type="button"
-              onClick={() => setFloatingNotif(null)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setFloatingNotif(null);
+              }}
               className="text-zinc-500 hover:text-zinc-300 p-1 rounded-lg hover:bg-zinc-800 transition-colors flex-shrink-0"
               title="Đóng thông báo"
             >
@@ -4965,59 +5037,59 @@ const Home = ({ initialTab }) => {
                   notifications.map(n => {
                     const isFriendReq = n.type === 'FRIEND_REQUEST';
                     const isFriendAccepted = n.type === 'FRIEND_ACCEPTED';
-                    const hasPhoto = n.actorAvatar && !n.actorAvatar.includes('dicebear') && !n.actorAvatar.includes('bottts');
-                    const displayName = n.actorName || 'Thành viên';
+                    const displayName = n.actorDisplayName || n.actorName || n.actorUsername || 'Thành viên';
+                    const targetPostId = n.targetPostId || n.postId || n.referenceId;
+                    const isPostNotif = ['POST_REACT', 'POST_COMMENT', 'COMMENT_REPLY', 'COMMENT_LIKE', 'POST_SHARE', 'REACTION', 'COMMENT', 'REPOST'].includes(n.type) || !!targetPostId;
 
                     return (
                       <div
                         key={n.id}
-                        onClick={() => {
-                          if (n.unread) {
-                            setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, unread: false, isRead: true } : item));
-                            axiosClient.put(`/notifications/${n.id}/read`).catch(() => { });
-                          }
-                          if (n.postId) {
-                            setIsNotifOpen(false);
-                            const targetPost = safePosts.find(p => p.id === n.postId);
-                            if (targetPost) {
-                              setSelectedThreadPost(targetPost);
-                              fetchComments(targetPost.id);
-                            } else {
-                              const el = document.getElementById(`post-${n.postId}`);
-                              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            }
-                          }
-                        }}
-                        className={`p-3 rounded-2xl border transition-all flex items-start gap-3 ${n.unread
+                        onClick={() => handleOpenNotification(n)}
+                        className={`p-3 rounded-2xl border transition-all flex items-start gap-3 cursor-pointer ${n.unread
                           ? 'bg-zinc-900/90 border-zinc-700/80 shadow-md hover:border-zinc-500'
                           : 'bg-zinc-950/60 border-zinc-800/60 hover:bg-zinc-900/40 text-zinc-300'
                           }`}
                       >
-                        {/* Left: Avatar */}
+                        {/* Left: Avatar & Interaction Badge */}
                         <div className="flex-shrink-0 mt-0.5">
-                          {isFriendReq || isFriendAccepted ? (
-                            <div
-                              className="w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 overflow-hidden flex items-center justify-center text-xs font-bold text-white shadow-sm cursor-pointer"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (n.actorId) {
-                                  setIsNotifOpen(false);
-                                  navigate(`/profile/${n.actorId}`);
-                                }
-                              }}
-                              title="Xem trang cá nhân"
-                            >
-                              {hasPhoto ? (
-                                <img src={n.actorAvatar} alt={displayName} className="w-full h-full object-cover" />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-700 to-zinc-900 text-white font-bold text-xs">
-                                  {displayName.charAt(0).toUpperCase()}
-                                </div>
-                              )}
+                          {n.actorId ? (
+                            <div className="relative w-10 h-10 shrink-0">
+                              <UserAvatar
+                                user={{
+                                  id: n.actorId,
+                                  userId: n.actorId,
+                                  username: n.actorUsername || n.actorName,
+                                  account: n.actorUsername || n.actorName,
+                                  avatarUrl: n.actorAvatar,
+                                  avatar: n.actorAvatar
+                                }}
+                                size={40}
+                                className="w-10 h-10 rounded-full hover:opacity-90 transition-opacity"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (n.actorId) {
+                                    setIsNotifOpen(false);
+                                    navigate(`/profile/${n.actorId}`);
+                                  }
+                                }}
+                                title={`Xem trang cá nhân ${displayName}`}
+                              />
+                              {/* Huy hiệu nhỏ đơn sắc Dark Zinc ở góc dưới phải avatar */}
+                              <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-zinc-900 border border-zinc-700/80 flex items-center justify-center text-zinc-300 shadow-sm pointer-events-none">
+                                {(n.type === 'POST_REACT' || n.type === 'REACTION' || n.type === 'COMMENT_LIKE' || n.text?.includes('cảm xúc') || n.text?.includes('thích') || n.text?.includes('tim')) ? (
+                                  <Heart size={9} className="text-zinc-300 fill-zinc-300" />
+                                ) : (n.type === 'POST_COMMENT' || n.type === 'COMMENT' || n.type === 'COMMENT_REPLY' || n.text?.includes('bình luận') || n.text?.includes('phản hồi')) ? (
+                                  <MessageSquare size={9} className="text-zinc-300 fill-zinc-300" />
+                                ) : (n.type === 'POST_SHARE' || n.type === 'REPOST' || n.text?.includes('chia sẻ') || n.text?.includes('đăng lại')) ? (
+                                  <Share2 size={9} className="text-zinc-300" />
+                                ) : (
+                                  <UserPlus size={9} className="text-zinc-300" />
+                                )}
+                              </div>
                             </div>
                           ) : (
-                            <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-sm">
-                              {n.icon || (n.text?.includes('thích') || n.text?.includes('tim') ? '❤️' : n.text?.includes('bình luận') ? '💬' : '🔔')}
+                            <div className="w-10 h-10 rounded-full bg-zinc-800/90 border border-zinc-700 flex items-center justify-center text-zinc-300 shrink-0">
+                              <Bell size={18} strokeWidth={1.8} />
                             </div>
                           )}
                         </div>
@@ -5113,7 +5185,7 @@ const Home = ({ initialTab }) => {
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setIsNotifOpen(false);
-                                  navigate('/messages');
+                                  navigate(`/messages?userId=${n.actorId}`);
                                 }}
                                 className="mt-2 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-200 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
                               >
@@ -5124,7 +5196,7 @@ const Home = ({ initialTab }) => {
                           ) : (
                             <div>
                               <p className="text-xs text-zinc-100 leading-relaxed font-sans m-0">
-                                {n.text}
+                                {n.text || n.content || n.message}
                               </p>
                               <div className="flex items-center gap-2 mt-1.5">
                                 <span className="text-[10px] text-zinc-400 font-mono">
@@ -5132,6 +5204,11 @@ const Home = ({ initialTab }) => {
                                 </span>
                                 {n.unread && (
                                   <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse"></span>
+                                )}
+                                {isPostNotif && (
+                                  <span className="text-[10px] text-zinc-400 hover:text-white transition-colors">
+                                    • Chạm để xem bài viết
+                                  </span>
                                 )}
                               </div>
                             </div>
