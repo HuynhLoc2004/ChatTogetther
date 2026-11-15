@@ -3,8 +3,10 @@ import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import axiosClient from '../api/axiosClient';
 import TalovinLogo from '../components/TalovinLogo';
+import { useAuth } from '../context/AuthContext';
 
 const Login = () => {
+  const { updateCurrentUser, refreshProfile } = useAuth();
   const [formData, setFormData] = useState({ account: '', password: '' });
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -69,6 +71,15 @@ const Login = () => {
             localStorage.setItem('account', userAccount);
             localStorage.setItem('username', userAccount);
             localStorage.setItem('nickname', userAccount);
+          }
+          if (userId || userAccount) {
+            updateCurrentUser({
+              id: userId,
+              account: userAccount,
+              username: userAccount,
+              nickname: userAccount
+            });
+            refreshProfile().catch(() => {});
           }
         } catch (decodeError) {
           console.error("Không thể giải mã token:", decodeError);

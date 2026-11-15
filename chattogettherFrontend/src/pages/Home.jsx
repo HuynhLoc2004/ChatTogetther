@@ -26,6 +26,10 @@ import IncomingCallModal from '../components/IncomingCallModal';
 import CommunitySection, { validateInputSafe } from '../components/CommunitySection';
 import ResonanceMatchModal from '../components/ResonanceMatchModal';
 import ChallengeDeckModal from '../components/ChallengeDeckModal';
+import UserAvatar from '../components/UserAvatar';
+import { useAuth } from '../context/AuthContext';
+
+export { default as UserAvatar } from '../components/UserAvatar';
 
 // ==========================================
 // TALOVIN WEB AUDIO SOUND EFFECTS (Độ trễ 0ms, không tốn băng thông)
@@ -99,44 +103,6 @@ export const playCommentSuccessSound = () => {
       osc.stop(startAt + 0.25);
     });
   } catch (_) {}
-};
-
-// Avatar: Ưu tiên ảnh thật người dùng tải lên. Nếu chưa có ảnh hoặc lỗi tải, dùng DiceBear Avatar
-export const UserAvatar = ({ avatar, name = '', size = 36, className = "" }) => {
-  const seed = encodeURIComponent((name || 'user').trim() || 'user');
-  const fallbackDicebear = `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=${seed}`;
-  const hasCustomAvatar = Boolean(avatar && avatar.trim());
-  const [imgSrc, setImgSrc] = useState(hasCustomAvatar ? avatar : fallbackDicebear);
-
-  useEffect(() => {
-    if (avatar && avatar.trim()) {
-      setImgSrc(avatar);
-    } else {
-      setImgSrc(fallbackDicebear);
-    }
-  }, [avatar, fallbackDicebear]);
-
-  return (
-    <img 
-      src={imgSrc} 
-      alt={name || "Avatar"} 
-      className={`user-avatar-img select-none ${className}`} 
-      style={{ 
-        width: size, 
-        height: size, 
-        borderRadius: '50%', 
-        objectFit: 'cover',
-        border: '1px solid rgba(255, 255, 255, 0.12)',
-        background: '#18181b',
-        flexShrink: 0
-      }} 
-      onError={() => {
-        if (imgSrc !== fallbackDicebear) {
-          setImgSrc(fallbackDicebear);
-        }
-      }}
-    />
-  );
 };
 
 class SectionErrorBoundary extends Component {
@@ -315,18 +281,11 @@ const buildCommentThreads = (comments) => {
 const Home = ({ initialTab }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [currentUserProfile, setCurrentUserProfile] = useState(() => {
-    try {
-      const u = localStorage.getItem('user_profile');
-      return u ? JSON.parse(u) : null;
-    } catch (_) {
-      return null;
-    }
-  });
-  const currentUserId = currentUserProfile?.id || localStorage.getItem('user_id');
-  const currentUserName = currentUserProfile?.nickname || currentUserProfile?.account || localStorage.getItem('nickname') || localStorage.getItem('account') || localStorage.getItem('username') || 'Thành viên';
-  const currentUserAccount = currentUserProfile?.account || localStorage.getItem('account') || localStorage.getItem('username') || 'user';
-  const currentUserAvatar = currentUserProfile?.avatar || localStorage.getItem('user_avatar') || localStorage.getItem('avatar') || '';
+  const { currentUser, updateCurrentUser, refreshProfile } = useAuth();
+  const currentUserId = currentUser?.id || localStorage.getItem('user_id');
+  const currentUserName = currentUser?.displayName || currentUser?.nickname || currentUser?.account || localStorage.getItem('nickname') || localStorage.getItem('account') || localStorage.getItem('username') || 'Thành viên';
+  const currentUserAccount = currentUser?.account || currentUser?.username || localStorage.getItem('account') || localStorage.getItem('username') || 'user';
+  const currentUserAvatar = currentUser?.avatarUrl || currentUser?.avatar || localStorage.getItem('user_avatar') || localStorage.getItem('avatar') || '';
 
   // Navigation tab chính: 'feed' | 'rooms' | 'trending' | 'saved' | 'groups'
   const [activeTab, setActiveTab] = useState(() => {
@@ -614,18 +573,7 @@ const Home = ({ initialTab }) => {
         const res = await axiosClient.get('/users/profile');
         const u = res?.data?.data;
         if (u) {
-          setCurrentUserProfile(u);
-          localStorage.setItem('user_profile', JSON.stringify(u));
-          if (u.nickname) localStorage.setItem('nickname', u.nickname);
-          if (u.account) {
-            localStorage.setItem('account', u.account);
-            localStorage.setItem('username', u.account);
-          }
-          if (u.avatar) {
-            localStorage.setItem('user_avatar', u.avatar);
-            localStorage.setItem('avatar', u.avatar);
-          }
-          if (u.id) localStorage.setItem('user_id', String(u.id));
+          updateCurrentUser(u);
 
           const uRoles = Array.isArray(u.roles) ? u.roles : [];
           const isAdmin = u.vipTier === 'ADMIN' || u.isVerified || uRoles.some(r => {
@@ -637,7 +585,7 @@ const Home = ({ initialTab }) => {
       } catch (_) {}
     };
     fetchUserProfile();
-  }, []);
+  }, [updateCurrentUser]);
 
   // Đồng bộ cấu hình động từ Admin Dashboard
   useEffect(() => {
@@ -2520,7 +2468,7 @@ const Home = ({ initialTab }) => {
             title="Quản lý tài khoản, hồ sơ & đăng xuất"
           >
             <div className="dock-user-profile">
-              <UserAvatar avatar={currentUserAvatar} name={currentUserName} size={34} />
+              <UserAvatar user={currentUser} size={34} />
               <div className="dock-user-meta min-w-0 flex-1">
                 <span className="dock-user-name truncate block">{currentUserName}</span>
                 <span className="dock-user-handle font-mono truncate block">@{currentUserAccount}</span>
@@ -2626,8 +2574,8 @@ const Home = ({ initialTab }) => {
             </div>
           )}
 
-          {/* Thanh Tab điều hướng Sảnh (Hiện trên PC/Tablet: sm:flex, ẩn trên Mobile để giải phóng không gian bảng tin) */}
-          <div className="stream-header hidden sm:flex items-center justify-between">
+          {/* Thanh Tab điều hướng Sảnh (Hiện trên PC: md:flex, ẩn triệt để trên Mobile để giải phóng không gian) */}
+          <div className="stream-header hidden md:flex items-center justify-between">
             {/* 1. MÀN HÌNH LỚN (PC / TABLET): Hiện đầy đủ các tab ngang thanh lịch */}
             <div className="stream-tabs flex items-center">
               <button 
@@ -2836,7 +2784,7 @@ const Home = ({ initialTab }) => {
 
               <div className="post-creator-box">
               <div className="creator-input-row">
-                <UserAvatar avatar={localStorage.getItem('user_avatar')} size={36} />
+                <UserAvatar user={currentUser} size={36} />
                 <div className="creator-field-wrap">
                   <textarea 
                     ref={newPostInputRef}
@@ -8146,7 +8094,7 @@ const Home = ({ initialTab }) => {
             padding-bottom: calc(120px + env(safe-area-inset-bottom, 24px)); 
           }
           .stream-header {
-            padding: 6px 10px;
+            display: none !important;
           }
           .stream-tabs {
             gap: 4px;

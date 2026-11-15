@@ -11,7 +11,9 @@ import {
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
 import TalovinLogo from '../components/TalovinLogo';
-import { UserAvatar, playHeartSound } from './Home';
+import UserAvatar from '../components/UserAvatar';
+import { playHeartSound } from './Home';
+import { useAuth } from '../context/AuthContext';
 
 const parsePostMedia = (raw, fallbackPost = null) => {
   const directAudio = fallbackPost?.audioUrl || fallbackPost?.voiceUrl || fallbackPost?.audio || null;
@@ -82,14 +84,15 @@ const TIME_FORMATTER = (dateStr) => {
 const ProfilePage = () => {
   const { userId } = useParams();
   const navigate = useNavigate();
+  const { currentUser, updateCurrentUser } = useAuth();
 
-  const currentUserId = localStorage.getItem('user_id');
+  const currentUserId = currentUser?.id || localStorage.getItem('user_id');
   const effectiveUserId = userId || currentUserId;
   const isMe = Boolean(currentUserId && String(effectiveUserId) === String(currentUserId));
 
-  // States
-  const [profile, setProfile] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // States: Khởi tạo snapshot ngay lập tức nếu là tài khoản của mình (0ms delay)
+  const [profile, setProfile] = useState(() => (isMe && currentUser ? currentUser : null));
+  const [loading, setLoading] = useState(() => !isMe && !profile);
   const [activeTab, setActiveTab] = useState('posts'); // 'posts' | 'friends'
   const [isEditing, setIsEditing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -315,6 +318,9 @@ const ProfilePage = () => {
       if (res.data?.data) {
         const data = res.data.data;
         setProfile(data);
+        if (isMe) {
+          updateCurrentUser(data);
+        }
 
         setEditData({
           nickname: data.nickname || '',
@@ -450,8 +456,7 @@ const ProfilePage = () => {
           ...prev,
           ...res.data.data
         }));
-        if (payload.nickname) localStorage.setItem('nickname', payload.nickname);
-        if (payload.avatar) localStorage.setItem('user_avatar', payload.avatar);
+        updateCurrentUser(res.data.data);
       }
 
       toast.success("Đã lưu tần số & hồ sơ cá nhân!");
@@ -708,8 +713,10 @@ const ProfilePage = () => {
                 <div className="relative flex-shrink-0">
                   <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden border border-zinc-700/80 bg-zinc-950 shadow-lg">
                     <UserAvatar
-                      avatar={profile?.avatar}
-                      name={profile?.nickname || profile?.account}
+                      user={isMe ? (currentUser || profile) : profile}
+                      avatar={profile?.avatar || (isMe ? currentUser?.avatar : '')}
+                      name={profile?.nickname || profile?.account || (isMe ? (currentUser?.displayName || currentUser?.account) : '')}
+                      userId={effectiveUserId}
                       size={96}
                       className="w-full h-full rounded-2xl object-cover"
                     />
@@ -1025,8 +1032,10 @@ const ProfilePage = () => {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <UserAvatar
+                            user={isMe ? (currentUser || profile) : { avatar: post.authorAvatar, nickname: post.authorNickname, username: post.authorAccount, id: post.authorId }}
                             avatar={post.authorAvatar || profile?.avatar}
-                            name={post.authorNickname || profile?.nickname}
+                            name={post.authorNickname || post.authorAccount || profile?.nickname || profile?.account}
+                            userId={post.authorId || profile?.id}
                             size={38}
                             className="rounded-xl"
                           />
@@ -1147,8 +1156,6 @@ const ProfilePage = () => {
                             <span>{post.commentsCount || 0}</span>
                           </button>
                         </div>
-
-                        <span className="font-mono text-[10px] text-zinc-500">Tín hiệu trạm</span>
                       </div>
                     </article>
                   ))

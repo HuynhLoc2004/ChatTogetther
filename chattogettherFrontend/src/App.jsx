@@ -10,6 +10,7 @@ import ProfilePage from './pages/ProfilePage';
 import DirectMessagePage from './pages/DirectMessagePage';
 import CallPage from './pages/CallPage';
 import GlobalCallBanner from './components/GlobalCallBanner';
+import { AuthProvider } from './context/AuthContext';
 import './App.css';
 
 // Error Boundary để ngăn chặn hoàn toàn màn hình đen (Blank Screen)
@@ -167,8 +168,9 @@ const PublicRoute = ({ children }) => {
 function App() {
   return (
     <ErrorBoundary>
-      <Router>
-        <div className="app-root">
+      <AuthProvider>
+        <Router>
+          <div className="app-root">
           <Toaster 
             position="top-center" 
             reverseOrder={false}
@@ -317,7 +319,8 @@ function App() {
           </Routes>
         </div>
       </Router>
-    </ErrorBoundary>
+    </AuthProvider>
+  </ErrorBoundary>
   );
 }
 
