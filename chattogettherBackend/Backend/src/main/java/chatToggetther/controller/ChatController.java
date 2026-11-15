@@ -21,7 +21,6 @@ public class ChatController {
         this.chatService = chatService;
     }
 
-    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('WRITE')")
     @PostMapping("/send")
     public ResponseEntity<ResponseData<Boolean>> sendMessage(
             JwtAuthenticationToken jwtAuthenticationToken,
@@ -31,7 +30,6 @@ public class ChatController {
         return ResponseEntity.ok(this.chatService.sendMessage(jwtAuthenticationToken, messageRequest, user_room));
     }
 
-    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('WRITE')")
     @PostMapping
     public ResponseEntity<ResponseData<Boolean>> postMessageDirect(
             JwtAuthenticationToken jwtAuthenticationToken,
@@ -92,7 +90,7 @@ public class ChatController {
     @GetMapping("/direct/{targetUserId}")
     public ResponseEntity<ResponseData<Map<String, Object>>> getOrCreateDirectRoom(
             JwtAuthenticationToken token,
-            @PathVariable("targetUserId") Long targetUserId
+            @PathVariable("targetUserId") String targetUserId
     ) {
         return ResponseEntity.ok(this.chatService.getOrCreateDirectRoom(token, targetUserId));
     }

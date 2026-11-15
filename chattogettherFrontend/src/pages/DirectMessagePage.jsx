@@ -42,6 +42,7 @@ export const DirectMessagePage = () => {
   // Hội thoại đang chọn
   const [activePartner, setActivePartner] = useState(null);
   const [activeRoomId, setActiveRoomId] = useState(null);
+  const [partnerNotFound, setPartnerNotFound] = useState(false);
   const [messages, setMessages] = useState([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [textInput, setTextInput] = useState('');
@@ -114,6 +115,7 @@ export const DirectMessagePage = () => {
   // 2. Mở hoặc tạo đoạn chat khi có urlTargetUserId
   const openDirectChat = useCallback(async (targetId, fallbackPartner = null) => {
     if (!targetId || targetId.toString() === currentUserId?.toString()) return;
+    setPartnerNotFound(false);
     if (fallbackPartner) {
       setActivePartner(fallbackPartner);
     }
@@ -132,17 +134,25 @@ export const DirectMessagePage = () => {
         setActivePartner(targetUser || fallbackPartner);
 
         // Nạp lịch sử tin nhắn của phòng DM này
-        const histRes = await axiosClient.get(`/message/${roomId}`);
-        if (histRes?.data?.data) {
-          setMessages(histRes.data.data);
-          setTimeout(() => scrollToBottom(false), 80);
-        } else {
+        try {
+          const histRes = await axiosClient.get(`/message/${roomId}`);
+          if (histRes?.data?.data) {
+            setMessages(histRes.data.data);
+            setTimeout(() => scrollToBottom(false), 80);
+          } else {
+            setMessages([]);
+          }
+        } catch (_) {
           setMessages([]);
         }
       }
     } catch (e) {
       console.error('Lỗi mở chat 1-1:', e);
-      if (e.response?.status !== 404) {
+      if (e.response?.status === 404) {
+        setPartnerNotFound(true);
+        setActiveRoomId(null);
+        setMessages([]);
+      } else {
         const msg = e.response?.data?.message;
         if (msg) {
           toast.error(msg, { id: `dm-err-${targetId}` });
@@ -284,16 +294,28 @@ export const DirectMessagePage = () => {
 
     try {
       let targetRoom = activeRoomId;
-      if (!targetRoom && activePartner?.id) {
-        const roomRes = await axiosClient.get(`/message/direct/${activePartner.id}`);
+      if (!targetRoom) {
+        const targetIdentifier = activePartner?.id || activePartner?.account || urlTargetUserId;
+        if (!targetIdentifier) {
+          throw new Error("Không thể xác định người nhận");
+        }
+        let roomRes;
+        try {
+          roomRes = await axiosClient.get(`/message/direct/${targetIdentifier}`);
+        } catch (_) {
+          roomRes = await axiosClient.post(`/rooms/direct/${targetIdentifier}`);
+        }
         if (roomRes?.data?.data?.roomId) {
           targetRoom = roomRes.data.data.roomId;
           setActiveRoomId(targetRoom);
+          if (roomRes.data.data.targetUser && !activePartner) {
+            setActivePartner(roomRes.data.data.targetUser);
+          }
         }
       }
 
       if (!targetRoom) {
-        throw new Error("Không thể xác định phòng trò chuyện");
+        throw new Error("Không thể khởi tạo cuộc trò chuyện với người dùng này");
       }
 
       await axiosClient.post('/message/send', {
@@ -308,7 +330,8 @@ export const DirectMessagePage = () => {
       setTimeout(() => scrollToBottom(true), 60);
     } catch (err) {
       console.error("Lỗi gửi tin nhắn 1-1:", err);
-      toast.error(err.response?.data?.message || 'Không thể gửi tin nhắn');
+      const errMsg = err.response?.data?.message || err.message || 'Không thể gửi tin nhắn';
+      toast.error(errMsg, { id: 'dm-send-error' });
       // Hoàn tác tin nhắn nếu gửi thất bại
       setMessages(prev => prev.filter(m => m.id !== tempId));
       setTextInput(content);
@@ -766,7 +789,15 @@ export const DirectMessagePage = () => {
                 ref={scrollContainerRef}
                 className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 sm:px-6 py-4 space-y-3 custom-scrollbar"
               >
-                {loadingMessages ? (
+                {partnerNotFound ? (
+                  <div className="py-16 text-center text-zinc-500 space-y-2">
+                    <User size={28} className="mx-auto text-rose-500 opacity-80" />
+                    <p className="text-sm font-semibold text-zinc-300">Không tìm thấy người dùng này</p>
+                    <p className="text-xs text-zinc-500 max-w-sm mx-auto">
+                      Tài khoản người dùng có thể đã bị xóa hoặc thay đổi tên đăng nhập. Vui lòng chọn bạn bè khác để trò chuyện.
+                    </p>
+                  </div>
+                ) : loadingMessages ? (
                   <div className="py-12 text-center text-zinc-500 text-xs font-mono">
                     Đang nạp tin nhắn hội thoại...
                   </div>
@@ -840,6 +871,7 @@ export const DirectMessagePage = () => {
                 <input 
                   type="text"
                   value={textInput}
+                  disabled={partnerNotFound}
                   onChange={(e) => setTextInput(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
@@ -847,13 +879,13 @@ export const DirectMessagePage = () => {
                       handleSendMessage(e);
                     }
                   }}
-                  placeholder={`Nhắn tin cho ${activePartner.nickname || activePartner.account}...`}
-                  className="flex-1 px-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-700 font-sans"
+                  placeholder={partnerNotFound ? "Không thể nhắn tin cho người dùng này..." : `Nhắn tin cho ${activePartner.nickname || activePartner.account}...`}
+                  className="flex-1 px-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-700 font-sans disabled:opacity-50"
                 />
 
                 <button
                   type="submit"
-                  disabled={!textInput.trim() || sending}
+                  disabled={!textInput.trim() || sending || partnerNotFound}
                   className="px-4 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1.5 shrink-0"
                 >
                   <Send size={13} />

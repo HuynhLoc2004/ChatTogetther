@@ -41,7 +41,7 @@ public class RoomController {
     @RequestMapping(value = {"/direct/{targetUserId}", "/direct-room/{targetUserId}"}, method = {RequestMethod.GET, RequestMethod.POST})
     public ResponseEntity<ResponseData<java.util.Map<String, Object>>> getOrCreateDirectRoom(
             Authentication authentication,
-            @PathVariable("targetUserId") Long targetUserId
+            @PathVariable("targetUserId") String targetUserId
     ) {
         JwtAuthenticationToken jwtAuth = (authentication instanceof JwtAuthenticationToken) ? (JwtAuthenticationToken) authentication : null;
         return ResponseEntity.ok(this.chatService.getOrCreateDirectRoom(jwtAuth, targetUserId));

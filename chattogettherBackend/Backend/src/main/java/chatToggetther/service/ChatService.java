@@ -206,14 +206,53 @@ public class ChatService {
 
     @Transactional
     public ResponseData<Map<String, Object>> getOrCreateDirectRoom(JwtAuthenticationToken token, Long targetUserId) {
-        Long myId = SecurityUtils.extractUserId(token);
+        return getOrCreateDirectRoom(token, targetUserId != null ? targetUserId.toString() : null);
+    }
+
+    @Transactional
+    public ResponseData<Map<String, Object>> getOrCreateDirectRoom(JwtAuthenticationToken token, String targetIdentifier) {
+        UserEntity me = SecurityUtils.getAuthenticatedUser(token, userRepository);
+        if (me == null) {
+            throw new AppException(401, "Yêu cầu đăng nhập hoặc phiên làm việc đã hết hạn", 401);
+        }
+        Long myId = me.getId();
+
+        if (targetIdentifier == null || targetIdentifier.trim().isEmpty()) {
+            throw new AppException(400, "Thiếu thông tin người nhận", 400);
+        }
+
+        String targetStr = targetIdentifier.trim();
+        UserEntity target = null;
+
+        // 1. Thử tìm theo ID số
+        try {
+            Long targetIdNum = Long.parseLong(targetStr);
+            target = userRepository.findById(targetIdNum).orElse(null);
+        } catch (NumberFormatException ignored) {}
+
+        // 2. Thử tìm theo account (username)
+        if (target == null) {
+            target = userRepository.findByAccount(targetStr).orElse(null);
+        }
+
+        // 3. Thử tìm theo nickname hoặc account không phân biệt hoa thường
+        if (target == null) {
+            List<UserEntity> allUsers = userRepository.findAll();
+            target = allUsers.stream()
+                    .filter(u -> targetStr.equalsIgnoreCase(u.getAccount()) || 
+                                 targetStr.equalsIgnoreCase(u.getNickname()))
+                    .findFirst()
+                    .orElse(null);
+        }
+
+        if (target == null) {
+            throw new AppException(404, "Không tìm thấy người dùng nhận", 404);
+        }
+
+        Long targetUserId = target.getId();
         if (myId.equals(targetUserId)) {
             throw new AppException(400, "Không thể tạo đoạn chat với chính mình", 400);
         }
-        UserEntity me = userRepository.findById(myId)
-                .orElseThrow(() -> new AppException(404, "Không tìm thấy người dùng hiện tại", 404));
-        UserEntity target = userRepository.findById(targetUserId)
-                .orElseThrow(() -> new AppException(404, "Không tìm thấy người dùng nhận", 404));
 
         String directKey = "DM_" + Math.min(myId, targetUserId) + "_" + Math.max(myId, targetUserId);
 
@@ -228,14 +267,10 @@ public class ChatService {
         }
 
         if (dmRoom != null) {
-            // Tách bạch hoàn toàn: dọn sạch mọi UserRoomEntity tàn dư trong phòng DM để không gây lỗi unique key
-            if (dmRoom.getUserRoomEntityList() != null && !dmRoom.getUserRoomEntityList().isEmpty()) {
-                dmRoom.getUserRoomEntityList().clear();
-            }
             if (!Boolean.TRUE.equals(dmRoom.getActive())) {
                 dmRoom.setActive(true);
+                dmRoom = roomRepository.save(dmRoom);
             }
-            dmRoom = roomRepository.save(dmRoom);
         } else {
             String myName = (me.getNickname() != null && !me.getNickname().trim().isEmpty()) ? me.getNickname() : me.getAccount();
             String targetName = (target.getNickname() != null && !target.getNickname().trim().isEmpty()) ? target.getNickname() : target.getAccount();
@@ -258,7 +293,10 @@ public class ChatService {
                         .orElseGet(() -> roomRepository.findAll().stream()
                                 .filter(r -> directKey.equals(r.getPassword()))
                                 .findFirst()
-                                .orElseThrow(() -> new AppException(500, "Không thể khởi tạo cuộc trò chuyện: " + ex.getMessage(), 500)));
+                                .orElse(null));
+                if (dmRoom == null) {
+                    throw new AppException(500, "Không thể khởi tạo cuộc trò chuyện: " + ex.getMessage(), 500);
+                }
             }
         }
 

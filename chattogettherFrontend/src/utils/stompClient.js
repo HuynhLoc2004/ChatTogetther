@@ -1,4 +1,3 @@
-import SockJS from 'sockjs-client';
 import Stomp from 'stompjs';
 import { BACKEND_URL } from '../api/axiosClient';
 
@@ -17,24 +16,14 @@ export const getWebSocketUrl = () => {
 };
 
 /**
- * Khởi tạo STOMP client an toàn:
- * - Ưu tiên native browser WebSocket thuần để xóa hoàn toàn cảnh báo [Violation] Permissions policy: unload.
- * - Tự động fallback sang SockJS với transports: ['websocket'] nếu cần.
+ * Khởi tạo STOMP client WebSocket thuần (Native WebSocket)
+ * Hoàn toàn loại bỏ SockJS để triệt tiêu vĩnh viễn lỗi:
+ * [Violation] Permissions policy violation: unload is not allowed in this document.
  */
 export const createStompClient = () => {
-  if (typeof window !== 'undefined' && window.WebSocket) {
-    try {
-      const wsUrl = getWebSocketUrl();
-      const socket = new WebSocket(wsUrl);
-      const client = Stomp.over(socket);
-      client.debug = () => {};
-      return client;
-    } catch (_) {}
-  }
-
-  const socketUrl = BACKEND_URL ? `${BACKEND_URL}/ws-gs-guide` : '/ws-gs-guide';
-  const sock = new SockJS(socketUrl, null, { transports: ['websocket'] });
-  const client = Stomp.over(sock);
+  const wsUrl = getWebSocketUrl();
+  const socket = new WebSocket(wsUrl);
+  const client = Stomp.over(socket);
   client.debug = () => {};
   return client;
 };

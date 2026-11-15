@@ -33,7 +33,7 @@ public class RoomEntity {
     private String description;
     @Column(name = "create_time" , nullable = false , columnDefinition = "TIMESTAMP")
     private LocalDateTime localDateTime;
-    @OneToMany(cascade = CascadeType.ALL ,fetch =  FetchType.LAZY , mappedBy = "roomEntity")
+    @OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "roomEntity", orphanRemoval = true)
     private List<UserRoomEntity> userRoomEntityList = new ArrayList<>();
     @OneToMany(mappedBy = "roomEntity", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<MessageEntity> messages = new ArrayList<>();
