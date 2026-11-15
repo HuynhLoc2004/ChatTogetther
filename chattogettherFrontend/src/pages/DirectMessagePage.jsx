@@ -13,6 +13,7 @@ import { UserAvatar } from './Home';
 import TalovinLogo from '../components/TalovinLogo';
 import MobileBottomNav from '../components/MobileBottomNav';
 import { usePresence } from '../context/PresenceContext';
+import { playMessageIncoming } from '../utils/soundEffects';
 
 const ICE_SERVERS = {
   iceServers: [
@@ -92,6 +93,13 @@ export const DirectMessagePage = () => {
     sendHeartbeat();
     const interval = setInterval(sendHeartbeat, 25000);
     return () => clearInterval(interval);
+  }, []);
+
+  // Tự động yêu cầu quyền thông báo hệ thống khi vào trang nhắn tin
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
+    }
   }, []);
 
   // 1. Tải danh sách bạn bè
@@ -228,12 +236,30 @@ export const DirectMessagePage = () => {
           client.subscribe(`/topic/messages/${currentUserId}`, (message) => {
             try {
               const newMsg = JSON.parse(message.body);
+              const isFromMe = newMsg.userId?.toString() === currentUserId?.toString();
+
               setMessages(prev => {
                 if (prev.some(m => m.id === newMsg.id)) return prev;
                 const hasPending = prev.some(m => m.pending && m.message === newMsg.message);
                 if (hasPending) {
                   return prev.map(m => (m.pending && m.message === newMsg.message) ? newMsg : m);
                 }
+
+                // Phát âm thanh khi có tin nhắn mới từ người khác
+                if (!isFromMe) {
+                  playMessageIncoming();
+
+                  if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted' && document.hidden) {
+                    try {
+                      new Notification(newMsg.nickname || newMsg.senderUsername || 'Tin nhắn mới', {
+                        body: newMsg.message,
+                        icon: newMsg.senderAvatar || newMsg.avatar || '/favicon.ico',
+                        tag: `dm-${newMsg.userId}`
+                      });
+                    } catch (_) {}
+                  }
+                }
+
                 return [...prev, newMsg];
               });
 
@@ -255,12 +281,30 @@ export const DirectMessagePage = () => {
           client.subscribe(`/topic/room/${activeRoomId}`, (message) => {
             try {
               const newMsg = JSON.parse(message.body);
+              const isFromMe = newMsg.userId?.toString() === currentUserId?.toString();
+
               setMessages(prev => {
                 if (prev.some(m => m.id === newMsg.id)) return prev;
                 const hasPending = prev.some(m => m.pending && m.message === newMsg.message);
                 if (hasPending) {
                   return prev.map(m => (m.pending && m.message === newMsg.message) ? newMsg : m);
                 }
+
+                // Phát âm thanh khi có tin nhắn mới từ đối phương trong cùng phòng
+                if (!isFromMe) {
+                  playMessageIncoming();
+
+                  if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted' && document.hidden) {
+                    try {
+                      new Notification(newMsg.nickname || newMsg.senderUsername || 'Tin nhắn mới', {
+                        body: newMsg.message,
+                        icon: newMsg.senderAvatar || newMsg.avatar || '/favicon.ico',
+                        tag: `dm-${newMsg.userId}`
+                      });
+                    } catch (_) {}
+                  }
+                }
+
                 return [...prev, newMsg];
               });
               setFriends(prev => prev.map(f => {

@@ -121,6 +121,28 @@ public class ChatService {
                 this.simpMessagingTemplate.convertAndSend("/topic/messages/" + userId, sendMessageDTO);
             }
 
+            // Bắn sự kiện thông báo realtime (Floating Alert & Âm thanh & OS Notification) cho tin nhắn 1-1
+            if (isDm && partnerId != null) {
+                String contentPreview = messageEntity.getMessage();
+                if (contentPreview != null && contentPreview.length() > 100) {
+                    contentPreview = contentPreview.substring(0, 97) + "...";
+                }
+                java.util.Map<String, Object> dmAlertPayload = new java.util.HashMap<>();
+                dmAlertPayload.put("roomId", roomEntity.getId());
+                dmAlertPayload.put("roomName", senderNickname);
+                dmAlertPayload.put("isDirect", true);
+                dmAlertPayload.put("partnerId", userId);
+                dmAlertPayload.put("senderId", userId);
+                dmAlertPayload.put("senderUsername", senderUsername);
+                dmAlertPayload.put("senderDisplayName", senderNickname);
+                dmAlertPayload.put("senderAvatar", senderAvatar);
+                dmAlertPayload.put("contentPreview", contentPreview);
+                dmAlertPayload.put("createdAt", now.toString());
+
+                this.simpMessagingTemplate.convertAndSendToUser(partnerId.toString(), "/queue/room-alerts", dmAlertPayload);
+                this.simpMessagingTemplate.convertAndSend("/topic/room-alerts/" + partnerId, dmAlertPayload);
+            }
+
             // Bắn sự kiện tin nhắn nhóm qua kênh riêng (tuyệt đối không tạo bản ghi Notification ở Chuông Sảnh)
             if (!isDm && roomEntity.getUserRoomEntityList() != null) {
                 String contentPreview = messageEntity.getMessage();

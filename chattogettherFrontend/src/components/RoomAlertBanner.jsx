@@ -46,9 +46,19 @@ export const RoomAlertBanner = () => {
 
           // Kiểm tra: nếu user đang mở đúng phòng chat này và tab đang focus thì không làm phiền
           const currentPath = window.location.pathname;
-          const isViewingThisRoom = currentPath === `/room/${alert.roomId}` || currentPath === `/room/${alert.roomId}/`;
+          const searchParams = new URLSearchParams(window.location.search);
+          const currentUserIdParam = searchParams.get('userId') || searchParams.get('user_id');
 
-          if (isViewingThisRoom && !document.hidden) {
+          let isViewingThisChat = false;
+          if (alert.isDirect) {
+            isViewingThisChat = currentPath === `/messages/${alert.senderId}` || 
+                                currentPath === `/messages/${alert.senderUsername}` ||
+                                (currentPath.startsWith('/messages') && String(currentUserIdParam) === String(alert.senderId));
+          } else {
+            isViewingThisChat = currentPath === `/room/${alert.roomId}` || currentPath === `/room/${alert.roomId}/`;
+          }
+
+          if (isViewingThisChat && !document.hidden) {
             return;
           }
 
@@ -58,14 +68,25 @@ export const RoomAlertBanner = () => {
           // 2. Kích hoạt System / OS Notification trên Điện thoại hoặc Laptop (nếu user cấp quyền)
           if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
             try {
-              const notif = new Notification(alert.roomName || 'Tin nhắn nhóm mới', {
-                body: `${alert.senderDisplayName || alert.senderUsername || 'Thành viên'}: ${alert.contentPreview || ''}`,
+              const notifTitle = alert.isDirect 
+                ? (alert.senderDisplayName || alert.senderUsername || 'Tin nhắn mới') 
+                : (alert.roomName || 'Tin nhắn nhóm mới');
+              const notifBody = alert.isDirect
+                ? (alert.contentPreview || 'Đã gửi cho bạn một tin nhắn mới')
+                : `${alert.senderDisplayName || alert.senderUsername || 'Thành viên'}: ${alert.contentPreview || ''}`;
+
+              const notif = new Notification(notifTitle, {
+                body: notifBody,
                 icon: alert.senderAvatar || '/favicon.ico',
-                tag: `room-${alert.roomId}`
+                tag: alert.isDirect ? `dm-${alert.senderId}` : `room-${alert.roomId}`
               });
               notif.onclick = () => {
                 window.focus();
-                navigate(`/room/${alert.roomId}`);
+                if (alert.isDirect) {
+                  navigate(`/messages/${alert.senderId}`);
+                } else {
+                  navigate(`/room/${alert.roomId}`);
+                }
                 notif.close();
               };
             } catch (_) {}
@@ -106,9 +127,14 @@ export const RoomAlertBanner = () => {
     <div 
       className="fixed top-3 inset-x-3 sm:inset-x-auto sm:top-4 sm:right-4 z-[99999] max-w-sm w-auto sm:w-96 animate-in slide-in-from-top-3 fade-in duration-200 select-none"
       onClick={() => {
-        const targetRoomId = currentAlert.roomId;
+        const isDirect = Boolean(currentAlert.isDirect);
+        const targetId = isDirect ? currentAlert.senderId : currentAlert.roomId;
         setCurrentAlert(null);
-        navigate(`/room/${targetRoomId}`);
+        if (isDirect) {
+          navigate(`/messages/${targetId}`);
+        } else {
+          navigate(`/room/${targetId}`);
+        }
       }}
     >
       <div className="bg-zinc-900/95 backdrop-blur-md border border-zinc-800 shadow-2xl rounded-2xl p-3 flex items-center gap-3 cursor-pointer hover:border-zinc-700/90 transition-all duration-150 active:scale-[0.98]">
@@ -133,7 +159,7 @@ export const RoomAlertBanner = () => {
             </span>
             <span className="text-[10px] text-zinc-500">•</span>
             <span className="text-[11px] font-medium text-emerald-400 truncate">
-              {currentAlert.roomName}
+              {currentAlert.isDirect ? 'Tin nhắn riêng' : currentAlert.roomName}
             </span>
           </div>
           <p className="text-xs text-zinc-400 truncate mt-0.5 leading-tight font-sans">
