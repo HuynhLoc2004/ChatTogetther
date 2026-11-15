@@ -2496,60 +2496,55 @@ const Home = ({ initialTab }) => {
         <main className="main-stream">
           
           {/* Header Mobile */}
-          <header className="mobile-top-bar">
-            <div className="m-brand" onClick={handleLogoRefresh} title="Bấm để cuộn lên đầu & làm mới bài viết">
-              <TalovinLogo size={26} />
+          <header className="mobile-top-bar sticky top-0 z-30 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80 h-14 px-3.5 flex items-center justify-between">
+            <div className="m-brand flex items-center cursor-pointer" onClick={handleLogoRefresh} title="Bấm để cuộn lên đầu & làm mới bài viết">
+              <TalovinLogo size={24} />
             </div>
-            <div className="m-actions">
+            <div className="flex items-center gap-2">
+              {/* Nút Tìm kiếm */}
               <button 
                 type="button"
                 onClick={() => setShowMobileSearchBar(!showMobileSearchBar)}
-                className={`w-7 h-7 rounded-xl flex items-center justify-center transition-all ${showMobileSearchBar || activeSearchQuery ? 'bg-white text-black' : 'bg-[#181818] text-zinc-300'}`}
+                className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-95 border ${showMobileSearchBar || activeSearchQuery ? 'bg-white text-black border-white' : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white'}`}
                 title="Tìm kiếm bài viết, chủ đề"
               >
-                <Search size={14} />
+                <Search size={15} />
               </button>
+
+              {/* Nút Pill FM */}
               <button 
                 type="button"
-                onClick={() => setShowMobileMusicSheet(true)} 
-                className={`m-radio-pill max-w-[145px] ${isPlayingRadio ? 'active !border-emerald-500/50 !bg-zinc-800 text-white' : ''}`}
-                title={currentTrack ? `Nhạc nền: ${currentTrack.title || currentTrack.name} (Chạm để mở trình phát)` : 'Mở trình phát nhạc'}
+                onClick={() => setIsSpeedMatchOpen(true)}
+                className="h-9 px-2.5 rounded-full bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs flex items-center gap-1.5 shadow-sm transition-all active:scale-95"
+                title="Mở Trạm Dò Sóng FM"
               >
-                {isPlayingRadio ? (
-                  <span className="flex items-center gap-0.5 h-3 flex-shrink-0">
-                    <span className="w-0.5 h-2 bg-emerald-400 rounded-full animate-bounce"></span>
-                    <span className="w-0.5 h-3 bg-emerald-400 rounded-full animate-bounce [animation-delay:0.15s]"></span>
-                    <span className="w-0.5 h-1.5 bg-emerald-400 rounded-full animate-bounce [animation-delay:0.3s]"></span>
-                  </span>
-                ) : (
-                  <Music size={12} className="flex-shrink-0 text-zinc-400" />
-                )}
-                <span className="truncate font-medium text-[11px] text-zinc-200">
-                  {currentTrack ? (currentTrack.title || currentTrack.name) : 'Âm nhạc'}
-                </span>
+                <Radio size={13} className="text-zinc-950" />
+                <span className="font-semibold text-xs">FM</span>
               </button>
-              {isAdminUser && (
-                <button 
-                  type="button"
-                  onClick={() => navigate('/admin')} 
-                  className="w-7 h-7 rounded-xl flex items-center justify-center bg-zinc-900 border border-zinc-700 text-zinc-200 transition-all hover:bg-zinc-800"
-                  title="Mở Bảng Quản Trị Hệ Thống"
-                >
-                  <Shield size={14} />
-                </button>
-              )}
+
+              {/* Nút Thẻ Bài Thử Thách */}
+              <button 
+                type="button"
+                onClick={() => setIsPartyWheelOpen(true)}
+                className="w-9 h-9 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-200 hover:text-white transition-all active:scale-95"
+                title="Bốc Thẻ Bài Thử Thách"
+              >
+                <Dices size={16} />
+              </button>
+
+              {/* Duy nhất 1 Icon Chuông có Badge */}
               <button 
                 type="button"
                 onClick={() => {
                   setIsNotifOpen(!isNotifOpen);
                   requestNotificationPermission();
                 }} 
-                className="btn-header-notif relative"
+                className="w-9 h-9 rounded-full bg-zinc-900 border border-zinc-800 relative flex items-center justify-center text-zinc-300 hover:text-white transition-all active:scale-95"
                 title="Thông báo sảnh"
               >
-                <Bell size={16} strokeWidth={1.5} />
+                <Bell size={16} strokeWidth={1.6} />
                 {notifications.filter(n => n.unread).length > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-mono font-bold flex items-center justify-center border-2 border-zinc-950 shadow-sm animate-pulse">
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-mono font-bold flex items-center justify-center border-2 border-zinc-950 shadow-sm animate-pulse">
                     {notifications.filter(n => n.unread).length > 9 ? '9+' : notifications.filter(n => n.unread).length}
                   </span>
                 )}
@@ -2592,10 +2587,10 @@ const Home = ({ initialTab }) => {
             </div>
           )}
 
-          {/* Thanh Tab điều hướng Sảnh (Đồng bộ, tối giản cho cả PC & Mobile - Bảng màu Slate Graphite sang trọng) */}
-          <div className="stream-header">
-            {/* 1. MÀN HÌNH LỚN (PC / TABLET): Hiện đầy đủ các tab ngang thanh lịch, không dùng màu neon AI chói mắt */}
-            <div className="stream-tabs hidden sm:flex">
+          {/* Thanh Tab điều hướng Sảnh (Hiện trên PC/Tablet: sm:flex, ẩn trên Mobile để giải phóng không gian bảng tin) */}
+          <div className="stream-header hidden sm:flex items-center justify-between">
+            {/* 1. MÀN HÌNH LỚN (PC / TABLET): Hiện đầy đủ các tab ngang thanh lịch */}
+            <div className="stream-tabs flex items-center">
               <button 
                 type="button"
                 className={`stream-tab ${activeTab === 'feed' ? 'active' : ''}`}
@@ -2638,46 +2633,14 @@ const Home = ({ initialTab }) => {
               </button>
             </div>
 
-            {/* 2. MÀN HÌNH NHỎ (MOBILE): Nút chọn không gian hiện tại + Hamburger mở drawer chuyển không gian mượt mà */}
-            <div className="flex sm:hidden items-center justify-between w-full gap-2">
-              <button
-                type="button"
-                onClick={() => setIsSpaceDrawerOpen(true)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#171a25] hover:bg-[#1f2434] border border-[#252c3c] text-slate-100 text-xs font-semibold shadow-sm active:scale-98 transition-all flex-1 min-w-0"
-              >
-                {activeTab === 'feed' && <Globe size={13} className="text-slate-300 flex-shrink-0" />}
-                {activeTab === 'groups' && <Users size={13} className="text-slate-300 flex-shrink-0" />}
-                {activeTab === 'trending' && <Flame size={13} className="text-slate-300 flex-shrink-0" />}
-                {activeTab === 'saved' && <Bookmark size={13} className="text-slate-300 flex-shrink-0" />}
-                {activeTab === 'rooms' && <Radio size={13} className="text-slate-300 flex-shrink-0" />}
-                <span className="truncate">
-                  {activeTab === 'feed' ? 'Sảnh trực tuyến' :
-                   activeTab === 'groups' ? 'Cộng đồng' :
-                   activeTab === 'trending' ? 'Thịnh hành' :
-                   activeTab === 'saved' ? 'Đã lưu' :
-                   `Phòng thoại (${userAccessibleRooms.length})`}
-                </span>
-                <ChevronDown size={13} className="text-slate-400 ml-auto flex-shrink-0" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setIsSpaceDrawerOpen(true)}
-                className="w-8 h-8 rounded-xl bg-[#171a25] hover:bg-[#1f2434] border border-[#252c3c] text-slate-300 hover:text-white flex items-center justify-center transition-all active:scale-95 flex-shrink-0"
-                title="Mở menu chuyển không gian"
-              >
-                <Menu size={16} strokeWidth={1.8} />
-              </button>
-            </div>
-
-            {/* NÚT CHUÔNG THÔNG BÁO SẢNH (Mở Slide-over Drawer sang trọng) */}
+            {/* NÚT CHUÔNG THÔNG BÁO SẢNH (PC) */}
             <button 
               type="button"
               onClick={() => {
                 setIsNotifOpen(!isNotifOpen);
                 requestNotificationPermission();
               }} 
-              className="btn-header-notif hidden sm:flex relative"
+              className="btn-header-notif flex relative"
               title="Thông báo sảnh (Mở ngăn kéo)"
             >
               <Bell size={15} strokeWidth={1.5} />
@@ -2799,7 +2762,40 @@ const Home = ({ initialTab }) => {
           {/* KHU VỰC B: BỘ TẠO TÍN HIỆU ĐA PHƯƠNG TIỆN (Multimedia Composer) */}
           {/* ============================================================== */}
           {activeTab === 'feed' && (
-            <div className="post-creator-box">
+            <div className="feed-composer-wrapper">
+              {/* THANH TRẠNG THÁI NHANH 1 DÒNG (COMPACT AUDIO BAR — xl:hidden) */}
+              <div className="h-11 px-3 mb-3 rounded-xl bg-zinc-900/90 border border-zinc-800/90 flex items-center justify-between gap-2 xl:hidden shadow-sm">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-6 h-6 rounded-lg bg-zinc-800 border border-zinc-700/80 flex items-center justify-center text-zinc-300 shrink-0">
+                    <Radio size={12} />
+                  </div>
+                  <span className="text-xs text-zinc-300 truncate font-sans">
+                    Trạm phát sóng FM • Khám phá tần số đồng điệu
+                  </span>
+                </div>
+                <div className="shrink-0 flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsSpeedMatchOpen(true)}
+                    className="bg-white hover:bg-zinc-200 text-zinc-950 text-[11px] font-medium px-2.5 h-7 rounded-lg transition-all active:scale-95 flex items-center gap-1 shadow-sm"
+                    title="Dò sóng FM"
+                  >
+                    <Radio size={11} />
+                    <span>Dò sóng</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsPartyWheelOpen(true)}
+                    className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 text-[11px] font-medium px-2.5 h-7 rounded-lg transition-all active:scale-95 flex items-center gap-1"
+                    title="Bốc thẻ bài thử thách"
+                  >
+                    <Dices size={11} />
+                    <span>Thẻ bài</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="post-creator-box">
               <div className="creator-input-row">
                 <UserAvatar avatar={localStorage.getItem('user_avatar')} size={36} />
                 <div className="creator-field-wrap">
@@ -3057,6 +3053,7 @@ const Home = ({ initialTab }) => {
                   {isPosting ? 'Đang gửi...' : 'Đăng bài'}
                 </button>
               </div>
+            </div>
             </div>
           )}
 

@@ -690,7 +690,7 @@ export const ResonanceMatchModal = ({
       <audio ref={previewAudioRef} onEnded={() => setIsPlayingPreview(false)} className="hidden" />
 
       <div 
-        className="w-full max-w-xl bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col text-zinc-100 max-h-[92vh]"
+        className="w-[92vw] max-w-md md:max-w-xl bg-zinc-900 border border-zinc-800 rounded-2xl md:rounded-3xl shadow-2xl overflow-hidden flex flex-col text-zinc-100 max-h-[85dvh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* ============================================================== */}
