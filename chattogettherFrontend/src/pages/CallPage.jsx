@@ -18,10 +18,11 @@ const ICE_SERVERS = {
 };
 
 const CallPage = () => {
-  const { roomId, userId } = useParams();
+  const { roomId, userId: pathUserId } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
+  const userId = pathUserId || searchParams.get('userId') || searchParams.get('user_id') || searchParams.get('targetId');
   const isVideoParam = searchParams.get('type') === 'video' || searchParams.get('video') === 'true';
   const isIncoming = searchParams.get('incoming') === 'true' || searchParams.get('autoAnswer') === 'true';
   const isDirectCall = Boolean(userId);
@@ -94,6 +95,15 @@ const CallPage = () => {
     fetchTargetMeta();
     return () => { isMounted = false; };
   }, [isDirectCall, isRoomCall, userId, roomId]);
+
+  // Kiểm tra an toàn: Nếu không có người nhận hoặc phòng cuộc gọi
+  useEffect(() => {
+    if (!userId && !roomId) {
+      toast.error("Không tìm thấy thông tin đối phương hoặc phòng gọi!");
+      const t = setTimeout(() => navigate('/messages'), 1800);
+      return () => clearTimeout(t);
+    }
+  }, [userId, roomId, navigate]);
 
   // 2. Format Call Duration
   const formatTime = (secs) => {
@@ -410,11 +420,12 @@ const CallPage = () => {
           }
         };
 
-        // Kết nối WebSocket STOMP chuẩn native browser
+        // Kết nối WebSocket STOMP chuẩn native browser kèm Authorization token
         const stomp = createStompClient();
         stompClient.current = stomp;
+        const authToken = localStorage.getItem('accesstoken');
 
-        stomp.connect({}, async () => {
+        stomp.connect(authToken ? { Authorization: `Bearer ${authToken}` } : {}, async () => {
           if (!isActive) return;
 
           // Subscribe topic nhận tín hiệu

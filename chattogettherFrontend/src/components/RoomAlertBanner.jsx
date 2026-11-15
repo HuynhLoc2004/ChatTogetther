@@ -93,7 +93,7 @@ export const RoomAlertBanner = () => {
           }
 
           // 3. Hiển thị In-App Floating Banner nếu đang ở tab web hoặc tab khác
-          if (!isViewingThisRoom) {
+          if (!isViewingThisChat) {
             if (timeoutRef.current) clearTimeout(timeoutRef.current);
             setCurrentAlert(alert);
 

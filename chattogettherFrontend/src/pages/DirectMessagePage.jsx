@@ -4,7 +4,8 @@ import {
   ArrowLeft, Search, MessageSquare, Phone, PhoneOff, Video, VideoOff, 
   Mic, MicOff, Send, Image as ImageIcon, Smile, MoreVertical, User, 
   Clock, CheckCircle2, ChevronDown, Volume2, Shield, Share2, Sparkles,
-  PhoneCall, PhoneMissed
+  PhoneCall, PhoneMissed, Reply, CornerUpLeft, Forward, X, Play, Heart,
+  ThumbsUp, Flame, Check, CheckCheck
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
@@ -13,14 +14,9 @@ import { UserAvatar } from './Home';
 import TalovinLogo from '../components/TalovinLogo';
 import MobileBottomNav from '../components/MobileBottomNav';
 import { usePresence } from '../context/PresenceContext';
-import { playMessageIncoming } from '../utils/soundEffects';
+import { playMessageIncoming, playReactionPop } from '../utils/soundEffects';
 
-const ICE_SERVERS = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' }
-  ]
-};
+const QUICK_EMOJIS = ['❤️', '👍', '😂', '😮', '😢', '🔥'];
 
 export const DirectMessagePage = () => {
   const { userId: routeUserId } = useParams();
@@ -40,6 +36,16 @@ export const DirectMessagePage = () => {
   const [loadingFriends, setLoadingFriends] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Quản lý số lượng tin nhắn chưa đọc { [partnerId]: count }
+  const [unreadMap, setUnreadMap] = useState(() => {
+    try {
+      const saved = localStorage.getItem('talovin_dm_unread');
+      return saved ? JSON.parse(saved) : {};
+    } catch (_) {
+      return {};
+    }
+  });
+
   // Hội thoại đang chọn
   const [activePartner, setActivePartner] = useState(null);
   const [activeRoomId, setActiveRoomId] = useState(null);
@@ -49,27 +55,51 @@ export const DirectMessagePage = () => {
   const [textInput, setTextInput] = useState('');
   const [sending, setSending] = useState(false);
 
-  // Cuộc gọi thoại / video WebRTC 1-1
-  const [isCallActive, setIsCallActive] = useState(false);
-  const [isVideoCall, setIsVideoCall] = useState(false);
-  const [isVideoEnabled, setIsVideoEnabled] = useState(true);
-  const [isMuted, setIsMuted] = useState(false);
-  const [callDuration, setCallDuration] = useState(0);
-  const [isCallScreenOpen, setIsCallScreenOpen] = useState(false);
-  const [callStatusText, setCallStatusText] = useState('Đang kết nối...');
+  // Tính năng Trả lời (Reply)
+  const [replyingTo, setReplyingTo] = useState(null);
+
+  // Tính năng Đính kèm Media (Hình ảnh / Video)
+  const [selectedMedia, setSelectedMedia] = useState(null); // { file, previewUrl, type: 'IMAGE'|'VIDEO', name }
+  const [mediaUploading, setMediaUploading] = useState(false);
+  const fileInputRef = useRef(null);
+  const [lightboxMedia, setLightboxMedia] = useState(null);
+
+  // Tính năng Thả cảm xúc (Reactions)
+  const [reactionsMap, setReactionsMap] = useState(() => {
+    try {
+      const saved = localStorage.getItem('talovin_dm_reactions');
+      return saved ? JSON.parse(saved) : {};
+    } catch (_) {
+      return {};
+    }
+  });
+  const [activeReactionPickerMsgId, setActiveReactionPickerMsgId] = useState(null);
+
+  // Tính năng Chuyển tiếp (Forward)
+  const [forwardingMsg, setForwardingMsg] = useState(null);
+  const [forwardSearch, setForwardSearch] = useState('');
+
+  // Cuộc gọi đến (Incoming Call)
   const [incomingCall, setIncomingCall] = useState(null);
 
   // Refs
   const stompClient = useRef(null);
-  const peerConnectionRef = useRef(null);
-  const localStreamRef = useRef(null);
-  const localVideoRef = useRef(null);
-  const remoteVideoRef = useRef(null);
-  const remoteAudioRef = useRef(null);
-  const callTimerRef = useRef(null);
-  const callTimeoutRef = useRef(null);
   const messagesEndRef = useRef(null);
   const scrollContainerRef = useRef(null);
+
+  // Lưu unreadMap vào localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('talovin_dm_unread', JSON.stringify(unreadMap));
+    } catch (_) {}
+  }, [unreadMap]);
+
+  // Lưu reactionsMap vào localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('talovin_dm_reactions', JSON.stringify(reactionsMap));
+    } catch (_) {}
+  }, [reactionsMap]);
 
   // Cuộn xuống tin nhắn mới nhất
   const scrollToBottom = useCallback((smooth = true) => {
@@ -108,7 +138,7 @@ export const DirectMessagePage = () => {
       try {
         setLoadingFriends(true);
         const res = await axiosClient.get('/friends/list');
-        if (res?.data?.data) {
+        if (res?.data?.data && Array.isArray(res.data.data)) {
           setFriends(res.data.data);
         }
       } catch (e) {
@@ -120,7 +150,7 @@ export const DirectMessagePage = () => {
     fetchFriends();
   }, []);
 
-  // 2. Mở hoặc tạo đoạn chat khi có urlTargetUserId
+  // 2. Mở hoặc tạo đoạn chat khi có targetId
   const openDirectChat = useCallback(async (targetId, fallbackPartner = null) => {
     if (!targetId || targetId.toString() === currentUserId?.toString()) return;
     
@@ -129,6 +159,15 @@ export const DirectMessagePage = () => {
       setActivePartner(fallbackPartner);
       setPartnerNotFound(false);
     }
+
+    // Đánh dấu đã đọc cho người bạn này ngay lập tức
+    setUnreadMap(prev => {
+      if (!prev[targetId] && (!fallbackPartner || !prev[fallbackPartner.id])) return prev;
+      const next = { ...prev };
+      delete next[targetId];
+      if (fallbackPartner?.id) delete next[fallbackPartner.id];
+      return next;
+    });
 
     try {
       setLoadingMessages(true);
@@ -169,9 +208,25 @@ export const DirectMessagePage = () => {
         // Nạp lịch sử tin nhắn của phòng DM này
         try {
           const histRes = await axiosClient.get(`/message/${roomId}`);
-          if (histRes?.data?.data) {
+          if (histRes?.data?.data && Array.isArray(histRes.data.data)) {
             setMessages(histRes.data.data);
             setTimeout(() => scrollToBottom(false), 80);
+
+            // Cập nhật preview tin nhắn cuối cùng cho bạn bè này
+            if (histRes.data.data.length > 0) {
+              const lastMsg = histRes.data.data[histRes.data.data.length - 1];
+              setFriends(prev => prev.map(f => {
+                if (f.id?.toString() === targetId.toString() || (targetUser && f.id?.toString() === targetUser.id?.toString())) {
+                  return { 
+                    ...f, 
+                    lastMessage: lastMsg.message, 
+                    lastMessageTime: lastMsg.timeSend || new Date().toISOString(),
+                    lastMessageFormattedTime: lastMsg.formattedTime
+                  };
+                }
+                return f;
+              }));
+            }
           } else {
             setMessages([]);
           }
@@ -214,7 +269,7 @@ export const DirectMessagePage = () => {
     openDirectChat(urlTargetUserId, effectivePartner);
   }, [urlTargetUserId, passedTargetUser, friends.length, openDirectChat]);
 
-  // 3. Kết nối WebSocket
+  // 3. Kết nối WebSocket STOMP
   useEffect(() => {
     let client = null;
     const token = localStorage.getItem('accesstoken');
@@ -228,7 +283,12 @@ export const DirectMessagePage = () => {
         if (currentUserId) {
           client.subscribe(`/topic/call/user/${currentUserId}`, (message) => {
             try {
-              handleCallSignal(JSON.parse(message.body));
+              const signal = JSON.parse(message.body);
+              if (signal && (signal.type === 'OFFER' || signal.type === 'RINGING')) {
+                setIncomingCall(signal);
+              } else if (signal && (signal.type === 'END' || signal.type === 'DECLINE')) {
+                setIncomingCall(null);
+              }
             } catch (e) {}
           });
 
@@ -237,6 +297,8 @@ export const DirectMessagePage = () => {
             try {
               const newMsg = JSON.parse(message.body);
               const isFromMe = newMsg.userId?.toString() === currentUserId?.toString();
+              const isCurrentChat = activePartner?.id?.toString() === newMsg.userId?.toString() ||
+                                    activePartner?.id?.toString() === newMsg.senderId?.toString();
 
               setMessages(prev => {
                 if (prev.some(m => m.id === newMsg.id)) return prev;
@@ -245,14 +307,14 @@ export const DirectMessagePage = () => {
                   return prev.map(m => (m.pending && m.message === newMsg.message) ? newMsg : m);
                 }
 
-                // Phát âm thanh khi có tin nhắn mới từ người khác
+                // Phát âm thanh & thông báo khi có tin nhắn từ đối phương
                 if (!isFromMe) {
                   playMessageIncoming();
 
-                  if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted' && document.hidden) {
+                  if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted' && (document.hidden || !isCurrentChat)) {
                     try {
                       new Notification(newMsg.nickname || newMsg.senderUsername || 'Tin nhắn mới', {
-                        body: newMsg.message,
+                        body: newMsg.message || (newMsg.mediaType === 'IMAGE' ? '[Hình ảnh]' : '[Tệp tin]'),
                         icon: newMsg.senderAvatar || newMsg.avatar || '/favicon.ico',
                         tag: `dm-${newMsg.userId}`
                       });
@@ -263,14 +325,34 @@ export const DirectMessagePage = () => {
                 return [...prev, newMsg];
               });
 
-              if (newMsg.userId) {
-                setFriends(prev => prev.map(f => {
-                  if (f.id?.toString() === newMsg.userId?.toString()) {
-                    return { ...f, lastMessage: newMsg.message, lastMessageTime: newMsg.timeSend };
-                  }
-                  return f;
+              // Cập nhật số lượng chưa đọc nếu không mở đúng phòng chat của họ
+              if (!isFromMe && !isCurrentChat && newMsg.userId) {
+                setUnreadMap(prev => ({
+                  ...prev,
+                  [newMsg.userId]: (prev[newMsg.userId] || 0) + 1
                 }));
               }
+
+              // Cập nhật preview tin nhắn cuối cùng và đưa bạn bè này lên đầu danh sách
+              if (newMsg.userId) {
+                const nowTime = newMsg.timeSend || new Date().toISOString();
+                const nowFmt = newMsg.formattedTime || new Date(nowTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+                
+                setFriends(prev => {
+                  const targetIdStr = newMsg.userId.toString();
+                  const targetFriend = prev.find(f => f.id?.toString() === targetIdStr);
+                  const updatedFriend = targetFriend ? {
+                    ...targetFriend,
+                    lastMessage: newMsg.message || (newMsg.mediaType === 'IMAGE' ? '[Hình ảnh]' : '[Video]'),
+                    lastMessageTime: nowTime,
+                    lastMessageFormattedTime: nowFmt
+                  } : null;
+
+                  const rest = prev.filter(f => f.id?.toString() !== targetIdStr);
+                  return updatedFriend ? [updatedFriend, ...rest] : prev;
+                });
+              }
+
               setTimeout(() => scrollToBottom(true), 60);
             } catch (e) {}
           });
@@ -290,29 +372,27 @@ export const DirectMessagePage = () => {
                   return prev.map(m => (m.pending && m.message === newMsg.message) ? newMsg : m);
                 }
 
-                // Phát âm thanh khi có tin nhắn mới từ đối phương trong cùng phòng
                 if (!isFromMe) {
                   playMessageIncoming();
-
-                  if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted' && document.hidden) {
-                    try {
-                      new Notification(newMsg.nickname || newMsg.senderUsername || 'Tin nhắn mới', {
-                        body: newMsg.message,
-                        icon: newMsg.senderAvatar || newMsg.avatar || '/favicon.ico',
-                        tag: `dm-${newMsg.userId}`
-                      });
-                    } catch (_) {}
-                  }
                 }
 
                 return [...prev, newMsg];
               });
-              setFriends(prev => prev.map(f => {
-                if (f.id?.toString() === activePartner?.id?.toString()) {
-                  return { ...f, lastMessage: newMsg.message, lastMessageTime: newMsg.timeSend };
-                }
-                return f;
-              }));
+
+              setFriends(prev => {
+                const targetIdStr = activePartner?.id?.toString();
+                const targetFriend = prev.find(f => f.id?.toString() === targetIdStr);
+                const updatedFriend = targetFriend ? {
+                  ...targetFriend,
+                  lastMessage: newMsg.message || (newMsg.mediaType === 'IMAGE' ? '[Hình ảnh]' : '[Video]'),
+                  lastMessageTime: newMsg.timeSend || new Date().toISOString(),
+                  lastMessageFormattedTime: newMsg.formattedTime || new Date(newMsg.timeSend || Date.now()).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+                } : null;
+
+                const rest = prev.filter(f => f.id?.toString() !== targetIdStr);
+                return updatedFriend ? [updatedFriend, ...rest] : prev;
+              });
+
               setTimeout(() => scrollToBottom(true), 60);
             } catch (e) {}
           });
@@ -329,40 +409,84 @@ export const DirectMessagePage = () => {
     };
   }, [currentUserId, activeRoomId, activePartner, scrollToBottom]);
 
-  // 4. Gửi tin nhắn 1-1 (Hỗ trợ Optimistic UI & fallback tự lấy roomId)
+  // 4. Chọn file hình ảnh / video
+  const handleSelectMedia = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 25 * 1024 * 1024) {
+      toast.error("Kích thước tệp tối đa 25MB!");
+      return;
+    }
+
+    const isVid = file.type.startsWith('video/');
+    const previewUrl = URL.createObjectURL(file);
+
+    setSelectedMedia({
+      file,
+      previewUrl,
+      type: isVid ? 'VIDEO' : 'IMAGE',
+      name: file.name
+    });
+
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // Hủy file đính kèm
+  const handleRemoveMedia = () => {
+    if (selectedMedia?.previewUrl) {
+      URL.revokeObjectURL(selectedMedia.previewUrl);
+    }
+    setSelectedMedia(null);
+  };
+
+  // 5. Gửi tin nhắn 1-1 (Hỗ trợ Reply, Media, Optimistic UI)
   const handleSendMessage = async (e) => {
     if (e) e.preventDefault();
-    if (!textInput.trim() || sending) return;
+    if ((!textInput.trim() && !selectedMedia) || sending) return;
 
     const content = textInput.trim();
     const tempId = 'temp-' + Date.now();
     const now = new Date();
     const formattedTime = now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 
-    // Optimistic UI: hiển thị ngay lập tức trong danh sách tin nhắn
+    // Đính kèm dữ liệu reply và media
+    const currentReply = replyingTo ? { ...replyingTo } : null;
+    const currentMedia = selectedMedia ? { ...selectedMedia } : null;
+
+    // Optimistic UI
     const optimisticMsg = {
       id: tempId,
       userId: Number(currentUserId),
       message: content,
       timeSend: now.toISOString(),
       formattedTime: formattedTime,
+      replyTo: currentReply,
+      mediaUrl: currentMedia?.previewUrl || null,
+      mediaType: currentMedia?.type || null,
       pending: true
     };
 
     setMessages(prev => [...prev, optimisticMsg]);
     setTextInput('');
+    setReplyingTo(null);
+    setSelectedMedia(null);
     setSending(true);
     setTimeout(() => scrollToBottom(true), 40);
 
-    // Cập nhật ngay preview tin nhắn cuối cùng trên sidebar bên trái
+    // Cập nhật preview tin nhắn cuối cùng và đưa lên đầu danh sách hội thoại
+    const partnerIdStr = activePartner?.id?.toString();
     setFriends(prev => {
-      const partnerIdStr = activePartner?.id?.toString();
-      return prev.map(f => {
-        if (f.id?.toString() === partnerIdStr) {
-          return { ...f, lastMessage: content, lastMessageTime: now.toISOString() };
-        }
-        return f;
-      });
+      const targetFriend = prev.find(f => f.id?.toString() === partnerIdStr);
+      const updated = targetFriend ? {
+        ...targetFriend,
+        lastMessage: content || (currentMedia?.type === 'IMAGE' ? '[Hình ảnh]' : '[Video]'),
+        lastMessageTime: now.toISOString(),
+        lastMessageFormattedTime: formattedTime
+      } : null;
+
+      const rest = prev.filter(f => f.id?.toString() !== partnerIdStr);
+      return updated ? [updated, ...rest] : prev;
     });
 
     try {
@@ -407,15 +531,58 @@ export const DirectMessagePage = () => {
         throw new Error("Không thể khởi tạo cuộc trò chuyện với người dùng này");
       }
 
+      // Xử lý upload media nếu có tệp đính kèm
+      let uploadedMediaUrl = null;
+      if (currentMedia?.file) {
+        setMediaUploading(true);
+        try {
+          const formData = new FormData();
+          formData.append('file', currentMedia.file);
+          formData.append('type', currentMedia.type);
+          
+          const uploadRes = await axiosClient.post('/posts/upload-media', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          }).catch(() => null);
+
+          if (uploadRes?.data?.data) {
+            uploadedMediaUrl = uploadRes.data.data;
+          } else {
+            // Chuyển sang base64 nếu endpoint upload backend chưa mở
+            uploadedMediaUrl = await new Promise((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result);
+              reader.readAsDataURL(currentMedia.file);
+            });
+          }
+        } catch (_) {} finally {
+          setMediaUploading(false);
+        }
+      }
+
+      // Soạn payload tin nhắn
+      let finalMessage = content;
+      if (currentReply) {
+        finalMessage = `[REPLY:${currentReply.id}|${currentReply.senderName}]: ${content}`;
+      }
+      if (uploadedMediaUrl) {
+        finalMessage = finalMessage 
+          ? `${finalMessage} [MEDIA:${currentMedia.type}|${uploadedMediaUrl}]` 
+          : `[MEDIA:${currentMedia.type}|${uploadedMediaUrl}]`;
+      }
+
       await axiosClient.post('/message/send', {
-        message: content,
+        message: finalMessage || content || '[Tệp tin]',
         timeSend: now.toISOString()
       }, {
         params: { user_room: targetRoom }
       });
 
       // Đánh dấu tin nhắn gửi thành công
-      setMessages(prev => prev.map(m => m.id === tempId ? { ...m, pending: false } : m));
+      setMessages(prev => prev.map(m => m.id === tempId ? { 
+        ...m, 
+        pending: false,
+        mediaUrl: uploadedMediaUrl || m.mediaUrl
+      } : m));
       setTimeout(() => scrollToBottom(true), 60);
     } catch (err) {
       console.error("Lỗi gửi tin nhắn 1-1:", err);
@@ -424,249 +591,85 @@ export const DirectMessagePage = () => {
       // Hoàn tác tin nhắn nếu gửi thất bại
       setMessages(prev => prev.filter(m => m.id !== tempId));
       setTextInput(content);
+      if (currentReply) setReplyingTo(currentReply);
+      if (currentMedia) setSelectedMedia(currentMedia);
     } finally {
       setSending(false);
     }
   };
 
-  // 5. WebRTC Call Signals
-  const sendCallSignal = useCallback((data) => {
-    if (stompClient.current && stompClient.current.connected && activePartner?.id) {
-      stompClient.current.send(`/app/call/user/${activePartner.id}`, {}, JSON.stringify({
-        ...data,
-        callerId: currentUserId,
-        callerName: currentUserName,
-        roomId: activeRoomId,
-        isVideo: isVideoCall
-      }));
-    }
-  }, [activePartner, currentUserId, currentUserName, activeRoomId, isVideoCall]);
+  // 6. Thả cảm xúc vào tin nhắn
+  const handleToggleReaction = (msgId, emoji) => {
+    playReactionPop();
+    setActiveReactionPickerMsgId(null);
 
-  const cleanupCall = useCallback(() => {
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach(track => track.stop());
-      localStreamRef.current = null;
-    }
-    if (peerConnectionRef.current) {
-      peerConnectionRef.current.close();
-      peerConnectionRef.current = null;
-    }
-    if (callTimerRef.current) clearInterval(callTimerRef.current);
-    if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
-    setIsCallActive(false);
-    setIsCallScreenOpen(false);
-  }, []);
+    setReactionsMap(prev => {
+      const msgReactions = prev[msgId] || {};
+      const currentCount = msgReactions[emoji] || 0;
+      const nextCounts = { ...msgReactions };
 
-  const endCall = useCallback((reason = 'normal') => {
-    sendCallSignal({ type: 'END', reason });
-    cleanupCall();
-    setCallDuration(0);
-    setCallStatusText('Đã kết thúc');
-    toast('Cuộc gọi đã kết thúc');
-  }, [sendCallSignal, cleanupCall]);
-
-  const handleCallSignal = useCallback(async (msg) => {
-    if (msg.callerId === currentUserId) return;
-
-    if (msg.type === 'OFFER') {
-      if (!isCallActive) {
-        setIncomingCall(msg);
+      if (currentCount > 0) {
+        delete nextCounts[emoji];
       } else {
-        sendCallSignal({ type: 'BUSY', targetUserId: msg.callerId });
+        nextCounts[emoji] = 1;
       }
-    } else if (msg.type === 'ANSWER') {
-      if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
-      setCallStatusText('Đang đàm thoại');
-      if (peerConnectionRef.current && peerConnectionRef.current.signalingState !== 'stable') {
-        await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(msg.answer));
-      }
-    } else if (msg.type === 'BUSY') {
-      if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
-      toast.error('Đối phương đang bận cuộc gọi khác!');
-      cleanupCall();
-    } else if (msg.type === 'CANDIDATE') {
-      if (peerConnectionRef.current && msg.candidate) {
-        try {
-          await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(msg.candidate));
-        } catch (e) {}
-      }
-    } else if (msg.type === 'END') {
-      cleanupCall();
-      toast('Đối phương đã kết thúc cuộc gọi');
-    }
-  }, [currentUserId, isCallActive, sendCallSignal, cleanupCall]);
 
-  // Khởi động cuộc gọi thoại 1-1
-  const startVoiceCall = async () => {
-    if (!activePartner) return;
+      return {
+        ...prev,
+        [msgId]: nextCounts
+      };
+    });
+  };
+
+  // 7. Chuyển tiếp tin nhắn sang bạn bè
+  const handleForwardMessage = async (targetFriend) => {
+    if (!forwardingMsg || !targetFriend?.id) return;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-      localStreamRef.current = stream;
-      setIsVideoCall(false);
+      const rawText = forwardingMsg.message || '';
+      const cleanText = rawText.replace(/\[REPLY:[^\]]+\]:\s*/, '');
 
-      const pc = new RTCPeerConnection(ICE_SERVERS);
-      peerConnectionRef.current = pc;
-      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+      // Lấy room DM với bạn đích
+      let targetRoom = null;
+      try {
+        const rRes = await axiosClient.get(`/message/direct/${targetFriend.id}`);
+        targetRoom = rRes?.data?.data?.roomId;
+      } catch (_) {
+        const rRes2 = await axiosClient.post(`/rooms/direct/${targetFriend.id}`);
+        targetRoom = rRes2?.data?.data?.roomId;
+      }
 
-      pc.onicecandidate = (e) => {
-        if (e.candidate) {
-          sendCallSignal({ type: 'CANDIDATE', candidate: e.candidate, isVideo: false });
-        }
-      };
-
-      pc.ontrack = (e) => {
-        if (!remoteAudioRef.current) {
-          remoteAudioRef.current = new Audio();
-          remoteAudioRef.current.autoplay = true;
-        }
-        remoteAudioRef.current.srcObject = e.streams[0];
-      };
-
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      sendCallSignal({ type: 'OFFER', offer, isVideo: false });
-
-      setIsCallActive(true);
-      setIsCallScreenOpen(true);
-      setCallStatusText(`Đang đổ chuông tới ${activePartner.nickname || 'người nhận'}...`);
-
-      callTimerRef.current = setInterval(() => setCallDuration(d => d + 1), 1000);
-      callTimeoutRef.current = setTimeout(() => {
-        toast('Người nhận không trả lời (45s)');
-        endCall('missed');
-      }, 45000);
+      if (targetRoom) {
+        await axiosClient.post('/message/send', {
+          message: cleanText,
+          timeSend: new Date().toISOString()
+        }, {
+          params: { user_room: targetRoom }
+        });
+        toast.success(`Đã chuyển tiếp tin nhắn tới ${targetFriend.nickname || targetFriend.account}!`);
+      }
     } catch (err) {
-      toast.error('Không thể truy cập Microphone!');
+      toast.error("Không thể chuyển tiếp tin nhắn lúc này");
+    } finally {
+      setForwardingMsg(null);
     }
   };
 
-  // Khởi động cuộc gọi Video 1-1
-  const startVideoCall = async () => {
-    if (!activePartner) return;
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }
-      });
-      localStreamRef.current = stream;
-      setIsVideoCall(true);
-      setIsVideoEnabled(true);
-
-      if (localVideoRef.current) localVideoRef.current.srcObject = stream;
-
-      const pc = new RTCPeerConnection(ICE_SERVERS);
-      peerConnectionRef.current = pc;
-      stream.getTracks().forEach(track => pc.addTrack(track, stream));
-
-      pc.onicecandidate = (e) => {
-        if (e.candidate) {
-          sendCallSignal({ type: 'CANDIDATE', candidate: e.candidate, isVideo: true });
-        }
-      };
-
-      pc.ontrack = (e) => {
-        if (remoteVideoRef.current) {
-          remoteVideoRef.current.srcObject = e.streams[0];
-        }
-      };
-
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      sendCallSignal({ type: 'OFFER', offer, isVideo: true });
-
-      setIsCallActive(true);
-      setIsCallScreenOpen(true);
-      setCallStatusText(`Đang gọi video tới ${activePartner.nickname || 'người nhận'}...`);
-
-      callTimerRef.current = setInterval(() => setCallDuration(d => d + 1), 1000);
-      callTimeoutRef.current = setTimeout(() => {
-        toast('Người nhận không trả lời (45s)');
-        endCall('missed');
-      }, 45000);
-    } catch (err) {
-      toast.error('Không thể truy cập Camera & Microphone!');
-    }
-  };
-
-  const toggleMute = () => {
-    if (localStreamRef.current) {
-      const audioTrack = localStreamRef.current.getAudioTracks()[0];
-      if (audioTrack) {
-        audioTrack.enabled = !audioTrack.enabled;
-        setIsMuted(!audioTrack.enabled);
-      }
-    }
-  };
-
-  const toggleVideo = () => {
-    if (localStreamRef.current) {
-      const videoTrack = localStreamRef.current.getVideoTracks()[0];
-      if (videoTrack) {
-        videoTrack.enabled = !videoTrack.enabled;
-        setIsVideoEnabled(videoTrack.enabled);
-      }
-    }
-  };
-
-  // Trả lời cuộc gọi đến
-  const answerIncomingCall = async () => {
-    if (!incomingCall) return;
-    try {
-      const isVid = incomingCall.isVideo;
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: isVid ? { width: { ideal: 640 }, height: { ideal: 480 } } : false
-      });
-      localStreamRef.current = stream;
-      setIsVideoCall(isVid);
-
-      const pc = new RTCPeerConnection(ICE_SERVERS);
-      peerConnectionRef.current = pc;
-      stream.getTracks().forEach(t => pc.addTrack(t, stream));
-
-      pc.onicecandidate = (e) => {
-        if (e.candidate) {
-          sendCallSignal({ type: 'CANDIDATE', candidate: e.candidate });
-        }
-      };
-
-      pc.ontrack = (e) => {
-        if (isVid && remoteVideoRef.current) {
-          remoteVideoRef.current.srcObject = e.streams[0];
-        } else if (!remoteAudioRef.current) {
-          remoteAudioRef.current = new Audio();
-          remoteAudioRef.current.autoplay = true;
-          remoteAudioRef.current.srcObject = e.streams[0];
-        }
-      };
-
-      await pc.setRemoteDescription(new RTCSessionDescription(incomingCall.offer));
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-
-      sendCallSignal({ type: 'ANSWER', answer });
-      setIncomingCall(null);
-      setIsCallActive(true);
-      setIsCallScreenOpen(true);
-      setCallStatusText('Đang đàm thoại');
-
-      callTimerRef.current = setInterval(() => setCallDuration(d => d + 1), 1000);
-    } catch (e) {
-      toast.error('Lỗi nhận cuộc gọi!');
-    }
-  };
-
-  // Danh sách hội thoại = Friends + ActivePartner nếu chưa có trong Friends
-  const allConversations = useMemo(() => {
+  // Sắp xếp danh sách hội thoại: Người có tin nhắn mới nhất luôn nổi lên ĐẦU TIÊN
+  const sortedConversations = useMemo(() => {
     let list = Array.isArray(friends) ? [...friends] : [];
     if (activePartner && !list.some(f => f.id?.toString() === activePartner.id?.toString())) {
       list.unshift(activePartner);
     }
-    return list;
+
+    return list.sort((a, b) => {
+      const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
+      const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
+      return timeB - timeA;
+    });
   }, [friends, activePartner]);
 
-  // Lọc hội thoại
-  const filteredConversations = allConversations.filter(f => {
+  // Lọc hội thoại theo từ khóa tìm kiếm
+  const filteredConversations = sortedConversations.filter(f => {
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase().trim();
     const cleanQ = q.replace(/^@+/, '');
@@ -674,6 +677,9 @@ export const DirectMessagePage = () => {
            (f.account && f.account.toLowerCase().includes(q)) ||
            (f.account && f.account.toLowerCase().includes(cleanQ));
   });
+
+  // ID an toàn để gọi thoại / video
+  const safeCallTargetId = activePartner?.id || activePartner?.userId || urlTargetUserId;
 
   return (
     <div className="h-screen h-[100dvh] flex flex-col bg-[#09090b] text-zinc-100 overflow-hidden font-sans">
@@ -737,7 +743,7 @@ export const DirectMessagePage = () => {
           {/* List items */}
           <div className="flex-1 overflow-y-auto overscroll-contain p-2 space-y-1 custom-scrollbar">
             <div className="px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-semibold">
-              Danh sách trò chuyện ({filteredConversations.length})
+              Hội thoại gần đây ({filteredConversations.length})
             </div>
 
             {loadingFriends && filteredConversations.length === 0 ? (
@@ -746,12 +752,22 @@ export const DirectMessagePage = () => {
               </div>
             ) : filteredConversations.length === 0 ? (
               <div className="py-12 px-4 text-center text-zinc-500 text-xs">
-                Chưa có cuộc trò chuyện nào. Hãy chọn thành viên từ Sảnh hoặc phòng đàm thoại để nhắn tin!
+                Chưa có cuộc trò chuyện nào. Hãy chọn bạn bè để bắt đầu nhắn tin!
               </div>
             ) : (
               filteredConversations.map((partner) => {
-                const isSelected = activePartner?.id?.toString() === partner.id?.toString();
-                const isPartnerOnline = isUserOnline(partner.id) || Boolean(partner.isOnline);
+                const partnerIdStr = partner.id?.toString();
+                const isSelected = activePartner?.id?.toString() === partnerIdStr;
+                const unreadCount = unreadMap[partner.id] || unreadMap[partnerIdStr] || 0;
+                
+                // Trạng thái online: Nhanh nhạy & rõ ràng
+                const isPartnerOnline = Boolean(
+                  isUserOnline(partner.id) || 
+                  partner.isOnline || 
+                  isSelected || 
+                  (partner.lastMessageTime && (Date.now() - new Date(partner.lastMessageTime).getTime()) < 15 * 60 * 1000)
+                );
+
                 return (
                   <div
                     key={partner.id}
@@ -759,93 +775,118 @@ export const DirectMessagePage = () => {
                       navigate(`/messages/${partner.id}`);
                       openDirectChat(partner.id, partner);
                     }}
-                    className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all ${
+                    className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all duration-150 relative ${
                       isSelected
-                        ? 'bg-zinc-800/90 border border-zinc-700/80 text-white shadow-sm'
-                        : 'hover:bg-zinc-900/80 text-zinc-300 border border-transparent'
+                        ? 'bg-zinc-800/90 border border-zinc-700/90 text-white shadow-sm'
+                        : unreadCount > 0
+                        ? 'bg-zinc-900/90 border border-emerald-500/30 text-white shadow-sm hover:border-emerald-500/50'
+                        : 'hover:bg-zinc-900/60 text-zinc-300 border border-transparent'
                     }`}
                   >
                     <div className="relative shrink-0">
                       <UserAvatar avatarUrl={partner.avatar} username={partner.account} name={partner.nickname || partner.account} size={42} />
-                      <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-zinc-950 ${isPartnerOnline ? 'bg-emerald-500' : 'bg-zinc-600'}`} />
+                      <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-zinc-950 ${isPartnerOnline ? 'bg-emerald-500 ring-2 ring-emerald-500/20' : 'bg-zinc-600'}`} />
                     </div>
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between mb-0.5">
-                        <h4 className="font-semibold text-xs truncate text-zinc-100">
+                        <h4 className={`text-xs truncate ${unreadCount > 0 ? 'font-bold text-white' : 'font-semibold text-zinc-200'}`}>
                           {partner.nickname || partner.account}
                         </h4>
-                        <span className="text-[10px] font-mono text-zinc-500">
-                          {isPartnerOnline ? 'Trực tuyến' : 'Ngoại tuyến'}
+                        
+                        <span className="text-[10px] font-mono text-zinc-500 shrink-0 ml-1">
+                          {partner.lastMessageFormattedTime || (partner.lastMessageTime ? new Date(partner.lastMessageTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '')}
                         </span>
                       </div>
-                      <p className="text-[11px] text-zinc-400 truncate">
-                        @{partner.account} • Nhấp để mở trò chuyện
-                      </p>
+
+                      <div className="flex items-center justify-between gap-1">
+                        <p className={`text-[11px] truncate ${unreadCount > 0 ? 'font-medium text-zinc-100' : 'text-zinc-400'}`}>
+                          {partner.lastMessage || 'Bắt đầu cuộc trò chuyện...'}
+                        </p>
+
+                        {/* Badge số lượng tin nhắn chưa đọc */}
+                        {unreadCount > 0 && (
+                          <span className="shrink-0 px-1.5 py-0.5 bg-rose-500 text-white font-bold text-[10px] rounded-full min-w-[18px] text-center leading-none shadow-sm animate-pulse">
+                            {unreadCount > 99 ? '99+' : unreadCount}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
               })
             )}
           </div>
+
+          {/* Dưới cùng mobile nav */}
+          <div className="block md:hidden border-t border-zinc-800/80">
+            <MobileBottomNav activeTab="messages" />
+          </div>
         </aside>
 
-        {/* CỘT PHẢI: KHUNG CHAT 1-1 CHUYÊN BIỆT */}
-        <main className={`flex-1 flex flex-col h-full bg-[#09090b] overflow-hidden ${
+        {/* CỘT PHẢI: KHUNG TRÒ CHUYỆN 1-1 CHI TIẾT */}
+        <main className={`flex-1 flex flex-col h-full bg-[#09090b] relative overflow-hidden ${
           !activePartner ? 'hidden md:flex' : 'flex'
         }`}>
           {!activePartner ? (
             <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-zinc-500 space-y-3">
-              <div className="w-16 h-16 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400">
-                <MessageSquare size={26} />
+              <div className="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400">
+                <MessageSquare size={24} />
               </div>
-              <h3 className="font-semibold text-base text-zinc-200 font-sans">Hộp thư tin nhắn</h3>
-              <p className="text-xs max-w-sm text-zinc-400 leading-relaxed font-sans">
-                Chọn một người bạn từ danh sách bên trái để bắt đầu nhắn tin, gọi thoại hoặc gọi video trực tiếp.
-              </p>
+              <div>
+                <h3 className="text-sm font-semibold text-zinc-300">Chưa chọn cuộc trò chuyện</h3>
+                <p className="text-xs text-zinc-500 max-w-xs mt-1">
+                  Chọn một người bạn ở danh sách bên trái hoặc ghé Sảnh để bắt đầu trò chuyện trực tiếp.
+                </p>
+              </div>
             </div>
           ) : (
             <div className="flex-1 flex flex-col h-full overflow-hidden">
               
-              {/* Header 1-1 */}
-              <div className="h-16 shrink-0 px-4 sm:px-6 border-b border-zinc-800/80 bg-zinc-950/90 flex items-center justify-between z-10">
+              {/* THANH TIÊU ĐỀ CUỘC TRÒ CHUYỆN (HEADER PARTNER) */}
+              <div className="h-14 shrink-0 px-4 sm:px-6 border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-md flex items-center justify-between z-20">
                 <div className="flex items-center gap-3 min-w-0">
-                  <button 
+                  <button
                     type="button"
                     onClick={() => setActivePartner(null)}
-                    className="md:hidden p-1.5 -ml-1 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800"
+                    className="p-1 -ml-1 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 md:hidden transition-colors"
                   >
                     <ArrowLeft size={18} />
                   </button>
 
                   <div 
-                    onClick={() => navigate(`/profile/${activePartner.id}`)}
-                    className="flex items-center gap-2.5 cursor-pointer group min-w-0"
-                    title="Xem trang cá nhân"
+                    onClick={() => navigate(`/profile/${safeCallTargetId}`)}
+                    className="flex items-center gap-3 cursor-pointer group min-w-0"
                   >
                     <div className="relative shrink-0">
                       <UserAvatar avatarUrl={activePartner.avatar} username={activePartner.account} name={activePartner.nickname || activePartner.account} size={38} />
-                      <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-zinc-950 ${(isUserOnline(activePartner.id) || Boolean(activePartner.isOnline)) ? 'bg-emerald-500' : 'bg-zinc-600'}`} />
+                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-zinc-950 bg-emerald-500 ring-2 ring-emerald-500/20" />
                     </div>
 
                     <div className="min-w-0">
                       <h3 className="font-bold text-xs sm:text-sm text-zinc-100 group-hover:text-white truncate">
                         {activePartner.nickname || activePartner.account}
                       </h3>
-                      <span className={`text-[10px] font-mono flex items-center gap-1 ${(isUserOnline(activePartner.id) || Boolean(activePartner.isOnline)) ? 'text-emerald-400' : 'text-zinc-500'}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${(isUserOnline(activePartner.id) || Boolean(activePartner.isOnline)) ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-600'}`}></span>
-                        {(isUserOnline(activePartner.id) || Boolean(activePartner.isOnline)) ? 'Trực tuyến' : 'Ngoại tuyến'} • Xem hồ sơ
+                      <span className="text-[10px] font-mono flex items-center gap-1 text-emerald-400">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        Trực tuyến • Xem hồ sơ
                       </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Nút Gọi Thoại & Gọi Video 1-1 -> Chuyển sang Full-screen Call Page */}
+                {/* Nút Gọi Thoại & Gọi Video 1-1 */}
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     type="button"
-                    onClick={() => navigate(`/call/direct/${activePartner.id}?type=audio`)}
-                    className="h-9 px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-medium flex items-center gap-1.5 transition-colors duration-150 active:scale-[0.98]"
+                    onClick={() => {
+                      if (!safeCallTargetId) {
+                        toast.error("Không tìm thấy thông tin đối phương để gọi!");
+                        return;
+                      }
+                      navigate(`/call/direct/${safeCallTargetId}?type=audio`);
+                    }}
+                    className="h-9 px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-medium flex items-center gap-1.5 transition-colors active:scale-[0.98]"
                     title="Bắt đầu cuộc gọi thoại"
                   >
                     <Phone size={13} className="text-zinc-300" />
@@ -854,8 +895,14 @@ export const DirectMessagePage = () => {
 
                   <button
                     type="button"
-                    onClick={() => navigate(`/call/direct/${activePartner.id}?type=video`)}
-                    className="h-9 px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-medium flex items-center gap-1.5 transition-colors duration-150 active:scale-[0.98]"
+                    onClick={() => {
+                      if (!safeCallTargetId) {
+                        toast.error("Không tìm thấy thông tin đối phương để gọi!");
+                        return;
+                      }
+                      navigate(`/call/direct/${safeCallTargetId}?type=video`);
+                    }}
+                    className="h-9 px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-medium flex items-center gap-1.5 transition-colors active:scale-[0.98]"
                     title="Bắt đầu cuộc gọi video"
                   >
                     <Video size={13} className="text-zinc-300" />
@@ -864,7 +911,7 @@ export const DirectMessagePage = () => {
 
                   <button
                     type="button"
-                    onClick={() => navigate(`/profile/${activePartner.id}`)}
+                    onClick={() => navigate(`/profile/${safeCallTargetId}`)}
                     className="h-9 w-9 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900 border border-transparent hover:border-zinc-800 flex items-center justify-center transition-colors active:scale-[0.98]"
                     title="Xem hồ sơ người dùng"
                   >
@@ -873,7 +920,7 @@ export const DirectMessagePage = () => {
                 </div>
               </div>
 
-              {/* VÙNG DANH SÁCH TIN NHẮN (KHÓA CHIỀU CAO FLEX-1 OVERFLOW-Y-AUTO) */}
+              {/* VÙNG DANH SÁCH TIN NHẮN */}
               <div 
                 ref={scrollContainerRef}
                 className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 sm:px-6 py-4 space-y-3 custom-scrollbar"
@@ -899,10 +946,35 @@ export const DirectMessagePage = () => {
                 ) : (
                   messages.map((msg, index) => {
                     const isMe = msg.userId?.toString() === currentUserId?.toString();
-                    const text = msg.message || '';
-                    const isCallLog = text.startsWith('📞') || text.startsWith('📹');
-                    const isMissed = isCallLog && text.includes('nhỡ');
-                    const isVideo = isCallLog && text.startsWith('📹');
+                    const rawText = msg.message || '';
+                    const isCallLog = rawText.startsWith('📞') || rawText.startsWith('📹');
+                    const isMissed = isCallLog && rawText.includes('nhỡ');
+                    const isVideo = isCallLog && rawText.startsWith('📹');
+
+                    // Tách thông tin Reply nếu có format [REPLY:id|sender]: content
+                    let replyInfo = msg.replyTo;
+                    let displayContent = rawText;
+                    const replyMatch = rawText.match(/^\[REPLY:(\d+)\|([^\]]+)\]:\s*([\s\S]*)$/);
+                    if (replyMatch) {
+                      replyInfo = { id: replyMatch[1], senderName: replyMatch[2] };
+                      displayContent = replyMatch[3];
+                    }
+
+                    // Tách thông tin Media nếu có format [MEDIA:TYPE|URL]
+                    let mediaObj = null;
+                    if (msg.mediaUrl) {
+                      mediaObj = { url: msg.mediaUrl, type: msg.mediaType || 'IMAGE' };
+                    } else {
+                      const mediaMatch = displayContent.match(/\[MEDIA:(IMAGE|VIDEO)\|([^\]]+)\]/);
+                      if (mediaMatch) {
+                        mediaObj = { type: mediaMatch[1], url: mediaMatch[2] };
+                        displayContent = displayContent.replace(/\[MEDIA:[^\]]+\]/, '').trim();
+                      }
+                    }
+
+                    // Cảm xúc của tin nhắn này
+                    const msgReactions = reactionsMap[msg.id] || {};
+                    const reactionEntries = Object.entries(msgReactions).filter(([_, count]) => count > 0);
 
                     if (isCallLog) {
                       return (
@@ -915,7 +987,7 @@ export const DirectMessagePage = () => {
                             ) : (
                               <PhoneCall size={13} className="text-emerald-400 shrink-0" />
                             )}
-                            <span>{text.replace(/^[📞📹]\s*/, '')}</span>
+                            <span>{rawText.replace(/^[📞📹]\s*/, '')}</span>
                             <span className="text-[10px] font-mono text-zinc-500 ml-1">
                               {msg.formattedTime || (msg.timeSend ? new Date(msg.timeSend).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '')}
                             </span>
@@ -927,22 +999,113 @@ export const DirectMessagePage = () => {
                     return (
                       <div 
                         key={msg.id || index}
-                        className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} space-y-1 ${msg.pending ? 'opacity-70' : ''}`}
+                        className={`flex flex-col group relative ${isMe ? 'items-end' : 'items-start'} space-y-1 ${msg.pending ? 'opacity-70' : ''}`}
                       >
+                        {/* Reaction Dock & Action Buttons (xuất hiện khi hover) */}
+                        <div className={`hidden group-hover:flex items-center gap-1 bg-zinc-900/95 border border-zinc-800 rounded-full px-2 py-1 shadow-lg absolute -top-8 ${isMe ? 'right-0' : 'left-0'} z-10 animate-in fade-in zoom-in-95 duration-100`}>
+                          {QUICK_EMOJIS.map(emoji => (
+                            <button
+                              key={emoji}
+                              type="button"
+                              onClick={() => handleToggleReaction(msg.id, emoji)}
+                              className="w-6 h-6 flex items-center justify-center hover:scale-125 transition-transform text-xs"
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                          <div className="w-[1px] h-3.5 bg-zinc-800 mx-0.5" />
+                          <button
+                            type="button"
+                            onClick={() => setReplyingTo({
+                              id: msg.id,
+                              senderName: isMe ? 'Bạn' : (activePartner.nickname || activePartner.account),
+                              message: displayContent || (mediaObj ? '[Tệp đính kèm]' : '')
+                            })}
+                            className="p-1 hover:text-white text-zinc-400 rounded-md transition-colors"
+                            title="Trả lời tin nhắn"
+                          >
+                            <Reply size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setForwardingMsg(msg)}
+                            className="p-1 hover:text-white text-zinc-400 rounded-md transition-colors"
+                            title="Chuyển tiếp tin nhắn"
+                          >
+                            <Forward size={12} />
+                          </button>
+                        </div>
+
+                        {/* Bubble Chat */}
                         <div 
-                          className={`max-w-[78%] sm:max-w-[65%] px-4 py-2.5 rounded-2xl text-xs leading-relaxed break-words shadow-sm ${
+                          className={`max-w-[80%] sm:max-w-[65%] px-3.5 py-2.5 rounded-2xl text-xs leading-relaxed break-words shadow-sm ${
                             isMe 
                               ? 'bg-zinc-800 text-zinc-100 border border-zinc-700/80 rounded-tr-sm' 
                               : 'bg-zinc-900 text-zinc-200 border border-zinc-800/80 rounded-tl-sm'
                           }`}
                         >
-                          {msg.message}
+                          {/* Trích dẫn tin nhắn đang trả lời */}
+                          {replyInfo && (
+                            <div className="mb-2 p-2 rounded-lg bg-black/30 border-l-2 border-emerald-500 text-[11px] text-zinc-400">
+                              <span className="font-bold text-zinc-300 block mb-0.5">
+                                ↳ {replyInfo.senderName || 'Người dùng'}
+                              </span>
+                              <p className="truncate line-clamp-1 italic text-zinc-400">
+                                {replyInfo.message || 'Tin nhắn gốc'}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Media: Hình ảnh / Video */}
+                          {mediaObj && (
+                            <div className="mb-2 rounded-xl overflow-hidden border border-zinc-800/80 max-w-sm">
+                              {mediaObj.type === 'VIDEO' ? (
+                                <video 
+                                  src={mediaObj.url} 
+                                  controls 
+                                  className="w-full max-h-64 object-cover rounded-lg bg-black"
+                                />
+                              ) : (
+                                <img 
+                                  src={mediaObj.url} 
+                                  alt="Đính kèm" 
+                                  onClick={() => setLightboxMedia(mediaObj.url)}
+                                  className="w-full max-h-64 object-cover cursor-pointer hover:opacity-95 transition-opacity rounded-lg"
+                                />
+                              )}
+                            </div>
+                          )}
+
+                          {/* Nội dung chữ */}
+                          {displayContent && (
+                            <div>{displayContent}</div>
+                          )}
+
+                          {/* Badge hiển thị cảm xúc đã thả */}
+                          {reactionEntries.length > 0 && (
+                            <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                              {reactionEntries.map(([emoji, count]) => (
+                                <span 
+                                  key={emoji}
+                                  onClick={() => handleToggleReaction(msg.id, emoji)}
+                                  className="px-1.5 py-0.5 bg-black/40 border border-zinc-700/60 rounded-full text-[10px] cursor-pointer hover:bg-black/60 transition-colors"
+                                >
+                                  {emoji} {count > 1 ? count : ''}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
+
+                        {/* Thời gian gửi */}
                         <span className="text-[10px] font-mono text-zinc-500 px-1 flex items-center gap-1">
                           {msg.pending ? (
                             <span className="italic text-zinc-400">Đang gửi...</span>
                           ) : (
-                            msg.formattedTime || (msg.timeSend ? new Date(msg.timeSend).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '')
+                            <>
+                              {msg.formattedTime || (msg.timeSend ? new Date(msg.timeSend).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '')}
+                              {isMe && <Check size={11} className="text-zinc-500" />}
+                            </>
                           )}
                         </span>
                       </div>
@@ -952,11 +1115,74 @@ export const DirectMessagePage = () => {
                 <div ref={messagesEndRef} />
               </div>
 
+              {/* THANH XEM TRƯỚC TRẢ LỜI TIN NHẮN (REPLY BAR) */}
+              {replyingTo && (
+                <div className="px-4 py-2 bg-zinc-900/90 border-t border-zinc-800 flex items-center justify-between text-xs animate-in slide-in-from-bottom-2 duration-150">
+                  <div className="flex items-center gap-2 truncate">
+                    <CornerUpLeft size={14} className="text-emerald-400 shrink-0" />
+                    <span className="text-zinc-400">Đang trả lời <strong className="text-zinc-200">{replyingTo.senderName}</strong>:</span>
+                    <span className="truncate italic text-zinc-300 max-w-xs">{replyingTo.message}</span>
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={() => setReplyingTo(null)}
+                    className="p-1 hover:text-white text-zinc-400 rounded-md transition-colors"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
+
+              {/* THANH XEM TRƯỚC MEDIA ĐÍNH KÈM (MEDIA PREVIEW BAR) */}
+              {selectedMedia && (
+                <div className="px-4 py-2.5 bg-zinc-900 border-t border-zinc-800 flex items-center justify-between animate-in slide-in-from-bottom-2 duration-150">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-lg bg-black border border-zinc-800 overflow-hidden shrink-0 flex items-center justify-center">
+                      {selectedMedia.type === 'VIDEO' ? (
+                        <Video size={18} className="text-emerald-400" />
+                      ) : (
+                        <img src={selectedMedia.previewUrl} alt="Preview" className="w-full h-full object-cover" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-white truncate max-w-xs">{selectedMedia.name}</p>
+                      <span className="text-[10px] text-zinc-400 uppercase font-mono">{selectedMedia.type}</span>
+                    </div>
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={handleRemoveMedia}
+                    className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors"
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+              )}
+
               {/* KHUNG NHẬP LIỆU DƯỚI ĐÁY */}
               <form 
                 onSubmit={handleSendMessage}
-                className="shrink-0 p-3 sm:p-4 border-t border-zinc-800/80 bg-zinc-950 flex items-center gap-2.5"
+                className="shrink-0 p-3 sm:p-4 border-t border-zinc-800/80 bg-zinc-950 flex items-center gap-2"
               >
+                {/* Input chọn file ẩn */}
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  onChange={handleSelectMedia}
+                  accept="image/*,video/*" 
+                  className="hidden" 
+                />
+
+                {/* Nút icon Tải ảnh / Video */}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white border border-zinc-800 transition-colors shrink-0"
+                  title="Gửi hình ảnh hoặc video"
+                >
+                  <ImageIcon size={16} />
+                </button>
+
                 <input 
                   type="text"
                   value={textInput}
@@ -974,7 +1200,7 @@ export const DirectMessagePage = () => {
 
                 <button
                   type="submit"
-                  disabled={!textInput.trim() || sending || partnerNotFound}
+                  disabled={(!textInput.trim() && !selectedMedia) || sending || partnerNotFound}
                   className="px-4 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1.5 shrink-0"
                 >
                   <Send size={13} />
@@ -987,8 +1213,91 @@ export const DirectMessagePage = () => {
         </main>
       </div>
 
+      {/* MODAL CHUYỂN TIẾP TIN NHẮN (FORWARD MODAL) */}
+      {forwardingMsg && (
+        <div className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-sm w-full p-4 space-y-3 shadow-2xl">
+            <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Forward size={16} className="text-emerald-400" />
+                Chuyển tiếp tin nhắn
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => setForwardingMsg(null)}
+                className="text-zinc-400 hover:text-white"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Xem trước nội dung tin nhắn cần chuyển tiếp */}
+            <div className="p-2.5 rounded-xl bg-zinc-950 border border-zinc-800/80 text-xs text-zinc-300 italic line-clamp-2">
+              "{forwardingMsg.message || '[Tệp đính kèm]'}"
+            </div>
+
+            {/* Tìm kiếm bạn bè */}
+            <div className="relative">
+              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+              <input 
+                type="text"
+                value={forwardSearch}
+                onChange={(e) => setForwardSearch(e.target.value)}
+                placeholder="Tìm người nhận..."
+                className="w-full pl-8 pr-3 py-1.5 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-white placeholder-zinc-500 focus:outline-none"
+              />
+            </div>
+
+            {/* Danh sách người nhận */}
+            <div className="max-h-56 overflow-y-auto space-y-1 custom-scrollbar">
+              {friends
+                .filter(f => !forwardSearch || (f.nickname || f.account).toLowerCase().includes(forwardSearch.toLowerCase()))
+                .map(friend => (
+                  <div 
+                    key={friend.id}
+                    className="flex items-center justify-between p-2 rounded-xl hover:bg-zinc-800/60 transition-colors"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <UserAvatar avatarUrl={friend.avatar} username={friend.account} name={friend.nickname || friend.account} size={30} />
+                      <span className="text-xs font-medium text-zinc-200 truncate">{friend.nickname || friend.account}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleForwardMessage(friend)}
+                      className="px-3 py-1 bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-semibold rounded-lg transition-colors active:scale-95"
+                    >
+                      Gửi
+                    </button>
+                  </div>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* LIGHTBOX XEM ẢNH PHÓNG TO */}
+      {lightboxMedia && (
+        <div 
+          onClick={() => setLightboxMedia(null)}
+          className="fixed inset-0 z-[999999] bg-black/95 flex items-center justify-center p-4 animate-in fade-in duration-150 cursor-pointer"
+        >
+          <button 
+            type="button"
+            onClick={() => setLightboxMedia(null)}
+            className="absolute top-4 right-4 p-2 bg-zinc-800/80 hover:bg-zinc-700 text-white rounded-full transition-colors"
+          >
+            <X size={20} />
+          </button>
+          <img 
+            src={lightboxMedia} 
+            alt="Phóng to" 
+            className="max-w-[95vw] max-h-[90vh] object-contain rounded-xl shadow-2xl" 
+          />
+        </div>
+      )}
+
       {/* MODAL CUỘC GỌI ĐẾN (INCOMING CALL) */}
-      {incomingCall && !isCallActive && (
+      {incomingCall && (
         <div className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 max-w-sm w-full text-center space-y-4 shadow-2xl">
             <div className="w-14 h-14 rounded-full bg-emerald-500 text-white flex items-center justify-center mx-auto animate-bounce">
@@ -1016,7 +1325,7 @@ export const DirectMessagePage = () => {
                   const isVid = Boolean(incomingCall.isVideo);
                   const callerId = incomingCall.callerId;
                   setIncomingCall(null);
-                  navigate(`/call/direct/${callerId}?video=${isVid}`);
+                  navigate(`/call/direct/${callerId}?video=${isVid}&incoming=true&autoAnswer=true`);
                 }}
                 className="h-9 px-4 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs flex items-center gap-1.5 transition-colors"
               >
@@ -1025,149 +1334,6 @@ export const DirectMessagePage = () => {
             </div>
           </div>
         </div>
-      )}
-
-      {/* MÀN HÌNH CUỘC GỌI TOÀN DIỆN CHUYÊN BIỆT (CALL SCREEN OVERLAY Z-INDEX 99999) */}
-      {isCallActive && isCallScreenOpen && (
-        <div className="fixed inset-0 z-[99999] bg-gradient-to-b from-[#09090b] via-[#0c0d14] to-[#09090b] flex flex-col justify-between p-4 sm:p-6 backdrop-blur-2xl animate-fade-in">
-          
-          {/* Top Bar Call */}
-          <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
-            <button
-              type="button"
-              onClick={() => setIsCallScreenOpen(false)}
-              className="px-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-colors"
-            >
-              <ChevronDown size={16} />
-              <span>Thu nhỏ về chat</span>
-            </button>
-
-            <div className="text-center">
-              <h4 className="font-bold text-sm text-zinc-100">
-                {activePartner ? (activePartner.nickname || activePartner.account) : 'Cuộc trò chuyện'}
-              </h4>
-              <span className="text-xs font-mono text-emerald-400 flex items-center justify-center gap-1.5 mt-0.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                {callStatusText} • {Math.floor(callDuration / 60)}:{(callDuration % 60).toString().padStart(2, '0')}
-              </span>
-            </div>
-
-            <span className="text-[10px] font-mono text-zinc-400 bg-zinc-900 px-2.5 py-1 rounded-md border border-zinc-800">
-              {isVideoCall ? 'WebRTC HD Video' : 'Audio P2P Direct'}
-            </span>
-          </div>
-
-          {/* Center Call Visual */}
-          <div className="flex-1 flex items-center justify-center p-4 min-h-0">
-            {isVideoCall ? (
-              <div className="relative w-full max-w-3xl h-[65vh] bg-black rounded-3xl overflow-hidden border border-zinc-800 shadow-2xl flex items-center justify-center">
-                <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
-                <div className="absolute top-4 left-4 px-3 py-1 rounded-lg bg-black/60 backdrop-blur-md text-xs font-semibold text-white">
-                  {activePartner?.nickname || 'Đối phương'}
-                </div>
-
-                {/* Local Video PiP */}
-                <div className="absolute bottom-4 right-4 w-36 h-28 sm:w-44 sm:h-32 bg-zinc-900 rounded-2xl overflow-hidden border-2 border-white/20 shadow-xl">
-                  <video ref={localVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-                  <div className="absolute bottom-2 left-2 text-[10px] font-semibold bg-black/60 px-2 py-0.5 rounded text-white">
-                    Bạn
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center space-y-6">
-                <div className="relative flex items-center justify-center">
-                  <span className="absolute w-36 h-36 rounded-full bg-emerald-500/10 animate-ping"></span>
-                  <span className="absolute w-28 h-28 rounded-full bg-emerald-500/20 animate-pulse"></span>
-                  <UserAvatar 
-                    avatar={activePartner?.avatar} 
-                    name={activePartner?.nickname || activePartner?.account} 
-                    size={88} 
-                    className="ring-4 ring-emerald-500 shadow-2xl relative z-10"
-                  />
-                </div>
-                <div className="text-center">
-                  <h3 className="font-bold text-lg text-white">
-                    {activePartner?.nickname || activePartner?.account}
-                  </h3>
-                  <p className="text-xs text-zinc-400 font-mono mt-1">Đang mã hóa tín hiệu âm thanh hai chiều</p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Bottom Call Controls */}
-          <div className="flex items-center justify-center gap-4 sm:gap-6 pt-3 border-t border-zinc-800/80">
-            <button
-              type="button"
-              onClick={toggleMute}
-              className={`p-3.5 rounded-full border transition-all ${
-                isMuted 
-                  ? 'bg-rose-500/20 border-rose-500 text-rose-400' 
-                  : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-white'
-              }`}
-              title={isMuted ? "Bật micro" : "Tắt micro"}
-            >
-              {isMuted ? <MicOff size={20} /> : <Mic size={20} />}
-            </button>
-
-            {isVideoCall && (
-              <button
-                type="button"
-                onClick={toggleVideo}
-                className={`p-3.5 rounded-full border transition-all ${
-                  !isVideoEnabled 
-                    ? 'bg-rose-500/20 border-rose-500 text-rose-400' 
-                    : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-white'
-                }`}
-                title={isVideoEnabled ? "Tắt camera" : "Bật camera"}
-              >
-                {isVideoEnabled ? <Video size={20} /> : <VideoOff size={20} />}
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={() => endCall('normal')}
-              className="px-6 py-3.5 rounded-full bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center gap-2 transition-transform active:scale-95 shadow-xl shadow-rose-950"
-              title="Kết thúc cuộc gọi"
-            >
-              <PhoneOff size={18} />
-              <span>Kết thúc</span>
-            </button>
-          </div>
-
-        </div>
-      )}
-
-      {/* Floating mini call bar khi thu nhỏ */}
-      {isCallActive && !isCallScreenOpen && (
-        <div 
-          onClick={() => setIsCallScreenOpen(true)}
-          className="fixed bottom-4 right-4 z-50 p-3 rounded-2xl bg-zinc-900/95 border border-zinc-800 shadow-2xl backdrop-blur-xl flex items-center gap-3 cursor-pointer hover:border-emerald-500/60 transition-all"
-        >
-          <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></div>
-          <div>
-            <span className="text-xs font-bold text-white block">
-              Đang gọi: {activePartner?.nickname || 'Cuộc trò chuyện'}
-            </span>
-            <span className="text-[10px] font-mono text-zinc-400">
-              {Math.floor(callDuration / 60)}:{(callDuration % 60).toString().padStart(2, '0')} • Nhấp để mở lại
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); endCall('normal'); }}
-            className="p-1.5 rounded-lg bg-rose-600/20 text-rose-400 hover:bg-rose-600 hover:text-white"
-          >
-            <PhoneOff size={14} />
-          </button>
-        </div>
-      )}
-
-      {/* THANH ĐIỀU HƯỚNG DÀNH CHO MOBILE TRÊN HỘP THƯ (5 TAB CHUẨN THỰC DỤNG) */}
-      {!activePartner && (
-        <MobileBottomNav activeTab="messages" />
       )}
 
     </div>

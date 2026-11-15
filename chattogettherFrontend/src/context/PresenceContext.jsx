@@ -54,30 +54,37 @@ export const PresenceProvider = ({ children }) => {
     if (!currentUserId) return;
 
     const sendHeartbeat = () => {
-      // 1. Gửi qua REST
-      axiosClient.post('/presence/heartbeat').catch(() => {});
+      // 1. Gửi qua REST với body userId
+      axiosClient.post('/presence/heartbeat', { userId: Number(currentUserId) }).catch(() => {});
       // 2. Gửi qua WebSocket nếu đang connected
       if (stompClientRef.current && stompClientRef.current.connected) {
         try {
-          stompClientRef.current.send('/app/presence/heartbeat', {}, JSON.stringify({ userId: currentUserId }));
+          stompClientRef.current.send('/app/presence/heartbeat', {}, JSON.stringify({ userId: Number(currentUserId) }));
         } catch (_) {}
       }
     };
 
     sendHeartbeat();
-    const interval = setInterval(sendHeartbeat, 25000);
+    const interval = setInterval(sendHeartbeat, 20000);
     return () => clearInterval(interval);
   }, [getCurrentUserId]);
 
-  // 3. Lắng nghe sự kiện /topic/presence qua STOMP WebSocket
+  // 3. Lắng nghe sự kiện /topic/presence qua STOMP WebSocket & định kỳ đồng bộ
   useEffect(() => {
     fetchOnlineUsers();
+    const syncInterval = setInterval(fetchOnlineUsers, 30000);
 
     let isMounted = true;
     const client = createStompClient();
     stompClientRef.current = client;
 
-    client.connect({}, () => {
+    const currentUserId = getCurrentUserId();
+    const token = localStorage.getItem('accesstoken');
+    const connectHeaders = {};
+    if (currentUserId) connectHeaders['userId'] = String(currentUserId);
+    if (token) connectHeaders['Authorization'] = `Bearer ${token}`;
+
+    client.connect(connectHeaders, () => {
       if (!isMounted) return;
 
       client.subscribe('/topic/presence', (frame) => {
@@ -103,6 +110,7 @@ export const PresenceProvider = ({ children }) => {
 
     return () => {
       isMounted = false;
+      clearInterval(syncInterval);
       if (stompClientRef.current) {
         try {
           stompClientRef.current.disconnect();

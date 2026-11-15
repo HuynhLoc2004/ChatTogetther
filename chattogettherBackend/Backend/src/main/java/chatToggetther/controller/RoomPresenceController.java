@@ -49,8 +49,15 @@ public class RoomPresenceController {
      * API gửi nhịp tim định kỳ (Heartbeat) của người dùng hiện tại
      */
     @org.springframework.web.bind.annotation.PostMapping({"/api/presence/heartbeat", "/presence/heartbeat"})
-    public ResponseEntity<ResponseData<Boolean>> postGlobalHeartbeat(org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken token) {
+    public ResponseEntity<ResponseData<Boolean>> postGlobalHeartbeat(
+            org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken token,
+            @org.springframework.web.bind.annotation.RequestBody(required = false) Map<String, Object> body) {
         Long userId = chatToggetther.Customize.SecurityUtils.extractUserId(token);
+        if (userId == null && body != null && body.get("userId") != null) {
+            try {
+                userId = Long.valueOf(String.valueOf(body.get("userId")));
+            } catch (Exception ignored) {}
+        }
         if (userId != null) {
             presenceService.recordActive(userId, null);
         }

@@ -57,6 +57,19 @@ const getAudioContext = () => {
   return sharedAudioCtx;
 };
 
+// Tự động mở khóa AudioContext khi có bất kỳ tương tác người dùng nào
+if (typeof window !== 'undefined') {
+  const unlockAudio = () => {
+    const ctx = getAudioContext();
+    if (ctx && ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+  };
+  window.addEventListener('click', unlockAudio, { passive: true });
+  window.addEventListener('keydown', unlockAudio, { passive: true });
+  window.addEventListener('touchstart', unlockAudio, { passive: true });
+}
+
 /**
  * 1. playReactionPop() - Âm thanh khi Thả Cảm Xúc / Tim bài viết & bình luận
  * Chuẩn Apple/iOS & Telegram: Tiếng bọt nước / búng tay pha lê trong vắt, tuyệt đối không bị đục
@@ -284,6 +297,43 @@ export const playRemoveTick = (overrideVolume = null) => {
  * 4. playMessageIncoming() - Âm báo tin nhắn nhóm tới thanh thoát, dễ chịu
  * 2 nốt ding-dong nhẹ 660Hz -> 990Hz, thời lượng ~110ms, âm lượng 0.12, dùng chung 1 AudioContext
  */
+const triggerDingDong = (ctx, volumePercent) => {
+  const now = ctx.currentTime;
+  const masterGain = ctx.createGain();
+  masterGain.gain.setValueAtTime((volumePercent / 100) * 0.16, now);
+  masterGain.connect(ctx.destination);
+
+  // Nốt 1: 660Hz (ding)
+  const osc1 = ctx.createOscillator();
+  const gain1 = ctx.createGain();
+  osc1.type = 'sine';
+  osc1.frequency.setValueAtTime(660, now);
+
+  gain1.gain.setValueAtTime(0.001, now);
+  gain1.gain.linearRampToValueAtTime(0.8, now + 0.008);
+  gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+
+  osc1.connect(gain1);
+  gain1.connect(masterGain);
+  osc1.start(now);
+  osc1.stop(now + 0.09);
+
+  // Nốt 2: 990Hz (dong)
+  const osc2 = ctx.createOscillator();
+  const gain2 = ctx.createGain();
+  osc2.type = 'sine';
+  osc2.frequency.setValueAtTime(990, now + 0.045);
+
+  gain2.gain.setValueAtTime(0.001, now + 0.045);
+  gain2.gain.linearRampToValueAtTime(0.9, now + 0.052);
+  gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
+
+  osc2.connect(gain2);
+  gain2.connect(masterGain);
+  osc2.start(now + 0.045);
+  osc2.stop(now + 0.14);
+};
+
 export const playMessageIncoming = (overrideVolume = null) => {
   try {
     if (activeSoundConfig.theme === 'MUTED') return;
@@ -292,40 +342,13 @@ export const playMessageIncoming = (overrideVolume = null) => {
 
     const ctx = getAudioContext();
     if (!ctx) return;
-    const now = ctx.currentTime;
 
-    const masterGain = ctx.createGain();
-    masterGain.gain.setValueAtTime((volumePercent / 100) * 0.12, now);
-    masterGain.connect(ctx.destination);
-
-    // Nốt 1: 660Hz (ding)
-    const osc1 = ctx.createOscillator();
-    const gain1 = ctx.createGain();
-    osc1.type = 'sine';
-    osc1.frequency.setValueAtTime(660, now);
-
-    gain1.gain.setValueAtTime(0.001, now);
-    gain1.gain.linearRampToValueAtTime(0.7, now + 0.008);
-    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
-
-    osc1.connect(gain1);
-    gain1.connect(masterGain);
-    osc1.start(now);
-    osc1.stop(now + 0.08);
-
-    // Nốt 2: 990Hz (dong)
-    const osc2 = ctx.createOscillator();
-    const gain2 = ctx.createGain();
-    osc2.type = 'sine';
-    osc2.frequency.setValueAtTime(990, now + 0.045);
-
-    gain2.gain.setValueAtTime(0.001, now + 0.045);
-    gain2.gain.linearRampToValueAtTime(0.85, now + 0.052);
-    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.115);
-
-    osc2.connect(gain2);
-    gain2.connect(masterGain);
-    osc2.start(now + 0.045);
-    osc2.stop(now + 0.12);
+    if (ctx.state === 'suspended') {
+      ctx.resume().then(() => {
+        triggerDingDong(ctx, volumePercent);
+      }).catch(() => {});
+    } else {
+      triggerDingDong(ctx, volumePercent);
+    }
   } catch (_) {}
 };

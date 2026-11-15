@@ -303,6 +303,14 @@ function App() {
               } 
             />
             <Route 
+              path="/call/direct" 
+              element={
+                <ProtectedRoute>
+                  <CallPage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
               path="/call/room/:roomId" 
               element={
                 <ProtectedRoute>
