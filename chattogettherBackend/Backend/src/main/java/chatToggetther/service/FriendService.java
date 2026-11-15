@@ -26,11 +26,16 @@ public class FriendService {
     private final UserRepository userRepository;
     private final FriendshipRepository friendshipRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final NotificationService notificationService;
 
-    public FriendService(UserRepository userRepository, FriendshipRepository friendshipRepository, SimpMessagingTemplate messagingTemplate) {
+    public FriendService(UserRepository userRepository, 
+                         FriendshipRepository friendshipRepository, 
+                         SimpMessagingTemplate messagingTemplate,
+                         NotificationService notificationService) {
         this.userRepository = userRepository;
         this.friendshipRepository = friendshipRepository;
         this.messagingTemplate = messagingTemplate;
+        this.notificationService = notificationService;
     }
 
     private UserDTO mapToDTO(UserEntity u, String status) {
@@ -106,17 +111,19 @@ public class FriendService {
         friendship.setCreatedAt(LocalDateTime.now());
         friendshipRepository.save(friendship);
 
-        // Báo cho receiver qua WebSocket
+        // Lưu thông báo persistent vào PostgreSQL và bắn Realtime qua STOMP
         try {
-            messagingTemplate.convertAndSend("/topic/user/" + receiverId, "FRIEND_REQUEST_RECEIVED");
             String senderName = sender.getNickname() != null && !sender.getNickname().isEmpty() ? sender.getNickname() : sender.getAccount();
-            Map<String, Object> notif = new HashMap<>();
-            notif.put("id", System.currentTimeMillis());
-            notif.put("type", "FRIEND_REQUEST");
-            notif.put("text", senderName + " đã gửi cho bạn một lời mời kết bạn.");
-            notif.put("time", "Vừa xong");
-            notif.put("unread", true);
-            messagingTemplate.convertAndSend("/topic/user/" + receiverId + "/notifications", notif);
+            notificationService.createAndSendNotification(
+                    receiverId,
+                    senderId,
+                    senderName,
+                    sender.getAvatar(),
+                    "FRIEND_REQUEST",
+                    friendship.getId(),
+                    senderName + " đã gửi cho bạn một lời mời kết bạn.",
+                    "PENDING"
+            );
         } catch (Exception ignored) {}
 
         return new ResponseData<>(200, "Đã gửi lời mời kết bạn thành công", true);
@@ -145,19 +152,26 @@ public class FriendService {
         f.setStatus("ACCEPTED");
         friendshipRepository.save(f);
 
-        // Báo cho cả 2 qua WebSocket
+        // Cập nhật trạng thái thông báo kết bạn của người nhận
         try {
+            notificationService.updateFriendRequestStatus(receiverId, senderId, "ACCEPTED");
+
+            // Báo cho sender ban đầu qua Notification persistent & realtime
+            String receiverName = receiver.getNickname() != null && !receiver.getNickname().isEmpty() ? receiver.getNickname() : receiver.getAccount();
+            notificationService.createAndSendNotification(
+                    senderId,
+                    receiverId,
+                    receiverName,
+                    receiver.getAvatar(),
+                    "FRIEND_ACCEPTED",
+                    receiverId,
+                    receiverName + " đã đồng ý kết bạn với bạn.",
+                    "COMPLETED"
+            );
+
+            // Bắn tín hiệu làm mới danh sách bạn bè
             messagingTemplate.convertAndSend("/topic/user/" + senderId, "FRIEND_REQUEST_ACCEPTED");
             messagingTemplate.convertAndSend("/topic/user/" + receiverId, "FRIEND_REQUEST_ACCEPTED");
-
-            String receiverName = receiver.getNickname() != null && !receiver.getNickname().isEmpty() ? receiver.getNickname() : receiver.getAccount();
-            Map<String, Object> notif = new HashMap<>();
-            notif.put("id", System.currentTimeMillis());
-            notif.put("type", "FRIEND_ACCEPTED");
-            notif.put("text", receiverName + " đã đồng ý kết bạn với bạn.");
-            notif.put("time", "Vừa xong");
-            notif.put("unread", true);
-            messagingTemplate.convertAndSend("/topic/user/" + senderId + "/notifications", notif);
         } catch (Exception ignored) {}
 
         return new ResponseData<>(200, "Đã chấp nhận kết bạn", true);
@@ -181,12 +195,13 @@ public class FriendService {
         if (existing.isPresent()) {
             friendshipRepository.delete(existing.get());
             try {
+                notificationService.updateFriendRequestStatus(currentUserId, targetId, "REJECTED");
                 messagingTemplate.convertAndSend("/topic/user/" + targetId, "FRIEND_REMOVED");
             } catch (Exception ignored) {}
-            return new ResponseData<>(200, "Đã hủy kết bạn thành công", true);
+            return new ResponseData<>(200, "Đã xử lý quan hệ bạn bè thành công", true);
         }
 
-        return new ResponseData<>(400, "Không có quan hệ bạn bè để hủy", false);
+        return new ResponseData<>(400, "Không có quan hệ bạn bè để xử lý", false);
     }
 
     @Transactional(readOnly = true)

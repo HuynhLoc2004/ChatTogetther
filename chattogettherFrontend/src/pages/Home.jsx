@@ -9,7 +9,7 @@ import {
   Shuffle, Image as ImageIcon, CheckCircle2, Zap, Dices, Maximize2, Download,
   Edit3, Trash2, MoreVertical, Tag, Filter, Check, Disc,
   Mic, Headphones, Moon, Gamepad2, Film, Square,
-  Flag, AlertTriangle, UserCheck,
+  Flag, AlertTriangle, UserCheck, UserPlus,
   ChevronDown, Menu, Globe, Layers, SlidersHorizontal, Repeat, Sun, Smile,
   ArrowLeft, RefreshCw, Clock, Loader2, SkipBack, SkipForward, ChevronLeft
 } from 'lucide-react';
@@ -674,20 +674,86 @@ const Home = ({ initialTab }) => {
     }
   });
 
-  // Đồng bộ nạp thông báo khi currentUserId sẵn sàng
-  useEffect(() => {
-    if (currentUserId) {
-      try {
-        const stored = localStorage.getItem(`talovin_notifs_${currentUserId}`) || localStorage.getItem('talovin_notifs_cache');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setNotifications(prev => prev.length === 0 ? parsed : prev);
-          }
-        }
-      } catch {}
+  // Đồng bộ nạp thông báo từ server khi currentUserId sẵn sàng
+  const fetchNotifications = useCallback(async () => {
+    if (!currentUserId) return;
+    try {
+      const res = await axiosClient.get('/notifications');
+      if (res.data?.data?.notifications) {
+        setNotifications(res.data.data.notifications);
+      }
+    } catch (err) {
+      console.warn("Lỗi tải thông báo từ server:", err);
     }
   }, [currentUserId]);
+
+  const requestNotificationPermission = () => {
+    if (typeof window !== 'undefined' && "Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {});
+    }
+  };
+
+  const handleMarkAllNotificationsRead = async () => {
+    try {
+      await axiosClient.put('/notifications/read-all');
+    } catch {}
+    setNotifications(prev => prev.map(n => ({ ...n, unread: false, isRead: true })));
+  };
+
+  const handleClearAllNotifications = async () => {
+    try {
+      await axiosClient.delete('/notifications');
+    } catch {}
+    setNotifications([]);
+    if (currentUserId) {
+      localStorage.removeItem(`talovin_notifs_${currentUserId}`);
+    }
+    localStorage.removeItem('talovin_notifs_cache');
+  };
+
+  const handleAcceptFriendRequest = async (senderId, notifId) => {
+    try {
+      await axiosClient.post('/friends/accept', null, { params: { sender_id: senderId } });
+      toast.success("Đã chấp nhận lời mời kết bạn!", { id: 'fr-act' });
+      setNotifications(prev => prev.map(n => 
+        (n.id === notifId || (n.type === 'FRIEND_REQUEST' && n.actorId === senderId))
+          ? { ...n, status: 'ACCEPTED', unread: false, isRead: true }
+          : n
+      ));
+      if (floatingNotif && (floatingNotif.id === notifId || floatingNotif.actorId === senderId)) {
+        setFloatingNotif(null);
+      }
+      fetchPendingFriendsCount();
+      fetchFriends();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Lỗi khi chấp nhận kết bạn!", { id: 'fr-act' });
+    }
+  };
+
+  const handleDeclineFriendRequest = async (senderId, notifId) => {
+    try {
+      await axiosClient.post('/friends/decline', null, { params: { sender_id: senderId } });
+      toast.success("Đã từ chối lời mời kết bạn", { id: 'fr-act' });
+      setNotifications(prev => prev.map(n => 
+        (n.id === notifId || (n.type === 'FRIEND_REQUEST' && n.actorId === senderId))
+          ? { ...n, status: 'REJECTED', unread: false, isRead: true }
+          : n
+      ));
+      if (floatingNotif && (floatingNotif.id === notifId || floatingNotif.actorId === senderId)) {
+        setFloatingNotif(null);
+      }
+      fetchPendingFriendsCount();
+      fetchFriends();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Lỗi khi từ chối lời mời!", { id: 'fr-act' });
+    }
+  };
+
+  useEffect(() => {
+    if (currentUserId) {
+      fetchNotifications();
+    }
+  }, [currentUserId, fetchNotifications]);
 
   // Lưu trữ lịch sử thông báo (tránh ghi đè mảng rỗng khi vừa mount)
   useEffect(() => {
@@ -1800,18 +1866,18 @@ const Home = ({ initialTab }) => {
         stompClient.subscribe('/topic/posts', () => fetchPosts(true));
 
         if (currentUserId) {
-          // Kênh thông báo cá nhân hóa thời gian thực (Cảm xúc, Bình luận, Tố cáo & Gỡ bài)
+          // Kênh thông báo cá nhân hóa thời gian thực (Lời mời kết bạn, Cảm xúc, Bình luận, Tố cáo & Gỡ bài)
           stompClient.subscribe(`/topic/user/${currentUserId}/notifications`, (message) => {
             try {
               const notif = JSON.parse(message.body);
-              const textContent = notif.text || notif.message || notif.title || 'Thông báo mới từ hệ thống';
-              const dedupKey = `${notif.type || 'SYS'}_${textContent}_${notif.postId || ''}`;
+              const textContent = notif.content || notif.text || notif.message || notif.title || 'Thông báo mới từ hệ thống';
+              const dedupKey = `${notif.type || 'SYS'}_${textContent}_${notif.id || notif.referenceId || ''}`;
               const now = Date.now();
 
-              // Chống spam & lọc trùng lặp thông báo trong 10 giây
+              // Chống spam & lọc trùng lặp thông báo trong 5 giây
               if (recentNotifKeysRef.current.has(dedupKey)) {
                 const prevTime = recentNotifKeysRef.current.get(dedupKey);
-                if (now - prevTime < 10000) {
+                if (now - prevTime < 5000) {
                   return; // Đã nhận thông báo tương tự cách đây ít giây, bỏ qua để tránh duplicate
                 }
               }
@@ -1824,10 +1890,17 @@ const Home = ({ initialTab }) => {
 
               const normalizedNotif = {
                 id: notif.id || Date.now(),
+                actorId: notif.actorId,
+                actorName: notif.actorName,
+                actorAvatar: notif.actorAvatar,
+                referenceId: notif.referenceId,
                 text: textContent,
-                title: notif.title || (notif.type === 'POST_TAKEDOWN' ? 'Kiểm duyệt nội dung' : 'Thông báo hệ thống'),
+                title: notif.title || (notif.type === 'FRIEND_REQUEST' ? 'Lời mời kết bạn' :
+                                       notif.type === 'FRIEND_ACCEPTED' ? 'Chấp nhận kết bạn' :
+                                       notif.type === 'POST_TAKEDOWN' ? 'Kiểm duyệt nội dung' : 'Thông báo hệ thống'),
                 type: notif.type || 'SYSTEM',
-                time: notif.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                status: notif.status || (notif.type === 'FRIEND_REQUEST' ? 'PENDING' : 'COMPLETED'),
+                time: notif.time || 'Vừa xong',
                 unread: true,
                 postId: notif.postId,
                 reason: notif.reason,
@@ -1835,6 +1908,23 @@ const Home = ({ initialTab }) => {
               };
               setNotifications(prev => [normalizedNotif, ...prev.filter(n => n.id !== normalizedNotif.id)]);
               setFloatingNotif(normalizedNotif);
+
+              if (notif.type === 'FRIEND_REQUEST' || notif.type === 'FRIEND_ACCEPTED') {
+                fetchPendingFriendsCount();
+                fetchFriends();
+              }
+
+              // Thông báo đẩy ra trình duyệt / điện thoại nếu được cấp quyền
+              if (typeof window !== 'undefined' && "Notification" in window && Notification.permission === "granted") {
+                try {
+                  const pushTitle = normalizedNotif.type === 'FRIEND_REQUEST' ? 'Talovin - Lời mời kết bạn' :
+                                    normalizedNotif.type === 'FRIEND_ACCEPTED' ? 'Talovin - Kết nối mới' : 'Talovin';
+                  new Notification(pushTitle, {
+                    body: normalizedNotif.text,
+                    icon: normalizedNotif.actorAvatar || "/logo.png"
+                  });
+                } catch {}
+              }
 
               if (notif.type === 'POST_TAKEDOWN') {
                 fetchPosts(true);
@@ -1844,30 +1934,11 @@ const Home = ({ initialTab }) => {
             }
           });
 
-          // Kênh thông báo raw event người dùng (chỉ cập nhật danh sách bạn bè, tránh spam duplicate thông báo)
+          // Kênh thông báo raw event người dùng (chỉ cập nhật danh sách bạn bè đồng bộ)
           stompClient.subscribe(`/topic/user/${currentUserId}`, (message) => {
-            if (message.body === 'FRIEND_REQUEST_RECEIVED' || message.body === 'FRIEND_REQUEST_ACCEPTED') {
+            if (message.body === 'FRIEND_REQUEST_RECEIVED' || message.body === 'FRIEND_REQUEST_ACCEPTED' || message.body === 'FRIEND_REMOVED') {
               fetchFriends();
               fetchPendingFriendsCount();
-              // Lưu ý: Backend đã gửi notification có cấu trúc chi tiết vào /topic/user/${id}/notifications.
-              // Chỉ tạo thêm notification dự phòng nếu chưa từng nhận notification này trong 10 giây qua.
-              const dedupKey = `FRIEND_${message.body}`;
-              const now = Date.now();
-              if (!recentNotifKeysRef.current.has(dedupKey) || (now - recentNotifKeysRef.current.get(dedupKey) >= 10000)) {
-                recentNotifKeysRef.current.set(dedupKey, now);
-                const notifItem = {
-                  id: Date.now(),
-                  title: 'Kết nối bạn bè',
-                  text: message.body === 'FRIEND_REQUEST_RECEIVED' 
-                    ? 'Bạn có một lời mời kết bạn mới!' 
-                    : 'Lời mời kết bạn của bạn đã được chấp nhận!',
-                  time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                  unread: true,
-                  type: 'FRIEND'
-                };
-                setNotifications(prev => [notifItem, ...prev]);
-                setFloatingNotif(notifItem);
-              }
             }
           });
 
@@ -2467,9 +2538,21 @@ const Home = ({ initialTab }) => {
                   <Shield size={14} />
                 </button>
               )}
-              <button onClick={() => setIsNotifOpen(!isNotifOpen)} className="btn-header-notif">
+              <button 
+                type="button"
+                onClick={() => {
+                  setIsNotifOpen(!isNotifOpen);
+                  requestNotificationPermission();
+                }} 
+                className="btn-header-notif relative"
+                title="Thông báo sảnh"
+              >
                 <Bell size={16} strokeWidth={1.5} />
-                {notifications.some(n => n.unread) && <span className="notif-dot"></span>}
+                {notifications.filter(n => n.unread).length > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-mono font-bold flex items-center justify-center border-2 border-zinc-950 shadow-sm animate-pulse">
+                    {notifications.filter(n => n.unread).length > 9 ? '9+' : notifications.filter(n => n.unread).length}
+                  </span>
+                )}
               </button>
             </div>
           </header>
@@ -2590,12 +2673,19 @@ const Home = ({ initialTab }) => {
             {/* NÚT CHUÔNG THÔNG BÁO SẢNH (Mở Slide-over Drawer sang trọng) */}
             <button 
               type="button"
-              onClick={() => setIsNotifOpen(!isNotifOpen)} 
-              className="btn-header-notif hidden sm:flex"
+              onClick={() => {
+                setIsNotifOpen(!isNotifOpen);
+                requestNotificationPermission();
+              }} 
+              className="btn-header-notif hidden sm:flex relative"
               title="Thông báo sảnh (Mở ngăn kéo)"
             >
               <Bell size={15} strokeWidth={1.5} />
-              {notifications.some(n => n.unread) && <span className="notif-dot"></span>}
+              {notifications.filter(n => n.unread).length > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-mono font-bold flex items-center justify-center border-2 border-zinc-950 shadow-sm animate-pulse">
+                  {notifications.filter(n => n.unread).length > 9 ? '9+' : notifications.filter(n => n.unread).length}
+                </span>
+              )}
             </button>
           </div>
 
@@ -4630,40 +4720,65 @@ const Home = ({ initialTab }) => {
       {/* THANH THÔNG BÁO NỔI HỆ THỐNG THỜI GIAN THỰC (REALTIME FLOATING PILL) */}
       {floatingNotif && (
         <div 
-          className="fixed top-14 left-1/2 -translate-x-1/2 z-[9999] max-w-md w-[92vw] sm:w-[420px] bg-zinc-900/98 border border-zinc-700/80 rounded-2xl p-3.5 shadow-2xl backdrop-blur-xl flex items-start gap-3 animate-fade-in"
+          className="fixed top-14 left-1/2 -translate-x-1/2 z-[9999] max-w-md w-[92vw] sm:w-[420px] bg-zinc-950/95 border border-zinc-700/80 rounded-2xl p-3.5 shadow-2xl backdrop-blur-xl flex flex-col gap-2.5 animate-in slide-in-from-top-3 duration-200"
           style={{ boxShadow: '0 20px 40px -8px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.08)' }}
         >
-          <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${
-            floatingNotif.type === 'POST_TAKEDOWN' 
-              ? 'bg-rose-500/15 border border-rose-500/30 text-rose-400'
-              : floatingNotif.type === 'FRIEND'
-              ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400'
-              : 'bg-indigo-500/15 border border-indigo-500/30 text-indigo-400'
-          }`}>
-            {floatingNotif.type === 'POST_TAKEDOWN' ? (
-              <AlertTriangle size={16} />
-            ) : floatingNotif.type === 'FRIEND' ? (
-              <UserCheck size={16} />
-            ) : (
-              <Bell size={16} />
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-xs font-bold text-zinc-100 flex items-center justify-between">
-              <span>{floatingNotif.title}</span>
-              <span className="text-[10px] text-zinc-500 font-mono">{floatingNotif.time}</span>
+          <div className="flex items-start gap-3">
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden ${
+              floatingNotif.type === 'POST_TAKEDOWN' 
+                ? 'bg-rose-500/15 border border-rose-500/30 text-rose-400'
+                : (floatingNotif.type === 'FRIEND_REQUEST' || floatingNotif.type === 'FRIEND')
+                ? 'bg-zinc-800 border border-zinc-700 text-zinc-200'
+                : 'bg-zinc-800 border border-zinc-700 text-zinc-300'
+            }`}>
+              {floatingNotif.actorAvatar ? (
+                <img src={floatingNotif.actorAvatar} alt="avatar" className="w-full h-full object-cover" />
+              ) : floatingNotif.type === 'POST_TAKEDOWN' ? (
+                <AlertTriangle size={16} />
+              ) : floatingNotif.type === 'FRIEND_REQUEST' ? (
+                <UserPlus size={16} />
+              ) : (
+                <Bell size={16} />
+              )}
             </div>
-            <p className="text-xs text-zinc-300 mt-0.5 leading-relaxed break-words font-sans">
-              {floatingNotif.text}
-            </p>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-bold text-zinc-100 flex items-center justify-between">
+                <span>{floatingNotif.title}</span>
+                <span className="text-[10px] text-zinc-500 font-mono">{floatingNotif.time}</span>
+              </div>
+              <p className="text-xs text-zinc-300 mt-0.5 leading-relaxed break-words font-sans">
+                {floatingNotif.text}
+              </p>
+            </div>
+            <button 
+              type="button" 
+              onClick={() => setFloatingNotif(null)} 
+              className="text-zinc-500 hover:text-zinc-300 p-1 rounded-lg hover:bg-zinc-800 transition-colors flex-shrink-0"
+              title="Đóng thông báo"
+            >
+              <X size={14} />
+            </button>
           </div>
-          <button 
-            type="button" 
-            onClick={() => setFloatingNotif(null)} 
-            className="text-zinc-500 hover:text-zinc-300 p-1 rounded-lg hover:bg-zinc-800 transition-colors"
-          >
-            <X size={14} />
-          </button>
+
+          {/* Nút Đồng ý / Từ chối nếu là FRIEND_REQUEST */}
+          {floatingNotif.type === 'FRIEND_REQUEST' && floatingNotif.status === 'PENDING' && floatingNotif.actorId && (
+            <div className="grid grid-cols-2 gap-2 pt-1.5 border-t border-zinc-800/80">
+              <button
+                type="button"
+                onClick={() => handleAcceptFriendRequest(floatingNotif.actorId, floatingNotif.id)}
+                className="h-8 rounded-lg bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs transition-all shadow-sm active:scale-95 flex items-center justify-center"
+              >
+                Đồng ý
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeclineFriendRequest(floatingNotif.actorId, floatingNotif.id)}
+                className="h-8 rounded-lg bg-zinc-900 text-zinc-300 border border-zinc-800 hover:bg-zinc-800 font-semibold text-xs transition-all active:scale-95 flex items-center justify-center"
+              >
+                Từ chối
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -4799,10 +4914,10 @@ const Home = ({ initialTab }) => {
               </div>
 
               <div className="flex items-center gap-2">
-                {notifications.length > 0 && (
+                {notifications.some(n => n.unread) && (
                   <button 
                     type="button"
-                    onClick={() => setNotifications(prev => prev.map(n => ({ ...n, unread: false })))} 
+                    onClick={handleMarkAllNotificationsRead} 
                     className="text-xs text-zinc-400 hover:text-white px-2 py-1 rounded-lg hover:bg-zinc-800/50 transition-colors"
                   >
                     Đã đọc hết
@@ -4828,66 +4943,204 @@ const Home = ({ initialTab }) => {
                   </div>
                   <p className="text-sm font-semibold text-zinc-200">Chưa có thông báo nào</p>
                   <p className="text-xs text-zinc-400 mt-1 max-w-xs mx-auto leading-relaxed">
-                    Các lượt thả cảm xúc, phản hồi bài viết và kết nối âm thanh sẽ hiển thị ở đây.
+                    Các lượt kết bạn, tương tác bài viết và thông báo hệ thống sẽ hiển thị ở đây.
                   </p>
                 </div>
               ) : (
-                notifications.map(n => (
-                  <div 
-                    key={n.id}
-                    onClick={() => {
-                      setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, unread: false } : item));
-                      setIsNotifOpen(false);
-                      if (n.postId) {
-                        const targetPost = safePosts.find(p => p.id === n.postId);
-                        if (targetPost) {
-                          setSelectedThreadPost(targetPost);
-                          fetchComments(targetPost.id);
-                        } else {
-                          const el = document.getElementById(`post-${n.postId}`);
-                          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                notifications.map(n => {
+                  const isFriendReq = n.type === 'FRIEND_REQUEST';
+                  const isFriendAccepted = n.type === 'FRIEND_ACCEPTED';
+                  const hasPhoto = n.actorAvatar && !n.actorAvatar.includes('dicebear') && !n.actorAvatar.includes('bottts');
+                  const displayName = n.actorName || 'Thành viên';
+
+                  return (
+                    <div 
+                      key={n.id}
+                      onClick={() => {
+                        if (n.unread) {
+                          setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, unread: false, isRead: true } : item));
+                          axiosClient.put(`/notifications/${n.id}/read`).catch(() => {});
                         }
-                      }
-                    }}
-                    className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-start gap-3 ${
-                      n.unread 
-                        ? 'bg-zinc-900/90 border-zinc-700/80 shadow-md hover:border-zinc-500' 
-                        : 'bg-zinc-950/60 border-zinc-800/60 hover:bg-zinc-900/40 text-zinc-300'
-                    }`}
-                  >
-                    <div className="flex-shrink-0 mt-0.5">
-                      <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-sm">
-                        {n.icon || (n.text?.includes('thích') || n.text?.includes('tim') ? '❤️' : n.text?.includes('bình luận') ? '💬' : '🔔')}
+                        if (n.postId) {
+                          setIsNotifOpen(false);
+                          const targetPost = safePosts.find(p => p.id === n.postId);
+                          if (targetPost) {
+                            setSelectedThreadPost(targetPost);
+                            fetchComments(targetPost.id);
+                          } else {
+                            const el = document.getElementById(`post-${n.postId}`);
+                            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          }
+                        }
+                      }}
+                      className={`p-3 rounded-2xl border transition-all flex items-start gap-3 ${
+                        n.unread 
+                          ? 'bg-zinc-900/90 border-zinc-700/80 shadow-md hover:border-zinc-500' 
+                          : 'bg-zinc-950/60 border-zinc-800/60 hover:bg-zinc-900/40 text-zinc-300'
+                      }`}
+                    >
+                      {/* Left: Avatar */}
+                      <div className="flex-shrink-0 mt-0.5">
+                        {isFriendReq || isFriendAccepted ? (
+                          <div 
+                            className="w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 overflow-hidden flex items-center justify-center text-xs font-bold text-white shadow-sm cursor-pointer"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (n.actorId) {
+                                setIsNotifOpen(false);
+                                navigate(`/profile/${n.actorId}`);
+                              }
+                            }}
+                            title="Xem trang cá nhân"
+                          >
+                            {hasPhoto ? (
+                              <img src={n.actorAvatar} alt={displayName} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-700 to-zinc-900 text-white font-bold text-xs">
+                                {displayName.charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-sm">
+                            {n.icon || (n.text?.includes('thích') || n.text?.includes('tim') ? '❤️' : n.text?.includes('bình luận') ? '💬' : '🔔')}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-zinc-100 leading-relaxed font-sans m-0">
-                        {n.text}
-                      </p>
-                      <div className="flex items-center gap-2 mt-1.5">
-                        <span className="text-[10px] text-zinc-400 font-mono">
-                          {n.time || 'Vừa xong'}
-                        </span>
-                        {n.unread && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse"></span>
+
+                      {/* Right: Nội dung thông báo */}
+                      <div className="flex-1 min-w-0">
+                        {isFriendReq ? (
+                          <div>
+                            <p className="text-xs text-zinc-200 leading-relaxed font-sans m-0">
+                              <span 
+                                className="font-bold text-white hover:underline cursor-pointer"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (n.actorId) {
+                                    setIsNotifOpen(false);
+                                    navigate(`/profile/${n.actorId}`);
+                                  }
+                                }}
+                              >
+                                {displayName}
+                              </span>
+                              {' '}đã gửi cho bạn một lời mời kết bạn.
+                            </p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-[10px] text-zinc-400 font-mono">
+                                {n.time || 'Vừa xong'}
+                              </span>
+                              {n.unread && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                              )}
+                            </div>
+
+                            {/* 2 Nút Đồng ý / Từ chối nếu PENDING */}
+                            {n.status === 'PENDING' && (
+                              <div className="grid grid-cols-2 gap-2 mt-2.5" onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAcceptFriendRequest(n.actorId, n.id)}
+                                  className="h-8 rounded-lg bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs transition-all shadow-sm active:scale-95 flex items-center justify-center"
+                                >
+                                  Đồng ý
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeclineFriendRequest(n.actorId, n.id)}
+                                  className="h-8 rounded-lg bg-zinc-900 text-zinc-300 border border-zinc-800 hover:bg-zinc-800 font-semibold text-xs transition-all active:scale-95 flex items-center justify-center"
+                                >
+                                  Từ chối
+                                </button>
+                              </div>
+                            )}
+
+                            {n.status === 'ACCEPTED' && (
+                              <div className="mt-2 text-xs text-emerald-400 font-medium flex items-center gap-1">
+                                <CheckCircle2 size={13} />
+                                <span>Đã trở thành bạn bè</span>
+                              </div>
+                            )}
+
+                            {n.status === 'REJECTED' && (
+                              <div className="mt-2 text-xs text-zinc-500 font-medium">
+                                Đã từ chối lời mời
+                              </div>
+                            )}
+                          </div>
+                        ) : isFriendAccepted ? (
+                          <div>
+                            <p className="text-xs text-zinc-200 leading-relaxed font-sans m-0">
+                              <span 
+                                className="font-bold text-white hover:underline cursor-pointer"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (n.actorId) {
+                                    setIsNotifOpen(false);
+                                    navigate(`/profile/${n.actorId}`);
+                                  }
+                                }}
+                              >
+                                {displayName}
+                              </span>
+                              {' '}đã đồng ý kết bạn với bạn.
+                            </p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-[10px] text-zinc-400 font-mono">
+                                {n.time || 'Vừa xong'}
+                              </span>
+                              {n.unread && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setIsNotifOpen(false);
+                                navigate('/messages');
+                              }}
+                              className="mt-2 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-200 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+                            >
+                              <MessageSquare size={12} />
+                              <span>Nhắn tin ngay</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <div>
+                            <p className="text-xs text-zinc-100 leading-relaxed font-sans m-0">
+                              {n.text}
+                            </p>
+                            <div className="flex items-center gap-2 mt-1.5">
+                              <span className="text-[10px] text-zinc-400 font-mono">
+                                {n.time || 'Vừa xong'}
+                              </span>
+                              {n.unread && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse"></span>
+                              )}
+                            </div>
+                          </div>
                         )}
                       </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
 
             {/* Footer Drawer */}
             <div className="p-3 border-t border-zinc-800/80 bg-[#09090b] flex items-center justify-between text-xs text-zinc-400 flex-shrink-0">
-              <span className="font-mono text-[11px]">Talovin Notification Drawer</span>
-              <button 
-                type="button"
-                onClick={() => setNotifications([])}
-                className="text-zinc-400 hover:text-rose-400 transition-colors text-xs"
-              >
-                Xóa toàn bộ
-              </button>
+              <span className="text-[11px] text-zinc-500">Thông báo tự động lưu trữ</span>
+              {notifications.length > 0 && (
+                <button 
+                  type="button"
+                  onClick={handleClearAllNotifications}
+                  className="text-zinc-400 hover:text-rose-400 transition-colors text-xs font-medium px-2 py-1 rounded-lg hover:bg-zinc-900"
+                >
+                  Xóa toàn bộ
+                </button>
+              )}
             </div>
           </motion.div>
         </motion.div>

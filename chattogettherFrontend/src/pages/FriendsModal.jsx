@@ -208,9 +208,9 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200" onClick={onClose}>
       <div 
-        className="relative w-full sm:max-w-xl h-[92dvh] sm:h-auto sm:max-h-[85vh] rounded-t-3xl sm:rounded-3xl bg-zinc-950 border-0 sm:border border-zinc-800 shadow-2xl flex flex-col overflow-hidden animate-slide-up sm:animate-fade-in"
+        className="relative w-full max-w-lg h-[540px] max-h-[88vh] rounded-3xl bg-zinc-950 border border-zinc-800 shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 fade-in duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* TOP HEADER */}
@@ -319,7 +319,7 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
         </div>
 
         {/* LIST CONTENT AREA */}
-        <div className="flex-1 overflow-y-auto p-3.5 sm:p-4 space-y-2.5 overscroll-contain">
+        <div className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-4 space-y-2.5 overscroll-contain custom-scrollbar">
           {loading ? (
             <div className="py-20 flex flex-col items-center justify-center gap-2 text-zinc-500 text-xs font-mono">
               <div className="w-5 h-5 border-2 border-zinc-700 border-t-zinc-300 rounded-full animate-spin"></div>
@@ -495,11 +495,11 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
                         <button
                           type="button"
                           onClick={() => handleOpenDirectChat(friend)}
-                          className="px-2.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1 shadow-sm transition-all active:scale-95"
+                          className="px-3 py-1.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all active:scale-95"
                           title="Nhắn tin 1-1"
                         >
-                          <MessageSquare size={12} />
-                          <span className="hidden sm:inline">Nhắn tin</span>
+                          <MessageSquare size={13} />
+                          <span>Nhắn tin</span>
                         </button>
 
                         {/* Nút Gọi thoại */}
