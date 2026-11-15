@@ -38,6 +38,15 @@ public class RoomController {
         return ResponseEntity.ok(this.chatService.getMessageHistory(jwtAuth, roomId, beforeId, size));
     }
 
+    @RequestMapping(value = {"/direct/{targetUserId}", "/direct-room/{targetUserId}"}, method = {RequestMethod.GET, RequestMethod.POST})
+    public ResponseEntity<ResponseData<java.util.Map<String, Object>>> getOrCreateDirectRoom(
+            Authentication authentication,
+            @PathVariable("targetUserId") Long targetUserId
+    ) {
+        JwtAuthenticationToken jwtAuth = (authentication instanceof JwtAuthenticationToken) ? (JwtAuthenticationToken) authentication : null;
+        return ResponseEntity.ok(this.chatService.getOrCreateDirectRoom(jwtAuth, targetUserId));
+    }
+
     @PostMapping({"/create", "/create-room"})
     public ResponseEntity<ResponseData<CreateRoomResponseDTO>> createRoom(JwtAuthenticationToken jwtAuthenticationToken , @RequestBody @Valid RoomRequest roomRequest, HttpServletResponse httpServletResponse){
         return ResponseEntity.ok(this.roomService.createRoom(jwtAuthenticationToken , roomRequest, httpServletResponse));

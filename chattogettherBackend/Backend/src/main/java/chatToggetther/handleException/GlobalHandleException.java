@@ -44,13 +44,8 @@ public class GlobalHandleException {
         ResponseErr responseErr = new ResponseErr();
         responseErr.setStatusCode(ErrorCode.DATA_INTEGRITY_VIOLATION.getStatusCode().value());
         responseErr.setCode(ErrorCode.DATA_INTEGRITY_VIOLATION.getCode());
-        String message = ex.getRootCause() != null ? ex.getRootCause().getMessage() : ex.getMessage();
         responseErr.setTime(new Date());
-        if (message != null && message.contains("user_room") && message.contains("user_id")) {
-           responseErr.setMessage("Người dùng này đã tham gia một phòng khác rồi. Vui lòng thoát phòng cũ trước khi tạo phòng mới.");
-        } else {
-            responseErr.setMessage("Dữ liệu đã tồn tại hoặc vi phạm ràng buộc hệ thống.");
-        }
+        responseErr.setMessage("Dữ liệu đã tồn tại hoặc vi phạm ràng buộc hệ thống.");
         return ResponseEntity.status(responseErr.getStatusCode()).body(responseErr);
     }
     @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)

@@ -119,7 +119,13 @@ export const DirectMessagePage = () => {
     }
     try {
       setLoadingMessages(true);
-      const res = await axiosClient.get(`/message/direct/${targetId}`);
+      let res;
+      try {
+        res = await axiosClient.get(`/message/direct/${targetId}`);
+      } catch (errDirect) {
+        res = await axiosClient.post(`/rooms/direct/${targetId}`);
+      }
+
       if (res?.data?.data) {
         const { roomId, targetUser } = res.data.data;
         setActiveRoomId(roomId);
@@ -137,9 +143,8 @@ export const DirectMessagePage = () => {
     } catch (e) {
       console.error('Lỗi mở chat 1-1:', e);
       if (e.response?.status !== 404) {
-        // Chỉ hiện thông báo nếu không phải lỗi huỷ hoặc chuyển trang
         const msg = e.response?.data?.message;
-        if (msg && !msg.includes('đã tham gia một phòng khác')) {
+        if (msg) {
           toast.error(msg, { id: `dm-err-${targetId}` });
         }
       }
