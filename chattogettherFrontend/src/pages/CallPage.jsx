@@ -224,18 +224,27 @@ const CallPage = () => {
       const durationStr = formatTime(durationSecs);
       let callMsg = '';
 
-      if (isDirectCall) {
+      if (isDirectCall && userId) {
         if (durationSecs > 0) {
           callMsg = isVideo ? `📹 Cuộc gọi video (${durationStr})` : `📞 Cuộc gọi thoại (${durationStr})`;
         } else {
           callMsg = isVideo ? `📹 Cuộc gọi video bị nhỡ` : `📞 Cuộc gọi thoại bị nhỡ`;
         }
-        const targetRoom = dmRoomIdRef.current;
+        let targetRoom = dmRoomIdRef.current;
+        if (!targetRoom) {
+          try {
+            const directRoomRes = await axiosClient.get(`/message/direct/${userId}`);
+            targetRoom = directRoomRes?.data?.data?.roomId;
+            dmRoomIdRef.current = targetRoom;
+          } catch (_) {}
+        }
         if (targetRoom) {
-          axiosClient.post('/message/send', {
-            message: callMsg,
-            timeSend: new Date().toISOString()
-          }, { params: { user_room: targetRoom } }).catch(() => {});
+          try {
+            await axiosClient.post('/message/send', {
+              message: callMsg,
+              timeSend: new Date().toISOString()
+            }, { params: { user_room: targetRoom } });
+          } catch (_) {}
         }
       } else if (isRoomCall && roomId) {
         if (durationSecs > 0) {
@@ -243,10 +252,12 @@ const CallPage = () => {
         } else {
           callMsg = isVideo ? `📹 Cuộc gọi video nhóm đã kết thúc` : `📞 Cuộc gọi thoại nhóm đã kết thúc`;
         }
-        axiosClient.post('/message/send', {
-          message: callMsg,
-          timeSend: new Date().toISOString()
-        }, { params: { user_room: roomId } }).catch(() => {});
+        try {
+          await axiosClient.post('/message/send', {
+            message: callMsg,
+            timeSend: new Date().toISOString()
+          }, { params: { user_room: roomId } });
+        } catch (_) {}
       }
     } catch (e) {
       console.warn("Lỗi lưu lịch sử cuộc gọi:", e);
@@ -415,12 +426,14 @@ const CallPage = () => {
 
           if (isIncoming) {
             // Là người nhận máy: gửi tín hiệu ACCEPT để người gọi biết và gửi OFFER
-            setCallStatusText('Đang kết nối tín hiệu...');
+            setCallStatusText('Đang thiết lập kênh âm thanh...');
             sendCallSignal({ type: 'ACCEPT' });
           } else {
             // Là người khởi tạo cuộc gọi: bắt đầu đổ chuông và gửi OFFER
             startRingAudio();
             setCallStatusText('Đang đổ chuông...');
+            // Bắn tín hiệu RINGING ngay lập tức để bên nhận máy nhận thông báo trượt xuống tức thì
+            sendCallSignal({ type: 'RINGING', isVideo: isVideoParam });
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
             sendCallSignal({ type: 'OFFER', offer, isVideo: isVideoParam });
@@ -432,8 +445,8 @@ const CallPage = () => {
             setCallDuration(prev => prev + 1);
           }, 1000);
         }, (err) => {
-          console.error("Lỗi kết nối máy chủ tín hiệu:", err);
-          setCallStatusText('Đang thử kết nối lại máy chủ...');
+          console.warn("Lỗi kết nối máy chủ tín hiệu:", err);
+          setCallStatusText('Đang dò tìm tín hiệu đàm thoại...');
         });
 
       } catch (err) {
@@ -563,15 +576,16 @@ const CallPage = () => {
 
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="font-medium text-sm sm:text-base text-zinc-100 line-clamp-1">
+              <h2 className="font-semibold text-sm sm:text-base text-zinc-100 line-clamp-1">
                 {displayName}
               </h2>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 border border-zinc-700">
-                {isDirectCall ? 'Trực tiếp 1-1' : 'Phòng nhóm'}
+              <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-zinc-800/90 text-zinc-300 border border-zinc-700/80 flex items-center gap-1">
+                <Shield size={10} className="text-emerald-400" />
+                <span>{isDirectCall ? (isVideoCall ? 'Cuộc gọi video riêng tư' : 'Cuộc gọi thoại riêng tư') : 'Phòng nhóm'}</span>
               </span>
             </div>
-            <div className="flex items-center gap-2 text-xs text-zinc-400">
-              <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+            <div className="flex items-center gap-2 text-xs text-zinc-400 mt-0.5">
+              <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400 animate-ping'}`} />
               <span>{callStatusText}</span>
             </div>
           </div>
@@ -603,9 +617,13 @@ const CallPage = () => {
 
             {/* Trạng thái nếu không có video hoặc đang đàm thoại Audio */}
             {(!isVideoCall || !isConnected) && (
-              <div className="flex flex-col items-center gap-4 z-10 p-6 text-center">
+              <div className="flex flex-col items-center gap-4 z-10 p-6 text-center animate-in fade-in duration-300">
                 <div className="relative">
-                  <div className={`w-28 h-28 sm:w-36 sm:h-36 rounded-full overflow-hidden border-2 border-zinc-700/80 bg-zinc-800/90 flex items-center justify-center shadow-2xl transition-transform ${isConnected ? 'ring-4 ring-emerald-500/30 ring-offset-4 ring-offset-zinc-900' : 'animate-pulse'}`}>
+                  {/* Vòng lan tỏa âm thanh mềm mại */}
+                  {!isConnected && (
+                    <div className="absolute -inset-4 rounded-full border border-emerald-500/20 animate-ping pointer-events-none" />
+                  )}
+                  <div className={`w-28 h-28 sm:w-36 sm:h-36 rounded-full overflow-hidden border-2 border-zinc-700/80 bg-zinc-800/90 flex items-center justify-center shadow-2xl transition-all duration-300 ${isConnected ? 'ring-4 ring-emerald-500/30 ring-offset-4 ring-offset-zinc-950 scale-105' : 'scale-100'}`}>
                     <UserAvatar 
                       avatar={displayAvatar} 
                       name={displayName} 
@@ -620,9 +638,15 @@ const CallPage = () => {
                   )}
                 </div>
 
-                <div className="text-center mt-2">
-                  <h3 className="font-semibold text-lg sm:text-xl text-zinc-100">{displayName}</h3>
-                  <p className="text-xs text-zinc-400 mt-1">{callStatusText}</p>
+                <div className="text-center mt-2 space-y-1">
+                  <h3 className="font-semibold text-xl sm:text-2xl text-zinc-100 tracking-tight">{displayName}</h3>
+                  {partnerProfile?.account && (
+                    <p className="text-xs font-mono text-zinc-500">@{partnerProfile.account}</p>
+                  )}
+                  <p className="text-xs sm:text-sm text-zinc-400 font-medium pt-1 flex items-center justify-center gap-2">
+                    <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400 animate-ping'}`} />
+                    <span>{callStatusText}</span>
+                  </p>
                 </div>
               </div>
             )}

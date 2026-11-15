@@ -315,10 +315,18 @@ const buildCommentThreads = (comments) => {
 const Home = ({ initialTab }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const currentUserId = localStorage.getItem('user_id');
-  const currentUserName = localStorage.getItem('nickname') || localStorage.getItem('account') || localStorage.getItem('username') || 'Thành viên';
-  const currentUserAccount = localStorage.getItem('account') || localStorage.getItem('username') || 'user';
-  const currentUserAvatar = localStorage.getItem('user_avatar') || '';
+  const [currentUserProfile, setCurrentUserProfile] = useState(() => {
+    try {
+      const u = localStorage.getItem('user_profile');
+      return u ? JSON.parse(u) : null;
+    } catch (_) {
+      return null;
+    }
+  });
+  const currentUserId = currentUserProfile?.id || localStorage.getItem('user_id');
+  const currentUserName = currentUserProfile?.nickname || currentUserProfile?.account || localStorage.getItem('nickname') || localStorage.getItem('account') || localStorage.getItem('username') || 'Thành viên';
+  const currentUserAccount = currentUserProfile?.account || localStorage.getItem('account') || localStorage.getItem('username') || 'user';
+  const currentUserAvatar = currentUserProfile?.avatar || localStorage.getItem('user_avatar') || localStorage.getItem('avatar') || '';
 
   // Navigation tab chính: 'feed' | 'rooms' | 'trending' | 'saved' | 'groups'
   const [activeTab, setActiveTab] = useState(() => {
@@ -599,13 +607,26 @@ const Home = ({ initialTab }) => {
     }
   });
 
-  // Đồng bộ kiểm tra quyền Admin thời gian thực từ API Profile
+  // Đồng bộ thông tin tài khoản người dùng và quyền Admin thời gian thực từ API Profile
   useEffect(() => {
-    const verifyAdmin = async () => {
+    const fetchUserProfile = async () => {
       try {
         const res = await axiosClient.get('/users/profile');
         const u = res?.data?.data;
         if (u) {
+          setCurrentUserProfile(u);
+          localStorage.setItem('user_profile', JSON.stringify(u));
+          if (u.nickname) localStorage.setItem('nickname', u.nickname);
+          if (u.account) {
+            localStorage.setItem('account', u.account);
+            localStorage.setItem('username', u.account);
+          }
+          if (u.avatar) {
+            localStorage.setItem('user_avatar', u.avatar);
+            localStorage.setItem('avatar', u.avatar);
+          }
+          if (u.id) localStorage.setItem('user_id', String(u.id));
+
           const uRoles = Array.isArray(u.roles) ? u.roles : [];
           const isAdmin = u.vipTier === 'ADMIN' || u.isVerified || uRoles.some(r => {
             const up = String(r).toUpperCase();
@@ -615,7 +636,7 @@ const Home = ({ initialTab }) => {
         }
       } catch (_) {}
     };
-    verifyAdmin();
+    fetchUserProfile();
   }, []);
 
   // Đồng bộ cấu hình động từ Admin Dashboard
@@ -2337,170 +2358,172 @@ const Home = ({ initialTab }) => {
       <div className="app-main-layout">
 
         {/* ============================================================== */}
-        {/* CỘT 1: THANH ĐIỀU HƯỚNG TRÁI (220px - 240px) */}
+        {/* CỘT 1: THANH ĐIỀU HƯỚNG TRÁI (220px - 240px) - GHIM CỐ ĐỊNH STICKY */}
         {/* ============================================================== */}
-        <aside className="nav-sidebar">
-          <div className="nav-brand" onClick={handleLogoRefresh} title="Bấm để cuộn lên đầu & làm mới dữ liệu">
-            <TalovinLogo size={30} brandName={systemConfig.brand_name || 'Talovin'} />
-          </div>
+        <aside className="nav-sidebar sticky top-0 h-screen flex flex-col justify-between py-4 z-20">
+          <div className="flex flex-col gap-3 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden flex-1 pr-1">
+            <div className="nav-brand" onClick={handleLogoRefresh} title="Bấm để cuộn lên đầu & làm mới dữ liệu">
+              <TalovinLogo size={30} brandName={systemConfig.brand_name || 'Talovin'} />
+            </div>
 
-          {/* Live Music Deck */}
-          <div className="ambient-radio-widget">
-            <div className="radio-top-row">
-              <Music size={13} className="text-zinc-400" />
-              <span className="radio-name-text">
-                {currentTrack ? (currentTrack.title || currentTrack.name) : "Âm nhạc hệ thống"}
-              </span>
-              {currentTrack && (
-                <div className="equalizer-bars-group">
-                  <span className={`eq-bar ${isPlayingRadio ? 'animating' : ''}`}></span>
-                  <span className={`eq-bar ${isPlayingRadio ? 'animating' : ''}`}></span>
-                  <span className={`eq-bar ${isPlayingRadio ? 'animating' : ''}`}></span>
-                  <span className={`eq-bar ${isPlayingRadio ? 'animating' : ''}`}></span>
+            {/* Live Music Deck */}
+            <div className="ambient-radio-widget">
+              <div className="radio-top-row">
+                <Music size={13} className="text-zinc-400" />
+                <span className="radio-name-text">
+                  {currentTrack ? (currentTrack.title || currentTrack.name) : "Âm nhạc hệ thống"}
+                </span>
+                {currentTrack && (
+                  <div className="equalizer-bars-group">
+                    <span className={`eq-bar ${isPlayingRadio ? 'animating' : ''}`}></span>
+                    <span className={`eq-bar ${isPlayingRadio ? 'animating' : ''}`}></span>
+                    <span className={`eq-bar ${isPlayingRadio ? 'animating' : ''}`}></span>
+                    <span className={`eq-bar ${isPlayingRadio ? 'animating' : ''}`}></span>
+                  </div>
+                )}
+              </div>
+              {currentTrack ? (
+                <div className="radio-btns-row">
+                  <button 
+                    type="button"
+                    onClick={togglePlayRadio} 
+                    className="btn-radio-toggle"
+                    title={isPlayingRadio ? "Tạm dừng" : "Phát nhạc"}
+                  >
+                    {isPlayingRadio ? <Pause size={12} /> : <Play size={12} />}
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={playNextRadio} 
+                    className="btn-radio-next"
+                    title="Chuyển bài"
+                  >
+                    <Shuffle size={12} />
+                  </button>
+                  <span className="radio-genre-label font-mono">
+                    {currentTrack.genreTag || currentTrack.genre || "Bản nhạc"}
+                  </span>
                 </div>
+              ) : (
+                <p className="text-[11px] text-zinc-500 mt-1">Chưa có bản nhạc nào</p>
               )}
             </div>
-            {currentTrack ? (
-              <div className="radio-btns-row">
+
+            {/* Menu Điều Hướng (Động từ Admin Dashboard) */}
+            <div className="nav-menu">
+              {dynamicMenu.lobby?.visible !== false && (
                 <button 
-                  type="button"
-                  onClick={togglePlayRadio} 
-                  className="btn-radio-toggle"
-                  title={isPlayingRadio ? "Tạm dừng" : "Phát nhạc"}
+                  className={`nav-item ${activeTab === 'feed' ? 'active' : ''}`}
+                  onClick={() => { setActiveTab('feed'); setActiveFilterTag(null); }}
                 >
-                  {isPlayingRadio ? <Pause size={12} /> : <Play size={12} />}
+                  <Compass size={15} strokeWidth={1.5} />
+                  <span>{dynamicMenu.lobby?.label || "Sảnh trực tuyến"}</span>
                 </button>
+              )}
+
+              {dynamicMenu.groups?.visible !== false && (
                 <button 
-                  type="button"
-                  onClick={playNextRadio} 
-                  className="btn-radio-next"
-                  title="Chuyển bài"
+                  className={`nav-item ${activeTab === 'groups' ? 'active' : ''}`}
+                  onClick={() => { setActiveTab('groups'); setActiveFilterTag(null); }}
                 >
-                  <Shuffle size={12} />
-                </button>
-                <span className="radio-genre-label font-mono">
-                  {currentTrack.genreTag || currentTrack.genre || "Bản nhạc"}
-                </span>
-              </div>
-            ) : (
-              <p className="text-[11px] text-zinc-500 mt-1">Chưa có bản nhạc nào</p>
-            )}
-          </div>
-
-          {/* Menu Điều Hướng (Động từ Admin Dashboard) */}
-          <div className="nav-menu">
-            {dynamicMenu.lobby?.visible !== false && (
-              <button 
-                className={`nav-item ${activeTab === 'feed' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('feed'); setActiveFilterTag(null); }}
-              >
-                <Compass size={15} strokeWidth={1.5} />
-                <span>{dynamicMenu.lobby?.label || "Sảnh trực tuyến"}</span>
-              </button>
-            )}
-
-            {dynamicMenu.groups?.visible !== false && (
-              <button 
-                className={`nav-item ${activeTab === 'groups' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('groups'); setActiveFilterTag(null); }}
-              >
-                <Users size={15} strokeWidth={1.5} />
-                <span>{dynamicMenu.groups?.label || "Cộng đồng"}</span>
-              </button>
-            )}
-
-            {dynamicMenu.rooms?.visible !== false && (
-              <button 
-                className={`nav-item ${activeTab === 'rooms' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('rooms'); setActiveFilterTag(null); }}
-              >
-                <Radio size={15} strokeWidth={1.5} />
-                <span>{dynamicMenu.rooms?.label || "Phòng đàm thoại"}</span>
-              </button>
-            )}
-
-            {dynamicMenu.trending?.visible !== false && (
-              <button 
-                className={`nav-item ${activeTab === 'trending' ? 'active' : ''}`}
-                onClick={() => setActiveTab('trending')}
-              >
-                <Flame size={15} strokeWidth={1.5} />
-                <span>{dynamicMenu.trending?.label || "Thịnh hành"}</span>
-              </button>
-            )}
-
-            {dynamicMenu.saved?.visible !== false && (
-              <button 
-                className={`nav-item ${activeTab === 'saved' ? 'active' : ''}`}
-                onClick={() => setActiveTab('saved')}
-              >
-                <Bookmark size={15} strokeWidth={1.5} />
-                <span>{dynamicMenu.saved?.label || "Đã lưu"} ({Array.isArray(savedPostIds) ? savedPostIds.length : 0})</span>
-              </button>
-            )}
-
-            <button 
-              type="button"
-              className="nav-item"
-              onClick={() => navigate('/messages')}
-              title="Hộp thư tin nhắn"
-            >
-              <MessageSquare size={15} strokeWidth={1.5} />
-              <span>Tin nhắn</span>
-            </button>
-
-            {dynamicMenu.friends?.visible !== false && (
-              <button 
-                className="nav-item flex items-center justify-between"
-                onClick={() => setIsFriendsOpen(true)}
-              >
-                <div className="flex items-center gap-2.5">
                   <Users size={15} strokeWidth={1.5} />
-                  <span>{dynamicMenu.friends?.label || "Bạn bè"}</span>
-                </div>
-                {pendingFriendsCount > 0 && (
-                  <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                    {pendingFriendsCount}
-                  </span>
-                )}
-              </button>
-            )}
+                  <span>{dynamicMenu.groups?.label || "Cộng đồng"}</span>
+                </button>
+              )}
 
-            {dynamicMenu.profile?.visible !== false && (
-              <button 
-                className="nav-item"
-                onClick={() => navigate('/profile')}
-              >
-                <User size={15} strokeWidth={1.5} />
-                <span>{dynamicMenu.profile?.label || "Hồ sơ & Huy hiệu"}</span>
-              </button>
-            )}
+              {dynamicMenu.rooms?.visible !== false && (
+                <button 
+                  className={`nav-item ${activeTab === 'rooms' ? 'active' : ''}`}
+                  onClick={() => { setActiveTab('rooms'); setActiveFilterTag(null); }}
+                >
+                  <Radio size={15} strokeWidth={1.5} />
+                  <span>{dynamicMenu.rooms?.label || "Phòng đàm thoại"}</span>
+                </button>
+              )}
 
-            {/* Nút vào Bảng Quản Trị Hệ Thống (Dành riêng cho Quản trị viên) */}
-            {isAdminUser && (
+              {dynamicMenu.trending?.visible !== false && (
+                <button 
+                  className={`nav-item ${activeTab === 'trending' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('trending')}
+                >
+                  <Flame size={15} strokeWidth={1.5} />
+                  <span>{dynamicMenu.trending?.label || "Thịnh hành"}</span>
+                </button>
+              )}
+
+              {dynamicMenu.saved?.visible !== false && (
+                <button 
+                  className={`nav-item ${activeTab === 'saved' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('saved')}
+                >
+                  <Bookmark size={15} strokeWidth={1.5} />
+                  <span>{dynamicMenu.saved?.label || "Đã lưu"} ({Array.isArray(savedPostIds) ? savedPostIds.length : 0})</span>
+                </button>
+              )}
+
               <button 
                 type="button"
-                className="nav-item border border-emerald-500/30 text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 transition-all font-semibold"
-                onClick={() => navigate('/admin')}
-                title="Mở Bảng Quản Trị Hệ Thống"
+                className="nav-item"
+                onClick={() => navigate('/messages')}
+                title="Hộp thư tin nhắn"
               >
-                <Shield size={15} strokeWidth={2} />
-                <span>Bảng Quản Trị</span>
+                <MessageSquare size={15} strokeWidth={1.5} />
+                <span>Tin nhắn</span>
               </button>
-            )}
+
+              {dynamicMenu.friends?.visible !== false && (
+                <button 
+                  className="nav-item flex items-center justify-between"
+                  onClick={() => setIsFriendsOpen(true)}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Users size={15} strokeWidth={1.5} />
+                    <span>{dynamicMenu.friends?.label || "Bạn bè"}</span>
+                  </div>
+                  {pendingFriendsCount > 0 && (
+                    <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                      {pendingFriendsCount}
+                    </span>
+                  )}
+                </button>
+              )}
+
+              {dynamicMenu.profile?.visible !== false && (
+                <button 
+                  className="nav-item"
+                  onClick={() => navigate('/profile')}
+                >
+                  <User size={15} strokeWidth={1.5} />
+                  <span>{dynamicMenu.profile?.label || "Hồ sơ & Huy hiệu"}</span>
+                </button>
+              )}
+
+              {/* Nút vào Bảng Quản Trị Hệ Thống (Dành riêng cho Quản trị viên) */}
+              {isAdminUser && (
+                <button 
+                  type="button"
+                  className="nav-item border border-emerald-500/30 text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 transition-all font-semibold"
+                  onClick={() => navigate('/admin')}
+                  title="Mở Bảng Quản Trị Hệ Thống"
+                >
+                  <Shield size={15} strokeWidth={2} />
+                  <span>Bảng Quản Trị</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* User Profile & Account Dock Card (Chân Sidebar chuẩn phong cách Linear / Discord) */}
           <div 
-            className="nav-user-dock cursor-pointer" 
+            className="nav-user-dock cursor-pointer mt-3 shrink-0" 
             onClick={() => navigate('/profile')}
             title="Quản lý tài khoản, hồ sơ & đăng xuất"
           >
             <div className="dock-user-profile">
-              <UserAvatar avatar={localStorage.getItem('user_avatar')} name={currentUserName} size={32} />
-              <div className="dock-user-meta">
-                <span className="dock-user-name">{currentUserName}</span>
-                <span className="dock-user-handle font-mono">@{currentUserAccount}</span>
+              <UserAvatar avatar={currentUserAvatar} name={currentUserName} size={34} />
+              <div className="dock-user-meta min-w-0 flex-1">
+                <span className="dock-user-name truncate block">{currentUserName}</span>
+                <span className="dock-user-handle font-mono truncate block">@{currentUserAccount}</span>
               </div>
             </div>
           </div>
@@ -3976,9 +3999,9 @@ const Home = ({ initialTab }) => {
         </main>
 
         {/* ============================================================== */}
-        {/* CỘT 3: RIGHT DOCK (280px - 300px) */}
+        {/* CỘT 3: RIGHT DOCK (280px - 300px) - GHIM CỐ ĐỊNH STICKY */}
         {/* ============================================================== */}
-        <aside className="widgets-sidebar">
+        <aside className="widgets-sidebar sticky top-0 h-screen overflow-y-auto py-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden z-20">
           
           {/* Ô Tìm Kiếm Gọn Gàng (Chỉ tìm khi Enter / Bấm Icon / Mobile Go - Có Dropdown Lịch Sử & Xu Hướng Hot) */}
           <div className="search-section-container relative">
@@ -5835,7 +5858,7 @@ const Home = ({ initialTab }) => {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
           display: flex;
           justify-content: center;
-          overflow-x: hidden;
+          overflow-x: clip;
         }
 
         /* KHUNG CHÍNH CĂN GIỮA - 3 CỘT KHÔNG BỊ TRỐNG RỖNG TRÊN MÀN HÌNH RỘNG */
@@ -5845,6 +5868,9 @@ const Home = ({ initialTab }) => {
           max-width: 1480px;
           margin: 0 auto;
           justify-content: center;
+          align-items: flex-start;
+          min-height: 100vh;
+          position: relative;
         }
 
         /* ================= CỘT 1: THANH ĐIỀU HƯỚNG TRÁI ================= */
@@ -5858,9 +5884,11 @@ const Home = ({ initialTab }) => {
           border-right: 1px solid var(--card-border);
           display: flex;
           flex-direction: column;
+          justify-content: space-between;
           padding: 18px 14px;
           box-sizing: border-box;
           flex-shrink: 0;
+          z-index: 20;
         }
 
         .nav-brand {
@@ -7559,6 +7587,11 @@ const Home = ({ initialTab }) => {
         .widgets-sidebar {
           width: 300px;
           min-width: 280px;
+          height: 100vh;
+          position: sticky;
+          top: 0;
+          overflow-y: auto;
+          scrollbar-width: none;
           padding: 18px 16px;
           box-sizing: border-box;
           display: flex;
@@ -7567,6 +7600,10 @@ const Home = ({ initialTab }) => {
           flex-shrink: 0;
           background: var(--sidebar-bg);
           border-left: 1px solid var(--card-border);
+          z-index: 20;
+        }
+        .widgets-sidebar::-webkit-scrollbar {
+          display: none;
         }
         .search-input-wrap {
           background: var(--input-bg);

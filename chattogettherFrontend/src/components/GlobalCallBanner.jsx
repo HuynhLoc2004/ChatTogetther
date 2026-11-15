@@ -16,7 +16,26 @@ const GlobalCallBanner = () => {
   const ringOscillator = useRef(null);
   const autoDismissTimer = useRef(null);
 
-  const currentUserId = localStorage.getItem('user_id');
+  const [effectiveUserId, setEffectiveUserId] = useState(() => localStorage.getItem('user_id'));
+  const [incomingMessageNotice, setIncomingMessageNotice] = useState(null);
+  const msgDismissTimer = useRef(null);
+
+  // Đồng bộ reactive user_id khi đăng nhập hoặc thay đổi tài khoản
+  useEffect(() => {
+    const checkUserId = () => {
+      const uid = localStorage.getItem('user_id');
+      if (uid && uid !== effectiveUserId) {
+        setEffectiveUserId(uid);
+      }
+    };
+    checkUserId();
+    window.addEventListener('storage', checkUserId);
+    const interval = setInterval(checkUserId, 1500);
+    return () => {
+      window.removeEventListener('storage', checkUserId);
+      clearInterval(interval);
+    };
+  }, [effectiveUserId]);
 
   // 1. Play Synthesized Ringtone
   const startRingingSound = useCallback(() => {
@@ -76,7 +95,7 @@ const GlobalCallBanner = () => {
 
   // 3. Connect to WebSocket & listen for calls
   useEffect(() => {
-    if (!currentUserId) return;
+    if (!effectiveUserId) return;
 
     let isMounted = true;
     const socketUrl = BACKEND_URL ? `${BACKEND_URL}/ws-gs-guide` : '/ws-gs-guide';
@@ -89,10 +108,10 @@ const GlobalCallBanner = () => {
       if (!isMounted) return;
 
       // Subscribe direct call signal for this user
-      client.subscribe(`/topic/call/user/${currentUserId}`, (frame) => {
+      client.subscribe(`/topic/call/user/${effectiveUserId}`, (frame) => {
         try {
           const msg = JSON.parse(frame.body);
-          if (!msg || String(msg.callerId) === String(currentUserId)) return;
+          if (!msg || String(msg.callerId) === String(effectiveUserId)) return;
 
           // Don't show banner if already inside /call
           if (window.location.pathname.startsWith('/call')) return;
@@ -107,12 +126,27 @@ const GlobalCallBanner = () => {
               setIncomingCall(null);
               stopRingingSound();
             }, 30000);
-          } else if (msg.type === 'END' || msg.type === 'CANCEL' || msg.type === 'BUSY') {
+          } else if (msg.type === 'END' || msg.type === 'CANCEL' || msg.type === 'BUSY' || msg.type === 'DECLINE') {
             setIncomingCall(null);
             stopRingingSound();
             clearDismissTimer();
           }
         } catch (e) {}
+      });
+
+      // Lắng nghe thông báo tin nhắn đến để trượt thanh thông báo
+      client.subscribe(`/topic/user/${effectiveUserId}/notifications`, (frame) => {
+        try {
+          const notif = JSON.parse(frame.body);
+          if (!notif || window.location.pathname.startsWith('/messages') || window.location.pathname.startsWith('/call')) return;
+          if (notif.type === 'MESSAGE' || notif.title?.includes('tin nhắn')) {
+            setIncomingMessageNotice(notif);
+            if (msgDismissTimer.current) clearTimeout(msgDismissTimer.current);
+            msgDismissTimer.current = setTimeout(() => {
+              setIncomingMessageNotice(null);
+            }, 6000);
+          }
+        } catch (_) {}
       });
     }, () => {});
 
@@ -120,11 +154,12 @@ const GlobalCallBanner = () => {
       isMounted = false;
       stopRingingSound();
       clearDismissTimer();
+      if (msgDismissTimer.current) clearTimeout(msgDismissTimer.current);
       if (client && client.connected) {
         client.disconnect();
       }
     };
-  }, [currentUserId, startRingingSound, stopRingingSound, clearDismissTimer]);
+  }, [effectiveUserId, startRingingSound, stopRingingSound, clearDismissTimer]);
 
   // Dismiss on route change to /call
   useEffect(() => {
@@ -132,6 +167,9 @@ const GlobalCallBanner = () => {
       setIncomingCall(null);
       stopRingingSound();
       clearDismissTimer();
+    }
+    if (location.pathname.startsWith('/messages')) {
+      setIncomingMessageNotice(null);
     }
   }, [location.pathname, stopRingingSound, clearDismissTimer]);
 
@@ -163,7 +201,7 @@ const GlobalCallBanner = () => {
       if (stompClient.current && stompClient.current.connected) {
         const declinePayload = {
           type: 'DECLINE',
-          callerId: currentUserId,
+          callerId: effectiveUserId,
           reason: 'declined'
         };
         if (roomId) {
@@ -179,71 +217,112 @@ const GlobalCallBanner = () => {
     setIncomingCall(null);
   };
 
-  if (!incomingCall) return null;
+  // Nếu có cuộc gọi đến, render thanh trượt cuộc gọi
+  if (incomingCall) {
+    const isVideo = Boolean(incomingCall.isVideo);
+    return (
+      <div 
+        className="fixed top-3 sm:top-5 left-1/2 -translate-x-1/2 z-[999999] w-[92vw] max-w-md bg-zinc-900/95 border border-zinc-700/80 rounded-2xl p-3.5 shadow-2xl backdrop-blur-xl animate-in slide-in-from-top-6 duration-300"
+        style={{
+          boxShadow: '0 20px 45px -10px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.08)'
+        }}
+      >
+        <div className="flex items-center justify-between gap-3">
+          {/* Avatar & Info */}
+          <div 
+            onClick={handleAccept}
+            className="flex items-center gap-3 cursor-pointer min-w-0 flex-1 hover:opacity-90 transition-opacity"
+            title="Bấm để nhận cuộc gọi ngay"
+          >
+            <div className="relative shrink-0">
+              <UserAvatar 
+                avatar={incomingCall.callerAvatar} 
+                name={incomingCall.callerName || 'Người gọi'} 
+                size={44} 
+                className="w-11 h-11 rounded-full ring-2 ring-emerald-500/50"
+              />
+              <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 border-2 border-zinc-900 flex items-center justify-center text-zinc-950 animate-pulse">
+                {isVideo ? <Video size={10} /> : <Phone size={10} />}
+              </span>
+            </div>
 
-  const isVideo = Boolean(incomingCall.isVideo);
-
-  return (
-    <div 
-      className="fixed top-3 sm:top-5 left-1/2 -translate-x-1/2 z-[999999] w-[92vw] max-w-md bg-zinc-900/95 border border-zinc-700/80 rounded-2xl p-3.5 shadow-2xl backdrop-blur-xl animate-in slide-in-from-top-6 duration-300"
-      style={{
-        boxShadow: '0 20px 45px -10px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.08)'
-      }}
-    >
-      <div className="flex items-center justify-between gap-3">
-        {/* Avatar & Info */}
-        <div 
-          onClick={handleAccept}
-          className="flex items-center gap-3 cursor-pointer min-w-0 flex-1 hover:opacity-90 transition-opacity"
-        >
-          <div className="relative shrink-0">
-            <UserAvatar 
-              avatar={incomingCall.callerAvatar} 
-              name={incomingCall.callerName || 'Người gọi'} 
-              size={44} 
-              className="w-11 h-11 rounded-full ring-2 ring-emerald-500/50"
-            />
-            <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 border-2 border-zinc-900 flex items-center justify-center text-zinc-950 animate-pulse">
-              {isVideo ? <Video size={10} /> : <Phone size={10} />}
-            </span>
+            <div className="min-w-0 flex-1">
+              <h4 className="font-semibold text-xs sm:text-sm text-zinc-100 truncate">
+                {incomingCall.callerName || 'Người dùng Talovin'}
+              </h4>
+              <p className="text-[11px] text-zinc-400 truncate flex items-center gap-1.5 mt-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping inline-block" />
+                <span>{isVideo ? 'Cuộc gọi Video đến...' : 'Cuộc gọi thoại đến...'}</span>
+              </p>
+            </div>
           </div>
 
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleDecline}
+              className="h-9 px-3 sm:px-3.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-rose-400 border border-zinc-700/80 font-medium text-xs flex items-center gap-1.5 transition-all active:scale-95"
+              title="Từ chối"
+            >
+              <PhoneOff size={14} />
+              <span className="hidden xs:inline sm:inline">Từ chối</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleAccept}
+              className="h-9 px-3.5 sm:px-4 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs flex items-center gap-1.5 transition-all active:scale-95 shadow-md shadow-white/10"
+              title="Nghe máy"
+            >
+              <Phone size={14} className="fill-current" />
+              <span>Nghe máy</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Nếu có tin nhắn mới đến, render thanh thông báo trượt xuống
+  if (incomingMessageNotice) {
+    return (
+      <div 
+        onClick={() => {
+          const senderId = incomingMessageNotice.senderId || incomingMessageNotice.targetId;
+          setIncomingMessageNotice(null);
+          if (senderId) {
+            navigate(`/messages/${senderId}`);
+          } else {
+            navigate('/messages');
+          }
+        }}
+        className="fixed top-3 sm:top-5 left-1/2 -translate-x-1/2 z-[999999] w-[92vw] max-w-md bg-zinc-900/95 border border-zinc-700/80 rounded-2xl p-3 shadow-2xl backdrop-blur-xl animate-in slide-in-from-top-6 duration-300 cursor-pointer hover:bg-zinc-800/90 transition-all flex items-center justify-between gap-3"
+      >
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <UserAvatar 
+            avatar={incomingMessageNotice.senderAvatar} 
+            name={incomingMessageNotice.senderName || incomingMessageNotice.title || 'Tin nhắn mới'} 
+            size={36} 
+            className="w-9 h-9 rounded-full ring-1 ring-zinc-700 shrink-0"
+          />
           <div className="min-w-0 flex-1">
-            <h4 className="font-semibold text-xs sm:text-sm text-zinc-100 truncate">
-              {incomingCall.callerName || 'Người dùng Talovin'}
-            </h4>
-            <p className="text-[11px] text-zinc-400 truncate flex items-center gap-1.5 mt-0.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping inline-block" />
-              <span>{isVideo ? 'Cuộc gọi Video đến...' : 'Cuộc gọi thoại đến...'}</span>
+            <h5 className="font-semibold text-xs text-zinc-200 truncate">
+              {incomingMessageNotice.senderName || incomingMessageNotice.title || 'Tin nhắn riêng mới'}
+            </h5>
+            <p className="text-[11px] text-zinc-400 truncate mt-0.5">
+              {incomingMessageNotice.content || 'Đã gửi một tin nhắn cho bạn. Bấm để xem.'}
             </p>
           </div>
         </div>
-
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={handleDecline}
-            className="h-9 px-3 sm:px-3.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-rose-400 border border-zinc-700/80 font-medium text-xs flex items-center gap-1.5 transition-all active:scale-95"
-            title="Từ chối"
-          >
-            <PhoneOff size={14} />
-            <span className="hidden xs:inline sm:inline">Từ chối</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleAccept}
-            className="h-9 px-3.5 sm:px-4 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs flex items-center gap-1.5 transition-all active:scale-95 shadow-md shadow-white/10"
-            title="Nghe máy"
-          >
-            <Phone size={14} className="fill-current" />
-            <span>Nghe máy</span>
-          </button>
-        </div>
+        <span className="text-[10px] font-medium text-zinc-400 bg-zinc-800 px-2 py-1 rounded-lg border border-zinc-700/60 shrink-0">
+          Xem ngay
+        </span>
       </div>
-    </div>
-  );
+    );
+  }
+
+  return null;
 };
 
 export default GlobalCallBanner;

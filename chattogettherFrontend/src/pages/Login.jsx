@@ -59,10 +59,16 @@ const Login = () => {
           const payloadBase64 = token.split('.')[1]; // Lấy phần Payload của JWT
           const decodedPayload = JSON.parse(atob(payloadBase64)); // Giải mã Base64 sang JSON
           const userId = decodedPayload.user_id;
+          const userAccount = decodedPayload.sub || formData.account.trim();
           
           if (userId) {
             localStorage.setItem('user_id', userId);
             console.log("Đã lưu user_id:", userId);
+          }
+          if (userAccount) {
+            localStorage.setItem('account', userAccount);
+            localStorage.setItem('username', userAccount);
+            localStorage.setItem('nickname', userAccount);
           }
         } catch (decodeError) {
           console.error("Không thể giải mã token:", decodeError);
