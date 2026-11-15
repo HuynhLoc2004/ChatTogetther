@@ -224,20 +224,52 @@ public class CommunityGroupService {
             : Boolean.TRUE.equals(request.getRequiresPostApproval());
         group.setRequiresPostApproval(reqPostApproval);
 
-        if (request.getCategoryId() != null) {
+        // Xử lý danh mục & chủ đề (hỗ trợ chủ đề tự tạo)
+        String rawCategoryName = request.getCategoryName() != null ? request.getCategoryName().trim() : null;
+        if (rawCategoryName != null && !rawCategoryName.isEmpty()) {
+            String formattedCatName = capitalizeWords(rawCategoryName);
+            String catSlug = toSlug(formattedCatName);
+
+            CommunityCategoryEntity cat = this.categoryRepository.findByNameIgnoreCase(formattedCatName)
+                    .or(() -> this.categoryRepository.findBySlugIgnoreCase(catSlug))
+                    .orElseGet(() -> {
+                        CommunityCategoryEntity newCat = CommunityCategoryEntity.builder()
+                                .name(formattedCatName)
+                                .slug(catSlug)
+                                .source("USER_CREATED")
+                                .status("ACTIVE")
+                                .isActive(true)
+                                .isPinned(false)
+                                .displayOrder(100)
+                                .createdAt(LocalDateTime.now())
+                                .build();
+                        return this.categoryRepository.save(newCat);
+                    });
+
+            group.setCategoryId(cat.getId());
+            group.setCategoryCode(cat.getSlug());
+            group.setCategoryName(cat.getName());
+        } else if (request.getCategoryId() != null) {
             group.setCategoryId(request.getCategoryId());
             Optional<CommunityCategoryEntity> catOpt = this.categoryRepository.findById(request.getCategoryId());
             if (catOpt.isPresent()) {
                 group.setCategoryCode(catOpt.get().getSlug());
+                group.setCategoryName(catOpt.get().getName());
             }
         } else if (request.getCategoryCode() != null && !request.getCategoryCode().trim().isEmpty()) {
             group.setCategoryCode(request.getCategoryCode().trim());
             Optional<CommunityCategoryEntity> catOpt = this.categoryRepository.findBySlug(request.getCategoryCode().trim().toLowerCase());
             if (catOpt.isPresent()) {
                 group.setCategoryId(catOpt.get().getId());
+                group.setCategoryName(catOpt.get().getName());
             }
         } else {
             group.setCategoryCode("GENERAL");
+            group.setCategoryName("Chung • Mọi chủ đề");
+        }
+
+        if (request.getTags() != null) {
+            group.setTagList(request.getTags());
         }
 
         group.setStatus("ACTIVE");
@@ -308,18 +340,44 @@ public class CommunityGroupService {
         } else if (request.getRequiresPostApproval() != null) {
             group.setRequiresPostApproval(request.getRequiresPostApproval());
         }
-        if (request.getCategoryId() != null) {
+        if (request.getCategoryName() != null && !request.getCategoryName().trim().isEmpty()) {
+            String formattedCatName = capitalizeWords(request.getCategoryName().trim());
+            String catSlug = toSlug(formattedCatName);
+            CommunityCategoryEntity cat = this.categoryRepository.findByNameIgnoreCase(formattedCatName)
+                    .or(() -> this.categoryRepository.findBySlugIgnoreCase(catSlug))
+                    .orElseGet(() -> {
+                        CommunityCategoryEntity newCat = CommunityCategoryEntity.builder()
+                                .name(formattedCatName)
+                                .slug(catSlug)
+                                .source("USER_CREATED")
+                                .status("ACTIVE")
+                                .isActive(true)
+                                .isPinned(false)
+                                .displayOrder(100)
+                                .createdAt(LocalDateTime.now())
+                                .build();
+                        return this.categoryRepository.save(newCat);
+                    });
+            group.setCategoryId(cat.getId());
+            group.setCategoryCode(cat.getSlug());
+            group.setCategoryName(cat.getName());
+        } else if (request.getCategoryId() != null) {
             group.setCategoryId(request.getCategoryId());
             Optional<CommunityCategoryEntity> catOpt = this.categoryRepository.findById(request.getCategoryId());
             if (catOpt.isPresent()) {
                 group.setCategoryCode(catOpt.get().getSlug());
+                group.setCategoryName(catOpt.get().getName());
             }
         } else if (request.getCategoryCode() != null && !request.getCategoryCode().trim().isEmpty()) {
             group.setCategoryCode(request.getCategoryCode().trim());
             Optional<CommunityCategoryEntity> catOpt = this.categoryRepository.findBySlug(request.getCategoryCode().trim().toLowerCase());
             if (catOpt.isPresent()) {
                 group.setCategoryId(catOpt.get().getId());
+                group.setCategoryName(catOpt.get().getName());
             }
+        }
+        if (request.getTags() != null) {
+            group.setTagList(request.getTags());
         }
         if (request.getIsPinnedFeatured() != null) {
             group.setIsFeatured(request.getIsPinnedFeatured());
@@ -809,7 +867,9 @@ public class CommunityGroupService {
         dto.setRequirePostApproval(Boolean.TRUE.equals(g.getRequiresPostApproval()));
         dto.setCategoryId(g.getCategoryId());
         dto.setCategoryCode(g.getCategoryCode() != null ? g.getCategoryCode() : "GENERAL");
-        if (g.getCategoryId() != null) {
+        if (g.getCategoryName() != null && !g.getCategoryName().trim().isEmpty()) {
+            dto.setCategoryName(g.getCategoryName());
+        } else if (g.getCategoryId() != null) {
             this.categoryRepository.findById(g.getCategoryId()).ifPresent(cat -> dto.setCategoryName(cat.getName()));
         } else if (g.getCategoryCode() != null) {
             this.categoryRepository.findBySlug(g.getCategoryCode().toLowerCase()).ifPresent(cat -> {
@@ -817,6 +877,7 @@ public class CommunityGroupService {
                 dto.setCategoryName(cat.getName());
             });
         }
+        dto.setTags(g.getTagList());
         dto.setStatus(g.getStatus() != null ? g.getStatus() : "ACTIVE");
         dto.setIsFeatured(Boolean.TRUE.equals(g.getIsFeatured()));
         dto.setIsPinnedFeatured(Boolean.TRUE.equals(g.getIsFeatured()));
@@ -920,5 +981,33 @@ public class CommunityGroupService {
         dto.setCreatedAt(r.getCreatedAt());
         dto.setResolvedAt(r.getResolvedAt());
         return dto;
+    }
+
+    private String capitalizeWords(String input) {
+        if (input == null || input.trim().isEmpty()) return "";
+        String[] words = input.trim().split("\\s+");
+        StringBuilder sb = new StringBuilder();
+        for (String w : words) {
+            if (w.isEmpty()) continue;
+            sb.append(Character.toUpperCase(w.charAt(0)));
+            if (w.length() > 1) {
+                sb.append(w.substring(1));
+            }
+            sb.append(" ");
+        }
+        return sb.toString().trim();
+    }
+
+    private String toSlug(String input) {
+        if (input == null || input.trim().isEmpty()) return "topic-" + System.currentTimeMillis();
+        String normalized = java.text.Normalizer.normalize(input, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{InCombiningDiacriticalMarks}+", "")
+                .toLowerCase()
+                .replaceAll("[đĐ]", "d")
+                .replaceAll("[^a-z0-9\\s-]", "")
+                .replaceAll("\\s+", "-")
+                .replaceAll("-+", "-")
+                .replaceAll("^-|-$", "");
+        return normalized.isEmpty() ? "topic-" + System.currentTimeMillis() : normalized;
     }
 }

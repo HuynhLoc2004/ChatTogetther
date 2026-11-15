@@ -12,5 +12,8 @@ public interface CommunityCategoryRepository extends JpaRepository<CommunityCate
     List<CommunityCategoryEntity> findByIsActiveTrueOrderByDisplayOrderAscIdAsc();
     List<CommunityCategoryEntity> findAllByOrderByDisplayOrderAscIdAsc();
     Optional<CommunityCategoryEntity> findBySlug(String slug);
+    Optional<CommunityCategoryEntity> findBySlugIgnoreCase(String slug);
+    Optional<CommunityCategoryEntity> findByNameIgnoreCase(String name);
     boolean existsBySlug(String slug);
+    boolean existsByNameIgnoreCase(String name);
 }

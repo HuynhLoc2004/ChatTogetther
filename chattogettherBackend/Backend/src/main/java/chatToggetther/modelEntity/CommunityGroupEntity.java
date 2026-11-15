@@ -51,6 +51,12 @@ public class CommunityGroupEntity {
     @Column(name = "category_code")
     private String categoryCode = "GENERAL";
 
+    @Column(name = "category_name")
+    private String categoryName;
+
+    @Column(name = "tags", columnDefinition = "TEXT")
+    private String tags;
+
     @Column(name = "status")
     private String status = "ACTIVE"; // ACTIVE, PENDING, RESTRICTED, SUSPENDED
 
@@ -98,6 +104,45 @@ public class CommunityGroupEntity {
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    public List<String> getTagList() {
+        if (this.tags == null || this.tags.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            return mapper.readValue(this.tags, new com.fasterxml.jackson.core.type.TypeReference<List<String>>() {});
+        } catch (Exception e) {
+            String[] parts = this.tags.replace("[", "").replace("]", "").replace("\"", "").split(",");
+            List<String> result = new ArrayList<>();
+            for (String p : parts) {
+                if (!p.trim().isEmpty()) result.add(p.trim());
+            }
+            return result;
+        }
+    }
+
+    public void setTagList(List<String> list) {
+        if (list == null || list.isEmpty()) {
+            this.tags = null;
+            return;
+        }
+        try {
+            List<String> cleanList = new ArrayList<>();
+            for (String s : list) {
+                if (s != null && !s.trim().isEmpty()) {
+                    String clean = s.trim().replaceAll("^[#/]+", "").toLowerCase();
+                    if (!cleanList.contains(clean) && cleanList.size() < 5) {
+                        cleanList.add(clean);
+                    }
+                }
+            }
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            this.tags = mapper.writeValueAsString(cleanList);
+        } catch (Exception e) {
+            this.tags = null;
+        }
+    }
 
     @OneToMany(mappedBy = "group", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<CommunityMemberEntity> members = new ArrayList<>();

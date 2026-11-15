@@ -8,7 +8,7 @@ import {
   AlertTriangle, CheckCircle2, ChevronRight, Sliders, LayoutGrid,
   ShieldCheck, ShieldAlert, KeyRound, Palette, ExternalLink, Layers,
   FolderCog, Save, UserCheck, ShieldPlus, LogOut, Menu, Globe,
-  FileText, Repeat, RotateCcw, AlertOctagon, Heart, Signal, Disc3, Clock, Headphones
+  FileText, Repeat, RotateCcw, AlertOctagon, Heart, Signal, Disc3, Clock, Headphones, Pin
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
@@ -208,9 +208,14 @@ export const AdminDashboard = () => {
     slug: '',
     displayOrder: 0,
     isActive: true,
+    isPinned: false,
     iconName: 'Globe',
     description: ''
   });
+  const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
+  const [mergeSourceId, setMergeSourceId] = useState('');
+  const [mergeTargetId, setMergeTargetId] = useState('');
+  const [isMerging, setIsMerging] = useState(false);
   const [communityReports, setCommunityReports] = useState([]);
   const [loadingCommunityReports, setLoadingCommunityReports] = useState(false);
   const [communityReportFilter, setCommunityReportFilter] = useState('ALL');
@@ -747,6 +752,41 @@ export const AdminDashboard = () => {
       toast.success("Đã xóa danh mục thành công!");
     } catch (err) {
       toast.error("Lỗi xóa danh mục!");
+    }
+  };
+
+  const handleTogglePinCommunityCat = async (catId) => {
+    try {
+      const res = await axiosClient.patch(`/admin/community-categories/${catId}/pin`);
+      const isPinned = res.data?.data?.isPinned;
+      setAdminCommunityCategories(prev => prev.map(c => c.id === catId ? { ...c, isPinned } : c));
+      toast.success(isPinned ? "Đã ghim chủ đề lên đầu!" : "Đã bỏ ghim chủ đề!");
+      fetchAdminCommunityCategories();
+    } catch (err) {
+      toast.error("Lỗi khi ghim/bỏ ghim chủ đề!");
+    }
+  };
+
+  const handleMergeCategories = async (e) => {
+    e.preventDefault();
+    if (!mergeSourceId || !mergeTargetId || String(mergeSourceId) === String(mergeTargetId)) {
+      toast.error("Vui lòng chọn 2 chủ đề khác nhau để gộp!");
+      return;
+    }
+    try {
+      setIsMerging(true);
+      await axiosClient.post('/admin/community-categories/merge', {
+        sourceCategoryId: mergeSourceId,
+        targetCategoryId: mergeTargetId
+      });
+      toast.success("Đã gộp chủ đề thành công!");
+      setIsMergeModalOpen(false);
+      fetchAdminCommunityCategories();
+      fetchAdminGroups();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Lỗi khi gộp chủ đề!");
+    } finally {
+      setIsMerging(false);
     }
   };
 
@@ -4929,14 +4969,32 @@ const handleAddTrack = async (e) => {
                           </p>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={handleOpenCreateCommunityCat}
-                          className="px-3.5 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs flex items-center gap-1.5 transition-all active:scale-95 shadow-sm"
-                        >
-                          <Plus size={14} />
-                          <span>Thêm danh mục mới</span>
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (adminCommunityCategories.length >= 2) {
+                                setMergeSourceId(adminCommunityCategories[0].id);
+                                setMergeTargetId(adminCommunityCategories[1].id);
+                                setIsMergeModalOpen(true);
+                              } else {
+                                toast.error("Cần ít nhất 2 chủ đề để thực hiện thao tác gộp!");
+                              }
+                            }}
+                            className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 font-semibold text-xs flex items-center gap-1.5 transition-all active:scale-95"
+                          >
+                            <Layers size={14} />
+                            <span>Gộp chủ đề</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleOpenCreateCommunityCat}
+                            className="px-3.5 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs flex items-center gap-1.5 transition-all active:scale-95 shadow-sm"
+                          >
+                            <Plus size={14} />
+                            <span>Thêm danh mục mới</span>
+                          </button>
+                        </div>
                       </div>
 
                       {loadingCommunityCategories ? (
@@ -4948,23 +5006,47 @@ const handleAddTrack = async (e) => {
                           {adminCommunityCategories.map(cat => (
                             <div 
                               key={cat.id} 
-                              className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 transition-all space-y-2.5 shadow-sm"
+                              className={`p-4 rounded-2xl bg-zinc-900 border transition-all space-y-2.5 shadow-sm ${
+                                cat.isPinned ? 'border-zinc-700 ring-1 ring-zinc-700/50' : 'border-zinc-800 hover:border-zinc-700'
+                              }`}
                             >
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-8 h-8 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-200 font-bold text-xs">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-start gap-2.5">
+                                  <div className="w-8 h-8 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-200 font-bold text-xs shrink-0 mt-0.5">
                                     {cat.iconName ? cat.iconName.charAt(0) : '#'}
                                   </div>
                                   <div>
-                                    <h4 className="text-sm font-semibold text-zinc-100">{cat.name}</h4>
-                                    <span className="text-[10px] text-zinc-500 font-mono">slug: {cat.slug}</span>
+                                    <div className="flex items-center gap-1.5">
+                                      <h4 className="text-sm font-semibold text-zinc-100">{cat.name}</h4>
+                                      {cat.isPinned && (
+                                        <span className="p-0.5 rounded bg-zinc-800 text-zinc-200 border border-zinc-700" title="Đã ghim lên đầu">
+                                          <Pin size={10} className="fill-current" />
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 font-mono mt-0.5">
+                                      <span>slug: {cat.slug}</span>
+                                      <span>•</span>
+                                      <span className={`px-1.5 py-0.2 rounded border ${
+                                        cat.source === 'USER_CREATED' 
+                                          ? 'bg-zinc-800/80 text-zinc-300 border-zinc-700/80' 
+                                          : 'bg-zinc-950 text-zinc-500 border-zinc-800'
+                                      }`}>
+                                        {cat.source === 'USER_CREATED' ? 'Người dùng tạo' : 'Hệ thống'}
+                                      </span>
+                                    </div>
                                   </div>
                                 </div>
-                                <span className={`px-2 py-0.5 rounded text-[10px] font-mono ${
-                                  cat.isActive ? 'bg-zinc-800 text-zinc-200 border border-zinc-700' : 'bg-zinc-900 text-zinc-500 border border-zinc-800'
-                                }`}>
-                                  {cat.isActive ? 'Hoạt động' : 'Tạm ẩn'}
-                                </span>
+                                <div className="text-right shrink-0">
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-mono ${
+                                    cat.isActive ? 'bg-zinc-800 text-zinc-200 border border-zinc-700' : 'bg-zinc-900 text-zinc-500 border border-zinc-800'
+                                  }`}>
+                                    {cat.isActive ? 'Hoạt động' : 'Tạm ẩn'}
+                                  </span>
+                                  <div className="text-[10px] text-zinc-400 font-mono tabular-nums mt-1">
+                                    {cat.communityCount ?? 0} nhóm
+                                  </div>
+                                </div>
                               </div>
 
                               <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">
@@ -4974,6 +5056,18 @@ const handleAddTrack = async (e) => {
                               <div className="flex items-center justify-between pt-2.5 border-t border-zinc-800/80 text-xs text-zinc-500 font-mono">
                                 <span>Thứ tự: {cat.displayOrder ?? 0}</span>
                                 <div className="flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleTogglePinCommunityCat(cat.id)}
+                                    className={`p-1.5 rounded-lg border transition-colors ${
+                                      cat.isPinned 
+                                        ? 'bg-white text-zinc-950 border-white' 
+                                        : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-400 border-zinc-700'
+                                    }`}
+                                    title={cat.isPinned ? "Bỏ ghim chủ đề" : "Ghim chủ đề lên đầu"}
+                                  >
+                                    <Pin size={13} className={cat.isPinned ? "fill-current" : ""} />
+                                  </button>
                                   <button
                                     type="button"
                                     onClick={() => handleToggleCommunityCat(cat.id)}
@@ -5098,6 +5192,79 @@ const handleAddTrack = async (e) => {
                             className="px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-bold transition-all shadow-md active:scale-95"
                           >
                             {editingCommunityCat ? 'Lưu thay đổi' : 'Tạo danh mục'}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                )}
+                {/* MODAL GỘP CHỦ ĐỀ CỘNG ĐỒNG */}
+                {isMergeModalOpen && (
+                  <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => setIsMergeModalOpen(false)}>
+                    <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-2xl animate-modal-in" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+                        <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                          <Layers size={16} className="text-zinc-400" />
+                          <span>Gộp chủ đề cộng đồng</span>
+                        </h3>
+                        <button
+                          type="button"
+                          onClick={() => setIsMergeModalOpen(false)}
+                          className="w-7 h-7 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white flex items-center justify-center transition-colors"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+
+                      <form onSubmit={handleMergeCategories} className="space-y-4">
+                        <p className="text-xs text-zinc-400 leading-relaxed">
+                          Toàn bộ các không gian cộng đồng thuộc <span className="text-zinc-200 font-semibold">Chủ đề nguồn</span> sẽ được chuyển sang <span className="text-white font-semibold">Chủ đề đích</span>. Chủ đề nguồn sau đó sẽ được gỡ bỏ khỏi hệ thống.
+                        </p>
+
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-zinc-300">Chủ đề nguồn (sẽ gộp và xóa) *</label>
+                          <select
+                            value={mergeSourceId}
+                            onChange={(e) => setMergeSourceId(e.target.value)}
+                            className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-100 text-xs focus:outline-none focus:border-zinc-600 transition-colors"
+                          >
+                            {adminCommunityCategories.map(c => (
+                              <option key={c.id} value={c.id} disabled={String(c.id) === String(mergeTargetId)}>
+                                {c.name} ({c.communityCount ?? 0} nhóm) {c.source === 'USER_CREATED' ? '• Người dùng' : '• Hệ thống'}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-zinc-300">Chủ đề đích (nhận toàn bộ nhóm) *</label>
+                          <select
+                            value={mergeTargetId}
+                            onChange={(e) => setMergeTargetId(e.target.value)}
+                            className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-100 text-xs focus:outline-none focus:border-zinc-600 transition-colors"
+                          >
+                            {adminCommunityCategories.map(c => (
+                              <option key={c.id} value={c.id} disabled={String(c.id) === String(mergeSourceId)}>
+                                {c.name} ({c.communityCount ?? 0} nhóm) {c.source === 'USER_CREATED' ? '• Người dùng' : '• Hệ thống'}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-800">
+                          <button
+                            type="button"
+                            onClick={() => setIsMergeModalOpen(false)}
+                            className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold"
+                          >
+                            Hủy bỏ
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={isMerging}
+                            className="px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-bold transition-all shadow-md active:scale-95 disabled:opacity-50"
+                          >
+                            {isMerging ? 'Đang gộp...' : 'Xác nhận gộp chủ đề'}
                           </button>
                         </div>
                       </form>

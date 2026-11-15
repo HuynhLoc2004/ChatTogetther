@@ -28,6 +28,18 @@ public class CommunityCategoryEntity {
     @Builder.Default
     private Boolean isActive = true;
 
+    @Column(name = "status")
+    @Builder.Default
+    private String status = "ACTIVE"; // "ACTIVE", "HIDDEN"
+
+    @Column(name = "source")
+    @Builder.Default
+    private String source = "SYSTEM"; // "SYSTEM", "USER_CREATED"
+
+    @Column(name = "is_pinned")
+    @Builder.Default
+    private Boolean isPinned = false;
+
     @Column(name = "display_order", nullable = false)
     @Builder.Default
     private Integer displayOrder = 0;
@@ -41,4 +53,8 @@ public class CommunityCategoryEntity {
     @Column(name = "created_at")
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    @Transient
+    @Builder.Default
+    private Long communityCount = 0L;
 }

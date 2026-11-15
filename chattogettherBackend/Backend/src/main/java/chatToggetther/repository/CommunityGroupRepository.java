@@ -15,8 +15,8 @@ public interface CommunityGroupRepository extends JpaRepository<CommunityGroupEn
 
     // Query cho Client: Lấy các nhóm ACTIVE, lọc category & keyword, ưu tiên isFeatured DESC
     @Query("SELECT g FROM CommunityGroupEntity g WHERE (g.status = 'ACTIVE' OR g.status IS NULL) " +
-           "AND (:category IS NULL OR :category = '' OR :category = 'ALL' OR g.categoryCode = :category) " +
-           "AND (:kw IS NULL OR :kw = '' OR LOWER(g.name) LIKE LOWER(CONCAT('%', :kw, '%')) OR LOWER(g.description) LIKE LOWER(CONCAT('%', :kw, '%'))) " +
+           "AND (:category IS NULL OR :category = '' OR :category = 'ALL' OR g.categoryCode = :category OR LOWER(g.categoryName) = LOWER(:category) OR LOWER(g.tags) LIKE LOWER(CONCAT('%', :category, '%'))) " +
+           "AND (:kw IS NULL OR :kw = '' OR LOWER(g.name) LIKE LOWER(CONCAT('%', :kw, '%')) OR LOWER(g.description) LIKE LOWER(CONCAT('%', :kw, '%')) OR LOWER(g.categoryName) LIKE LOWER(CONCAT('%', :kw, '%')) OR LOWER(g.tags) LIKE LOWER(CONCAT('%', :kw, '%'))) " +
            "ORDER BY CASE WHEN g.isFeatured = true THEN 1 ELSE 0 END DESC, g.createdAt DESC")
     Page<CommunityGroupEntity> findActiveCommunitiesWithPaging(
             @Param("category") String categoryCode,
@@ -25,8 +25,8 @@ public interface CommunityGroupRepository extends JpaRepository<CommunityGroupEn
     );
 
     @Query("SELECT g FROM CommunityGroupEntity g WHERE (g.status = 'ACTIVE' OR g.status IS NULL) " +
-           "AND (:category IS NULL OR :category = '' OR :category = 'ALL' OR g.categoryCode = :category) " +
-           "AND (:kw IS NULL OR :kw = '' OR LOWER(g.name) LIKE LOWER(CONCAT('%', :kw, '%')) OR LOWER(g.description) LIKE LOWER(CONCAT('%', :kw, '%'))) " +
+           "AND (:category IS NULL OR :category = '' OR :category = 'ALL' OR g.categoryCode = :category OR LOWER(g.categoryName) = LOWER(:category) OR LOWER(g.tags) LIKE LOWER(CONCAT('%', :category, '%'))) " +
+           "AND (:kw IS NULL OR :kw = '' OR LOWER(g.name) LIKE LOWER(CONCAT('%', :kw, '%')) OR LOWER(g.description) LIKE LOWER(CONCAT('%', :kw, '%')) OR LOWER(g.categoryName) LIKE LOWER(CONCAT('%', :kw, '%')) OR LOWER(g.tags) LIKE LOWER(CONCAT('%', :kw, '%'))) " +
            "ORDER BY CASE WHEN g.isFeatured = true THEN 1 ELSE 0 END DESC, g.createdAt DESC")
     List<CommunityGroupEntity> findActiveCommunities(
             @Param("category") String categoryCode,
@@ -35,7 +35,7 @@ public interface CommunityGroupRepository extends JpaRepository<CommunityGroupEn
 
     // Query cho Super Admin: Xem toàn bộ (ACTIVE, RESTRICTED, SUSPENDED)
     @Query("SELECT g FROM CommunityGroupEntity g WHERE (:status IS NULL OR :status = '' OR :status = 'ALL' OR g.status = :status) " +
-           "AND (:kw IS NULL OR :kw = '' OR LOWER(g.name) LIKE LOWER(CONCAT('%', :kw, '%')) OR LOWER(g.description) LIKE LOWER(CONCAT('%', :kw, '%'))) " +
+           "AND (:kw IS NULL OR :kw = '' OR LOWER(g.name) LIKE LOWER(CONCAT('%', :kw, '%')) OR LOWER(g.description) LIKE LOWER(CONCAT('%', :kw, '%')) OR LOWER(g.categoryName) LIKE LOWER(CONCAT('%', :kw, '%')) OR LOWER(g.tags) LIKE LOWER(CONCAT('%', :kw, '%'))) " +
            "ORDER BY g.createdAt DESC")
     Page<CommunityGroupEntity> findAdminCommunitiesWithPaging(
             @Param("status") String status,
@@ -44,16 +44,27 @@ public interface CommunityGroupRepository extends JpaRepository<CommunityGroupEn
     );
 
     @Query("SELECT g FROM CommunityGroupEntity g WHERE (:status IS NULL OR :status = '' OR :status = 'ALL' OR g.status = :status) " +
-           "AND (:kw IS NULL OR :kw = '' OR LOWER(g.name) LIKE LOWER(CONCAT('%', :kw, '%')) OR LOWER(g.description) LIKE LOWER(CONCAT('%', :kw, '%'))) " +
+           "AND (:kw IS NULL OR :kw = '' OR LOWER(g.name) LIKE LOWER(CONCAT('%', :kw, '%')) OR LOWER(g.description) LIKE LOWER(CONCAT('%', :kw, '%')) OR LOWER(g.categoryName) LIKE LOWER(CONCAT('%', :kw, '%')) OR LOWER(g.tags) LIKE LOWER(CONCAT('%', :kw, '%'))) " +
            "ORDER BY g.createdAt DESC")
     List<CommunityGroupEntity> findAdminCommunities(
             @Param("status") String status,
             @Param("kw") String keyword
     );
 
-    @Query("SELECT g FROM CommunityGroupEntity g WHERE LOWER(g.name) LIKE LOWER(CONCAT('%', :kw, '%')) OR LOWER(g.description) LIKE LOWER(CONCAT('%', :kw, '%')) ORDER BY g.createdAt DESC")
+    @Query("SELECT g.categoryName, COUNT(g) FROM CommunityGroupEntity g WHERE (g.status = 'ACTIVE' OR g.status IS NULL) AND g.categoryName IS NOT NULL GROUP BY g.categoryName")
+    List<Object[]> countActiveGroupsByCategoryName();
+
+    @Query("SELECT g.categoryId, COUNT(g) FROM CommunityGroupEntity g WHERE (g.status = 'ACTIVE' OR g.status IS NULL) AND g.categoryId IS NOT NULL GROUP BY g.categoryId")
+    List<Object[]> countActiveGroupsByCategoryId();
+
+    @Query("SELECT g.categoryCode, COUNT(g) FROM CommunityGroupEntity g WHERE (g.status = 'ACTIVE' OR g.status IS NULL) AND g.categoryCode IS NOT NULL GROUP BY g.categoryCode")
+    List<Object[]> countActiveGroupsByCategoryCode();
+
+    @Query("SELECT g FROM CommunityGroupEntity g WHERE LOWER(g.name) LIKE LOWER(CONCAT('%', :kw, '%')) OR LOWER(g.description) LIKE LOWER(CONCAT('%', :kw, '%')) OR LOWER(g.categoryName) LIKE LOWER(CONCAT('%', :kw, '%')) OR LOWER(g.tags) LIKE LOWER(CONCAT('%', :kw, '%')) ORDER BY g.createdAt DESC")
     List<CommunityGroupEntity> searchGroups(@Param("kw") String keyword);
 
     @Query("SELECT g FROM CommunityGroupEntity g ORDER BY g.createdAt DESC")
     List<CommunityGroupEntity> findAllOrderByCreatedAtDesc();
+
+    List<CommunityGroupEntity> findByCategoryId(Long categoryId);
 }

@@ -27,6 +27,7 @@ public class CommunityGroupDTO {
     private Long categoryId;
     private String categoryName;
     private String categoryCode;
+    private List<String> tags = new ArrayList<>();
     private String status;
     private Boolean isFeatured;
     private Boolean requireMemberApproval;

@@ -32,7 +32,9 @@ public class CreateGroupRequest {
     private Boolean requiresPostApproval = false;
     private Boolean requirePostApproval;
     private Long categoryId;
+    private String categoryName;
     private String categoryCode = "GENERAL";
+    private java.util.List<String> tags;
     private Boolean isPinnedFeatured;
     private Long activeVoiceRoomId;
 }

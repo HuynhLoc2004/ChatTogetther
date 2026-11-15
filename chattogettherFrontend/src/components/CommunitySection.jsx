@@ -37,6 +37,8 @@ const DEFAULT_REJECT_REASONS = [
   { id: 'COPYRIGHT', label: 'Vi phạm bản quyền nội dung / hình ảnh' }
 ];
 
+export const POPULAR_SUGGESTED_TAGS = ['lofi', 'chill', 'coding', 'guitar', 'gaming', 'study', 'coffee', 'english', 'tam-su', 'tech'];
+
 const REACTION_EMOJIS = [
   { type: 'HEART', emoji: '❤️', label: 'Yêu thích' },
   { type: 'FIRE', emoji: '🔥', label: 'Bùng nổ' },
@@ -293,12 +295,16 @@ export const CommunitySection = ({
     rules: '',
     categoryCode: 'general',
     categoryId: null,
+    categoryName: '',
+    tags: [],
     coverUrl: '',
     avatarUrl: '',
     isPrivate: false,
     requiresApproval: false
   });
-  const [isCreateCategoryDropdownOpen, setIsCreateCategoryDropdownOpen] = useState(false);
+  const [topicInput, setTopicInput] = useState('');
+  const [isTopicDropdownOpen, setIsTopicDropdownOpen] = useState(false);
+  const [tagInput, setTagInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Chỉnh sửa quy định
@@ -706,9 +712,27 @@ export const CommunitySection = ({
       }
     }
 
+    // Xác định tên chủ đề chính
+    let finalCategoryName = (createForm.categoryName || '').trim();
+    if (!finalCategoryName && topicInput.trim()) {
+      finalCategoryName = topicInput.trim();
+    }
+    if (!finalCategoryName && createForm.categoryId) {
+      const matched = categories.find(c => c.id === createForm.categoryId);
+      if (matched) finalCategoryName = matched.name;
+    }
+    if (!finalCategoryName) {
+      finalCategoryName = 'Chung • Mọi chủ đề';
+    }
+
     try {
       setIsSubmitting(true);
-      const res = await axiosClient.post('/groups', createForm);
+      const payload = {
+        ...createForm,
+        categoryName: finalCategoryName,
+        tags: Array.isArray(createForm.tags) ? createForm.tags : []
+      };
+      const res = await axiosClient.post('/groups', payload);
       toast.success("Đã tạo cộng đồng thành công!");
       setIsCreateOpen(false);
       setCreateForm({
@@ -717,12 +741,17 @@ export const CommunitySection = ({
         rules: '',
         categoryCode: 'general',
         categoryId: null,
+        categoryName: '',
+        tags: [],
         coverUrl: '',
         avatarUrl: '',
         isPrivate: false,
         requiresApproval: false
       });
+      setTopicInput('');
+      setTagInput('');
       fetchGroups();
+      fetchCategories();
       if (res.data && res.data.data) {
         handleOpenGroup(res.data.data);
       }
@@ -2283,20 +2312,26 @@ export const CommunitySection = ({
 
             {/* Dải chip lọc danh mục động (Không có thanh cuộn ngang) */}
             <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden py-1">
-              {[{ id: 'all', slug: 'all', name: 'Tất cả cộng đồng' }, ...categories].map(cat => {
+              {[
+                { id: 'all', slug: 'all', name: 'Tất cả cộng đồng', communityCount: groups.length },
+                ...categories.filter(c => (c.communityCount || 0) > 0)
+              ].map(cat => {
                 const isSelected = activeCategory === (cat.slug || cat.id);
                 return (
                   <button
                     key={cat.id || cat.slug}
                     type="button"
                     onClick={() => setActiveCategory(cat.slug || cat.id)}
-                    className={`px-3.5 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all border shrink-0 ${
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all border shrink-0 flex items-center gap-1.5 ${
                       isSelected 
                         ? 'bg-zinc-800 text-white border-zinc-700 shadow-sm' 
                         : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200 hover:border-zinc-700'
                     }`}
                   >
-                    {cat.name}
+                    <span>{cat.name}</span>
+                    <span className="font-mono text-[11px] tabular-nums text-zinc-500">
+                      ({cat.communityCount ?? 0})
+                    </span>
                   </button>
                 );
               })}
@@ -2327,9 +2362,23 @@ export const CommunitySection = ({
           ) : (() => {
             const allList = Array.isArray(groups) ? groups : [];
             const filtered = allList.filter(g => {
-              if (activeCategory === 'all') return true;
-              return (g.categoryCode && g.categoryCode.toLowerCase() === activeCategory.toLowerCase()) ||
-                     (g.categoryId && String(g.categoryId) === String(activeCategory));
+              if (activeCategory !== 'all') {
+                const catMatch = 
+                  (g.categoryCode && g.categoryCode.toLowerCase() === activeCategory.toLowerCase()) ||
+                  (g.categoryId && String(g.categoryId) === String(activeCategory)) ||
+                  (g.categoryName && g.categoryName.toLowerCase() === activeCategory.toLowerCase());
+                const tagMatch = Array.isArray(g.tags) && g.tags.some(t => t.toLowerCase() === activeCategory.toLowerCase());
+                if (!catMatch && !tagMatch) return false;
+              }
+              if (searchKeyword && searchKeyword.trim()) {
+                const kw = searchKeyword.trim().toLowerCase();
+                const nameMatch = (g.name || '').toLowerCase().includes(kw);
+                const descMatch = (g.description || '').toLowerCase().includes(kw);
+                const catMatch = (g.categoryName || '').toLowerCase().includes(kw);
+                const tagMatch = Array.isArray(g.tags) && g.tags.some(t => t.toLowerCase().includes(kw));
+                if (!nameMatch && !descMatch && !catMatch && !tagMatch) return false;
+              }
+              return true;
             });
 
             const isGroupOwner = (g) => {
@@ -2409,6 +2458,23 @@ export const CommunitySection = ({
                     <p className="text-xs text-zinc-400 line-clamp-1 mt-1 font-sans">
                       {group.description || 'Không gian thảo luận và giao lưu dành cho các thành viên.'}
                     </p>
+
+                    {Array.isArray(group.tags) && group.tags.length > 0 && (
+                      <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                        {group.tags.map((t, idx) => (
+                          <span
+                            key={idx}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveCategory(t);
+                            }}
+                            className="font-mono text-[10px] bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 px-2 py-0.5 rounded-md border border-zinc-700/60 transition-colors"
+                          >
+                            #{t}
+                          </span>
+                        ))}
+                      </div>
+                    )}
 
                     <div className="flex items-center gap-2 mt-1.5 text-xs text-zinc-500 font-mono tabular-nums">
                       <span className="flex items-center gap-1">
@@ -2552,39 +2618,180 @@ export const CommunitySection = ({
                   />
                 </div>
 
-                {/* CUSTOM DROPDOWN CHO DANH MỤC TRONG MODAL */}
+                {/* CHỦ ĐỀ CHÍNH (SEARCHABLE & CREATABLE TOPIC PICKER) */}
                 <div className="relative">
-                  <label className="block text-zinc-300 text-xs font-semibold mb-1">Danh mục chuyên biệt</label>
-                  <button
-                    type="button"
-                    onClick={() => setIsCreateCategoryDropdownOpen(!isCreateCategoryDropdownOpen)}
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-white flex items-center justify-between focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 transition-colors"
-                  >
-                    <span>
-                      {categories.find(c => c.slug === createForm.categoryCode || c.id === createForm.categoryId)?.name || 'Chung • Mọi chủ đề'}
-                    </span>
-                    <ChevronDown size={14} className="text-zinc-400" />
-                  </button>
-                  {isCreateCategoryDropdownOpen && (
-                    <div className="absolute top-full left-0 right-0 mt-1 z-30 bg-zinc-900 border border-zinc-800 rounded-xl p-1 shadow-2xl space-y-0.5 max-h-48 overflow-y-auto custom-dark-scrollbar">
-                      {categories.map(c => (
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-zinc-300 text-xs font-semibold">Chủ đề chính *</label>
+                    {createForm.categoryName && (
+                      <span className="text-[10px] font-mono text-zinc-400">
+                        Đang chọn: <span className="text-white font-medium">{createForm.categoryName}</span>
+                      </span>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+                    <input 
+                      type="text"
+                      placeholder="Tìm chủ đề có sẵn hoặc tự gõ chủ đề mới..."
+                      value={topicInput}
+                      onFocus={() => setIsTopicDropdownOpen(true)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setTopicInput(val);
+                        setIsTopicDropdownOpen(true);
+                        setCreateForm(prev => ({
+                          ...prev,
+                          categoryName: val,
+                          categoryCode: val.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+                          categoryId: null
+                        }));
+                      }}
+                      className="w-full pl-9 pr-8 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-100 text-xs focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 placeholder-zinc-500 transition-colors"
+                    />
+                    {topicInput && (
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          setTopicInput('');
+                          setCreateForm(prev => ({ ...prev, categoryName: '', categoryCode: '', categoryId: null }));
+                        }}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 p-1"
+                      >
+                        <X size={13} />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Dropdown danh sách chủ đề + Tùy chọn tạo mới */}
+                  {isTopicDropdownOpen && (
+                    <div 
+                      className="absolute top-full left-0 right-0 mt-1 z-30 bg-zinc-900 border border-zinc-800 rounded-xl p-1.5 shadow-2xl space-y-1 max-h-52 overflow-y-auto custom-dark-scrollbar"
+                      onMouseDown={(e) => e.preventDefault()}
+                    >
+                      {/* Nút Tạo chủ đề mới nếu topicInput có chữ và chưa trùng chính xác */}
+                      {topicInput.trim() && !categories.some(c => c.name.toLowerCase() === topicInput.trim().toLowerCase()) && (
                         <button
-                          key={c.id}
                           type="button"
                           onClick={() => {
-                            setCreateForm(prev => ({ ...prev, categoryCode: c.slug, categoryId: c.id }));
-                            setIsCreateCategoryDropdownOpen(false);
+                            const trimmed = topicInput.trim();
+                            setCreateForm(prev => ({
+                              ...prev,
+                              categoryName: trimmed,
+                              categoryCode: trimmed.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+                              categoryId: null
+                            }));
+                            setTopicInput(trimmed);
+                            setIsTopicDropdownOpen(false);
                           }}
-                          className={`w-full text-left px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center justify-between ${
-                            createForm.categoryCode === c.slug ? 'bg-zinc-800 text-white font-medium' : 'text-zinc-300 hover:bg-zinc-800/60'
-                          }`}
+                          className="w-full text-left px-3 py-2 rounded-lg text-xs bg-zinc-850 hover:bg-zinc-800 text-white font-medium flex items-center gap-2 border border-dashed border-zinc-700 transition-colors"
                         >
-                          <span>{c.name}</span>
-                          {createForm.categoryCode === c.slug && <Check size={12} className="text-white" />}
+                          <Plus size={13} className="text-zinc-300" />
+                          <span>Tạo chủ đề mới: <span className="font-semibold text-white">"{topicInput.trim()}"</span></span>
                         </button>
-                      ))}
+                      )}
+
+                      {/* Danh sách chủ đề từ hệ thống */}
+                      {categories
+                        .filter(c => !topicInput.trim() || c.name.toLowerCase().includes(topicInput.trim().toLowerCase()))
+                        .map(c => {
+                          const isSelected = createForm.categoryId === c.id || createForm.categoryName.toLowerCase() === c.name.toLowerCase();
+                          return (
+                            <button
+                              key={c.id || c.slug}
+                              type="button"
+                              onClick={() => {
+                                setCreateForm(prev => ({
+                                  ...prev,
+                                  categoryName: c.name,
+                                  categoryCode: c.slug || c.name.toLowerCase(),
+                                  categoryId: c.id
+                                }));
+                                setTopicInput(c.name);
+                                setIsTopicDropdownOpen(false);
+                              }}
+                              className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center justify-between ${
+                                isSelected ? 'bg-zinc-800 text-white font-medium' : 'text-zinc-300 hover:bg-zinc-800/60'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span>{c.name}</span>
+                                {c.communityCount !== undefined && (
+                                  <span className="text-[10px] text-zinc-500 font-mono">({c.communityCount} nhóm)</span>
+                                )}
+                              </div>
+                              {isSelected && <Check size={12} className="text-white" />}
+                            </button>
+                          );
+                        })}
                     </div>
                   )}
+                </div>
+
+                {/* THẺ TỪ KHÓA NGÁCH (TAGS) - TỐI ĐA 5 THẺ */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-zinc-300 text-xs font-semibold">Thẻ từ khóa ngách (Tối đa 5 thẻ)</label>
+                    <span className="text-[10px] text-zinc-500 font-mono tabular-nums">{createForm.tags.length}/5</span>
+                  </div>
+
+                  {/* Khung chứa các tag pill và input */}
+                  <div className="min-h-[42px] px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center flex-wrap gap-1.5 focus-within:border-zinc-600 transition-colors">
+                    {createForm.tags.map((tag, idx) => (
+                      <span 
+                        key={idx}
+                        className="inline-flex items-center gap-1 font-mono text-[11px] bg-zinc-800 text-zinc-200 px-2 py-0.5 rounded-lg border border-zinc-700/80"
+                      >
+                        <span>#{tag}</span>
+                        <button
+                          type="button"
+                          onClick={() => setCreateForm(prev => ({ ...prev, tags: prev.tags.filter((_, i) => i !== idx) }))}
+                          className="text-zinc-400 hover:text-white transition-colors ml-0.5"
+                        >
+                          <X size={11} />
+                        </button>
+                      </span>
+                    ))}
+
+                    {createForm.tags.length < 5 && (
+                      <input 
+                        type="text"
+                        placeholder={createForm.tags.length === 0 ? "Nhập từ khóa (VD: lofi, guitar...) rồi gõ Enter" : "Thêm tag..."}
+                        value={tagInput}
+                        onChange={(e) => setTagInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ',') {
+                            e.preventDefault();
+                            const cleanTag = tagInput.trim().toLowerCase().replace(/^#+/, '').replace(/\s+/g, '-');
+                            if (cleanTag && !createForm.tags.includes(cleanTag) && createForm.tags.length < 5) {
+                              setCreateForm(prev => ({ ...prev, tags: [...prev.tags, cleanTag] }));
+                              setTagInput('');
+                            }
+                          }
+                        }}
+                        className="flex-1 min-w-[120px] bg-transparent text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none"
+                      />
+                    )}
+                  </div>
+
+                  {/* Gợi ý nhanh các thẻ phổ biến */}
+                  <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                    <span className="text-[10px] text-zinc-500 font-mono">Gợi ý:</span>
+                    {POPULAR_SUGGESTED_TAGS.filter(t => !createForm.tags.includes(t)).slice(0, 6).map(sug => (
+                      <button
+                        key={sug}
+                        type="button"
+                        disabled={createForm.tags.length >= 5}
+                        onClick={() => {
+                          if (createForm.tags.length < 5 && !createForm.tags.includes(sug)) {
+                            setCreateForm(prev => ({ ...prev, tags: [...prev.tags, sug] }));
+                          }
+                        }}
+                        className="font-mono text-[10px] bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 px-2 py-0.5 rounded-md border border-zinc-800 transition-colors disabled:opacity-40"
+                      >
+                        +{sug}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div>
@@ -2617,25 +2824,62 @@ export const CommunitySection = ({
                   />
                 </div>
 
-                <div 
-                  onClick={() => setCreateForm(prev => ({ ...prev, requiresApproval: !prev.requiresApproval }))}
-                  className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between select-none ${
-                    createForm.requiresApproval 
-                      ? 'bg-zinc-950 border-zinc-700 text-white' 
-                      : 'bg-zinc-950/60 border-zinc-800/80 text-zinc-400 hover:border-zinc-700'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${
-                      createForm.requiresApproval 
-                        ? 'bg-white border-white text-zinc-950' 
-                        : 'border-zinc-700 bg-zinc-900'
-                    }`}>
-                      {createForm.requiresApproval && <Check size={12} strokeWidth={3} />}
+                {/* CHỌN QUYỀN RIÊNG TƯ (2 CỘT TRỰC QUAN: CÔNG KHAI VS RIÊNG TƯ) */}
+                <div>
+                  <label className="block text-zinc-300 text-xs font-semibold mb-2">Quyền riêng tư & Tham gia</label>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {/* Thẻ Công khai */}
+                    <div 
+                      onClick={() => setCreateForm(prev => ({ ...prev, isPrivate: false, requiresApproval: false }))}
+                      className={`p-3.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+                        !createForm.requiresApproval && !createForm.isPrivate
+                          ? 'bg-zinc-950 border-zinc-600 text-white shadow-sm ring-1 ring-zinc-600'
+                          : 'bg-zinc-950/70 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-200">
+                          <Globe size={15} />
+                        </div>
+                        {!createForm.requiresApproval && !createForm.isPrivate && (
+                          <div className="w-4 h-4 rounded-full bg-white text-zinc-950 flex items-center justify-center">
+                            <Check size={10} strokeWidth={3} />
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-semibold text-zinc-100">Công khai</h4>
+                        <p className="text-[11px] text-zinc-400 mt-0.5 leading-snug">
+                          Mọi người đều có thể tìm thấy, đọc bài và tham gia tự do.
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-xs font-semibold text-zinc-200 block">Bật chế độ phê duyệt thành viên</span>
-                      <span className="text-[11px] text-zinc-500">Thành viên mới phải được Chủ nhóm hoặc Phó nhóm chấp thuận trước khi có thể đăng bài</span>
+
+                    {/* Thẻ Riêng tư & Duyệt */}
+                    <div 
+                      onClick={() => setCreateForm(prev => ({ ...prev, isPrivate: true, requiresApproval: true }))}
+                      className={`p-3.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+                        createForm.requiresApproval || createForm.isPrivate
+                          ? 'bg-zinc-950 border-zinc-600 text-white shadow-sm ring-1 ring-zinc-600'
+                          : 'bg-zinc-950/70 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-200">
+                          <Lock size={15} />
+                        </div>
+                        {(createForm.requiresApproval || createForm.isPrivate) && (
+                          <div className="w-4 h-4 rounded-full bg-white text-zinc-950 flex items-center justify-center">
+                            <Check size={10} strokeWidth={3} />
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-semibold text-zinc-100">Riêng tư & Duyệt</h4>
+                        <p className="text-[11px] text-zinc-400 mt-0.5 leading-snug">
+                          Cần Ban quản trị phê duyệt trước khi thành viên có thể đăng bài.
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>

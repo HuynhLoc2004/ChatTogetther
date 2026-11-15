@@ -30,7 +30,9 @@ public class UpdateGroupRequest {
     private Boolean requiresPostApproval;
     private Boolean requirePostApproval;
     private Long categoryId;
+    private String categoryName;
     private String categoryCode;
+    private java.util.List<String> tags;
     private String status;
     private Boolean isFeatured;
     private Boolean isPinnedFeatured;
