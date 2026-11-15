@@ -1918,6 +1918,46 @@ const Home = ({ initialTab }) => {
         if (!isMounted) return;
         stompClient.subscribe('/topic/rooms', () => fetchRooms(true));
         stompClient.subscribe('/topic/posts', () => fetchPosts(true));
+        stompClient.subscribe('/topic/system-config', (message) => {
+          try {
+            const cfg = JSON.parse(message.body);
+            if (cfg && typeof cfg === 'object') {
+              setSystemConfig(cfg);
+              if (cfg.vibe_options) {
+                try {
+                  const parsed = JSON.parse(cfg.vibe_options);
+                  if (Array.isArray(parsed) && parsed.length > 0) {
+                    const mapped = parsed.map(v => {
+                      const meta = getVibeIcon(v);
+                      return { id: v, label: v, icon: meta.icon, color: meta.color };
+                    });
+                    setDynamicVibes(mapped);
+                  }
+                } catch {}
+              }
+              if (cfg.menu_items) {
+                try {
+                  const parsed = JSON.parse(cfg.menu_items);
+                  if (Array.isArray(parsed) && parsed.length > 0) {
+                    const menuMap = {};
+                    parsed.forEach(m => { menuMap[m.id] = m; });
+                    setDynamicMenu(menuMap);
+                  }
+                } catch {}
+              }
+              if (cfg.report_reasons) {
+                try {
+                  const parsed = JSON.parse(cfg.report_reasons);
+                  if (Array.isArray(parsed) && parsed.length > 0) {
+                    setReportReasons(parsed);
+                  }
+                } catch {}
+              }
+            }
+          } catch (e) {
+            console.warn("Lỗi nhận realtime system config:", e);
+          }
+        });
 
         if (currentUserId) {
           // Kênh thông báo cá nhân hóa thời gian thực (Lời mời kết bạn, Cảm xúc, Bình luận, Tố cáo & Gỡ bài)

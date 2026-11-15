@@ -13,6 +13,7 @@ import {
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
 import TalovinLogo from '../components/TalovinLogo';
+import UserAvatar from '../components/UserAvatar';
 
 // ==========================================
 // ĐỊNH NGHĨA HỆ THỐNG QUYỀN HẠN & VAI TRÒ CHUẨN (RBAC)
@@ -127,6 +128,28 @@ export const AdminDashboard = () => {
   const [parsedVibes, setParsedVibes] = useState([]);
   const [newVibeInput, setNewVibeInput] = useState('');
   const [isSavingConfig, setIsSavingConfig] = useState(false);
+
+  // Live FM Stations Monitor
+  const [liveFmStations, setLiveFmStations] = useState([]);
+  const [loadingLiveFm, setLoadingLiveFm] = useState(false);
+
+  // Admin Audit Logs
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [loadingAuditLogs, setLoadingAuditLogs] = useState(false);
+  const [auditLogSearch, setAuditLogSearch] = useState('');
+
+  // Tham số vận hành & Thuật toán động
+  const [operationalParams, setOperationalParams] = useState({
+    fm_max_record_seconds: '5',
+    post_max_audio_seconds: '15',
+    fm_station_ttl_minutes: '15',
+    feed_friend_boost_score: '12.0',
+    feed_viral_velocity_threshold: '5',
+    icebreaker_hourly_limit: '3',
+    maintenance_mode: 'false',
+    announcement_banner: ''
+  });
+  const [isSavingOpParams, setIsSavingOpParams] = useState(false);
 
   // Thể loại thẻ bài động (Dynamic Challenge Categories)
   const [challengeCategories, setChallengeCategories] = useState(DEFAULT_CHALLENGE_CATEGORIES);
@@ -338,7 +361,9 @@ export const AdminDashboard = () => {
         fetchAdminPosts(),
         fetchAdminReposts(),
         fetchFrequencyData(),
-        fetchAdminReactions()
+        fetchAdminReactions(),
+        fetchLiveFmStations(),
+        fetchAuditLogs()
       ]);
     } catch (err) {
       console.error("Lỗi xác thực quyền:", err);
@@ -433,7 +458,8 @@ export const AdminDashboard = () => {
         items: [
           { id: 'overview', label: 'Tổng quan & Hệ thống', icon: LayoutGrid, permission: 'TL_PERM_STATS_VIEW' },
           { id: 'rooms', label: `Phòng thoại & Giới hạn (${adminRooms.length})`, icon: Radio, permission: 'TL_PERM_STATS_VIEW' },
-          { id: 'radio_music', label: `Băng tần FM & Kho nhạc (${adminIntents.length + tracks.length})`, icon: Headphones, permission: 'TL_PERM_MUSIC_MANAGE' }
+          { id: 'radio_music', label: `Băng tần FM & Kho nhạc (${adminIntents.length + tracks.length + liveFmStations.length})`, icon: Headphones, permission: 'TL_PERM_MUSIC_MANAGE' },
+          { id: 'audit_logs', label: `Nhật ký thao tác (${auditLogs.length})`, icon: ShieldCheck, permission: 'TL_PERM_STATS_VIEW' }
         ]
       },
       {
@@ -451,7 +477,7 @@ export const AdminDashboard = () => {
         ]
       }
     ];
-  }, [adminRooms.length, adminIntents.length, tracks.length, adminGroups.length, reports, challenges.length, parsedVibes.length, users.length]);
+  }, [adminRooms.length, adminIntents.length, tracks.length, liveFmStations.length, auditLogs.length, adminGroups.length, reports, challenges.length, parsedVibes.length, users.length]);
 
   // Tự động chuyển tab nếu tab hiện tại không được phép
   useEffect(() => {
@@ -515,9 +541,74 @@ export const AdminDashboard = () => {
             if (Array.isArray(parsedReports) && parsedReports.length > 0) setReportReasons(parsedReports);
           }
         } catch {}
+        if (d.fm_max_record_seconds || d.post_max_audio_seconds || d.fm_station_ttl_minutes || d.feed_friend_boost_score || d.feed_viral_velocity_threshold || d.icebreaker_hourly_limit || d.maintenance_mode || d.announcement_banner) {
+          setOperationalParams({
+            fm_max_record_seconds: d.fm_max_record_seconds || '5',
+            post_max_audio_seconds: d.post_max_audio_seconds || '15',
+            fm_station_ttl_minutes: d.fm_station_ttl_minutes || '15',
+            feed_friend_boost_score: d.feed_friend_boost_score || '12.0',
+            feed_viral_velocity_threshold: d.feed_viral_velocity_threshold || '5',
+            icebreaker_hourly_limit: d.icebreaker_hourly_limit || '3',
+            maintenance_mode: d.maintenance_mode || 'false',
+            announcement_banner: d.announcement_banner || ''
+          });
+        }
       }
     } catch (e) {
       console.error("Lỗi nạp cấu hình hệ thống:", e);
+    }
+  };
+
+  const fetchLiveFmStations = async () => {
+    try {
+      setLoadingLiveFm(true);
+      const res = await axiosClient.get('/admin/fm-stations');
+      if (res?.data?.data) {
+        setLiveFmStations(res.data.data);
+      }
+    } catch (e) {
+      console.warn("Không thể tải trạm FM trực tiếp:", e);
+    } finally {
+      setLoadingLiveFm(false);
+    }
+  };
+
+  const handleDisconnectFmStation = async (userId) => {
+    if (!window.confirm("Bạn có chắc chắn muốn ngắt sóng trạm FM của người dùng này?")) return;
+    try {
+      await axiosClient.delete(`/admin/fm-stations/${userId}`);
+      toast.success("Đã ngắt sóng trạm FM thành công!");
+      setLiveFmStations(prev => prev.filter(s => s.userId !== userId));
+      fetchAuditLogs();
+    } catch (e) {
+      toast.error(e.response?.data?.message || "Không thể ngắt sóng trạm FM");
+    }
+  };
+
+  const fetchAuditLogs = async () => {
+    try {
+      setLoadingAuditLogs(true);
+      const res = await axiosClient.get('/admin/audit-logs');
+      if (res?.data?.data) {
+        setAuditLogs(res.data.data);
+      }
+    } catch (e) {
+      console.warn("Không thể tải nhật ký thao tác:", e);
+    } finally {
+      setLoadingAuditLogs(false);
+    }
+  };
+
+  const handleSaveOpParams = async (e) => {
+    if (e) e.preventDefault();
+    try {
+      setIsSavingOpParams(true);
+      await saveConfigToBackend(operationalParams, "Đã lưu tham số vận hành & thuật toán thành công!");
+      fetchAuditLogs();
+    } catch (err) {
+      toast.error("Không thể lưu tham số vận hành: " + err.message);
+    } finally {
+      setIsSavingOpParams(false);
     }
   };
 
@@ -753,9 +844,16 @@ export const AdminDashboard = () => {
         action,
         note
       });
-      toast.success(action === 'TAKEDOWN' ? "Đã gỡ bài viết vi phạm và gửi thông báo tới tác giả!" : "Đã bỏ qua báo cáo!");
+      if (action === 'BAN_USER') {
+        toast.success("Đã khóa tài khoản người đăng và gỡ bỏ bài viết vi phạm!");
+      } else if (action === 'TAKEDOWN') {
+        toast.success("Đã gỡ bài viết vi phạm và gửi thông báo tới tác giả!");
+      } else {
+        toast.success("Đã bỏ qua báo cáo!");
+      }
       setReportActionModal({ isOpen: false, report: null, action: 'TAKEDOWN', note: '' });
       fetchReports();
+      fetchAuditLogs();
     } catch (err) {
       toast.error(err.response?.data?.message || "Không thể xử lý báo cáo lúc này");
     }
@@ -1496,10 +1594,10 @@ const handleAddTrack = async (e) => {
         <div className="flex flex-col border-b border-[#1e1e1e] p-5">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2.5">
-              <TalovinLogo size={26} />
+              <TalovinLogo size={26} showText={false} />
               <div className="flex flex-col leading-none">
                 <span className="font-extrabold text-base tracking-tight text-white">{configs.brand_name || "Talovin"}</span>
-                <span className="text-[10px] font-mono text-indigo-400 tracking-wider uppercase font-semibold mt-0.5">Admin Console</span>
+                <span className="text-[10px] font-mono text-zinc-400 tracking-wider uppercase font-semibold mt-0.5">Admin Console</span>
               </div>
             </div>
             <button 
@@ -1608,8 +1706,8 @@ const handleAddTrack = async (e) => {
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-mono">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-300 text-[11px] font-mono">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
               <span>Hệ thống bảo mật RBAC Online</span>
             </div>
 
@@ -1647,40 +1745,40 @@ const handleAddTrack = async (e) => {
                         <Users size={16} />
                       </div>
                     </div>
-                    <div className="text-2xl font-bold font-mono text-zinc-100 tracking-tight">{stats?.totalUsers ?? users.length}</div>
+                    <div className="text-2xl font-bold font-mono tabular-nums text-zinc-100 tracking-tight">{stats?.totalUsers ?? users.length}</div>
                     <span className="text-[11px] text-zinc-400 mt-1">Tài khoản lưu trên CSDL</span>
                   </div>
 
                   <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 hover:border-zinc-700 transition-all flex flex-col justify-between">
                     <div className="flex items-center justify-between mb-3">
                       <span className="text-xs font-medium text-zinc-400">Bài viết Sảnh</span>
-                      <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+                      <div className="w-8 h-8 rounded-lg bg-zinc-800 text-zinc-300 flex items-center justify-center">
                         <MessageSquare size={16} />
                       </div>
                     </div>
-                    <div className="text-2xl font-bold font-mono text-zinc-100 tracking-tight">{stats?.totalPosts ?? 0}</div>
+                    <div className="text-2xl font-bold font-mono tabular-nums text-zinc-100 tracking-tight">{stats?.totalPosts ?? 0}</div>
                     <span className="text-[11px] text-zinc-400 mt-1">Bài thảo luận & tương tác</span>
                   </div>
 
                   <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 hover:border-zinc-700 transition-all flex flex-col justify-between">
                     <div className="flex items-center justify-between mb-3">
                       <span className="text-xs font-medium text-zinc-400">Phòng đàm thoại</span>
-                      <div className="w-8 h-8 rounded-lg bg-cyan-500/10 text-cyan-400 flex items-center justify-center">
+                      <div className="w-8 h-8 rounded-lg bg-zinc-800 text-zinc-300 flex items-center justify-center">
                         <Radio size={16} />
                       </div>
                     </div>
-                    <div className="text-2xl font-bold font-mono text-zinc-100 tracking-tight">{stats?.totalRooms ?? 0}</div>
+                    <div className="text-2xl font-bold font-mono tabular-nums text-zinc-100 tracking-tight">{stats?.totalRooms ?? 0}</div>
                     <span className="text-[11px] text-zinc-400 mt-1">Không gian chat & WebRTC</span>
                   </div>
 
                   <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 hover:border-zinc-700 transition-all flex flex-col justify-between">
                     <div className="flex items-center justify-between mb-3">
                       <span className="text-xs font-medium text-zinc-400">Câu hỏi thử thách</span>
-                      <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center">
+                      <div className="w-8 h-8 rounded-lg bg-zinc-800 text-zinc-300 flex items-center justify-center">
                         <Sparkles size={16} />
                       </div>
                     </div>
-                    <div className="text-2xl font-bold font-mono text-zinc-100 tracking-tight">{challenges.length}</div>
+                    <div className="text-2xl font-bold font-mono tabular-nums text-zinc-100 tracking-tight">{challenges.length}</div>
                     <span className="text-[11px] text-zinc-400 mt-1">{challengeCategories.length} thể loại tương tác</span>
                   </div>
                 </div>
@@ -1690,30 +1788,32 @@ const handleAddTrack = async (e) => {
                   <div className="lg:col-span-2 p-5 rounded-2xl bg-zinc-900/40 border border-zinc-800/80 space-y-4">
                     <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
                       <div className="flex items-center gap-2">
-                        <ShieldCheck size={18} className="text-indigo-400" />
+                        <ShieldCheck size={18} className="text-zinc-300" />
                         <h3 className="text-sm font-bold text-zinc-200">Trạng Thái An Ninh & Phân Quyền Hạt Mịn (Granular RBAC)</h3>
                       </div>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-zinc-800 text-zinc-300 border border-zinc-700">
                         Bảo mật cấp cao
                       </span>
                     </div>
 
                     <div className="space-y-3 text-xs text-zinc-400 leading-relaxed">
                       <p>
-                        Toàn bộ các phân hệ quản lý đã được thiết lập bảo vệ độc lập. Thành viên quản trị chỉ thấy và thao tác đúng các tính năng được phân bổ thông qua mã định danh bảo mật <code className="text-indigo-300 font-mono">TL_ROLE_...</code> và <code className="text-indigo-300 font-mono">TL_PERM_...</code>.
+                        Toàn bộ các phân hệ quản lý đã được thiết lập bảo vệ độc lập. Thành viên quản trị chỉ thấy và thao tác đúng các tính năng được phân bổ thông qua mã định danh bảo mật <code className="text-zinc-200 font-mono">TL_ROLE_...</code> và <code className="text-zinc-200 font-mono">TL_PERM_...</code>.
                       </p>
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
                         <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800/60">
                           <span className="text-[11px] text-zinc-400 block font-mono">Tổng quyền hạn:</span>
-                          <span className="text-base font-bold text-zinc-200 font-mono">{SYSTEM_PERMISSIONS.length} mã quyền</span>
+                          <span className="text-base font-bold text-zinc-200 font-mono tabular-nums">{SYSTEM_PERMISSIONS.length} mã quyền</span>
                         </div>
                         <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800/60">
                           <span className="text-[11px] text-zinc-400 block font-mono">Vai trò mặc định:</span>
-                          <span className="text-base font-bold text-zinc-200 font-mono">{systemRoles.length} vai trò</span>
+                          <span className="text-base font-bold text-zinc-200 font-mono tabular-nums">{systemRoles.length} vai trò</span>
                         </div>
                         <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800/60 col-span-2 sm:col-span-1">
                           <span className="text-[11px] text-zinc-400 block font-mono">Trạng thái đồng bộ:</span>
-                          <span className="text-base font-bold text-emerald-400 font-mono">Real-time DB</span>
+                          <span className="text-base font-bold text-zinc-200 font-mono flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Real-time DB
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -1730,7 +1830,7 @@ const handleAddTrack = async (e) => {
                             onClick={() => { setActiveTab('challenges'); handleOpenAddChallenge(); }}
                             className="w-full text-left p-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 text-xs font-semibold text-zinc-300 flex items-center justify-between"
                           >
-                            <span className="flex items-center gap-2"><Sparkles size={14} className="text-amber-400" /> Thêm câu hỏi thử thách</span>
+                            <span className="flex items-center gap-2"><Sparkles size={14} className="text-zinc-400" /> Thêm câu hỏi thử thách</span>
                             <Plus size={14} />
                           </button>
                         )}
@@ -1739,7 +1839,7 @@ const handleAddTrack = async (e) => {
                             onClick={() => setActiveTab('users')}
                             className="w-full text-left p-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 text-xs font-semibold text-zinc-300 flex items-center justify-between"
                           >
-                            <span className="flex items-center gap-2"><Users size={14} className="text-emerald-400" /> Quản lý danh sách thành viên</span>
+                            <span className="flex items-center gap-2"><Users size={14} className="text-zinc-400" /> Quản lý danh sách thành viên</span>
                             <ChevronRight size={14} />
                           </button>
                         )}
@@ -1748,11 +1848,165 @@ const handleAddTrack = async (e) => {
                             onClick={() => setActiveTab('branding')}
                             className="w-full text-left p-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 text-xs font-semibold text-zinc-300 flex items-center justify-between"
                           >
-                            <span className="flex items-center gap-2"><Sliders size={14} className="text-indigo-400" /> Tùy chỉnh Menu & Logo</span>
+                            <span className="flex items-center gap-2"><Sliders size={14} className="text-zinc-400" /> Tùy chỉnh Menu & Logo</span>
                             <ChevronRight size={14} />
                           </button>
                         )}
                       </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ====================================================
+                    THAM SỐ VẬN HÀNH & THUẬT TOÁN HỆ THỐNG (OPERATIONAL PARAMETERS)
+                    ==================================================== */}
+                <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800 pb-3">
+                    <div>
+                      <h3 className="text-sm font-bold text-zinc-200 flex items-center gap-2">
+                        <Sliders size={16} className="text-zinc-300" />
+                        <span>Tham Số Vận Hành & Thuật Toán Hệ Thống (Real-time Config)</span>
+                      </h3>
+                      <p className="text-xs text-zinc-400 mt-0.5">
+                        Khi lưu, các tham số sẽ được đồng bộ ngay lập tức tới máy chủ và phát STOMP cho Client mà không cần khởi động lại
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleSaveOpParams}
+                      disabled={isSavingOpParams}
+                      className="px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95 disabled:opacity-50 self-start sm:self-auto"
+                    >
+                      <Save size={14} />
+                      <span>{isSavingOpParams ? 'Đang lưu...' : 'Lưu tham số vận hành'}</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div>
+                      <label className="text-xs font-medium text-zinc-300 block mb-1">
+                        Giới hạn thu âm FM (Giây)
+                      </label>
+                      <input
+                        type="number"
+                        min="3"
+                        max="30"
+                        value={operationalParams.fm_max_record_seconds}
+                        onChange={(e) => setOperationalParams({ ...operationalParams, fm_max_record_seconds: e.target.value })}
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-zinc-500 font-mono tabular-nums"
+                        placeholder="5"
+                      />
+                      <span className="text-[10px] text-zinc-500 mt-1 block">Tối đa cho audio giọng nói phát trạm FM (mặc định 5s)</span>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-medium text-zinc-300 block mb-1">
+                        Giới hạn audio bài đăng (Giây)
+                      </label>
+                      <input
+                        type="number"
+                        min="5"
+                        max="60"
+                        value={operationalParams.post_max_audio_seconds}
+                        onChange={(e) => setOperationalParams({ ...operationalParams, post_max_audio_seconds: e.target.value })}
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-zinc-500 font-mono tabular-nums"
+                        placeholder="15"
+                      />
+                      <span className="text-[10px] text-zinc-500 mt-1 block">Tối đa cho ghi âm bài viết ngoài Sảnh (mặc định 15s)</span>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-medium text-zinc-300 block mb-1">
+                        Thời hạn sống trạm FM (Phút)
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="120"
+                        value={operationalParams.fm_station_ttl_minutes}
+                        onChange={(e) => setOperationalParams({ ...operationalParams, fm_station_ttl_minutes: e.target.value })}
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-zinc-500 font-mono tabular-nums"
+                        placeholder="15"
+                      />
+                      <span className="text-[10px] text-zinc-500 mt-1 block">TTL tự động giải phóng trạm phát (mặc định 15 phút)</span>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-medium text-zinc-300 block mb-1">
+                        Điểm ưu tiên bạn bè trên Feed
+                      </label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="1"
+                        max="50"
+                        value={operationalParams.feed_friend_boost_score}
+                        onChange={(e) => setOperationalParams({ ...operationalParams, feed_friend_boost_score: e.target.value })}
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-zinc-500 font-mono tabular-nums"
+                        placeholder="12.0"
+                      />
+                      <span className="text-[10px] text-zinc-500 mt-1 block">Thuật toán cộng điểm hiển thị bài bạn bè</span>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-medium text-zinc-300 block mb-1">
+                        Ngưỡng bài viết thịnh hành
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        value={operationalParams.feed_viral_velocity_threshold}
+                        onChange={(e) => setOperationalParams({ ...operationalParams, feed_viral_velocity_threshold: e.target.value })}
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-zinc-500 font-mono tabular-nums"
+                        placeholder="5"
+                      />
+                      <span className="text-[10px] text-zinc-500 mt-1 block">Tương tác/phút để bài được gán nhãn Thịnh hành</span>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-medium text-zinc-300 block mb-1">
+                        Giới hạn bốc thẻ bài/giờ
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="50"
+                        value={operationalParams.icebreaker_hourly_limit}
+                        onChange={(e) => setOperationalParams({ ...operationalParams, icebreaker_hourly_limit: e.target.value })}
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-zinc-500 font-mono tabular-nums"
+                        placeholder="3"
+                      />
+                      <span className="text-[10px] text-zinc-500 mt-1 block">Chống spam bốc thẻ bài liên tục</span>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-medium text-zinc-300 block mb-1">
+                        Chế độ bảo trì hệ thống
+                      </label>
+                      <select
+                        value={operationalParams.maintenance_mode}
+                        onChange={(e) => setOperationalParams({ ...operationalParams, maintenance_mode: e.target.value })}
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-zinc-500 font-mono"
+                      >
+                        <option value="false">Tắt (Hoạt động bình thường)</option>
+                        <option value="true">Bật (Chỉ Admin truy cập)</option>
+                      </select>
+                      <span className="text-[10px] text-zinc-500 mt-1 block">Tạm thời khóa sảnh cho người dùng thường</span>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-medium text-zinc-300 block mb-1">
+                        Banner thông báo toàn hệ thống
+                      </label>
+                      <input
+                        type="text"
+                        value={operationalParams.announcement_banner}
+                        onChange={(e) => setOperationalParams({ ...operationalParams, announcement_banner: e.target.value })}
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-zinc-500 text-xs"
+                        placeholder="Để trống nếu không thông báo"
+                      />
+                      <span className="text-[10px] text-zinc-500 mt-1 block">Hiện dải banner thông báo ghim trên đầu trang</span>
                     </div>
                   </div>
                 </div>
@@ -2962,12 +3216,12 @@ const handleAddTrack = async (e) => {
                 ==================================================== */}
             {(activeTab === 'radio_music' || activeTab === 'frequency_management' || activeTab === 'music') && (hasPermission('TL_PERM_MUSIC_MANAGE') || hasPermission('TL_PERM_STATS_VIEW')) && radioMusicSubTab === 'intents' && (
               <div className="space-y-6 animate-fade-in">
-                {/* SUB-TAB CHUYỂN ĐỔI: BĂNG TẦN FM & KHO NHẠC */}
-                <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-3 mb-5">
+                {/* SUB-TAB CHUYỂN ĐỔI: BĂNG TẦN FM & KHO NHẠC & TRẠM LIVE */}
+                <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-3 mb-5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   <button
                     type="button"
                     onClick={() => setRadioMusicSubTab('intents')}
-                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all ${
+                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all whitespace-nowrap ${
                       radioMusicSubTab === 'intents'
                         ? 'bg-white text-zinc-950 font-semibold shadow-sm'
                         : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
@@ -2978,13 +3232,24 @@ const handleAddTrack = async (e) => {
                   <button
                     type="button"
                     onClick={() => setRadioMusicSubTab('music')}
-                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all ${
+                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all whitespace-nowrap ${
                       radioMusicSubTab === 'music'
                         ? 'bg-white text-zinc-950 font-semibold shadow-sm'
                         : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
                     }`}
                   >
                     Kho nhạc nền & Đài phát Lo-Fi ({tracks.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRadioMusicSubTab('live_stations')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all whitespace-nowrap ${
+                      radioMusicSubTab === 'live_stations'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Trạm FM đang phát trực tiếp ({liveFmStations.length})
                   </button>
                 </div>
                 {/* Header */}
@@ -3203,12 +3468,12 @@ const handleAddTrack = async (e) => {
                 ==================================================== */}
             {(activeTab === 'radio_music' || activeTab === 'frequency_management' || activeTab === 'music') && (hasPermission('TL_PERM_MUSIC_MANAGE') || hasPermission('TL_PERM_STATS_VIEW')) && radioMusicSubTab === 'music' && (
               <div className="space-y-6 animate-fade-in">
-                {/* SUB-TAB CHUYỂN ĐỔI: BĂNG TẦN FM & KHO NHẠC */}
-                <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-3 mb-5">
+                {/* SUB-TAB CHUYỂN ĐỔI: BĂNG TẦN FM & KHO NHẠC & TRẠM LIVE */}
+                <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-3 mb-5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   <button
                     type="button"
                     onClick={() => setRadioMusicSubTab('intents')}
-                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all ${
+                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all whitespace-nowrap ${
                       radioMusicSubTab === 'intents'
                         ? 'bg-white text-zinc-950 font-semibold shadow-sm'
                         : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
@@ -3219,13 +3484,24 @@ const handleAddTrack = async (e) => {
                   <button
                     type="button"
                     onClick={() => setRadioMusicSubTab('music')}
-                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all ${
+                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all whitespace-nowrap ${
                       radioMusicSubTab === 'music'
                         ? 'bg-white text-zinc-950 font-semibold shadow-sm'
                         : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
                     }`}
                   >
                     Kho nhạc nền & Đài phát Lo-Fi ({tracks.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRadioMusicSubTab('live_stations')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all whitespace-nowrap ${
+                      radioMusicSubTab === 'live_stations'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Trạm FM đang phát trực tiếp ({liveFmStations.length})
                   </button>
                 </div>
                 <div className="flex items-center justify-between">
@@ -3285,6 +3561,243 @@ const handleAddTrack = async (e) => {
                       </div>
                     ))
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* ====================================================
+                SUB-TAB: TRẠM FM ĐANG PHÁT TRỰC TIẾP (LIVE STATIONS MONITOR)
+                ==================================================== */}
+            {(activeTab === 'radio_music' || activeTab === 'frequency_management' || activeTab === 'music') && (hasPermission('TL_PERM_MUSIC_MANAGE') || hasPermission('TL_PERM_STATS_VIEW')) && radioMusicSubTab === 'live_stations' && (
+              <div className="space-y-6 animate-fade-in">
+                {/* SUB-TAB CHUYỂN ĐỔI: BĂNG TẦN FM & KHO NHẠC & TRẠM LIVE */}
+                <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-3 mb-5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  <button
+                    type="button"
+                    onClick={() => setRadioMusicSubTab('intents')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all whitespace-nowrap ${
+                      radioMusicSubTab === 'intents'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Băng tần FM ({adminIntents.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRadioMusicSubTab('music')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all whitespace-nowrap ${
+                      radioMusicSubTab === 'music'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Kho nhạc nền & Đài phát Lo-Fi ({tracks.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRadioMusicSubTab('live_stations')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all whitespace-nowrap ${
+                      radioMusicSubTab === 'live_stations'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Trạm FM đang phát trực tiếp ({liveFmStations.length})
+                  </button>
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-xl font-bold text-zinc-100 tracking-tight flex items-center gap-2">
+                      <Radio size={20} className="text-zinc-300" />
+                      <span>Trạm FM Đang Phát Trực Tiếp (Live Registry Monitor)</span>
+                    </h2>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      Giám sát các trạm phát thanh giọng nói thời gian thực (5 giây) được lưu trữ trên Cloudflare R2, nghe thử audio và ngắt sóng ngay lập tức nếu vi phạm
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={fetchLiveFmStations}
+                    className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-xs font-semibold flex items-center gap-1.5 transition-all self-start sm:self-auto"
+                  >
+                    <RefreshCw size={14} className={loadingLiveFm ? 'animate-spin' : ''} />
+                    <span>Làm mới danh sách</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {liveFmStations.map((station) => (
+                    <div
+                      key={station.userId}
+                      className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 hover:border-zinc-700 transition-all flex flex-col justify-between space-y-4"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <UserAvatar user={{ id: station.userId, avatar: station.avatar, nickname: station.nickname || station.account }} size={42} />
+                          <div className="min-w-0">
+                            <span className="font-bold text-sm text-zinc-200 block truncate">
+                              {station.maskedName || station.nickname || station.account}
+                            </span>
+                            <span className="text-[11px] font-mono text-zinc-400 truncate block">
+                              @{station.account} (ID: #{station.userId})
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end">
+                          <span className="font-mono text-xs font-bold text-zinc-200 bg-zinc-800 px-2 py-0.5 rounded-full border border-zinc-700 tabular-nums">
+                            {station.frequency ? Number(station.frequency).toFixed(1) : '—'} MHz
+                          </span>
+                          <span className="text-[10px] text-zinc-500 font-mono mt-1">
+                            {station.intentTitle || station.intentCode}
+                          </span>
+                        </div>
+                      </div>
+
+                      {station.bio && (
+                        <p className="text-xs text-zinc-400 italic bg-zinc-950/60 p-2.5 rounded-xl border border-zinc-800/60 line-clamp-2">
+                          "{station.bio}"
+                        </p>
+                      )}
+
+                      {station.audioUrl && (
+                        <div className="pt-1">
+                          <span className="text-[10px] font-mono text-zinc-400 block mb-1">Âm thanh Cloudflare R2:</span>
+                          <audio
+                            src={station.audioUrl}
+                            controls
+                            className="w-full h-8 rounded-lg"
+                            preload="none"
+                          />
+                        </div>
+                      )}
+
+                      <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between">
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-mono text-emerald-400">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                          Đang phát sóng
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleDisconnectFmStation(station.userId)}
+                          className="h-8 px-3 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95"
+                        >
+                          <Trash2 size={13} />
+                          <span>Ngắt sóng ngay</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {liveFmStations.length === 0 && (
+                    <div className="col-span-full p-12 text-center text-zinc-500 font-mono text-xs bg-zinc-900/40 rounded-2xl border border-zinc-800">
+                      Hiện không có người dùng nào đang mở trạm sóng FM trực tiếp (TTL 15 phút).
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ====================================================
+                TAB: NHẬT KÝ KIỂM TOÁN HỆ THỐNG (ADMIN AUDIT LOGS)
+                ==================================================== */}
+            {activeTab === 'audit_logs' && hasPermission('TL_PERM_STATS_VIEW') && (
+              <div className="space-y-6 animate-fade-in">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-xl font-bold text-zinc-100 tracking-tight flex items-center gap-2">
+                      <ShieldCheck size={20} className="text-zinc-300" />
+                      <span>Nhật Ký Kiểm Toán Hệ Thống (Audit Logs)</span>
+                    </h2>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      Ghi nhận 100 thao tác gần nhất của các Quản trị viên trên cơ sở dữ liệu: gỡ bài, khóa người dùng, ngắt sóng FM và đổi cấu hình
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={fetchAuditLogs}
+                    className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-xs font-semibold flex items-center gap-1.5 transition-all"
+                  >
+                    <RefreshCw size={14} className={loadingAuditLogs ? 'animate-spin' : ''} />
+                    <span>Làm mới nhật ký</span>
+                  </button>
+                </div>
+
+                <div className="relative">
+                  <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
+                  <input
+                    type="text"
+                    placeholder="Tìm kiếm theo tên Quản trị viên, hành động, ID đối tượng hoặc chi tiết..."
+                    value={auditLogSearch}
+                    onChange={(e) => setAuditLogSearch(e.target.value)}
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-10 pr-4 py-2 text-xs text-white focus:outline-none focus:border-zinc-500"
+                  />
+                </div>
+
+                <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-zinc-900/90 border-b border-zinc-800 text-zinc-400 font-mono uppercase text-[10px]">
+                        <tr>
+                          <th className="px-4 py-3">Thời gian</th>
+                          <th className="px-4 py-3">Quản trị viên</th>
+                          <th className="px-4 py-3">Hành động</th>
+                          <th className="px-4 py-3">Đối tượng</th>
+                          <th className="px-4 py-3">Chi tiết thao tác</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-800/60">
+                        {auditLogs
+                          .filter(log => {
+                            if (!auditLogSearch.trim()) return true;
+                            const q = auditLogSearch.toLowerCase().trim();
+                            return (
+                              (log.adminName || '').toLowerCase().includes(q) ||
+                              (log.action || '').toLowerCase().includes(q) ||
+                              (log.targetType || '').toLowerCase().includes(q) ||
+                              (log.targetId || '').toLowerCase().includes(q) ||
+                              (log.detail || '').toLowerCase().includes(q)
+                            );
+                          })
+                          .map((log) => {
+                            const isDangerous = log.action === 'BAN_USER' || log.action === 'DELETE_POST' || log.action === 'TAKEDOWN' || log.action === 'DISCONNECT_FM';
+                            return (
+                              <tr key={log.id} className="hover:bg-zinc-800/30 transition-colors">
+                                <td className="px-4 py-3 whitespace-nowrap font-mono text-zinc-400 text-[11px] tabular-nums">
+                                  {log.createdAt ? new Date(log.createdAt).toLocaleString('vi-VN') : '—'}
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap font-semibold text-zinc-200">
+                                  {log.adminName || `Admin #${log.adminId}`}
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap">
+                                  <span className={`px-2 py-0.5 rounded-full font-mono text-[10px] font-bold border ${
+                                    isDangerous 
+                                      ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' 
+                                      : 'bg-zinc-800 text-zinc-300 border-zinc-700'
+                                  }`}>
+                                    {log.action}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap font-mono text-zinc-400 text-[11px]">
+                                  {log.targetType} {log.targetId ? `#${log.targetId}` : ''}
+                                </td>
+                                <td className="px-4 py-3 text-zinc-300 max-w-md break-words">
+                                  {log.detail || '—'}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        {auditLogs.length === 0 && (
+                          <tr>
+                            <td colSpan={5} className="px-4 py-12 text-center text-zinc-500 font-mono text-xs">
+                              Chưa có nhật ký thao tác nào được ghi nhận.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             )}
@@ -4755,7 +5268,7 @@ const handleAddTrack = async (e) => {
                             )}
                           </div>
 
-                          {/* Hành động của Quản trị viên */}
+                          {/* Hành động của Quản trị viên (3 Thao Tác Chuẩn Mực) */}
                           {r.status === 'PENDING' && (
                             <div className="flex items-center gap-2 pt-2 border-t border-zinc-800/60 flex-wrap">
                               <button
@@ -4769,13 +5282,26 @@ const handleAddTrack = async (e) => {
                                 className="h-9 px-3.5 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 text-xs font-medium transition-all shadow-sm flex items-center gap-1.5 active:scale-95"
                               >
                                 <Trash2 size={13} />
-                                <span>Gỡ bài vi phạm & Báo tác giả</span>
+                                <span>Gỡ nội dung vi phạm</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (window.confirm(`Bạn có chắc muốn KHÓA tài khoản của tác giả "${r.postAuthorName || 'này'}" và gỡ bài viết vi phạm khỏi hệ thống?`)) {
+                                    handleResolveReport(r.id, 'BAN_USER', `Khóa tài khoản do vi phạm nghiêm trọng: ${reasonLabel}`);
+                                  }
+                                }}
+                                className="h-9 px-3.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold transition-all shadow-sm flex items-center gap-1.5 active:scale-95"
+                              >
+                                <Ban size={13} />
+                                <span>Khóa tài khoản người đăng</span>
                               </button>
 
                               <button
                                 type="button"
                                 onClick={() => handleResolveReport(r.id, 'DISMISS', 'Nội dung hợp lệ')}
-                                className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition-all border border-zinc-700 active:scale-95"
+                                className="h-9 px-3.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition-all border border-zinc-700 active:scale-95"
                               >
                                 Bỏ qua báo cáo
                               </button>

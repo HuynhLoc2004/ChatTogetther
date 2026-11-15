@@ -3,6 +3,7 @@ package chatToggetther.service;
 import chatToggetther.Customize.AppException;
 import chatToggetther.Customize.ResponseData;
 import chatToggetther.Customize.SecurityUtils;
+import chatToggetther.DTO.BroadcastStationDTO;
 import chatToggetther.DTO.CommunityGroupDTO;
 import chatToggetther.DTO.PostDTO;
 import chatToggetther.DTO.PostReportDTO;
@@ -10,6 +11,7 @@ import chatToggetther.DTO.UserDTO;
 import chatToggetther.DTO.RoomDTO;
 import java.util.ArrayList;
 import chatToggetther.ENUMS.ErrorCode;
+import chatToggetther.modelEntity.AdminAuditLogEntity;
 import chatToggetther.modelEntity.ChallengeEntity;
 import chatToggetther.modelEntity.CommunityGroupEntity;
 import chatToggetther.modelEntity.PostEntity;
@@ -42,6 +44,8 @@ public class AdminService {
     private final SystemConfigRepository systemConfigRepository;
     private final CommunityGroupRepository groupRepository;
     private final PostReportRepository postReportRepository;
+    private final AdminAuditLogRepository adminAuditLogRepository;
+    private final FrequencyMatchService frequencyMatchService;
     private final SimpMessagingTemplate messagingTemplate;
 
     public AdminService(
@@ -54,6 +58,8 @@ public class AdminService {
             SystemConfigRepository systemConfigRepository,
             CommunityGroupRepository groupRepository,
             PostReportRepository postReportRepository,
+            AdminAuditLogRepository adminAuditLogRepository,
+            FrequencyMatchService frequencyMatchService,
             SimpMessagingTemplate messagingTemplate
     ) {
         this.userRepository = userRepository;
@@ -65,6 +71,8 @@ public class AdminService {
         this.systemConfigRepository = systemConfigRepository;
         this.groupRepository = groupRepository;
         this.postReportRepository = postReportRepository;
+        this.adminAuditLogRepository = adminAuditLogRepository;
+        this.frequencyMatchService = frequencyMatchService;
         this.messagingTemplate = messagingTemplate;
     }
 
@@ -144,6 +152,30 @@ public class AdminService {
         return false;
     }
 
+    public void logAudit(JwtAuthenticationToken token, String action, String targetType, String targetId, String detail) {
+        try {
+            Long adminId = SecurityUtils.extractUserId(token);
+            String adminName = "System Admin";
+            if (adminId != null) {
+                Optional<UserEntity> userOpt = userRepository.findById(adminId);
+                if (userOpt.isPresent()) {
+                    UserEntity u = userOpt.get();
+                    adminName = (u.getNickname() != null && !u.getNickname().trim().isEmpty()) ? u.getNickname() : u.getAccount();
+                }
+            }
+            AdminAuditLogEntity logEntity = AdminAuditLogEntity.builder()
+                    .adminId(adminId)
+                    .adminName(adminName)
+                    .action(action)
+                    .targetType(targetType)
+                    .targetId(targetId)
+                    .detail(detail)
+                    .createdAt(LocalDateTime.now())
+                    .build();
+            adminAuditLogRepository.save(logEntity);
+        } catch (Exception ignored) {}
+    }
+
     @Transactional(readOnly = true)
     public ResponseData<Map<String, Object>> getSystemStats(JwtAuthenticationToken token) {
         verifyAdmin(token, "TL_PERM_STATS_VIEW");
@@ -207,6 +239,7 @@ public class AdminService {
         );
         user.setActive(active);
         userRepository.save(user);
+        logAudit(token, active ? "UNBAN_USER" : "BAN_USER", "USER", String.valueOf(targetUserId), (active ? "Mở khóa" : "Khóa") + " tài khoản người dùng #" + targetUserId);
 
         return new ResponseData<>(200, "Cập nhật trạng thái người dùng thành công", true);
     }
@@ -220,6 +253,7 @@ public class AdminService {
         );
         user.setRoles(roles);
         userRepository.save(user);
+        logAudit(token, "UPDATE_ROLES", "USER", String.valueOf(targetUserId), "Cập nhật quyền thành: " + roles);
 
         return new ResponseData<>(200, "Cập nhật vai trò người dùng thành công", true);
     }
@@ -232,6 +266,7 @@ public class AdminService {
                 new AppException(404, "Bài viết không tồn tại", 404)
         );
         postRepository.delete(post);
+        logAudit(token, "DELETE_POST", "POST", String.valueOf(postId), "Admin đã gỡ bài viết #" + postId);
 
         return new ResponseData<>(200, "Đã gỡ bài viết vi phạm", true);
     }
@@ -255,6 +290,7 @@ public class AdminService {
         track.setCreatedAt(LocalDateTime.now());
 
         TrackEntity saved = trackRepository.save(track);
+        logAudit(token, "ADD_TRACK", "TRACK", String.valueOf(saved.getId()), "Thêm bài nhạc: " + saved.getName());
         return new ResponseData<>(200, "Thêm bản nhạc thành công", saved);
     }
 
@@ -266,6 +302,7 @@ public class AdminService {
                 new AppException(404, "Bản nhạc không tồn tại", 404)
         );
         trackRepository.delete(track);
+        logAudit(token, "DELETE_TRACK", "TRACK", String.valueOf(trackId), "Xóa bài nhạc: " + track.getName());
 
         return new ResponseData<>(200, "Đã xóa bản nhạc", true);
     }
@@ -314,6 +351,14 @@ public class AdminService {
         if (!map.containsKey("report_reasons")) {
             map.put("report_reasons", "[{\"id\":\"HARASSMENT\",\"label\":\"Quấy rối / Đả kích cá nhân\"},{\"id\":\"SPAM\",\"label\":\"Spam / Quảng cáo / Tin rác\"},{\"id\":\"HATE_SPEECH\",\"label\":\"Ngôn từ thù địch / Phản cảm\"},{\"id\":\"NSFW\",\"label\":\"Nội dung 18+ / Bạo lực\"},{\"id\":\"MISINFORMATION\",\"label\":\"Thông tin sai lệch / Lừa đảo\"},{\"id\":\"COPYRIGHT\",\"label\":\"Vi phạm bản quyền sở hữu\"}]");
         }
+        if (!map.containsKey("fm_max_record_seconds")) map.put("fm_max_record_seconds", "5");
+        if (!map.containsKey("post_max_audio_seconds")) map.put("post_max_audio_seconds", "15");
+        if (!map.containsKey("fm_station_ttl_minutes")) map.put("fm_station_ttl_minutes", "15");
+        if (!map.containsKey("feed_friend_boost_score")) map.put("feed_friend_boost_score", "12.0");
+        if (!map.containsKey("feed_viral_velocity_threshold")) map.put("feed_viral_velocity_threshold", "5");
+        if (!map.containsKey("icebreaker_hourly_limit")) map.put("icebreaker_hourly_limit", "3");
+        if (!map.containsKey("maintenance_mode")) map.put("maintenance_mode", "false");
+        if (!map.containsKey("announcement_banner")) map.put("announcement_banner", "");
 
         return new ResponseData<>(200, "Lấy cấu hình hệ thống thành công", map);
     }
@@ -333,8 +378,8 @@ public class AdminService {
                     String val = String.valueOf(entry.getValue());
                     SystemConfigEntity entity = systemConfigRepository.findById(key)
                             .orElse(SystemConfigEntity.builder()
-                                    .configKey(key)
-                                    .build());
+                                     .configKey(key)
+                                     .build());
                     entity.setConfigValue(val);
                     entity.setUpdatedAt(LocalDateTime.now());
                     systemConfigRepository.save(entity);
@@ -356,6 +401,12 @@ public class AdminService {
                 }
             }
         }
+
+        // Realtime broadcast STOMP cho Client tự động cập nhật không cần reload
+        try {
+            messagingTemplate.convertAndSend("/topic/system-config", getSystemConfig().getData());
+        } catch (Exception ignored) {}
+        logAudit(token, "UPDATE_CONFIG", "CONFIG", "SYSTEM", "Cập nhật tham số vận hành hệ thống");
 
         return new ResponseData<>(200, "Cập nhật cấu hình hệ thống thành công", true);
     }
@@ -470,6 +521,7 @@ public class AdminService {
         existing.setStatus("ACTIVE");
         existing.setActive(true);
         ChallengeEntity saved = challengeRepository.save(existing);
+        logAudit(token, "APPROVE_CHALLENGE", "CHALLENGE", String.valueOf(id), "Duyệt câu hỏi thử thách #" + id);
         return new ResponseData<>(200, "Đã duyệt câu hỏi thử thách lên sóng", saved);
     }
 
@@ -482,6 +534,7 @@ public class AdminService {
         existing.setStatus("HIDDEN");
         existing.setActive(false);
         ChallengeEntity saved = challengeRepository.save(existing);
+        logAudit(token, "REJECT_CHALLENGE", "CHALLENGE", String.valueOf(id), "Từ chối câu hỏi thử thách #" + id);
         return new ResponseData<>(200, "Đã từ chối câu hỏi thử thách", saved);
     }
 
@@ -493,6 +546,7 @@ public class AdminService {
                 new AppException(404, "Câu hỏi không tồn tại", 404)
         );
         challengeRepository.delete(existing);
+        logAudit(token, "DELETE_CHALLENGE", "CHALLENGE", String.valueOf(id), "Xóa câu hỏi thử thách #" + id);
 
         return new ResponseData<>(200, "Đã xóa câu hỏi thử thách", true);
     }
@@ -573,7 +627,41 @@ public class AdminService {
         report.setAdminNote(adminNote);
         report.setResolvedAt(LocalDateTime.now());
 
-        if ("TAKEDOWN".equalsIgnoreCase(action)) {
+        if ("BAN_USER".equalsIgnoreCase(action)) {
+            report.setStatus("RESOLVED_BAN_USER");
+
+            Optional<PostEntity> postOpt = postRepository.findById(report.getPostId());
+            Long authorId = report.getPostAuthorId();
+            if (postOpt.isPresent()) {
+                PostEntity post = postOpt.get();
+                if (authorId == null && post.getUser() != null) {
+                    authorId = post.getUser().getId();
+                }
+                postRepository.delete(post);
+
+                try {
+                    messagingTemplate.convertAndSend("/topic/posts", "POST_DELETED");
+                } catch (Exception ignored) {}
+            }
+
+            if (authorId != null) {
+                userRepository.findById(authorId).ifPresent(u -> {
+                    u.setActive(false);
+                    userRepository.save(u);
+                });
+
+                Map<String, Object> notif = new HashMap<>();
+                notif.put("type", "ACCOUNT_BANNED");
+                notif.put("title", "Tài khoản của bạn đã bị khóa");
+                notif.put("message", "Tài khoản của bạn đã bị quản trị viên khóa do vi phạm tiêu chuẩn cộng đồng (" + report.getReason() + "). " + (adminNote.trim().isEmpty() ? "" : ("Lý do: " + adminNote.trim())));
+                notif.put("createdAt", LocalDateTime.now().toString());
+
+                try {
+                    messagingTemplate.convertAndSend("/topic/user/" + authorId + "/notifications", notif);
+                } catch (Exception ignored) {}
+            }
+            logAudit(token, "BAN_USER", "USER", String.valueOf(authorId), "Khóa tài khoản và gỡ bài viết vi phạm báo cáo #" + reportId);
+        } else if ("TAKEDOWN".equalsIgnoreCase(action)) {
             report.setStatus("RESOLVED_TAKEDOWN");
 
             Optional<PostEntity> postOpt = postRepository.findById(report.getPostId());
@@ -602,8 +690,10 @@ public class AdminService {
                     } catch (Exception ignored) {}
                 }
             }
+            logAudit(token, "TAKEDOWN", "POST", String.valueOf(report.getPostId()), "Gỡ bài viết vi phạm theo báo cáo #" + reportId);
         } else {
             report.setStatus("DISMISSED");
+            logAudit(token, "DISMISS_REPORT", "REPORT", String.valueOf(reportId), "Bỏ qua báo cáo vi phạm #" + reportId);
         }
 
         postReportRepository.save(report);
@@ -679,6 +769,33 @@ public class AdminService {
         messagingTemplate.convertAndSend("/topic/rooms", "ROOM_DELETED");
         messagingTemplate.convertAndSend("/topic/room/" + roomId, "ROOM_DISBANDED");
         return new ResponseData<>(200, "Đóng phòng thành công", true);
+    }
+
+    // ==========================================
+    // NHẬT KÝ KIỂM TOÁN (AUDIT LOGS)
+    // ==========================================
+
+    @Transactional(readOnly = true)
+    public ResponseData<List<AdminAuditLogEntity>> getAuditLogs(JwtAuthenticationToken token) {
+        verifyAdmin(token);
+        return new ResponseData<>(200, "Lấy danh sách nhật ký kiểm toán thành công", adminAuditLogRepository.findTop100ByOrderByCreatedAtDesc());
+    }
+
+    // ==========================================
+    // GIÁM SÁT TRẠM FM ĐANG PHÁT TRỰC TIẾP
+    // ==========================================
+
+    @Transactional(readOnly = true)
+    public ResponseData<List<BroadcastStationDTO>> getLiveStationsForAdmin(JwtAuthenticationToken token) {
+        verifyAdmin(token, "TL_PERM_MUSIC_MANAGE");
+        return new ResponseData<>(200, "Lấy danh sách trạm FM trực tiếp thành công", frequencyMatchService.getLiveStationsForAdmin());
+    }
+
+    public ResponseData<Boolean> disconnectStationByAdmin(JwtAuthenticationToken token, Long userId) {
+        verifyAdmin(token, "TL_PERM_MUSIC_MANAGE");
+        ResponseData<Boolean> res = frequencyMatchService.disconnectStationByAdmin(userId);
+        logAudit(token, "DISCONNECT_FM", "FM_STATION", String.valueOf(userId), "Admin ngắt sóng trạm FM của người dùng ID #" + userId);
+        return res;
     }
 
 }

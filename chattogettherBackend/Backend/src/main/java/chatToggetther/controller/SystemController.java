@@ -11,13 +11,13 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/system")
+@RequestMapping({"/api/system", "/api/public"})
 @RequiredArgsConstructor
 public class SystemController {
 
     private final AdminService adminService;
 
-    @GetMapping("/config")
+    @GetMapping({"/config", "/system-config"})
     public ResponseEntity<ResponseData<Map<String, String>>> getPublicConfig() {
         return ResponseEntity.ok(this.adminService.getSystemConfig());
     }

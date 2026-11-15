@@ -676,4 +676,32 @@ public class FrequencyMatchService {
 
         return new ResponseData<>(200, "Danh sách trạm phát sóng trực tuyến", resDTO);
     }
+
+    /**
+     * Admin: Lấy danh sách tất cả trạm phát sóng đang live để giám sát
+     */
+    public List<BroadcastStationDTO> getLiveStationsForAdmin() {
+        long now = System.currentTimeMillis();
+        return ACTIVE_STATIONS.values().stream()
+                .filter(s -> (now - s.broadcastAt) <= STATION_TTL_MS)
+                .sorted(Comparator.comparingLong((StationRecord s) -> s.broadcastAt).reversed())
+                .map(this::mapToStationDTO)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Admin: Ngắt sóng trạm FM của người dùng vi phạm ngay lập tức
+     */
+    public ResponseData<Boolean> disconnectStationByAdmin(Long userId) {
+        if (userId == null) return new ResponseData<>(400, "UserId không hợp lệ", false);
+        StationRecord removed = ACTIVE_STATIONS.remove(userId);
+        if (removed != null) {
+            Map<String, Object> event = new HashMap<>();
+            event.put("action", "REMOVE");
+            event.put("userId", userId);
+            PENDING_BATCH_EVENTS.add(event);
+            return new ResponseData<>(200, "Đã ngắt sóng trạm FM thành công", true);
+        }
+        return new ResponseData<>(200, "Trạm không còn phát sóng hoặc đã hết hạn", true);
+    }
 }

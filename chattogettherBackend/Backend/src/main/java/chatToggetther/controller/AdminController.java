@@ -1,8 +1,10 @@
 package chatToggetther.controller;
 
 import chatToggetther.Customize.ResponseData;
+import chatToggetther.DTO.BroadcastStationDTO;
 import chatToggetther.DTO.UserDTO;
 import chatToggetther.DTO.RoomDTO;
+import chatToggetther.modelEntity.AdminAuditLogEntity;
 import chatToggetther.modelEntity.TrackEntity;
 import chatToggetther.service.AdminService;
 import org.springframework.http.ResponseEntity;
@@ -82,17 +84,43 @@ public class AdminController {
     // CẤU HÌNH HỆ THỐNG (SYSTEM CONFIG)
     // ==========================================
 
-    @GetMapping("/config")
+    @GetMapping({"/config", "/system-config"})
     public ResponseEntity<ResponseData<Map<String, String>>> getSystemConfig() {
         return ResponseEntity.ok(this.adminService.getSystemConfig());
     }
 
-    @PutMapping("/config")
+    @PutMapping({"/config", "/system-config"})
     public ResponseEntity<ResponseData<Boolean>> updateSystemConfig(
             JwtAuthenticationToken token,
             @RequestBody Map<String, Object> configs
     ) {
         return ResponseEntity.ok(this.adminService.updateSystemConfig(token, configs));
+    }
+
+    // ==========================================
+    // GIÁM SÁT TRẠM FM ĐANG PHÁT TRỰC TIẾP
+    // ==========================================
+
+    @GetMapping("/fm-stations")
+    public ResponseEntity<ResponseData<List<BroadcastStationDTO>>> getLiveStations(JwtAuthenticationToken token) {
+        return ResponseEntity.ok(this.adminService.getLiveStationsForAdmin(token));
+    }
+
+    @DeleteMapping("/fm-stations/{userId}")
+    public ResponseEntity<ResponseData<Boolean>> disconnectStation(
+            JwtAuthenticationToken token,
+            @PathVariable("userId") Long userId
+    ) {
+        return ResponseEntity.ok(this.adminService.disconnectStationByAdmin(token, userId));
+    }
+
+    // ==========================================
+    // NHẬT KÝ KIỂM TOÁN (AUDIT LOGS)
+    // ==========================================
+
+    @GetMapping("/audit-logs")
+    public ResponseEntity<ResponseData<List<AdminAuditLogEntity>>> getAuditLogs(JwtAuthenticationToken token) {
+        return ResponseEntity.ok(this.adminService.getAuditLogs(token));
     }
 
     // ==========================================
