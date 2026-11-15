@@ -7064,22 +7064,33 @@ const Home = ({ initialTab }) => {
         }
         .action-btn.active-liked { color: #f87171; }
 
-        /* REACTION POPOVER: NẰM GỌN TRÊN NÚT, TỰ BIẾN MẤT MƯỢT MÀ KHI RỜI CHUỘT */
+        /* REACTION POPOVER: NẰM GỌN TRÊN NÚT, NẢY LÊN MƯỢT MÀ, KHÔNG SCROLLBAR */
         .reactions-popup-menu {
           position: absolute;
-          bottom: calc(100% + 6px);
+          bottom: calc(100% + 10px);
           left: 0;
-          background: #181922;
-          border: 1px solid #2e3446;
-          border-radius: 14px;
-          padding: 6px 10px;
-          box-shadow: 0 16px 36px -4px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.06);
+          background: rgba(24, 24, 27, 0.96);
+          backdrop-filter: blur(16px);
+          -webkit-backdrop-filter: blur(16px);
+          border: 1px solid rgba(63, 63, 70, 0.85);
+          border-radius: 9999px;
+          padding: 5px 10px;
+          box-shadow: 0 20px 40px -8px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.08);
           display: flex;
           align-items: center;
-          gap: 7px;
+          gap: 6px;
           z-index: 70;
-          animation: slideUpReaction 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+          animation: springUpReaction 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
           pointer-events: auto;
+          overflow: visible !important;
+          scrollbar-width: none !important;
+          -ms-overflow-style: none !important;
+          touch-action: none;
+        }
+        .reactions-popup-menu::-webkit-scrollbar {
+          display: none !important;
+          width: 0 !important;
+          height: 0 !important;
         }
         .reactions-popup-menu::after {
           content: '';
@@ -7087,28 +7098,44 @@ const Home = ({ initialTab }) => {
           top: 100%;
           left: 0;
           right: 0;
-          height: 14px;
+          height: 16px;
         }
-        @keyframes slideUpReaction {
-          from { opacity: 0; transform: translateY(8px) scale(0.92); }
-          to { opacity: 1; transform: translateY(0) scale(1); }
+        @keyframes springUpReaction {
+          0% {
+            opacity: 0;
+            transform: translateY(14px) scale(0.85);
+          }
+          65% {
+            opacity: 1;
+            transform: translateY(-3px) scale(1.03);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
         }
         .reaction-emoji-item {
           background: transparent;
           border: none;
-          font-size: 20px;
+          font-size: 24px;
           cursor: pointer;
-          padding: 4px;
-          border-radius: 8px;
+          padding: 6px;
+          border-radius: 9999px;
           line-height: 1;
-          transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275), background 0.15s;
+          position: relative;
+          transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), filter 0.15s, background 0.15s;
           display: flex;
           align-items: center;
           justify-content: center;
+          user-select: none;
+          -webkit-user-select: none;
         }
-        .reaction-emoji-item:hover {
-          transform: scale(1.35) translateY(-3px);
-          background: rgba(255, 255, 255, 0.12);
+        .reaction-emoji-item:hover,
+        .reaction-emoji-item.is-hovered {
+          transform: scale(1.42) translateY(-6px);
+          filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.6));
+          background: rgba(255, 255, 255, 0.14);
+          z-index: 10;
         }
 
         /* Post Dropdown Menu */

@@ -68,7 +68,7 @@ const PostReactionDock = ({
     if (hoverCloseTimerRef.current) clearTimeout(hoverCloseTimerRef.current);
     hoverOpenTimerRef.current = setTimeout(() => {
       if (setActivePickerId) setActivePickerId(post.id);
-    }, 380);
+    }, 200);
   };
 
   const handleMouseLeave = () => {
@@ -77,7 +77,7 @@ const PostReactionDock = ({
       if (setActivePickerId && activePickerId === post.id) {
         setActivePickerId(null);
       }
-    }, 250);
+    }, 260);
   };
 
   // ================== MOBILE TOUCH / LONG-PRESS HANDLING ==================
@@ -99,7 +99,7 @@ const PostReactionDock = ({
         try { navigator.vibrate(25); } catch (_) {}
       }
       if (setActivePickerId) setActivePickerId(post.id);
-    }, 360);
+    }, 260);
   };
 
   const handleTouchMove = (e) => {
@@ -115,14 +115,37 @@ const PostReactionDock = ({
       return;
     }
 
-    // Đang mở dock qua nhấn giữ: phát hiện vuốt qua emoji
-    const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
-    const itemEl = targetEl?.closest('[data-reaction-type]');
-    if (itemEl) {
-      const type = itemEl.getAttribute('data-reaction-type');
-      setHighlightedType(type);
-    } else {
-      setHighlightedType(null);
+    // Khi đang đè mở dock: Chặn cuộn trang web để vuốt chọn mượt mà
+    if (e.cancelable) {
+      e.preventDefault();
+    }
+
+    // Nhận diện emoji ngón tay đang trỏ tới chính xác bằng toạ độ hình học
+    if (containerRef.current) {
+      const items = containerRef.current.querySelectorAll('[data-reaction-type]');
+      let foundType = null;
+      let minDistance = Infinity;
+
+      items.forEach((el) => {
+        const rect = el.getBoundingClientRect();
+        const inX = touch.clientX >= rect.left - 6 && touch.clientX <= rect.right + 6;
+        const inY = touch.clientY >= rect.top - 25 && touch.clientY <= rect.bottom + 30;
+        if (inX && inY) {
+          const centerX = rect.left + rect.width / 2;
+          const dist = Math.abs(touch.clientX - centerX);
+          if (dist < minDistance) {
+            minDistance = dist;
+            foundType = el.getAttribute('data-reaction-type');
+          }
+        }
+      });
+
+      if (foundType !== highlightedType) {
+        if (foundType && typeof navigator !== 'undefined' && navigator.vibrate) {
+          try { navigator.vibrate(10); } catch (_) {}
+        }
+        setHighlightedType(foundType);
+      }
     }
   };
 
@@ -144,12 +167,13 @@ const PostReactionDock = ({
       if (setActivePickerId) setActivePickerId(null);
       commitReaction(post.isLikedByMe ? (post.myReaction || 'HEART') : 'HEART');
     } else {
-      // Nhấn giữ trên điện thoại
+      // Nhấn giữ và trượt tay thả ngón tay trên điện thoại
       e.stopPropagation();
       if (highlightedType) {
         commitReaction(highlightedType);
-        setHighlightedType(null);
       }
+      setHighlightedType(null);
+      if (setActivePickerId) setActivePickerId(null);
     }
   };
 
@@ -216,8 +240,8 @@ const PostReactionDock = ({
       {/* Dock Chọn Biểu Tượng Cảm Xúc (Desktop Hover / Mobile Long-Press) */}
       {isPickerOpen && (
         <div
-          className="reactions-popup-menu absolute bottom-[calc(100%+8px)] left-0 bg-zinc-900 border border-zinc-700/80 rounded-full px-2.5 py-1.5 shadow-2xl flex items-center gap-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 select-none max-w-[calc(100vw-24px)] overflow-x-auto"
-          style={{ touchAction: 'manipulation' }}
+          className="reactions-popup-menu absolute bottom-[calc(100%+10px)] left-0 bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/80 rounded-full px-2 sm:px-2.5 py-1.5 shadow-2xl flex items-center gap-1 sm:gap-1.5 z-50 select-none"
+          style={{ touchAction: 'none', overflow: 'visible', scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           onClick={(e) => e.stopPropagation()}
           onMouseEnter={() => {
             if (hoverCloseTimerRef.current) clearTimeout(hoverCloseTimerRef.current);
@@ -232,6 +256,8 @@ const PostReactionDock = ({
                 key={item.type}
                 type="button"
                 data-reaction-type={item.type}
+                onMouseEnter={() => setHighlightedType(item.type)}
+                onMouseLeave={() => setHighlightedType(null)}
                 onTouchEnd={(e) => {
                   e.stopPropagation();
                   handledTouchRef.current = true;
@@ -245,12 +271,20 @@ const PostReactionDock = ({
                   if (handledTouchRef.current) return;
                   commitReaction(item.type);
                 }}
-                className={`reaction-emoji-item p-1.5 text-xl sm:text-2xl rounded-full transition-all duration-150 transform hover:scale-130 hover:-translate-y-1 active:scale-95 flex items-center justify-center shrink-0 cursor-pointer ${
-                  isHovered ? 'scale-130 -translate-y-1 bg-zinc-800' : ''
-                } ${isSelected ? 'bg-zinc-800/80 ring-1 ring-zinc-600' : ''}`}
+                className={`reaction-emoji-item relative p-1.5 sm:p-2 rounded-full transition-all duration-150 select-none cursor-pointer flex items-center justify-center shrink-0 ${
+                  isHovered ? 'is-hovered' : ''
+                } ${isSelected ? 'bg-zinc-800 ring-1 ring-zinc-500' : ''}`}
                 title={item.label}
               >
-                <span className="pointer-events-none">{item.emoji}</span>
+                {/* Tooltip hiển thị nhãn cảm xúc nảy lên phía trên */}
+                {isHovered && (
+                  <span className="absolute -top-7 left-1/2 -translate-x-1/2 bg-zinc-950/95 text-zinc-100 border border-zinc-700/90 font-medium text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap shadow-xl pointer-events-none animate-in fade-in zoom-in-75 duration-100 z-30">
+                    {item.label}
+                  </span>
+                )}
+                <span className="pointer-events-none text-2xl sm:text-[26px] leading-none block">
+                  {item.emoji}
+                </span>
               </button>
             );
           })}
