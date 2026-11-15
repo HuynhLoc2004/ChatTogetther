@@ -75,6 +75,7 @@ export const ResonanceMatchModal = ({
 
   // Thước chia vạch
   const rulerRef = useRef(null);
+  const chipScrollRef = useRef(null);
   const isDraggingRulerRef = useRef(false);
   const dragStartXRef = useRef(0);
   const dragStartFreqRef = useRef(96.4);
@@ -782,47 +783,79 @@ export const ResonanceMatchModal = ({
           {activeTab === 'tune' && (
             <div className="space-y-5 animate-fade-in">
 
-              {/* Dải chip chọn Băng tần từ Admin (Cuộn ngang mượt mà, padding thoáng) */}
-              <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden p-1">
+              {/* Dải chip chọn Băng tần từ Admin với 2 nút điều hướng tròn < > */}
+              <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => {
-                    stopAutoScan();
-                    setScanNotice(null);
-                    setSelectedIntentFilter('ALL');
+                    if (chipScrollRef.current) chipScrollRef.current.scrollBy({ left: -140, behavior: 'smooth' });
                   }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-mono whitespace-nowrap transition-all border shrink-0 ${
-                    selectedIntentFilter === 'ALL'
-                      ? 'bg-white text-zinc-950 font-semibold border-white'
-                      : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-white hover:border-zinc-700'
-                  }`}
+                  className="w-7 h-7 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center shrink-0 active:scale-95 transition-all"
+                  title="Cuộn sang trái"
                 >
-                  Tất cả (88 - 108 MHz)
+                  <ChevronLeft size={14} />
                 </button>
-                {intents.map(it => {
-                  const isSelected = selectedIntentFilter === it.code;
-                  return (
-                    <button
-                      key={it.code}
-                      type="button"
-                      onClick={() => {
-                        stopAutoScan();
-                        setScanNotice(null);
-                        setSelectedIntentFilter(it.code);
-                        if (it.freqStart != null) {
-                          setFrequency(Number(it.freqStart.toFixed(1)));
-                        }
-                      }}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-mono whitespace-nowrap transition-all border shrink-0 ${
-                        isSelected
-                          ? 'bg-white text-zinc-950 font-semibold border-white'
-                          : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-white hover:border-zinc-700'
-                      }`}
-                    >
-                      {it.title} ({it.freqStart?.toFixed(0)}-{it.freqEnd?.toFixed(0)} MHz)
-                    </button>
-                  );
-                })}
+
+                <div 
+                  ref={chipScrollRef}
+                  onWheel={(e) => {
+                    if (e.deltaY && chipScrollRef.current) {
+                      chipScrollRef.current.scrollLeft += e.deltaY;
+                    }
+                  }}
+                  className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden p-1 flex-1 scroll-smooth"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      stopAutoScan();
+                      setScanNotice(null);
+                      setSelectedIntentFilter('ALL');
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-mono whitespace-nowrap transition-all border shrink-0 ${
+                      selectedIntentFilter === 'ALL'
+                        ? 'bg-white text-zinc-950 font-semibold border-white'
+                        : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-white hover:border-zinc-700'
+                    }`}
+                  >
+                    Tất cả (88 - 108 MHz)
+                  </button>
+                  {intents.map(it => {
+                    const isSelected = selectedIntentFilter === it.code;
+                    return (
+                      <button
+                        key={it.code}
+                        type="button"
+                        onClick={() => {
+                          stopAutoScan();
+                          setScanNotice(null);
+                          setSelectedIntentFilter(it.code);
+                          const min = it.freqStart != null ? Number(it.freqStart.toFixed(1)) : 88.0;
+                          const max = it.freqEnd != null ? Number(it.freqEnd.toFixed(1)) : 108.0;
+                          setFrequency(prev => Math.min(max, Math.max(min, prev)));
+                        }}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-mono whitespace-nowrap transition-all border shrink-0 ${
+                          isSelected
+                            ? 'bg-white text-zinc-950 font-semibold border-white'
+                            : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-white hover:border-zinc-700'
+                        }`}
+                      >
+                        {it.title} ({it.freqStart?.toFixed(0)}-{it.freqEnd?.toFixed(0)} MHz)
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (chipScrollRef.current) chipScrollRef.current.scrollBy({ left: 140, behavior: 'smooth' });
+                  }}
+                  className="w-7 h-7 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center shrink-0 active:scale-95 transition-all"
+                  title="Cuộn sang phải"
+                >
+                  <ChevronRight size={14} />
+                </button>
               </div>
 
               {/* Mặt đồng hồ Tuner & Thước chia vạch */}
@@ -876,12 +909,13 @@ export const ResonanceMatchModal = ({
                     <div className="w-2 h-2 bg-rose-500 rotate-45 -translate-x-[3px] -translate-y-1 mx-auto" />
                   </div>
 
-                  {/* Dải vạch thước: cố định width 2814px (201 vạch * 14px) không bị co ép flex */}
+                  {/* Dải vạch thước: cố định width 2814px (201 vạch * 14px) đồng bộ 100% với kim đỏ */}
                   <div 
                     className="absolute top-0 bottom-0 flex items-end pb-2.5 transition-transform duration-75 will-change-transform"
                     style={{
+                      left: '50%',
                       width: `${201 * 14}px`,
-                      transform: `translateX(calc(50% - ${totalOffsetPx}px))`
+                      transform: `translateX(-${totalOffsetPx + 7}px)`
                     }}
                   >
                     {Array.from({ length: 201 }).map((_, idx) => {
@@ -1143,13 +1177,15 @@ export const ResonanceMatchModal = ({
                         onClick={() => handleSelectBroadcastIntent(it.code)}
                         className={`p-3 rounded-2xl border cursor-pointer transition-all ${
                           isSelected
-                            ? 'bg-zinc-900 border-zinc-600 shadow-sm'
-                            : 'bg-zinc-950/80 border-zinc-800 hover:border-zinc-700'
+                            ? 'bg-zinc-900 border-white text-white shadow-sm ring-1 ring-white'
+                            : 'bg-zinc-950/80 border-zinc-800 text-zinc-300 hover:border-zinc-700'
                         }`}
                       >
                         <div className="flex items-center justify-between">
                           <h5 className="font-semibold text-xs text-white">{it.title}</h5>
-                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-300 border border-zinc-700">
+                          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-md border ${
+                            isSelected ? 'bg-white text-zinc-950 font-bold border-white' : 'bg-zinc-800 text-zinc-300 border-zinc-700'
+                          }`}>
                             {it.freqStart?.toFixed(0)}-{it.freqEnd?.toFixed(0)} MHz
                           </span>
                         </div>
@@ -1162,8 +1198,8 @@ export const ResonanceMatchModal = ({
                 </div>
               </div>
 
-              {/* Tần số được cấp tự động (Khóa chặt trong khoảng, có nút đổi số ngẫu nhiên) */}
-              <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center justify-between gap-3">
+              {/* Tần số được cấp tự động (Khóa chặt trong khoảng, có nút +/- 0.1 và đổi số ngẫu nhiên) */}
+              <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <span className="text-xs text-zinc-400 font-mono block">2. Tần số phát sóng được cấp:</span>
                   <div className="flex items-baseline gap-1.5 mt-0.5">
@@ -1177,18 +1213,46 @@ export const ResonanceMatchModal = ({
                   </span>
                 </div>
 
-                <button 
-                  type="button" 
-                  onClick={() => {
-                    const it = intents.find(i => i.code === broadcastIntentCode) || intents[0];
-                    setBroadcastFreqTarget(getRandomFreqForIntent(it));
-                  }}
-                  className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 text-xs font-mono flex items-center gap-1.5 transition-colors active:scale-95 shrink-0"
-                  title="Chọn một tần số trống khác trong dải"
-                >
-                  <RefreshCw size={13} />
-                  <span>Đổi tần số khác</span>
-                </button>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      const it = intents.find(i => i.code === broadcastIntentCode);
+                      const min = it?.freqStart != null ? Number(it.freqStart.toFixed(1)) : 88.0;
+                      setBroadcastFreqTarget(prev => Math.max(min, Number((prev - 0.1).toFixed(1))));
+                    }}
+                    className="h-8 px-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 text-xs font-mono transition-colors active:scale-95"
+                    title="Giảm 0.1 MHz"
+                  >
+                    -0.1
+                  </button>
+
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      const it = intents.find(i => i.code === broadcastIntentCode);
+                      const max = it?.freqEnd != null ? Number(it.freqEnd.toFixed(1)) : 108.0;
+                      setBroadcastFreqTarget(prev => Math.min(max, Number((prev + 0.1).toFixed(1))));
+                    }}
+                    className="h-8 px-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 text-xs font-mono transition-colors active:scale-95"
+                    title="Tăng 0.1 MHz"
+                  >
+                    +0.1
+                  </button>
+
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      const it = intents.find(i => i.code === broadcastIntentCode) || intents[0];
+                      setBroadcastFreqTarget(getRandomFreqForIntent(it));
+                    }}
+                    className="h-8 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 text-xs font-mono flex items-center gap-1.5 transition-colors active:scale-95 shrink-0"
+                    title="Chọn một tần số trống khác trong dải"
+                  >
+                    <RefreshCw size={13} />
+                    <span>Đổi tần số khác</span>
+                  </button>
+                </div>
               </div>
 
               {/* KHUNG GHI ÂM 5S GIỌNG NÓI */}
@@ -1268,19 +1332,25 @@ export const ResonanceMatchModal = ({
                 )}
               </div>
 
-              {/* NÚT KÍCH HOẠT PHÁT SÓNG */}
+              {/* NÚT KÍCH HOẠT PHÁT SÓNG (Chỉ sáng trắng khi đã thu âm 5s) */}
               <div className="pt-2">
                 <button
                   type="button"
                   onClick={handlePublishBroadcast}
                   disabled={!recordedBlob || isSubmittingBroadcast}
-                  className="w-full py-3 px-4 rounded-2xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs sm:text-sm font-semibold disabled:opacity-50 transition-all active:scale-[0.98] shadow-md flex items-center justify-center gap-2"
+                  className={`w-full py-3.5 px-4 rounded-2xl font-semibold text-xs sm:text-sm transition-all active:scale-[0.98] shadow-md flex items-center justify-center gap-2 ${
+                    recordedBlob && !isSubmittingBroadcast
+                      ? 'bg-white hover:bg-zinc-200 text-zinc-950 shadow-white/10'
+                      : 'bg-zinc-900 border border-zinc-800 text-zinc-500 cursor-not-allowed opacity-60'
+                  }`}
                 >
                   <Radio size={16} />
                   <span>
                     {isSubmittingBroadcast 
-                      ? "Đang phát sóng..." 
-                      : `Thu âm 5s & Lên sóng tại ${broadcastFreqTarget.toFixed(1)} MHz`}
+                      ? "Đang tải dữ liệu phát sóng..." 
+                      : (recordedBlob 
+                          ? `Lên sóng tại ${broadcastFreqTarget.toFixed(1)} MHz` 
+                          : "Vui lòng thu âm 5s ở bước 3 để lên sóng")}
                   </span>
                 </button>
               </div>

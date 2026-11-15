@@ -1148,7 +1148,7 @@ const ProfilePage = () => {
                           </button>
                         </div>
 
-                        <span className="font-mono text-[10px] text-zinc-400">Talovin Signal</span>
+                        <span className="font-mono text-[10px] text-zinc-500">Tín hiệu trạm</span>
                       </div>
                     </article>
                   ))

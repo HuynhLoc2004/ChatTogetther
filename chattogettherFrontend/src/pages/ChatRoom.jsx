@@ -1795,7 +1795,12 @@ const ChatRoom = () => {
                             <span>Bài viết được chia sẻ bởi <strong>{payload.author}</strong></span>
                           </div>
                           {payload.imageUrl && (
-                            <img src={payload.imageUrl} alt="Post media" className="shared-post-thumbnail" />
+                            <img 
+                              src={payload.imageUrl} 
+                              alt="Khoảnh khắc" 
+                              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                              className="shared-post-thumbnail" 
+                            />
                           )}
                           <p className="shared-post-text">{payload.content}</p>
                           <div className="shared-post-footer">
