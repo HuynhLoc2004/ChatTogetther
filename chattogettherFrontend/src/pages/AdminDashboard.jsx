@@ -294,6 +294,29 @@ export const AdminDashboard = () => {
     };
   }, []);
 
+  // Global ESC key listener to close modals
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setIsAddChallengeOpen(false);
+        setIsCategoryModalOpen(false);
+        setIsAddTrackOpen(false);
+        setSelectedUserForRoles(null);
+        setIsAddRoleModalOpen(false);
+        setReportActionModal({ isOpen: false, report: null, action: 'TAKEDOWN', note: '' });
+        setIsIntentModalOpen(false);
+        setIsChannelModalOpen(false);
+        setTakedownModal({ isOpen: false, post: null, reason: '' });
+        setIsReactionModalOpen(false);
+        setIsCommunityCatModalOpen(false);
+        setSelectedCommunityReportToResolve(null);
+        setIsMobileMenuOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const initAdminSession = async () => {
     try {
       setLoading(true);
@@ -2068,7 +2091,7 @@ const handleAddTrack = async (e) => {
                       <div className="pt-2">
                         <span className="text-[11px] text-zinc-400 block mb-2 font-mono">Xem trước logo hiển thị:</span>
                         <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800/80 flex items-center gap-3">
-                          <TalovinLogo size={32} />
+                          <TalovinLogo size={32} showText={false} />
                           <div>
                             <span className="font-extrabold text-white text-base block">{configs.brand_name || "Talovin"}</span>
                             <span className="text-[11px] text-zinc-400 font-mono">{configs.brand_slogan || "Social Lounge"}</span>
@@ -2082,7 +2105,7 @@ const handleAddTrack = async (e) => {
                   <div className="lg:col-span-2 p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-4">
                     <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
                       <h3 className="text-sm font-bold text-zinc-200 flex items-center gap-2">
-                        <Layers size={15} className="text-emerald-400" />
+                        <Layers size={15} className="text-zinc-400" />
                         Danh Sách Các Mục Menu Sidebar ({parsedMenuItems.length})
                       </h3>
                       <span className="text-[11px] text-zinc-400 font-mono">Nhấn để Bật/Tắt ẩn hiện</span>
@@ -2486,7 +2509,7 @@ const handleAddTrack = async (e) => {
 
                     {loadingAdminReposts ? (
                       <div className="p-12 text-center text-zinc-500 text-xs font-mono flex flex-col items-center gap-2">
-                        <RefreshCw size={20} className="animate-spin text-emerald-500" />
+                        <RefreshCw size={20} className="animate-spin text-zinc-400" />
                         <span>Đang tải danh sách đăng lại của thành viên...</span>
                       </div>
                     ) : adminReposts.length === 0 ? (
@@ -2494,78 +2517,143 @@ const handleAddTrack = async (e) => {
                         Chưa có lượt đăng lại nào từ thành viên.
                       </div>
                     ) : (
-                      <div className="overflow-x-auto rounded-2xl border border-zinc-800 bg-zinc-900/80">
-                        <table className="w-full text-left border-collapse text-xs">
-                          <thead>
-                            <tr className="border-b border-zinc-800 text-zinc-400 font-mono text-[11px] bg-zinc-950/60">
-                              <th className="p-3.5">ID</th>
-                              <th className="p-3.5">Người đăng lại</th>
-                              <th className="p-3.5">Bài viết gốc</th>
-                              <th className="p-3.5">Tác giả bài gốc</th>
-                              <th className="p-3.5">Trạng thái bài gốc</th>
-                              <th className="p-3.5">Thời gian</th>
-                              <th className="p-3.5 text-right">Thao tác</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-zinc-800/60">
-                            {adminReposts.map((rep) => {
-                              const origPost = rep.post;
-                              const isOrigDeleted = origPost && Boolean(origPost.isDeleted);
-                              return (
-                                <tr key={rep.id} className="hover:bg-zinc-800/30 transition-colors">
-                                  <td className="p-3.5 font-mono text-zinc-500">#{rep.id}</td>
-                                  <td className="p-3.5">
-                                    <div className="flex items-center gap-2">
-                                      <div className="w-6 h-6 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-[10px] text-zinc-300">
-                                        {(rep.user?.nickname || rep.user?.account || 'U').charAt(0).toUpperCase()}
+                      <>
+                        {/* Desktop Table View */}
+                        <div className="hidden md:block overflow-x-auto rounded-2xl border border-zinc-800 bg-zinc-900/80">
+                          <table className="w-full text-left border-collapse text-xs">
+                            <thead>
+                              <tr className="border-b border-zinc-800 text-zinc-400 font-mono text-[11px] bg-zinc-950/60">
+                                <th className="p-3.5">ID</th>
+                                <th className="p-3.5">Người đăng lại</th>
+                                <th className="p-3.5">Bài viết gốc</th>
+                                <th className="p-3.5">Tác giả bài gốc</th>
+                                <th className="p-3.5">Trạng thái bài gốc</th>
+                                <th className="p-3.5">Thời gian</th>
+                                <th className="p-3.5 text-right">Thao tác</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-zinc-800/60">
+                              {adminReposts.map((rep) => {
+                                const origPost = rep.post;
+                                const isOrigDeleted = origPost && Boolean(origPost.isDeleted);
+                                return (
+                                  <tr key={rep.id} className="hover:bg-zinc-800/30 transition-colors">
+                                    <td className="p-3.5 font-mono text-zinc-500">#{rep.id}</td>
+                                    <td className="p-3.5">
+                                      <div className="flex items-center gap-2">
+                                        <div className="w-6 h-6 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-[10px] text-zinc-300">
+                                          {(rep.user?.nickname || rep.user?.account || 'U').charAt(0).toUpperCase()}
+                                        </div>
+                                        <div>
+                                          <div className="font-bold text-white">{rep.user?.nickname || rep.user?.account}</div>
+                                          <div className="text-[10px] font-mono text-zinc-500">@{rep.user?.account}</div>
+                                        </div>
                                       </div>
-                                      <div>
-                                        <div className="font-bold text-white">{rep.user?.nickname || rep.user?.account}</div>
-                                        <div className="text-[10px] font-mono text-zinc-500">@{rep.user?.account}</div>
-                                      </div>
+                                    </td>
+                                    <td className="p-3.5 max-w-xs">
+                                      <p className="line-clamp-2 text-zinc-300 text-[11.5px]">
+                                        {origPost ? (origPost.content || '(Tệp đính kèm)') : '<Bài viết không còn tồn tại>'}
+                                      </p>
+                                    </td>
+                                    <td className="p-3.5">
+                                      <span className="font-medium text-zinc-300">
+                                        {origPost?.userEntity?.nickname || origPost?.userEntity?.account || 'N/A'}
+                                      </span>
+                                    </td>
+                                    <td className="p-3.5">
+                                      {isOrigDeleted ? (
+                                        <span className="px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-400 text-[10.5px] font-semibold border border-rose-500/20">
+                                          Đã gỡ bài gốc
+                                        </span>
+                                      ) : (
+                                        <span className="px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-300 text-[10.5px] font-semibold border border-zinc-700/60">
+                                          Đang hoạt động
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="p-3.5 font-mono text-[11px] text-zinc-400 tabular-nums">
+                                      {rep.createdAt ? new Date(rep.createdAt).toLocaleString('vi-VN') : 'N/A'}
+                                    </td>
+                                    <td className="p-3.5 text-right">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleAdminDeleteRepost(rep.id)}
+                                        className="whitespace-nowrap shrink-0 h-8 px-3 rounded-lg bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white border border-rose-500/25 text-xs font-medium transition-all inline-flex items-center gap-1 active:scale-[0.98]"
+                                        title="Gỡ lượt đăng lại này mà không ảnh hưởng tới bài viết gốc"
+                                      >
+                                        <Trash2 size={12} />
+                                        <span>Gỡ đăng lại</span>
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Mobile Card Stack */}
+                        <div className="block md:hidden space-y-3">
+                          {adminReposts.map((rep) => {
+                            const origPost = rep.post;
+                            const isOrigDeleted = origPost && Boolean(origPost.isDeleted);
+                            return (
+                              <div
+                                key={rep.id}
+                                className="p-3.5 bg-zinc-950/60 border border-zinc-800/80 rounded-xl space-y-3"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-7 h-7 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-xs text-zinc-300">
+                                      {(rep.user?.nickname || rep.user?.account || 'U').charAt(0).toUpperCase()}
                                     </div>
-                                  </td>
-                                  <td className="p-3.5 max-w-xs">
-                                    <p className="line-clamp-2 text-zinc-300 text-[11.5px]">
-                                      {origPost ? (origPost.content || '(Tệp đính kèm)') : '<Bài viết không còn tồn tại>'}
-                                    </p>
-                                  </td>
-                                  <td className="p-3.5">
-                                    <span className="font-medium text-zinc-300">
-                                      {origPost?.userEntity?.nickname || origPost?.userEntity?.account || 'N/A'}
-                                    </span>
-                                  </td>
-                                  <td className="p-3.5">
+                                    <div>
+                                      <div className="font-bold text-white text-xs">{rep.user?.nickname || rep.user?.account}</div>
+                                      <div className="text-[10px] font-mono text-zinc-500">@{rep.user?.account}</div>
+                                    </div>
+                                  </div>
+                                  <span className="font-mono text-[11px] text-zinc-500">#{rep.id}</span>
+                                </div>
+
+                                <div className="p-2.5 rounded-lg bg-zinc-900/60 border border-zinc-800/60 text-xs">
+                                  <p className="text-zinc-300 text-[11.5px] line-clamp-2">
+                                    {origPost ? (origPost.content || '(Tệp đính kèm)') : '<Bài viết không còn tồn tại>'}
+                                  </p>
+                                  <div className="mt-1 text-[10px] text-zinc-500 flex items-center gap-1">
+                                    <span>Tác giả gốc:</span>
+                                    <span className="text-zinc-400 font-medium">{origPost?.userEntity?.nickname || origPost?.userEntity?.account || 'N/A'}</span>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center justify-between pt-1">
+                                  <div className="flex items-center gap-2">
                                     {isOrigDeleted ? (
-                                      <span className="px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-400 text-[10.5px] font-semibold border border-rose-500/30">
+                                      <span className="px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-400 text-[10.5px] font-semibold border border-rose-500/20">
                                         Đã gỡ bài gốc
                                       </span>
                                     ) : (
-                                      <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 text-[10.5px] font-semibold border border-emerald-500/20">
+                                      <span className="px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-300 text-[10.5px] font-semibold border border-zinc-700/60">
                                         Đang hoạt động
                                       </span>
                                     )}
-                                  </td>
-                                  <td className="p-3.5 font-mono text-[11px] text-zinc-500">
-                                    {rep.createdAt ? new Date(rep.createdAt).toLocaleString('vi-VN') : 'N/A'}
-                                  </td>
-                                  <td className="p-3.5 text-right">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleAdminDeleteRepost(rep.id)}
-                                      className="px-2.5 py-1 rounded-lg bg-rose-600/10 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/30 text-xs font-semibold transition-all inline-flex items-center gap-1"
-                                      title="Gỡ lượt đăng lại này mà không ảnh hưởng tới bài viết gốc"
-                                    >
-                                      <Trash2 size={12} />
-                                      <span>Gỡ đăng lại</span>
-                                    </button>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
+                                    <span className="font-mono text-[10.5px] text-zinc-500 tabular-nums">
+                                      {rep.createdAt ? new Date(rep.createdAt).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : 'N/A'}
+                                    </span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAdminDeleteRepost(rep.id)}
+                                    className="whitespace-nowrap shrink-0 h-8 px-3 rounded-lg bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white border border-rose-500/25 text-xs font-medium transition-all inline-flex items-center gap-1 active:scale-[0.98]"
+                                  >
+                                    <Trash2 size={12} />
+                                    <span>Gỡ</span>
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
                     )}
                   </div>
                 )}
@@ -2647,16 +2735,16 @@ const handleAddTrack = async (e) => {
 
                   <div className={`p-4 rounded-2xl border space-y-1 transition-all ${
                     challengeStats.pendingCount > 0 
-                      ? 'bg-zinc-900 border-amber-500/40 ring-1 ring-amber-500/20' 
+                      ? 'bg-zinc-900 border-zinc-700' 
                       : 'bg-zinc-900/60 border-zinc-800/80'
                   }`}>
                     <div className="flex items-center justify-between">
                       <span className="text-[11px] text-zinc-400 font-medium block">Chờ duyệt (User đóng góp)</span>
                       {challengeStats.pendingCount > 0 && (
-                        <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                        <span className="w-2 h-2 rounded-full bg-zinc-300 animate-pulse" />
                       )}
                     </div>
-                    <div className={`text-2xl font-bold font-mono tabular-nums ${challengeStats.pendingCount > 0 ? 'text-amber-400' : 'text-zinc-100'}`}>
+                    <div className="text-2xl font-bold font-mono tabular-nums text-zinc-100">
                       {challengeStats.pendingCount}
                     </div>
                   </div>
@@ -2706,7 +2794,7 @@ const handleAddTrack = async (e) => {
                     >
                       <span>Chờ duyệt</span>
                       <span className={`font-mono text-[10px] px-1.5 py-0.2 rounded-full ${
-                        challengeStats.pendingCount > 0 ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30' : 'bg-zinc-800 text-zinc-400'
+                        challengeStats.pendingCount > 0 ? 'bg-zinc-800 text-zinc-200 font-bold border border-zinc-700' : 'bg-zinc-800 text-zinc-400'
                       }`}>
                         {challengeStats.pendingCount}
                       </span>
@@ -2804,7 +2892,7 @@ const handleAddTrack = async (e) => {
                                 : 'Hệ thống'}
                             </span>
                             {item.status === 'PENDING' && (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 animate-pulse">
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-zinc-800 text-zinc-200 border border-zinc-700">
                                 Chờ duyệt
                               </span>
                             )}
@@ -3047,7 +3135,8 @@ const handleAddTrack = async (e) => {
 
                 {/* Bảng danh sách Reactions */}
                 <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl overflow-hidden shadow-sm">
-                  <div className="overflow-x-auto">
+                  {/* Desktop Table View */}
+                  <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-left text-xs text-zinc-300">
                       <thead className="bg-zinc-900/90 border-b border-zinc-800 text-[11px] font-medium text-zinc-400 uppercase tracking-wider">
                         <tr>
@@ -3071,20 +3160,22 @@ const handleAddTrack = async (e) => {
                                 </div>
                               </div>
                             </td>
-                            <td className="py-3.5 px-4 font-mono font-medium text-zinc-300">
-                              {item.code}
+                            <td className="py-3.5 px-4">
+                              <span className="font-mono text-xs bg-zinc-800/80 text-zinc-200 px-2.5 py-1 rounded-md border border-zinc-700/60 inline-block">
+                                {item.code}
+                              </span>
                             </td>
-                            <td className="py-3.5 px-4 text-center font-mono">
+                            <td className="py-3.5 px-4 text-center font-mono tabular-nums text-zinc-300">
                               {item.sortOrder || 0}
                             </td>
-                            <td className="py-3.5 px-4 text-center font-mono text-zinc-200">
+                            <td className="py-3.5 px-4 text-center font-mono tabular-nums text-zinc-200">
                               {item.usageCount || 0}
                             </td>
                             <td className="py-3.5 px-4 text-center">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-mono ${
                                 item.status === 'ACTIVE'
-                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                  : 'bg-zinc-800 text-zinc-500 border border-zinc-700'
+                                  ? 'bg-zinc-800 text-zinc-200 border border-zinc-700'
+                                  : 'bg-zinc-900 text-zinc-500 border border-zinc-800'
                               }`}>
                                 {item.status === 'ACTIVE' ? 'Kích hoạt' : 'Đang ẩn'}
                               </span>
@@ -3094,7 +3185,7 @@ const handleAddTrack = async (e) => {
                                 <button
                                   type="button"
                                   onClick={() => handleToggleReactionStatus(item)}
-                                  className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs transition-colors"
+                                  className="h-8 px-3 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium transition-all active:scale-[0.98]"
                                   title={item.status === 'ACTIVE' ? "Tạm ẩn cảm xúc này" : "Kích hoạt cảm xúc này"}
                                 >
                                   {item.status === 'ACTIVE' ? 'Ẩn' : 'Bật'}
@@ -3102,7 +3193,7 @@ const handleAddTrack = async (e) => {
                                 <button
                                   type="button"
                                   onClick={() => handleOpenEditReaction(item)}
-                                  className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors"
+                                  className="h-8 w-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 flex items-center justify-center transition-all active:scale-[0.98]"
                                   title="Chỉnh sửa thông tin"
                                 >
                                   <Edit3 size={13} />
@@ -3111,7 +3202,7 @@ const handleAddTrack = async (e) => {
                                   <button
                                     type="button"
                                     onClick={() => handleDeleteReaction(item)}
-                                    className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 transition-colors"
+                                    className="h-8 w-8 rounded-lg bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white border border-rose-500/25 flex items-center justify-center transition-all active:scale-[0.98]"
                                     title="Xóa cảm xúc này"
                                   >
                                     <Trash2 size={13} />
@@ -3124,12 +3215,78 @@ const handleAddTrack = async (e) => {
                       </tbody>
                     </table>
                   </div>
+
+                  {/* Mobile Card Stack */}
+                  <div className="block md:hidden p-3 space-y-3">
+                    {adminReactions.map((item) => (
+                      <div
+                        key={item.id}
+                        className="p-3.5 bg-zinc-950/60 border border-zinc-800/80 rounded-xl space-y-3"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2.5">
+                            <span className="text-3xl leading-none select-none">{item.emoji}</span>
+                            <div>
+                              <div className="font-semibold text-zinc-100 text-sm">{item.label}</div>
+                              <div className="text-[10px] text-zinc-500 font-mono">ID: #{item.id}</div>
+                            </div>
+                          </div>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-mono ${
+                            item.status === 'ACTIVE'
+                              ? 'bg-zinc-800 text-zinc-200 border border-zinc-700'
+                              : 'bg-zinc-900 text-zinc-500 border border-zinc-800'
+                          }`}>
+                            {item.status === 'ACTIVE' ? 'Kích hoạt' : 'Đang ẩn'}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs pt-1 border-t border-zinc-800/60">
+                          <span className="font-mono text-xs bg-zinc-800/80 text-zinc-200 px-2 py-0.5 rounded border border-zinc-700/60">
+                            {item.code}
+                          </span>
+                          <div className="flex items-center gap-3 text-zinc-400 font-mono text-[11px] tabular-nums">
+                            <span>Thứ tự: {item.sortOrder || 0}</span>
+                            <span>•</span>
+                            <span>{item.usageCount || 0} lượt dùng</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 pt-1 border-t border-zinc-800/60">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleReactionStatus(item)}
+                            className="h-8 px-3 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium transition-all active:scale-[0.98]"
+                          >
+                            {item.status === 'ACTIVE' ? 'Ẩn' : 'Bật'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditReaction(item)}
+                            className="h-8 px-3 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium flex items-center gap-1 transition-all active:scale-[0.98]"
+                          >
+                            <Edit3 size={12} />
+                            <span>Sửa</span>
+                          </button>
+                          {!['HEART', 'FIRE', 'HAHA', 'WOW', 'LIKE', 'CROWN', 'CLAP'].includes(item.code) && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteReaction(item)}
+                              className="h-8 px-3 rounded-lg bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white border border-rose-500/25 text-xs font-medium flex items-center gap-1 transition-all active:scale-[0.98]"
+                            >
+                              <Trash2 size={12} />
+                              <span>Xóa</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Modal Thêm / Sửa Reaction */}
                 {isReactionModalOpen && (
-                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
-                    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-5 shadow-2xl space-y-4">
+                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in" onClick={() => setIsReactionModalOpen(false)}>
+                    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-5 shadow-2xl space-y-4 animate-modal-in" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
                         <h3 className="font-semibold text-zinc-100 text-base">
                           {editingReaction ? 'Chỉnh Sửa Biểu Tượng Cảm Xúc' : 'Thêm Biểu Tượng Mới'}
@@ -3309,21 +3466,22 @@ const handleAddTrack = async (e) => {
 
                 {/* BẢNG 1: QUẢN LÝ BĂNG TẦN KẾT NỐI (MatchIntent) */}
                 <div className="p-5 rounded-2xl bg-zinc-900/40 border border-zinc-800 space-y-4">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
                       <h3 className="text-sm font-bold text-zinc-200">1. Danh mục Băng Tần FM (Match Intents)</h3>
                       <p className="text-xs text-zinc-400">Quy hoạch dải tần MHz riêng biệt cho từng mục đích kết nối</p>
                     </div>
                     <button
                       onClick={handleOpenAddIntent}
-                      className="h-9 px-3.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs flex items-center gap-1.5 transition-all shadow-sm"
+                      className="whitespace-nowrap shrink-0 h-9 px-3.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs flex items-center gap-1.5 transition-all shadow-sm active:scale-[0.98]"
                     >
                       <Plus size={13} />
                       <span>Thêm băng tần</span>
                     </button>
                   </div>
 
-                  <div className="overflow-x-auto">
+                  {/* Desktop Table View */}
+                  <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-left text-xs border-collapse">
                       <thead>
                         <tr className="border-b border-zinc-800 text-zinc-400 font-mono text-[11px]">
@@ -3339,26 +3497,30 @@ const handleAddTrack = async (e) => {
                       <tbody className="divide-y divide-zinc-800/60 font-sans">
                         {adminIntents.map(intent => (
                           <tr key={intent.id} className="hover:bg-zinc-800/30 transition-colors">
-                            <td className="py-3 px-3 font-mono text-emerald-400 font-semibold">{intent.code}</td>
+                            <td className="py-3 px-3">
+                              <span className="font-mono text-xs bg-zinc-800/80 text-zinc-200 px-2.5 py-1 rounded-md border border-zinc-700/60 inline-block">
+                                {intent.code}
+                              </span>
+                            </td>
                             <td className="py-3 px-3">
                               <span className="font-semibold text-zinc-200 block">{intent.title}</span>
                               <span className="text-[11px] text-zinc-400">{intent.subtitle}</span>
                             </td>
-                            <td className="py-3 px-3 font-mono text-zinc-300">
+                            <td className="py-3 px-3 font-mono text-zinc-300 tabular-nums">
                               {intent.freqStart?.toFixed(1)} - {intent.freqEnd?.toFixed(1)} MHz
                             </td>
                             <td className="py-3 px-3 font-mono text-zinc-400">{intent.iconName || 'Radio'}</td>
-                            <td className="py-3 px-3 font-mono text-zinc-400">{intent.displayOrder || 1}</td>
+                            <td className="py-3 px-3 font-mono text-zinc-400 tabular-nums">{intent.displayOrder || 1}</td>
                             <td className="py-3 px-3 text-center">
                               <button
                                 onClick={() => handleToggleIntent(intent.id)}
-                                className={`px-2 py-0.5 rounded-full font-mono text-[10px] font-semibold border transition-all ${
+                                className={`whitespace-nowrap shrink-0 h-8 px-3 rounded-lg text-xs font-medium transition-all active:scale-[0.98] ${
                                   intent.isActive !== false
-                                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
-                                    : 'bg-zinc-800 border-zinc-700 text-zinc-500'
+                                    ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                                    : 'bg-zinc-900 border border-zinc-800 text-zinc-400'
                                 }`}
                               >
-                                {intent.isActive !== false ? 'KÍCH HOẠT' : 'TẠM TẮT'}
+                                {intent.isActive !== false ? 'Đang bật' : 'Tạm tắt'}
                               </button>
                             </td>
                             <td className="py-3 px-3 text-right space-x-1.5">
@@ -3371,7 +3533,7 @@ const handleAddTrack = async (e) => {
                               </button>
                               <button
                                 onClick={() => handleDeleteIntent(intent.id)}
-                                className="p-1.5 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-zinc-800 transition-colors"
+                                className="p-1.5 rounded-lg text-zinc-400 hover:text-rose-400 hover:bg-zinc-800 transition-colors"
                                 title="Xóa"
                               >
                                 <Trash2 size={13} />
@@ -3382,25 +3544,75 @@ const handleAddTrack = async (e) => {
                       </tbody>
                     </table>
                   </div>
+
+                  {/* Mobile Card Stack View */}
+                  <div className="block md:hidden space-y-3">
+                    {adminIntents.map(intent => (
+                      <div key={intent.id} className="bg-zinc-950/60 border border-zinc-800/80 rounded-xl p-3.5 space-y-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold text-zinc-100 text-sm truncate">{intent.title}</span>
+                          <span className="font-mono text-xs bg-zinc-800/80 text-zinc-200 px-2.5 py-1 rounded-md border border-zinc-700/60 shrink-0">
+                            {intent.code}
+                          </span>
+                        </div>
+                        {intent.subtitle && (
+                          <p className="text-xs text-zinc-400 leading-relaxed">{intent.subtitle}</p>
+                        )}
+                        <div className="flex items-center justify-between text-xs font-mono text-zinc-400 pt-1 border-t border-zinc-800/60">
+                          <span className="tabular-nums text-zinc-300 font-semibold">{intent.freqStart?.toFixed(1)} - {intent.freqEnd?.toFixed(1)} MHz</span>
+                          <span className="text-[11px] text-zinc-500">Thứ tự: {intent.displayOrder || 1}</span>
+                        </div>
+                        <div className="flex items-center justify-between pt-1">
+                          <button
+                            onClick={() => handleToggleIntent(intent.id)}
+                            className={`whitespace-nowrap shrink-0 h-8 px-3 rounded-lg text-xs font-medium transition-all active:scale-[0.98] ${
+                              intent.isActive !== false
+                                ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                                : 'bg-zinc-900 border border-zinc-800 text-zinc-400'
+                            }`}
+                          >
+                            {intent.isActive !== false ? 'Đang bật' : 'Tạm tắt'}
+                          </button>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => handleOpenEditIntent(intent)}
+                              className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                              title="Chỉnh sửa"
+                            >
+                              <Edit3 size={14} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteIntent(intent.id)}
+                              className="p-2 rounded-lg text-zinc-400 hover:text-rose-400 hover:bg-zinc-800 transition-colors"
+                              title="Xóa"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 {/* BẢNG 2: QUẢN LÝ ĐÀI PHÁT NHẠC HỆ THỐNG (AudioChannel) */}
                 <div className="p-5 rounded-2xl bg-zinc-900/40 border border-zinc-800 space-y-4">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
                       <h3 className="text-sm font-bold text-zinc-200">2. Đài Phát Nhạc Nền Hệ Thống (Audio Channels)</h3>
                       <p className="text-xs text-zinc-400">Các luồng radio Lo-Fi / Ambient phát trực tiếp trên sảnh và phòng chung</p>
                     </div>
                     <button
                       onClick={handleOpenAddChannel}
-                      className="h-9 px-3.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs flex items-center gap-1.5 transition-all shadow-sm"
+                      className="whitespace-nowrap shrink-0 h-9 px-3.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs flex items-center gap-1.5 transition-all shadow-sm active:scale-[0.98]"
                     >
                       <Plus size={13} />
                       <span>Thêm luồng radio</span>
                     </button>
                   </div>
 
-                  <div className="overflow-x-auto">
+                  {/* Desktop Table View */}
+                  <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-left text-xs border-collapse">
                       <thead>
                         <tr className="border-b border-zinc-800 text-zinc-400 font-mono text-[11px]">
@@ -3415,11 +3627,11 @@ const handleAddTrack = async (e) => {
                         {adminChannels.map(ch => (
                           <tr key={ch.id} className="hover:bg-zinc-800/30 transition-colors">
                             <td className="py-3 px-3 font-semibold text-zinc-200 flex items-center gap-2">
-                              <Disc3 size={14} className="text-purple-400 flex-shrink-0" />
+                              <Disc3 size={14} className="text-zinc-400 flex-shrink-0" />
                               <span>{ch.name}</span>
                             </td>
                             <td className="py-3 px-3">
-                              <span className="px-2 py-0.5 rounded-md bg-zinc-800 border border-zinc-700/60 text-zinc-300 font-mono text-[10px]">
+                              <span className="px-2.5 py-1 rounded-md bg-zinc-800/80 border border-zinc-700/60 text-zinc-200 font-mono text-xs">
                                 {ch.genreTag || 'Lo-Fi'}
                               </span>
                             </td>
@@ -3429,13 +3641,13 @@ const handleAddTrack = async (e) => {
                             <td className="py-3 px-3 text-center">
                               <button
                                 onClick={() => handleToggleChannel(ch.id)}
-                                className={`px-2 py-0.5 rounded-full font-mono text-[10px] font-semibold border transition-all ${
+                                className={`whitespace-nowrap shrink-0 h-8 px-3 rounded-lg text-xs font-medium transition-all active:scale-[0.98] ${
                                   ch.isActive !== false
-                                    ? 'bg-purple-500/15 border-purple-500/30 text-purple-400'
-                                    : 'bg-zinc-800 border-zinc-700 text-zinc-500'
+                                    ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                                    : 'bg-zinc-900 border border-zinc-800 text-zinc-400'
                                 }`}
                               >
-                                {ch.isActive !== false ? 'KÍCH HOẠT' : 'TẠM TẮT'}
+                                {ch.isActive !== false ? 'Đang phát' : 'Tạm dừng'}
                               </button>
                             </td>
                             <td className="py-3 px-3 text-right space-x-1.5">
@@ -3448,7 +3660,7 @@ const handleAddTrack = async (e) => {
                               </button>
                               <button
                                 onClick={() => handleDeleteChannel(ch.id)}
-                                className="p-1.5 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-zinc-800 transition-colors"
+                                className="p-1.5 rounded-lg text-zinc-400 hover:text-rose-400 hover:bg-zinc-800 transition-colors"
                                 title="Xóa"
                               >
                                 <Trash2 size={13} />
@@ -3458,6 +3670,54 @@ const handleAddTrack = async (e) => {
                         ))}
                       </tbody>
                     </table>
+                  </div>
+
+                  {/* Mobile Card Stack View */}
+                  <div className="block md:hidden space-y-3">
+                    {adminChannels.map(ch => (
+                      <div key={ch.id} className="bg-zinc-950/60 border border-zinc-800/80 rounded-xl p-3.5 space-y-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Disc3 size={14} className="text-zinc-400 shrink-0" />
+                            <span className="font-semibold text-zinc-100 text-sm truncate">{ch.name}</span>
+                          </div>
+                          <span className="px-2 py-0.5 rounded-md bg-zinc-800/80 border border-zinc-700/60 text-zinc-300 font-mono text-[10px] shrink-0">
+                            {ch.genreTag || 'Lo-Fi'}
+                          </span>
+                        </div>
+                        <p className="text-xs font-mono text-zinc-400 truncate bg-zinc-900/60 px-2.5 py-1 rounded-lg border border-zinc-800/60">
+                          {ch.streamUrl}
+                        </p>
+                        <div className="flex items-center justify-between pt-1">
+                          <button
+                            onClick={() => handleToggleChannel(ch.id)}
+                            className={`whitespace-nowrap shrink-0 h-8 px-3 rounded-lg text-xs font-medium transition-all active:scale-[0.98] ${
+                              ch.isActive !== false
+                                ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                                : 'bg-zinc-900 border border-zinc-800 text-zinc-400'
+                            }`}
+                          >
+                            {ch.isActive !== false ? 'Đang phát' : 'Tạm dừng'}
+                          </button>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => handleOpenEditChannel(ch)}
+                              className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                              title="Chỉnh sửa"
+                            >
+                              <Edit3 size={14} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteChannel(ch.id)}
+                              className="p-2 rounded-lg text-zinc-400 hover:text-rose-400 hover:bg-zinc-800 transition-colors"
+                              title="Xóa"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -3736,7 +3996,8 @@ const handleAddTrack = async (e) => {
                 </div>
 
                 <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl overflow-hidden">
-                  <div className="overflow-x-auto">
+                  {/* Desktop Table View */}
+                  <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-left text-xs">
                       <thead className="bg-zinc-900/90 border-b border-zinc-800 text-zinc-400 font-mono uppercase text-[10px]">
                         <tr>
@@ -3797,6 +4058,62 @@ const handleAddTrack = async (e) => {
                         )}
                       </tbody>
                     </table>
+                  </div>
+
+                  {/* Mobile Card Stack */}
+                  <div className="block md:hidden p-3 space-y-3">
+                    {auditLogs
+                      .filter(log => {
+                        if (!auditLogSearch.trim()) return true;
+                        const q = auditLogSearch.toLowerCase().trim();
+                        return (
+                          (log.adminName || '').toLowerCase().includes(q) ||
+                          (log.action || '').toLowerCase().includes(q) ||
+                          (log.targetType || '').toLowerCase().includes(q) ||
+                          (log.targetId || '').toLowerCase().includes(q) ||
+                          (log.detail || '').toLowerCase().includes(q)
+                        );
+                      })
+                      .map((log) => {
+                        const isDangerous = log.action === 'BAN_USER' || log.action === 'DELETE_POST' || log.action === 'TAKEDOWN' || log.action === 'DISCONNECT_FM';
+                        return (
+                          <div
+                            key={log.id}
+                            className="p-3.5 bg-zinc-950/60 border border-zinc-800/80 rounded-xl space-y-2.5"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-semibold text-zinc-200 text-xs">
+                                {log.adminName || `Admin #${log.adminId}`}
+                              </span>
+                              <span className={`px-2 py-0.5 rounded-full font-mono text-[10px] font-bold border ${
+                                isDangerous 
+                                  ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' 
+                                  : 'bg-zinc-800 text-zinc-300 border-zinc-700'
+                              }`}>
+                                {log.action}
+                              </span>
+                            </div>
+
+                            <p className="text-xs text-zinc-300 break-words leading-relaxed">
+                              {log.detail || '—'}
+                            </p>
+
+                            <div className="flex items-center justify-between pt-1 border-t border-zinc-800/60 text-[10.5px] font-mono text-zinc-500">
+                              <span>
+                                {log.targetType} {log.targetId ? `#${log.targetId}` : ''}
+                              </span>
+                              <span className="tabular-nums">
+                                {log.createdAt ? new Date(log.createdAt).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '—'}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    {auditLogs.length === 0 && (
+                      <div className="p-8 text-center text-zinc-500 font-mono text-xs">
+                        Chưa có nhật ký thao tác nào được ghi nhận.
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -4232,8 +4549,8 @@ const handleAddTrack = async (e) => {
                                       <div className="flex items-center gap-2 flex-wrap">
                                         <h4 className="text-sm font-bold text-zinc-100 line-clamp-1">{group.name}</h4>
                                         {group.isFeatured && (
-                                          <span className="px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30 text-[9px] font-mono flex items-center gap-0.5">
-                                            <Star size={9} className="fill-amber-400 text-amber-400" />
+                                          <span className="px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-200 border border-zinc-700 text-[9px] font-mono flex items-center gap-0.5">
+                                            <Star size={9} className="text-zinc-200" />
                                             <span>Nổi bật</span>
                                           </span>
                                         )}
@@ -4265,7 +4582,7 @@ const handleAddTrack = async (e) => {
                                       isSuspended 
                                         ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' 
                                         : isRestricted
-                                        ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                                        ? 'bg-zinc-800 text-zinc-300 border border-zinc-700'
                                         : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
                                     }`}>
                                       {group.status || 'ACTIVE'}
@@ -4286,12 +4603,12 @@ const handleAddTrack = async (e) => {
                                       onClick={() => handleToggleFeaturedCommunity(group.id, !!group.isFeatured)}
                                       className={`p-2 rounded-xl border text-xs font-medium transition-all active:scale-95 flex items-center gap-1.5 ${
                                         group.isFeatured 
-                                          ? 'bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20' 
+                                          ? 'bg-white text-zinc-950 font-semibold border-white' 
                                           : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
                                       }`}
                                       title={group.isFeatured ? "Bỏ ghim nổi bật" : "Ghim lên nổi bật trang khám phá"}
                                     >
-                                      <Star size={13} className={group.isFeatured ? "fill-amber-400 text-amber-400" : ""} />
+                                      <Star size={13} className={group.isFeatured ? "fill-zinc-950 text-zinc-950" : "text-zinc-400"} />
                                       <span className="hidden sm:inline">{group.isFeatured ? "Bỏ ghim" : "Ghim"}</span>
                                     </button>
 
@@ -4467,7 +4784,7 @@ const handleAddTrack = async (e) => {
                                 {/* Trạng thái báo cáo */}
                                 <span className={`px-2 py-0.5 rounded text-[10px] font-mono ${
                                   report.status === 'PENDING'
-                                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold'
+                                    ? 'bg-zinc-800 text-zinc-200 border border-zinc-700 font-bold'
                                     : report.status === 'RESOLVED_SUSPENDED'
                                     ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30 font-bold'
                                     : 'bg-zinc-800 text-zinc-400 border border-zinc-700'
@@ -4507,7 +4824,7 @@ const handleAddTrack = async (e) => {
                                       setSelectedCommunityReportToResolve(report);
                                       setResolveActionType('RESOLVED_WARNED');
                                     }}
-                                    className="px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs font-semibold transition-all"
+                                    className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 text-xs font-semibold transition-all"
                                   >
                                     Cảnh cáo nhóm
                                   </button>
@@ -4532,11 +4849,11 @@ const handleAddTrack = async (e) => {
 
                 {/* MODAL GIẢI QUYẾT BÁO CÁO CỘNG ĐỒNG */}
                 {selectedCommunityReportToResolve && (
-                  <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-                    <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-2xl">
+                  <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => setSelectedCommunityReportToResolve(null)}>
+                    <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-2xl animate-modal-in" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
                         <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                          <ShieldAlert size={16} className="text-amber-400" />
+                          <ShieldAlert size={16} className="text-zinc-400" />
                           <span>Giải quyết báo cáo vi phạm</span>
                         </h3>
                         <button
@@ -4693,8 +5010,8 @@ const handleAddTrack = async (e) => {
 
                 {/* MODAL THÊM / SỬA DANH MỤC CỘNG ĐỒNG */}
                 {isCommunityCatModalOpen && (
-                  <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-                    <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-2xl">
+                  <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => setIsCommunityCatModalOpen(false)}>
+                    <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-2xl animate-modal-in" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
                         <h3 className="text-sm font-bold text-white flex items-center gap-2">
                           <Layers size={16} className="text-zinc-400" />
@@ -4817,27 +5134,28 @@ const handleAddTrack = async (e) => {
 
                 {/* 4 Thẻ chỉ số tổng quan phòng */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="p-3.5 rounded-2xl bg-zinc-900 border border-zinc-800">
+                  <div className="p-3.5 rounded-2xl bg-zinc-900/60 border border-zinc-800">
                     <span className="text-[10px] font-mono text-zinc-400 block mb-1">Tổng số phòng</span>
-                    <span className="text-2xl font-black text-zinc-100 font-mono">
+                    <span className="text-2xl font-bold text-zinc-100 font-mono tabular-nums">
                       {adminRooms.length}
                     </span>
                   </div>
-                  <div className="p-3.5 rounded-2xl bg-zinc-900 border border-emerald-500/30">
-                    <span className="text-[10px] font-mono text-emerald-400 block mb-1">Đang hoạt động</span>
-                    <span className="text-2xl font-black text-emerald-300 font-mono">
+                  <div className="p-3.5 rounded-2xl bg-zinc-900/60 border border-zinc-800">
+                    <span className="text-[10px] font-mono text-zinc-400 block mb-1">Đang hoạt động</span>
+                    <span className="text-2xl font-bold text-zinc-100 font-mono tabular-nums flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                       {adminRooms.filter(r => r.active).length}
                     </span>
                   </div>
-                  <div className="p-3.5 rounded-2xl bg-zinc-900 border border-amber-500/30">
-                    <span className="text-[10px] font-mono text-amber-400 block mb-1">Phòng riêng tư (Mật khẩu)</span>
-                    <span className="text-2xl font-black text-amber-300 font-mono">
+                  <div className="p-3.5 rounded-2xl bg-zinc-900/60 border border-zinc-800">
+                    <span className="text-[10px] font-mono text-zinc-400 block mb-1">Phòng riêng tư</span>
+                    <span className="text-2xl font-bold text-zinc-100 font-mono tabular-nums">
                       {adminRooms.filter(r => r.hasPassword || r.isPrivate).length}
                     </span>
                   </div>
-                  <div className="p-3.5 rounded-2xl bg-zinc-900 border border-cyan-500/30">
-                    <span className="text-[10px] font-mono text-cyan-400 block mb-1">Thành viên trực tuyến</span>
-                    <span className="text-2xl font-black text-cyan-300 font-mono">
+                  <div className="p-3.5 rounded-2xl bg-zinc-900/60 border border-zinc-800">
+                    <span className="text-[10px] font-mono text-zinc-400 block mb-1">Thành viên trực tuyến</span>
+                    <span className="text-2xl font-bold text-zinc-100 font-mono tabular-nums">
                       {adminRooms.reduce((acc, r) => acc + (r.soluong || 0), 0)}
                     </span>
                   </div>
@@ -4972,105 +5290,180 @@ const handleAddTrack = async (e) => {
                       Chưa có phòng thoại nào được tạo trên hệ thống.
                     </div>
                   ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-xs">
-                        <thead>
-                          <tr className="border-b border-zinc-800 text-zinc-400 font-mono text-[11px]">
-                            <th className="pb-3 pl-2">ID</th>
-                            <th className="pb-3">Phòng thoại</th>
-                            <th className="pb-3">Phân loại</th>
-                            <th className="pb-3">Thành viên online</th>
-                            <th className="pb-3">Thời gian tạo</th>
-                            <th className="pb-3">Trạng thái</th>
-                            <th className="pb-3 text-right pr-2">Hành động</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-zinc-800/60">
-                          {adminRooms
-                            .filter(r => {
-                              if (roomFilter === 'ACTIVE' && !r.active) return false;
-                              if (roomFilter === 'CLOSED' && r.active) return false;
-                              if (roomSearch.trim()) {
-                                const q = roomSearch.toLowerCase();
-                                return (r.nameroom && r.nameroom.toLowerCase().includes(q)) || String(r.id).includes(q);
-                              }
-                              return true;
-                            })
-                            .map((room) => (
-                              <tr key={room.id} className="hover:bg-zinc-850/50 transition-colors">
-                                <td className="py-3 pl-2 font-mono text-zinc-400">#{room.id}</td>
-                                <td className="py-3">
-                                  <div className="flex items-center gap-2.5">
-                                    <div className="w-8 h-8 rounded-lg bg-zinc-800 border border-zinc-700/60 flex items-center justify-center font-bold text-zinc-200 overflow-hidden flex-shrink-0">
-                                      {room.avatar ? (
-                                        <img src={room.avatar} alt="" className="w-full h-full object-cover" />
-                                      ) : (
-                                        <Radio size={14} className="text-zinc-400" />
-                                      )}
-                                    </div>
-                                    <div className="min-w-0">
-                                      <span className="font-semibold text-zinc-200 block truncate max-w-[180px]">
-                                        {room.nameroom || `Phòng #${room.id}`}
-                                      </span>
-                                      {room.description && (
-                                        <span className="text-[10px] text-zinc-400 truncate block max-w-[180px]">
-                                          {room.description}
+                    <>
+                      {/* Desktop Table View */}
+                      <div className="hidden md:block overflow-x-auto">
+                        <table className="w-full text-left text-xs">
+                          <thead>
+                            <tr className="border-b border-zinc-800 text-zinc-400 font-mono text-[11px]">
+                              <th className="pb-3 pl-2">ID</th>
+                              <th className="pb-3">Phòng thoại</th>
+                              <th className="pb-3">Phân loại</th>
+                              <th className="pb-3">Thành viên online</th>
+                              <th className="pb-3">Thời gian tạo</th>
+                              <th className="pb-3">Trạng thái</th>
+                              <th className="pb-3 text-right pr-2">Hành động</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-zinc-800/60">
+                            {adminRooms
+                              .filter(r => {
+                                if (roomFilter === 'ACTIVE' && !r.active) return false;
+                                if (roomFilter === 'CLOSED' && r.active) return false;
+                                if (roomSearch.trim()) {
+                                  const q = roomSearch.toLowerCase();
+                                  return (r.nameroom && r.nameroom.toLowerCase().includes(q)) || String(r.id).includes(q);
+                                }
+                                return true;
+                              })
+                              .map((room) => (
+                                <tr key={room.id} className="hover:bg-zinc-850/50 transition-colors">
+                                  <td className="py-3 pl-2 font-mono text-zinc-400">#{room.id}</td>
+                                  <td className="py-3">
+                                    <div className="flex items-center gap-2.5">
+                                      <div className="w-8 h-8 rounded-lg bg-zinc-800 border border-zinc-700/60 flex items-center justify-center font-bold text-zinc-200 overflow-hidden flex-shrink-0">
+                                        {room.avatar ? (
+                                          <img src={room.avatar} alt="" className="w-full h-full object-cover" />
+                                        ) : (
+                                          <Radio size={14} className="text-zinc-400" />
+                                        )}
+                                      </div>
+                                      <div className="min-w-0">
+                                        <span className="font-semibold text-zinc-200 block truncate max-w-[180px]">
+                                          {room.nameroom || `Phòng #${room.id}`}
                                         </span>
-                                      )}
+                                        {room.description && (
+                                          <span className="text-[10px] text-zinc-400 truncate block max-w-[180px]">
+                                            {room.description}
+                                          </span>
+                                        )}
+                                      </div>
                                     </div>
+                                  </td>
+                                  <td className="py-3">
+                                    {room.hasPassword || room.isPrivate ? (
+                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-mono bg-zinc-800/80 text-zinc-300 border border-zinc-700/60">
+                                        <Lock size={11} /> Riêng tư
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-mono bg-zinc-800/80 text-zinc-300 border border-zinc-700/60">
+                                        <Globe size={11} /> Công khai
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="py-3">
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono tabular-nums bg-zinc-800/60 text-zinc-200 border border-zinc-700/60">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                      {room.soluong || 0} online
+                                    </span>
+                                  </td>
+                                  <td className="py-3 text-zinc-400 font-mono text-[11px] tabular-nums">
+                                    {room.createdAt ? new Date(room.createdAt).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : 'N/A'}
+                                  </td>
+                                  <td className="py-3">
+                                    <span className="px-2.5 py-1 rounded-md text-xs font-mono bg-zinc-800/60 text-zinc-300 border border-zinc-700/60">
+                                      {room.active ? 'Đang mở' : 'Đã đóng'}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 text-right pr-2">
+                                    {room.active ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleForceCloseRoom(room.id, room.nameroom)}
+                                        className="whitespace-nowrap shrink-0 h-8 px-3 rounded-lg bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white border border-rose-500/25 text-xs font-medium transition-all inline-flex items-center gap-1 active:scale-[0.98]"
+                                        title="Đóng phòng khẩn cấp và đưa tất cả thành viên ra ngoài"
+                                      >
+                                        <Ban size={12} />
+                                        <span>Đóng phòng</span>
+                                      </button>
+                                    ) : (
+                                      <span className="text-xs text-zinc-500 font-mono">Đã kết thúc</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Mobile Card Stack View */}
+                      <div className="block md:hidden space-y-3">
+                        {adminRooms
+                          .filter(r => {
+                            if (roomFilter === 'ACTIVE' && !r.active) return false;
+                            if (roomFilter === 'CLOSED' && r.active) return false;
+                            if (roomSearch.trim()) {
+                              const q = roomSearch.toLowerCase();
+                              return (r.nameroom && r.nameroom.toLowerCase().includes(q)) || String(r.id).includes(q);
+                            }
+                            return true;
+                          })
+                          .map((room) => (
+                            <div key={room.id} className="bg-zinc-950/60 border border-zinc-800/80 rounded-xl p-3.5 space-y-2.5">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <div className="w-8 h-8 rounded-lg bg-zinc-800 border border-zinc-700/60 flex items-center justify-center font-bold text-zinc-200 overflow-hidden shrink-0">
+                                    {room.avatar ? (
+                                      <img src={room.avatar} alt="" className="w-full h-full object-cover" />
+                                    ) : (
+                                      <Radio size={14} className="text-zinc-400" />
+                                    )}
                                   </div>
-                                </td>
-                                <td className="py-3">
-                                  {room.hasPassword || room.isPrivate ? (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono bg-amber-500/10 text-amber-300 border border-amber-500/20">
-                                      <Lock size={10} /> Riêng tư (Mật khẩu)
+                                  <div className="min-w-0">
+                                    <span className="font-semibold text-zinc-200 block text-xs truncate">
+                                      {room.nameroom || `Phòng #${room.id}`}
                                     </span>
-                                  ) : (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
-                                      <Globe size={10} /> Công khai
-                                    </span>
-                                  )}
-                                </td>
-                                <td className="py-3">
-                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-mono font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                                    {room.soluong || 0} người
+                                    <span className="text-[10px] font-mono text-zinc-500">#{room.id}</span>
+                                  </div>
+                                </div>
+                                {room.hasPassword || room.isPrivate ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-mono bg-zinc-800/80 text-zinc-300 border border-zinc-700/60 shrink-0">
+                                    <Lock size={11} /> Riêng tư
                                   </span>
-                                </td>
-                                <td className="py-3 text-zinc-400 font-mono text-[11px]">
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-mono bg-zinc-800/80 text-zinc-300 border border-zinc-700/60 shrink-0">
+                                    <Globe size={11} /> Công khai
+                                  </span>
+                                )}
+                              </div>
+
+                              {room.description && (
+                                <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">
+                                  {room.description}
+                                </p>
+                              )}
+
+                              <div className="flex items-center justify-between text-xs font-mono text-zinc-400 pt-1 border-t border-zinc-800/60">
+                                <span className="inline-flex items-center gap-1.5 tabular-nums text-zinc-300">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                  {room.soluong || 0} online
+                                </span>
+                                <span className="text-[11px] text-zinc-500">
                                   {room.createdAt ? new Date(room.createdAt).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : 'N/A'}
-                                </td>
-                                <td className="py-3">
-                                  {room.active ? (
-                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                                      Đang mở
-                                    </span>
-                                  ) : (
-                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono text-zinc-400 bg-zinc-800 border border-zinc-700">
-                                      Đã đóng
-                                    </span>
-                                  )}
-                                </td>
-                                <td className="py-3 text-right pr-2">
-                                  {room.active ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleForceCloseRoom(room.id, room.nameroom)}
-                                      className="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white border border-rose-500/25 text-[11px] font-semibold transition-all inline-flex items-center gap-1"
-                                      title="Đóng phòng khẩn cấp và đưa tất cả thành viên ra ngoài"
-                                    >
-                                      <Ban size={11} />
-                                      <span>Đóng phòng</span>
-                                    </button>
-                                  ) : (
-                                    <span className="text-[11px] text-zinc-400 italic">Đã kết thúc</span>
-                                  )}
-                                </td>
-                              </tr>
-                            ))}
-                        </tbody>
-                      </table>
-                    </div>
+                                </span>
+                              </div>
+
+                              <div className="flex items-center justify-between pt-1">
+                                <span className="px-2.5 py-1 rounded-md text-xs font-mono bg-zinc-800/60 text-zinc-300 border border-zinc-700/60">
+                                  {room.active ? 'Đang mở' : 'Đã đóng'}
+                                </span>
+                                {room.active ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleForceCloseRoom(room.id, room.nameroom)}
+                                    className="whitespace-nowrap shrink-0 h-8 px-3 rounded-lg bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white border border-rose-500/25 text-xs font-medium transition-all inline-flex items-center gap-1 active:scale-[0.98]"
+                                  >
+                                    <Ban size={12} />
+                                    <span>Đóng phòng</span>
+                                  </button>
+                                ) : (
+                                  <span className="text-xs text-zinc-500 font-mono">Đã kết thúc</span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    </>
                   )}
                 </div>
               </div>
@@ -5149,21 +5542,21 @@ const handleAddTrack = async (e) => {
 
                 {/* 4 Thẻ chỉ số tổng quan báo cáo */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="p-3.5 rounded-2xl bg-zinc-900 border border-amber-500/30">
-                    <span className="text-[10px] font-mono text-amber-400 block mb-1">Chờ xử lý</span>
-                    <span className="text-2xl font-black text-amber-300 font-mono">
+                  <div className="p-3.5 rounded-2xl bg-zinc-900/60 border border-zinc-800">
+                    <span className="text-[10px] font-mono text-zinc-400 block mb-1">Chờ xử lý</span>
+                    <span className="text-2xl font-bold text-zinc-100 font-mono tabular-nums">
                       {reports.filter(r => r.status === 'PENDING').length}
                     </span>
                   </div>
-                  <div className="p-3.5 rounded-2xl bg-zinc-900 border border-rose-500/30">
-                    <span className="text-[10px] font-mono text-rose-400 block mb-1">Đã gỡ bài</span>
-                    <span className="text-2xl font-black text-rose-400 font-mono">
+                  <div className="p-3.5 rounded-2xl bg-zinc-900/60 border border-zinc-800">
+                    <span className="text-[10px] font-mono text-zinc-400 block mb-1">Đã gỡ bài</span>
+                    <span className="text-2xl font-bold text-rose-400 font-mono tabular-nums">
                       {reports.filter(r => r.status === 'RESOLVED_TAKEDOWN').length}
                     </span>
                   </div>
-                  <div className="p-3.5 rounded-2xl bg-zinc-900 border border-zinc-800">
+                  <div className="p-3.5 rounded-2xl bg-zinc-900/60 border border-zinc-800">
                     <span className="text-[10px] font-mono text-zinc-400 block mb-1">Đã bỏ qua</span>
-                    <span className="text-2xl font-black text-zinc-300 font-mono">
+                    <span className="text-2xl font-bold text-zinc-300 font-mono tabular-nums">
                       {reports.filter(r => r.status === 'DISMISSED').length}
                     </span>
                   </div>
@@ -5210,7 +5603,7 @@ const handleAddTrack = async (e) => {
                           key={r.id}
                           className={`p-4 rounded-2xl bg-zinc-900/90 border transition-all ${
                             r.status === 'PENDING'
-                              ? 'border-amber-500/40 shadow-lg shadow-amber-950/10'
+                              ? 'border-zinc-700'
                               : 'border-zinc-800/80 opacity-80'
                           }`}
                         >
@@ -5218,12 +5611,12 @@ const handleAddTrack = async (e) => {
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider ${
                                 r.status === 'PENDING'
-                                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                  ? 'bg-zinc-800 text-zinc-200 border border-zinc-700'
                                   : r.status === 'RESOLVED_TAKEDOWN'
-                                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                                  ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
                                   : 'bg-zinc-800 text-zinc-400 border border-zinc-700'
                               }`}>
-                                {r.status === 'PENDING' ? '⏳ Chờ xem xét' : r.status === 'RESOLVED_TAKEDOWN' ? '🚫 Đã gỡ bỏ bài' : '✓ Đã bỏ qua'}
+                                {r.status === 'PENDING' ? 'Chờ xem xét' : r.status === 'RESOLVED_TAKEDOWN' ? 'Đã gỡ bài viết' : r.status === 'RESOLVED_BAN_USER' ? 'Đã khóa tài khoản' : 'Đã bỏ qua'}
                               </span>
 
                               <span className="px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 text-xs font-semibold">
@@ -5263,7 +5656,7 @@ const handleAddTrack = async (e) => {
 
                             {r.adminNote && (
                               <div className="p-2.5 rounded-xl bg-zinc-950/40 border border-zinc-800/50 text-xs text-zinc-400">
-                                <span className="font-mono text-amber-400">Ghi chú xử lý của Quản trị viên:</span> {r.adminNote}
+                                <span className="font-mono text-zinc-300">Ghi chú xử lý của Quản trị viên:</span> {r.adminNote}
                               </div>
                             )}
                           </div>
@@ -5422,10 +5815,10 @@ const handleAddTrack = async (e) => {
           ==================================================== */}
       {isAddChallengeOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => setIsAddChallengeOpen(false)}>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl animate-modal-in" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Sparkles size={16} className="text-amber-400" />
+                <Sparkles size={16} className="text-zinc-400" />
                 {editingChallengeItem ? "Chỉnh Sửa Câu Hỏi Thử Thách" : "Thêm Câu Hỏi Thử Thách Mới"}
               </h3>
               <button onClick={() => setIsAddChallengeOpen(false)} className="text-zinc-400 hover:text-white">
@@ -5496,10 +5889,10 @@ const handleAddTrack = async (e) => {
           ==================================================== */}
       {isCategoryModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => setIsCategoryModalOpen(false)}>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl animate-modal-in" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <FolderCog size={16} className="text-indigo-400" />
+                <FolderCog size={16} className="text-zinc-400" />
                 Quản Lý Danh Mục Thể Loại Thử Thách
               </h3>
               <button onClick={() => setIsCategoryModalOpen(false)} className="text-zinc-400 hover:text-white">
@@ -5596,10 +5989,10 @@ const handleAddTrack = async (e) => {
           ==================================================== */}
       {isAddTrackOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => setIsAddTrackOpen(false)}>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl animate-modal-in" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Music size={16} className="text-indigo-400" />
+                <Music size={16} className="text-zinc-400" />
                 Thêm Bản Nhạc Mới Vào Sảnh
               </h3>
               <button onClick={() => setIsAddTrackOpen(false)} className="text-zinc-400 hover:text-white">
@@ -5686,11 +6079,11 @@ const handleAddTrack = async (e) => {
           ==================================================== */}
       {selectedUserForRoles && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => setSelectedUserForRoles(null)}>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl animate-modal-in" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
               <div>
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <ShieldCheck size={16} className="text-indigo-400" />
+                  <ShieldCheck size={16} className="text-zinc-400" />
                   Cấp Quyền Cho: {selectedUserForRoles.nickname || selectedUserForRoles.account}
                 </h3>
                 <span className="text-[11px] font-mono text-zinc-400">@{selectedUserForRoles.account} • ID: {selectedUserForRoles.id}</span>
@@ -5806,10 +6199,10 @@ const handleAddTrack = async (e) => {
           ==================================================== */}
       {isAddRoleModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => setIsAddRoleModalOpen(false)}>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl animate-modal-in" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <ShieldPlus size={16} className="text-indigo-400" />
+                <ShieldPlus size={16} className="text-zinc-400" />
                 Định Nghĩa Vai Trò Mới
               </h3>
               <button onClick={() => setIsAddRoleModalOpen(false)} className="text-zinc-400 hover:text-white">
@@ -5972,10 +6365,10 @@ const handleAddTrack = async (e) => {
           ==================================================== */}
       {isIntentModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => setIsIntentModalOpen(false)}>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl animate-modal-in" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Radio size={16} className="text-emerald-400" />
+                <Radio size={16} className="text-zinc-400" />
                 <span>{editingIntent ? 'Chỉnh Sửa Băng Tần' : 'Thêm Băng Tần FM Mới'}</span>
               </h3>
               <button onClick={() => setIsIntentModalOpen(false)} className="text-zinc-400 hover:text-white">
@@ -6100,10 +6493,10 @@ const handleAddTrack = async (e) => {
           ==================================================== */}
       {isChannelModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => setIsChannelModalOpen(false)}>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl animate-modal-in" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Disc3 size={16} className="text-purple-400" />
+                <Disc3 size={16} className="text-zinc-400" />
                 <span>{editingChannel ? 'Chỉnh Sửa Đài Phát Nhạc' : 'Thêm Luồng Radio Mới'}</span>
               </h3>
               <button onClick={() => setIsChannelModalOpen(false)} className="text-zinc-400 hover:text-white">
@@ -6174,7 +6567,7 @@ const handleAddTrack = async (e) => {
           ==================================================== */}
       {takedownModal.isOpen && takedownModal.post && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in" onClick={() => setTakedownModal({ isOpen: false, post: null, reason: '' })}>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl animate-modal-in" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
                 <AlertTriangle size={16} className="text-rose-400" />

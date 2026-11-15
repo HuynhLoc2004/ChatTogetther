@@ -26,3 +26,48 @@ body {
     bottom: auto !important;
   }
 }
+
+/* Linear/Vercel Micro-interactions & Smooth Transitions */
+@keyframes fadeInSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes modalZoomIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-tab-pane,
+.animate-in {
+  animation: fadeInSlideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-modal-in {
+  animation: modalZoomIn 0.15s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
