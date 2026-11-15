@@ -814,6 +814,8 @@ public class PostService {
             finalUserReaction = desiredReaction;
         }
 
+        this.postLikeRepository.flush();
+
         ReactionSummaryDTO summary = this.reactionService.getReactionSummary(postId, currentUser, post);
         summary.setUserReaction(finalUserReaction);
 
@@ -869,6 +871,8 @@ public class PostService {
             like.setCreatedAt(LocalDateTime.now());
             this.postLikeRepository.save(like);
         }
+
+        this.postLikeRepository.flush();
 
         PostDTO dto = mapToPostDTO(post, currentUser);
 

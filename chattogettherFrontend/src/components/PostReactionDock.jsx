@@ -178,6 +178,7 @@ const PostReactionDock = ({
     <div
       ref={containerRef}
       className="reaction-drop-wrapper relative group inline-flex items-center"
+      onClick={(e) => e.stopPropagation()}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
@@ -233,10 +234,15 @@ const PostReactionDock = ({
                 data-reaction-type={item.type}
                 onTouchEnd={(e) => {
                   e.stopPropagation();
+                  handledTouchRef.current = true;
+                  setTimeout(() => {
+                    handledTouchRef.current = false;
+                  }, 450);
                   commitReaction(item.type);
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (handledTouchRef.current) return;
                   commitReaction(item.type);
                 }}
                 className={`reaction-emoji-item p-1.5 text-xl sm:text-2xl rounded-full transition-all duration-150 transform hover:scale-130 hover:-translate-y-1 active:scale-95 flex items-center justify-center shrink-0 cursor-pointer ${

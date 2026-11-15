@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Users, Plus, Search, Shield, Crown, CheckCircle2, XCircle, 
+import {
+  Users, Plus, Search, Shield, Crown, CheckCircle2, XCircle,
   Settings, LogOut, Trash2, Camera, Lock, Globe, FileText, ChevronRight, ChevronDown, X,
   ArrowLeft, MessageSquare, PhoneCall, Radio, Send, Image as ImageIcon,
   Heart, MessageCircle, Sparkles, Flame, Check, CornerDownRight, Play, Pause,
@@ -74,7 +74,7 @@ const parsePostMedia = (raw, fallbackPost = null) => {
           audioUrl: parsed.audioUrl || directAudio || null,
           audioDuration: parsed.audioDuration || directDuration || null
         };
-      } catch (e) {}
+      } catch (e) { }
     }
     const isExplicitAudio = trimmed.includes('voice') || trimmed.includes('audio') || trimmed.startsWith('data:audio/') || trimmed.match(/\.(mp3|wav|ogg|m4a|aac)(\?.*)?$/i);
     const isVideo = !isExplicitAudio && (trimmed.match(/\.(mp4|mov|webm|m4v|3gp|mkv|avi)(\?.*)?$/i) || trimmed.includes('/video/') || trimmed.startsWith('data:video/'));
@@ -93,9 +93,9 @@ const parsePostMedia = (raw, fallbackPost = null) => {
   return { mediaUrl: null, mediaType: null, audioUrl: directAudio || null, audioDuration: directDuration || null };
 };
 
-export const CommunitySection = ({ 
-  currentUserId, 
-  currentUserName, 
+export const CommunitySection = ({
+  currentUserId,
+  currentUserName,
   currentUserAvatar = '',
   posts = [],
   setPosts,
@@ -478,7 +478,7 @@ export const CommunitySection = ({
             setSystemRejectReasons(parsed);
           }
         }
-      } catch (e) {}
+      } catch (e) { }
     };
     fetchRejectReasons();
   }, []);
@@ -489,7 +489,7 @@ export const CommunitySection = ({
       if (res.data?.data) {
         setGroupDedicatedPosts(res.data.data);
       }
-    } catch (e) {}
+    } catch (e) { }
   };
 
   const fetchPendingPosts = async (groupId) => {
@@ -846,7 +846,7 @@ export const CommunitySection = ({
       recordedAudioRef.current.currentTime = 0;
       recordedAudioRef.current.play().then(() => {
         setIsPlayingRecordedVoice(true);
-      }).catch(() => {});
+      }).catch(() => { });
     }
   };
 
@@ -952,7 +952,7 @@ export const CommunitySection = ({
     }
 
     const gNameStr = String(selectedGroup.name || '').toLowerCase().trim();
-    const existingRoom = (rooms || []).find(r => 
+    const existingRoom = (rooms || []).find(r =>
       r && String(r.nameroom || '').toLowerCase().includes(gNameStr)
     );
 
@@ -1026,10 +1026,10 @@ export const CommunitySection = ({
         audioUrl: voiceBase64 || undefined
       });
 
-      toast.success(selectedGroup.requiresPostApproval 
-        ? "Bài thảo luận đã được gửi và đang chờ Chủ nhóm/Mod duyệt!" 
+      toast.success(selectedGroup.requiresPostApproval
+        ? "Bài thảo luận đã được gửi và đang chờ Chủ nhóm/Mod duyệt!"
         : "Đã đăng bài thảo luận thành công!");
-      
+
       setGroupPostText('');
       setGroupAttachedImage(null);
       setVoiceBase64(null);
@@ -1048,20 +1048,20 @@ export const CommunitySection = ({
   };
 
   // Lọc bài viết thuộc nhóm
-  const groupPosts = groupDedicatedPosts.length > 0 
-    ? groupDedicatedPosts 
+  const groupPosts = groupDedicatedPosts.length > 0
+    ? groupDedicatedPosts
     : (posts || []).filter(p => p.groupId === selectedGroup?.id);
 
   // Kiểm tra xem nhóm có phòng thoại đang mở không
-  const activeGroupRoom = selectedGroup ? (rooms || []).find(r => 
+  const activeGroupRoom = selectedGroup ? (rooms || []).find(r =>
     r && String(r.nameroom || '').toLowerCase().includes(String(selectedGroup.name || '').toLowerCase().trim())
   ) : null;
 
   const isActualOwner = Boolean(
-    groupDetail?.isOwner || 
-    selectedGroup?.isOwner || 
+    groupDetail?.isOwner ||
+    selectedGroup?.isOwner ||
     groupDetail?.currentUserRole === 'OWNER' ||
-    selectedGroup?.currentUserRole === 'OWNER' || 
+    selectedGroup?.currentUserRole === 'OWNER' ||
     (currentUserId && (
       String(groupDetail?.ownerId || '') === String(currentUserId) ||
       String(selectedGroup?.ownerId || '') === String(currentUserId)
@@ -1086,11 +1086,11 @@ export const CommunitySection = ({
 
       {/* AUDIO PLAYER ẨN ĐỂ PREVIEW GHI ÂM 15S */}
       {voiceBase64 && (
-        <audio 
-          ref={recordedAudioRef} 
-          src={voiceBase64} 
+        <audio
+          ref={recordedAudioRef}
+          src={voiceBase64}
           onEnded={() => setIsPlayingRecordedVoice(false)}
-          className="hidden" 
+          className="hidden"
         />
       )}
 
@@ -1102,7 +1102,7 @@ export const CommunitySection = ({
 
           {/* Thanh breadcrumb quay lại */}
           <div className="flex items-center justify-between">
-            <button 
+            <button
               type="button"
               onClick={handleBackToList}
               className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white text-xs font-medium border border-zinc-800 transition-all active:scale-95 shadow-sm"
@@ -1305,9 +1305,8 @@ export const CommunitySection = ({
             <button
               type="button"
               onClick={() => setActiveWorkspaceTab('feed')}
-              className={`py-2 px-1 rounded-lg text-[11px] sm:text-xs font-medium flex items-center justify-center gap-1 transition-all truncate ${
-                activeWorkspaceTab === 'feed' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
-              }`}
+              className={`py-2 px-1 rounded-lg text-[11px] sm:text-xs font-medium flex items-center justify-center gap-1 transition-all truncate ${activeWorkspaceTab === 'feed' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
+                }`}
             >
               <MessageSquare size={13} className="shrink-0" />
               <span className="truncate">Thảo luận</span>
@@ -1317,9 +1316,8 @@ export const CommunitySection = ({
             <button
               type="button"
               onClick={() => setActiveWorkspaceTab('voice')}
-              className={`py-2 px-1 rounded-lg text-[11px] sm:text-xs font-medium flex items-center justify-center gap-1 transition-all truncate ${
-                activeWorkspaceTab === 'voice' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
-              }`}
+              className={`py-2 px-1 rounded-lg text-[11px] sm:text-xs font-medium flex items-center justify-center gap-1 transition-all truncate ${activeWorkspaceTab === 'voice' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
+                }`}
             >
               <Radio size={13} className="shrink-0" />
               <span className="truncate">Phòng thoại</span>
@@ -1331,9 +1329,8 @@ export const CommunitySection = ({
             <button
               type="button"
               onClick={() => setActiveWorkspaceTab('members')}
-              className={`py-2 px-1 rounded-lg text-[11px] sm:text-xs font-medium flex items-center justify-center gap-1 transition-all truncate ${
-                activeWorkspaceTab === 'members' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
-              }`}
+              className={`py-2 px-1 rounded-lg text-[11px] sm:text-xs font-medium flex items-center justify-center gap-1 transition-all truncate ${activeWorkspaceTab === 'members' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
+                }`}
             >
               <Users size={13} className="shrink-0" />
               <span className="truncate">Thành viên</span>
@@ -1348,9 +1345,8 @@ export const CommunitySection = ({
                   fetchPendingMembers(selectedGroup.id);
                   fetchPendingPosts(selectedGroup.id);
                 }}
-                className={`py-2 px-1 rounded-lg text-[11px] sm:text-xs font-medium flex items-center justify-center gap-1 transition-all truncate ${
-                  activeWorkspaceTab === 'settings' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
-                }`}
+                className={`py-2 px-1 rounded-lg text-[11px] sm:text-xs font-medium flex items-center justify-center gap-1 transition-all truncate ${activeWorkspaceTab === 'settings' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
               >
                 <Settings size={13} className="shrink-0" />
                 <span className="truncate">Quản trị</span>
@@ -1414,7 +1410,7 @@ export const CommunitySection = ({
                     {selectedGroup.requiresApproval ? "Cộng đồng yêu cầu phê duyệt thành viên" : "Tham gia cộng đồng để đăng bài thảo luận"}
                   </h4>
                   <p className="text-xs text-zinc-400 max-w-md mx-auto leading-relaxed">
-                    {selectedGroup.requiresApproval 
+                    {selectedGroup.requiresApproval
                       ? "Không gian này yêu cầu xét duyệt từ Ban quản trị nhóm. Hãy gửi yêu cầu tham gia để cùng kết nối và thảo luận."
                       : "Gia nhập cộng đồng để đăng bài viết, chia sẻ bản thu âm giọng nói 15s và kết nối cùng các thành viên."}
                   </p>
@@ -1429,128 +1425,127 @@ export const CommunitySection = ({
                 </div>
               ) : (
                 <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800/90 shadow-sm">
-                <div className="flex items-start gap-3">
-                  <div className="w-9 h-9 rounded-full bg-zinc-800 overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-xs text-white border border-zinc-700">
-                    {safeAvatar ? (
-                      <img src={safeAvatar} alt="Me" className="w-full h-full object-cover" />
-                    ) : (
-                      (currentUserName || 'U').charAt(0).toUpperCase()
-                    )}
-                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-full bg-zinc-800 overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-xs text-white border border-zinc-700">
+                      {safeAvatar ? (
+                        <img src={safeAvatar} alt="Me" className="w-full h-full object-cover" />
+                      ) : (
+                        (currentUserName || 'U').charAt(0).toUpperCase()
+                      )}
+                    </div>
 
-                  <div className="flex-1 min-w-0">
-                    <textarea 
-                      rows="3"
-                      value={groupPostText}
-                      onChange={(e) => setGroupPostText(e.target.value)}
-                      placeholder={`Chia sẻ câu chuyện, hỏi đáp hoặc ý tưởng vào cộng đồng ${selectedGroup.name}...`}
-                      className="w-full bg-transparent text-xs sm:text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none resize-none leading-relaxed"
-                    />
+                    <div className="flex-1 min-w-0">
+                      <textarea
+                        rows="3"
+                        value={groupPostText}
+                        onChange={(e) => setGroupPostText(e.target.value)}
+                        placeholder={`Chia sẻ câu chuyện, hỏi đáp hoặc ý tưởng vào cộng đồng ${selectedGroup.name}...`}
+                        className="w-full bg-transparent text-xs sm:text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none resize-none leading-relaxed"
+                      />
 
-                    {/* Preview Ảnh đính kèm */}
-                    {groupAttachedImage && (
-                      <div className="relative mt-2 inline-block rounded-xl overflow-hidden border border-zinc-700 max-h-40">
-                        <img src={groupAttachedImage} alt="Attached" className="max-h-40 object-cover" />
-                        <button 
-                          type="button" 
-                          onClick={() => setGroupAttachedImage(null)}
-                          className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/70 text-white flex items-center justify-center hover:bg-black"
-                        >
-                          <X size={12} />
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Trạng thái đang ghi âm 15s */}
-                    {isRecordingVoice && (
-                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-rose-950/30 border border-rose-500/40 mt-2 animate-pulse">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                          <span className="text-xs text-rose-300 font-mono">Đang thu âm giọng nói... {voiceDuration}s / 15s</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={stopRecordingVoice}
-                          className="px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center gap-1 active:scale-95"
-                        >
-                          <Square size={12} /> Dừng thu
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Preview Bản ghi âm 15s */}
-                    {voiceBase64 && !isRecordingVoice && (
-                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 mt-2">
-                        <div className="flex items-center gap-2.5">
+                      {/* Preview Ảnh đính kèm */}
+                      {groupAttachedImage && (
+                        <div className="relative mt-2 inline-block rounded-xl overflow-hidden border border-zinc-700 max-h-40">
+                          <img src={groupAttachedImage} alt="Attached" className="max-h-40 object-cover" />
                           <button
                             type="button"
-                            onClick={togglePlayRecordedVoice}
-                            className="w-7 h-7 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-200 flex items-center justify-center transition-colors"
+                            onClick={() => setGroupAttachedImage(null)}
+                            className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/70 text-white flex items-center justify-center hover:bg-black"
                           >
-                            {isPlayingRecordedVoice ? <Pause size={12} /> : <Play size={12} />}
+                            <X size={12} />
                           </button>
-                          <span className="text-xs text-zinc-300 font-mono">Bản thu âm ({voiceDuration || 15}s)</span>
                         </div>
+                      )}
+
+                      {/* Trạng thái đang ghi âm 15s */}
+                      {isRecordingVoice && (
+                        <div className="flex items-center justify-between p-2.5 rounded-xl bg-rose-950/30 border border-rose-500/40 mt-2 animate-pulse">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                            <span className="text-xs text-rose-300 font-mono">Đang thu âm giọng nói... {voiceDuration}s / 15s</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={stopRecordingVoice}
+                            className="px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center gap-1 active:scale-95"
+                          >
+                            <Square size={12} /> Dừng thu
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Preview Bản ghi âm 15s */}
+                      {voiceBase64 && !isRecordingVoice && (
+                        <div className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 mt-2">
+                          <div className="flex items-center gap-2.5">
+                            <button
+                              type="button"
+                              onClick={togglePlayRecordedVoice}
+                              className="w-7 h-7 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-200 flex items-center justify-center transition-colors"
+                            >
+                              {isPlayingRecordedVoice ? <Pause size={12} /> : <Play size={12} />}
+                            </button>
+                            <span className="text-xs text-zinc-300 font-mono">Bản thu âm ({voiceDuration || 15}s)</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={cancelRecordingVoice}
+                            className="text-zinc-500 hover:text-rose-400 p-1 transition-colors"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between pt-3 mt-2 border-t border-zinc-800/80">
+                        <div className="flex items-center gap-2">
+                          {/* Nút Đính kèm ảnh */}
+                          <label className="p-2 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-white cursor-pointer transition-colors">
+                            <ImageIcon size={14} />
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files[0];
+                                if (file) {
+                                  const reader = new FileReader();
+                                  reader.onloadend = () => setGroupAttachedImage(reader.result);
+                                  reader.readAsDataURL(file);
+                                }
+                              }}
+                            />
+                          </label>
+
+                          {/* Nút Ghi âm 15s */}
+                          <button
+                            type="button"
+                            onClick={isRecordingVoice ? stopRecordingVoice : startRecordingVoice}
+                            className={`p-2 rounded-xl border text-xs font-medium transition-all active:scale-95 flex items-center gap-1.5 ${isRecordingVoice
+                              ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                              : voiceBase64
+                                ? 'bg-zinc-800 text-white border-zinc-700'
+                                : 'bg-zinc-950 hover:bg-zinc-800 border-zinc-800 text-zinc-400 hover:text-white'
+                              }`}
+                            title="Ghi âm giọng nói 15s"
+                          >
+                            <Mic size={14} />
+                            <span className="hidden sm:inline text-xs">Ghi âm 15s</span>
+                          </button>
+                        </div>
+
                         <button
                           type="button"
-                          onClick={cancelRecordingVoice}
-                          className="text-zinc-500 hover:text-rose-400 p-1 transition-colors"
+                          onClick={handleAddGroupPost}
+                          disabled={isPostingGroup || (!groupPostText.trim() && !groupAttachedImage && !voiceBase64)}
+                          className="px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs shadow-sm transition-all active:scale-95 disabled:opacity-50"
                         >
-                          <X size={14} />
+                          {isPostingGroup ? "Đang gửi..." : "Đăng thảo luận"}
                         </button>
                       </div>
-                    )}
-
-                    <div className="flex items-center justify-between pt-3 mt-2 border-t border-zinc-800/80">
-                      <div className="flex items-center gap-2">
-                        {/* Nút Đính kèm ảnh */}
-                        <label className="p-2 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-white cursor-pointer transition-colors">
-                          <ImageIcon size={14} />
-                          <input 
-                            type="file" 
-                            accept="image/*" 
-                            className="hidden" 
-                            onChange={(e) => {
-                              const file = e.target.files[0];
-                              if (file) {
-                                const reader = new FileReader();
-                                reader.onloadend = () => setGroupAttachedImage(reader.result);
-                                reader.readAsDataURL(file);
-                              }
-                            }}
-                          />
-                        </label>
-
-                        {/* Nút Ghi âm 15s */}
-                        <button
-                          type="button"
-                          onClick={isRecordingVoice ? stopRecordingVoice : startRecordingVoice}
-                          className={`p-2 rounded-xl border text-xs font-medium transition-all active:scale-95 flex items-center gap-1.5 ${
-                            isRecordingVoice 
-                              ? 'bg-rose-500/20 text-rose-300 border-rose-500/30' 
-                              : voiceBase64 
-                              ? 'bg-zinc-800 text-white border-zinc-700' 
-                              : 'bg-zinc-950 hover:bg-zinc-800 border-zinc-800 text-zinc-400 hover:text-white'
-                          }`}
-                          title="Ghi âm giọng nói 15s"
-                        >
-                          <Mic size={14} />
-                          <span className="hidden sm:inline text-xs">Ghi âm 15s</span>
-                        </button>
-                      </div>
-
-                      <button 
-                        type="button"
-                        onClick={handleAddGroupPost}
-                        disabled={isPostingGroup || (!groupPostText.trim() && !groupAttachedImage && !voiceBase64)}
-                        className="px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs shadow-sm transition-all active:scale-95 disabled:opacity-50"
-                      >
-                        {isPostingGroup ? "Đang gửi..." : "Đăng thảo luận"}
-                      </button>
                     </div>
                   </div>
                 </div>
-              </div>
               )}
 
               {/* Danh sách bài thảo luận trong nhóm */}
@@ -1574,15 +1569,15 @@ export const CommunitySection = ({
                     const parsedMedia = parsePostMedia(post.imageUrl || post.mediaUrls?.[0]?.url || post.mediaUrls?.[0], post);
 
                     return (
-                      <article 
-                        key={post.id} 
+                      <article
+                        key={post.id}
                         id={`group-post-${post.id}`}
                         className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800/90 hover:border-zinc-700/80 transition-all shadow-sm space-y-3 cursor-pointer hover:bg-zinc-900/60"
                         onClick={(e) => handlePostClickInternal(e, post)}
                       >
                         {/* Header: Avatar, Name, Badges, Time, Actions */}
                         <div className="flex items-start justify-between gap-3">
-                          <div 
+                          <div
                             className="flex items-center gap-2.5 cursor-pointer min-w-0"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1590,10 +1585,10 @@ export const CommunitySection = ({
                               else if (onSelectUser) onSelectUser(authorId);
                             }}
                           >
-                            <UserAvatar 
-                              avatar={post.authorAvatar || post.avatar} 
-                              name={post.authorNickname || post.authorAccount} 
-                              size={36} 
+                            <UserAvatar
+                              avatar={post.authorAvatar || post.avatar}
+                              name={post.authorNickname || post.authorAccount}
+                              size={36}
                             />
                             <div className="min-w-0">
                               <div className="flex items-center gap-1.5 flex-wrap">
@@ -1628,11 +1623,10 @@ export const CommunitySection = ({
                             <button
                               type="button"
                               onClick={() => handleToggleSavePostInternal(post.id)}
-                              className={`p-1.5 rounded-lg transition-colors ${
-                                isSaved 
-                                  ? 'text-white bg-zinc-800' 
-                                  : 'text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/60'
-                              }`}
+                              className={`p-1.5 rounded-lg transition-colors ${isSaved
+                                ? 'text-white bg-zinc-800'
+                                : 'text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/60'
+                                }`}
                               title={isSaved ? "Bỏ lưu bài viết" : "Lưu bài viết"}
                             >
                               <Bookmark size={15} strokeWidth={1.5} fill={isSaved ? "currentColor" : "none"} />
@@ -1685,7 +1679,7 @@ export const CommunitySection = ({
 
                         {/* Media: Image or Video */}
                         {parsedMedia.mediaUrl && (
-                          <div 
+                          <div
                             className="rounded-xl overflow-hidden border border-zinc-800 max-h-80 relative cursor-pointer"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1694,14 +1688,14 @@ export const CommunitySection = ({
                           >
                             {parsedMedia.mediaType === 'video' ? (
                               <div className="relative w-full h-full">
-                                <video 
+                                <video
                                   key={`group-vid-${post.id}-${unmutedGroupVideos[post.id] ? 'unmuted' : 'muted'}`}
-                                  src={parsedMedia.mediaUrl} 
-                                  autoPlay 
-                                  loop 
-                                  muted={!unmutedGroupVideos[post.id]} 
-                                  playsInline 
-                                  className="w-full h-full object-cover max-h-80" 
+                                  src={parsedMedia.mediaUrl}
+                                  autoPlay
+                                  loop
+                                  muted={!unmutedGroupVideos[post.id]}
+                                  playsInline
+                                  className="w-full h-full object-cover max-h-80"
                                 />
                                 <button
                                   type="button"
@@ -1726,12 +1720,12 @@ export const CommunitySection = ({
                                 </button>
                               </div>
                             ) : (
-                              <img 
-                                src={parsedMedia.mediaUrl} 
-                                alt="" 
+                              <img
+                                src={parsedMedia.mediaUrl}
+                                alt=""
                                 loading="lazy"
                                 onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                className="w-full h-full object-cover max-h-80" 
+                                className="w-full h-full object-cover max-h-80"
                               />
                             )}
                           </div>
@@ -1739,7 +1733,7 @@ export const CommunitySection = ({
 
                         {/* Voice Note player */}
                         {parsedMedia.audioUrl && (
-                          <div 
+                          <div
                             className="p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center gap-3"
                             onClick={(e) => e.stopPropagation()}
                           >
@@ -1757,7 +1751,7 @@ export const CommunitySection = ({
                         )}
 
                         {/* Actions Toolbar: Like, Comment, Share */}
-                        <div 
+                        <div
                           className="flex items-center justify-between pt-2.5 border-t border-zinc-800/80 text-xs"
                           onClick={(e) => e.stopPropagation()}
                         >
@@ -1800,7 +1794,7 @@ export const CommunitySection = ({
                                 <span className="text-xs hidden sm:inline">Chia sẻ</span>
                               </button>
                             ) : (
-                              <div 
+                              <div
                                 className="flex items-center gap-1 text-zinc-600 select-none cursor-not-allowed"
                                 title="Chủ nhóm đã khóa chia sẻ ra ngoài"
                               >
@@ -1839,7 +1833,7 @@ export const CommunitySection = ({
                       </p>
                     </div>
 
-                    <button 
+                    <button
                       type="button"
                       onClick={() => {
                         if (navigate) navigate(`/room/${activeGroupRoom.id}`);
@@ -1859,7 +1853,7 @@ export const CommunitySection = ({
                   <p className="text-zinc-400 text-xs max-w-md mx-auto mb-4">
                     Bạn có thể khởi tạo một phòng voice call âm thanh độ trễ thấp dành riêng cho các thành viên cộng đồng {selectedGroup.name}.
                   </p>
-                  <button 
+                  <button
                     type="button"
                     onClick={handleOpenGroupVoiceRoom}
                     className="inline-flex items-center gap-2 h-10 px-5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs shadow-md transition-all active:scale-95"
@@ -1890,11 +1884,11 @@ export const CommunitySection = ({
                   const isSelf = member.userId === currentUserId;
 
                   return (
-                    <div 
-                      key={member.id} 
+                    <div
+                      key={member.id}
                       className="p-3.5 rounded-2xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 transition-all flex items-center justify-between gap-3 shadow-sm"
                     >
-                      <div 
+                      <div
                         className="flex items-center gap-3 min-w-0 cursor-pointer"
                         onClick={() => {
                           if (navigate) navigate(`/profile/${member.userId}`);
@@ -1973,7 +1967,7 @@ export const CommunitySection = ({
           {/* ========================================================= */}
           {activeWorkspaceTab === 'settings' && canManage && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in">
-              
+
               {/* THẺ 1: CẤU HÌNH PHÊ DUYỆT & ĐỀ XUẤT (SWITCH TOGGLES) */}
               <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800/90 space-y-4">
                 <div className="flex items-center gap-2 pb-3 border-b border-zinc-800">
@@ -2084,9 +2078,8 @@ export const CommunitySection = ({
                               setEditGroupForm(prev => ({ ...prev, categoryCode: c.slug, categoryId: c.id }));
                               setIsCategoryDropdownOpen(false);
                             }}
-                            className={`w-full text-left px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center justify-between ${
-                              editGroupForm.categoryCode === c.slug ? 'bg-zinc-800 text-white font-medium' : 'text-zinc-300 hover:bg-zinc-800/60'
-                            }`}
+                            className={`w-full text-left px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center justify-between ${editGroupForm.categoryCode === c.slug ? 'bg-zinc-800 text-white font-medium' : 'text-zinc-300 hover:bg-zinc-800/60'
+                              }`}
                           >
                             <span>{c.name}</span>
                             {editGroupForm.categoryCode === c.slug && <Check size={12} className="text-white" />}
@@ -2287,7 +2280,7 @@ export const CommunitySection = ({
               </p>
             </div>
 
-            <button 
+            <button
               type="button"
               onClick={() => setIsCreateOpen(true)}
               className="h-10 px-4 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs sm:text-sm shadow-sm transition-all active:scale-95 flex items-center justify-center gap-1.5 shrink-0 self-start sm:self-auto"
@@ -2301,8 +2294,8 @@ export const CommunitySection = ({
           <div className="space-y-2.5">
             <div className="relative">
               <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
-              <input 
-                type="text" 
+              <input
+                type="text"
                 placeholder="Tìm kiếm cộng đồng theo tên, chủ đề hoặc mô tả..."
                 value={searchKeyword}
                 onChange={(e) => setSearchKeyword(e.target.value)}
@@ -2351,7 +2344,7 @@ export const CommunitySection = ({
               <Users size={36} className="mx-auto mb-3 text-zinc-600 opacity-60" />
               <p className="text-zinc-300 text-sm font-semibold mb-1">Chưa có cộng đồng nào phù hợp</p>
               <p className="text-zinc-500 text-xs mb-4">Hãy là người đầu tiên sáng lập một cộng đồng mới ngay hôm nay!</p>
-              <button 
+              <button
                 type="button"
                 onClick={() => setIsCreateOpen(true)}
                 className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-medium shadow-sm transition-all active:scale-95"
@@ -2387,10 +2380,10 @@ export const CommunitySection = ({
               return false;
             };
 
-            const myJoinedGroups = filtered.filter(g => 
+            const myJoinedGroups = filtered.filter(g =>
               isGroupOwner(g) || ['OWNER', 'DEPUTY', 'MEMBER', 'PENDING'].includes(g.currentUserRole)
             );
-            const suggestedGroups = filtered.filter(g => 
+            const suggestedGroups = filtered.filter(g =>
               !isGroupOwner(g) && !['OWNER', 'DEPUTY', 'MEMBER', 'PENDING'].includes(g.currentUserRole)
             );
 
@@ -2402,12 +2395,12 @@ export const CommunitySection = ({
               const isPending = !isOwner && group.currentUserRole === 'PENDING';
 
               const gNameStr = String(group?.name || '').toLowerCase().trim();
-              const hasVoiceRoom = gNameStr ? (rooms || []).some(r => 
+              const hasVoiceRoom = gNameStr ? (rooms || []).some(r =>
                 r && String(r.nameroom || '').toLowerCase().includes(gNameStr)
               ) : false;
 
               return (
-                <div 
+                <div
                   key={group.id}
                   onClick={() => handleOpenGroup(group)}
                   className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800/90 hover:border-zinc-700 transition-all cursor-pointer flex items-center justify-between gap-3.5 shadow-sm group"
@@ -2579,7 +2572,7 @@ export const CommunitySection = ({
       <AnimatePresence>
         {isCreateOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md" onClick={() => setIsCreateOpen(false)}>
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -2592,8 +2585,8 @@ export const CommunitySection = ({
                   <Users size={18} className="text-zinc-300" />
                   <h3 className="text-zinc-100 font-bold text-sm tracking-tight">Tạo Không Gian Cộng Đồng Mới</h3>
                 </div>
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={() => setIsCreateOpen(false)}
                   className="text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition-colors"
                 >
@@ -2607,8 +2600,8 @@ export const CommunitySection = ({
                     <label className="text-zinc-300 text-xs font-semibold">Tên cộng đồng *</label>
                     <span className="text-[10px] text-zinc-500 font-mono">{createForm.name.length}/80</span>
                   </div>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     placeholder="VD: Hội Yêu Thích Lo-Fi, Lập Trình Viên..."
                     value={createForm.name}
                     onChange={(e) => setCreateForm(prev => ({ ...prev, name: e.target.value }))}
@@ -2799,7 +2792,7 @@ export const CommunitySection = ({
                     <label className="text-zinc-300 text-xs font-semibold">Mô tả ngắn</label>
                     <span className="text-[10px] text-zinc-500 font-mono">{createForm.description.length}/500</span>
                   </div>
-                  <textarea 
+                  <textarea
                     rows="2"
                     placeholder="Mô tả mục tiêu, định hướng và chủ đề của cộng đồng..."
                     value={createForm.description}
@@ -2814,7 +2807,7 @@ export const CommunitySection = ({
                     <label className="text-zinc-300 text-xs font-semibold">Nội quy ban đầu</label>
                     <span className="text-[10px] text-zinc-500 font-mono">{createForm.rules.length}/1000</span>
                   </div>
-                  <textarea 
+                  <textarea
                     rows="2"
                     placeholder="Nguyên tắc tham gia và chia sẻ..."
                     value={createForm.rules}
@@ -2885,15 +2878,15 @@ export const CommunitySection = ({
                 </div>
 
                 <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-zinc-800">
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={() => setIsCreateOpen(false)}
                     className="h-10 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium transition-all"
                   >
                     Hủy bỏ
                   </button>
-                  <button 
-                    type="submit" 
+                  <button
+                    type="submit"
                     disabled={isSubmitting}
                     className="h-10 px-5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs shadow-sm transition-all active:scale-95 disabled:opacity-50"
                   >
@@ -2911,7 +2904,7 @@ export const CommunitySection = ({
       {/* ========================================================= */}
       {isInviteFriendsOpen && selectedGroup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in" onClick={() => setIsInviteFriendsOpen(false)}>
-          <div 
+          <div
             className="relative w-full max-w-md rounded-2xl bg-zinc-900 border border-zinc-800/90 p-5 shadow-2xl flex flex-col max-h-[80vh]"
             onClick={(e) => e.stopPropagation()}
           >
@@ -2920,8 +2913,8 @@ export const CommunitySection = ({
                 <UserPlus size={18} className="text-zinc-300" />
                 <h3 className="text-zinc-100 font-bold text-sm">Mời bạn bè vào {selectedGroup.name}</h3>
               </div>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => setIsInviteFriendsOpen(false)}
                 className="text-zinc-400 hover:text-white p-1"
               >
@@ -2977,7 +2970,7 @@ export const CommunitySection = ({
       {/* ========================================================= */}
       {rejectModalPost && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in" onClick={() => setRejectModalPost(null)}>
-          <div 
+          <div
             className="relative w-full max-w-md rounded-2xl bg-zinc-900 border border-zinc-800/90 p-5 shadow-2xl flex flex-col space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
@@ -2986,8 +2979,8 @@ export const CommunitySection = ({
                 <AlertTriangle size={18} />
                 <h3 className="text-zinc-100 font-bold text-sm">Từ chối xuất bản bài viết</h3>
               </div>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => setRejectModalPost(null)}
                 className="text-zinc-400 hover:text-white p-1"
               >
@@ -3001,18 +2994,17 @@ export const CommunitySection = ({
 
             <div className="space-y-2">
               {systemRejectReasons.map(r => (
-                <label 
-                  key={r.id} 
-                  className={`flex items-center justify-between p-2.5 rounded-xl border cursor-pointer transition-all ${
-                    selectedRejectReason === r.id 
-                      ? 'bg-zinc-800/80 border-zinc-600 text-white' 
-                      : 'bg-zinc-950 border-zinc-800 text-zinc-300 hover:border-zinc-700'
-                  }`}
+                <label
+                  key={r.id}
+                  className={`flex items-center justify-between p-2.5 rounded-xl border cursor-pointer transition-all ${selectedRejectReason === r.id
+                    ? 'bg-zinc-800/80 border-zinc-600 text-white'
+                    : 'bg-zinc-950 border-zinc-800 text-zinc-300 hover:border-zinc-700'
+                    }`}
                 >
                   <span className="text-xs">{r.label}</span>
-                  <input 
-                    type="radio" 
-                    name="rejectReason" 
+                  <input
+                    type="radio"
+                    name="rejectReason"
                     value={r.id}
                     checked={selectedRejectReason === r.id}
                     onChange={() => setSelectedRejectReason(r.id)}
@@ -3021,17 +3013,16 @@ export const CommunitySection = ({
                 </label>
               ))}
 
-              <label 
-                className={`flex items-center justify-between p-2.5 rounded-xl border cursor-pointer transition-all ${
-                  selectedRejectReason === 'CUSTOM' 
-                    ? 'bg-zinc-800/80 border-zinc-600 text-white' 
-                    : 'bg-zinc-950 border-zinc-800 text-zinc-300 hover:border-zinc-700'
-                }`}
+              <label
+                className={`flex items-center justify-between p-2.5 rounded-xl border cursor-pointer transition-all ${selectedRejectReason === 'CUSTOM'
+                  ? 'bg-zinc-800/80 border-zinc-600 text-white'
+                  : 'bg-zinc-950 border-zinc-800 text-zinc-300 hover:border-zinc-700'
+                  }`}
               >
                 <span className="text-xs">Lý do khác (Nhập thủ công)</span>
-                <input 
-                  type="radio" 
-                  name="rejectReason" 
+                <input
+                  type="radio"
+                  name="rejectReason"
                   value="CUSTOM"
                   checked={selectedRejectReason === 'CUSTOM'}
                   onChange={() => setSelectedRejectReason('CUSTOM')}
@@ -3040,7 +3031,7 @@ export const CommunitySection = ({
               </label>
 
               {selectedRejectReason === 'CUSTOM' && (
-                <textarea 
+                <textarea
                   rows="2"
                   value={customRejectReason}
                   onChange={(e) => setCustomRejectReason(e.target.value)}
@@ -3051,15 +3042,15 @@ export const CommunitySection = ({
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-800">
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => setRejectModalPost(null)}
                 className="h-9 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium transition-all"
               >
                 Hủy bỏ
               </button>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={handleConfirmRejectPost}
                 disabled={isRejecting}
                 className="h-9 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-medium transition-all active:scale-95 disabled:opacity-50 shadow-sm"
@@ -3076,7 +3067,7 @@ export const CommunitySection = ({
       {/* ========================================================= */}
       {isReportModalOpen && selectedGroup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in" onClick={() => setIsReportModalOpen(false)}>
-          <div 
+          <div
             className="relative w-full max-w-md rounded-2xl bg-zinc-900 border border-zinc-800/90 p-5 shadow-2xl flex flex-col space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
@@ -3085,8 +3076,8 @@ export const CommunitySection = ({
                 <Flag size={18} />
                 <h3 className="text-zinc-100 font-bold text-sm">Báo cáo cộng đồng vi phạm</h3>
               </div>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => setIsReportModalOpen(false)}
                 className="text-zinc-400 hover:text-white p-1"
               >
@@ -3100,8 +3091,8 @@ export const CommunitySection = ({
 
             <div className="space-y-2">
               <label className="text-[11px] font-mono text-zinc-400 block mb-1">Lý do vi phạm</label>
-              <select 
-                value={reportReason} 
+              <select
+                value={reportReason}
                 onChange={(e) => setReportReason(e.target.value)}
                 className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-zinc-700"
               >
@@ -3115,7 +3106,7 @@ export const CommunitySection = ({
 
             <div>
               <label className="text-[11px] font-mono text-zinc-400 block mb-1">Mô tả thêm (Tùy chọn)</label>
-              <textarea 
+              <textarea
                 rows="3"
                 value={reportDescription}
                 onChange={(e) => setReportDescription(e.target.value)}
@@ -3125,15 +3116,15 @@ export const CommunitySection = ({
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-800">
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => setIsReportModalOpen(false)}
                 className="h-9 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium transition-all"
               >
                 Hủy bỏ
               </button>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={handleSendCommunityReport}
                 disabled={isSubmittingReport}
                 className="h-9 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-medium transition-all active:scale-95 disabled:opacity-50 shadow-sm"

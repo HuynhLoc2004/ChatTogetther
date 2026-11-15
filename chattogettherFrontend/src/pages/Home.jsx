@@ -1339,42 +1339,63 @@ const Home = ({ initialTab }) => {
         const desired = reactionDesiredStateRef.current.get(strPostId);
         const sendType = desired?.reactionType || targetType;
 
-        const res = await axiosClient.post(`/posts/${postId}/react`, null, {
-          params: { type: sendType || 'HEART' }
-        });
+        let res;
+        try {
+          res = await axiosClient.post(`/posts/${postId}/react`, null, {
+            params: { type: sendType || 'HEART' }
+          });
+        } catch (apiErr) {
+          if (apiErr.response?.status === 404) {
+            // Tương thích: fallback gọi /like nếu backend route /react trả 404
+            res = await axiosClient.post(`/posts/${postId}/like`, null, {
+              params: { type: sendType || 'HEART' }
+            });
+          } else {
+            throw apiErr;
+          }
+        }
 
-        const serverSummary = res?.data?.data;
+        const serverData = res?.data?.data;
         const latestDesired = reactionDesiredStateRef.current.get(strPostId);
 
+        // Hỗ trợ cả cấu trúc ReactionSummaryDTO (/react) và PostDTO (/like)
+        const serverLiked = serverData
+          ? (serverData.userReaction !== undefined ? !!serverData.userReaction : !!serverData.isLikedByMe)
+          : false;
+        const serverReaction = serverData?.userReaction || serverData?.myReaction || null;
+        const serverLikesCount = serverData?.totalCount !== undefined
+          ? serverData.totalCount
+          : (serverData?.likesCount ?? 0);
+        const serverTopReactions = serverData?.topReactions || [];
+
         // Kiểm tra xem trạng thái server trả về có trùng khớp với mong muốn mới nhất không
-        const serverLiked = !!serverSummary?.userReaction;
         if (latestDesired && latestDesired.isLiked !== serverLiked) {
           // Người dùng đã ấn thêm trong lúc request đang bay, lặp lại để đồng bộ
           continue;
         }
 
         // Đã đồng bộ hoàn tất, cập nhật summary an toàn
-        if (serverSummary) {
+        if (serverData) {
           setPosts(prev => prev.map(p => {
             if (String(p.id) !== strPostId) return p;
             return {
               ...p,
-              isLikedByMe: !!serverSummary.userReaction,
-              myReaction: serverSummary.userReaction,
-              likesCount: serverSummary.totalCount,
-              reactionStats: serverSummary,
-              topReactions: serverSummary.topReactions
+              isLikedByMe: serverLiked,
+              myReaction: serverReaction,
+              likesCount: serverLikesCount,
+              reactionStats: serverData,
+              topReactions: serverTopReactions
             };
           }));
           setSelectedThreadPost(prev => {
             if (!prev || String(prev.id) !== strPostId) return prev;
             return {
               ...prev,
-              isLikedByMe: !!serverSummary.userReaction,
-              myReaction: serverSummary.userReaction,
-              likesCount: serverSummary.totalCount,
-              reactionStats: serverSummary,
-              topReactions: serverSummary.topReactions
+              isLikedByMe: serverLiked,
+              myReaction: serverReaction,
+              likesCount: serverLikesCount,
+              reactionStats: serverData,
+              topReactions: serverTopReactions
             };
           });
         }
@@ -1382,10 +1403,8 @@ const Home = ({ initialTab }) => {
       }
     } catch (err) {
       console.warn("Lỗi sync cảm xúc:", err);
-      if (err.response?.status === 404) {
-        setPosts(prev => prev.filter(p => String(p.id) !== strPostId));
-        setSelectedThreadPost(prev => (prev && String(prev.id) === strPostId) ? null : prev);
-      }
+      // TUYỆT ĐỐI KHÔNG XÓA BÀI VIẾT KHỎI FEED ĐỂ TRÁNH GIẬT NHẢY MÀN HÌNH
+      fetchPosts(true);
     } finally {
       reactionInFlightMapRef.current.delete(strPostId);
       reactionDesiredStateRef.current.delete(strPostId);
@@ -2293,9 +2312,13 @@ const Home = ({ initialTab }) => {
         if (scoreB !== scoreA) {
           return scoreB - scoreA;
         }
-        return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+        const timeDiff = new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+        if (timeDiff !== 0) return timeDiff;
+        return (Number(b.id) || 0) - (Number(a.id) || 0);
       }
-      return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+      const timeDiff = new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+      if (timeDiff !== 0) return timeDiff;
+      return (Number(b.id) || 0) - (Number(a.id) || 0);
     });
 
   const allCommunitySparks = Array.from(new Set(

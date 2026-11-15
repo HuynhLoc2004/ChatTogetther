@@ -94,9 +94,14 @@ public class PostController {
             JwtAuthenticationToken token,
             @PathVariable("id") Long postId,
             @RequestParam(value = "type", required = false) String reactionType,
-            @RequestParam(value = "reactionType", required = false) String reactionTypeAlt
+            @RequestParam(value = "reactionType", required = false) String reactionTypeAlt,
+            @RequestBody(required = false) java.util.Map<String, String> body
     ) {
-        String effectiveType = (reactionType != null && !reactionType.trim().isEmpty()) ? reactionType : reactionTypeAlt;
+        String effectiveType = (reactionType != null && !reactionType.trim().isEmpty()) 
+                ? reactionType 
+                : (reactionTypeAlt != null && !reactionTypeAlt.trim().isEmpty() 
+                    ? reactionTypeAlt 
+                    : (body != null ? body.get("type") : null));
         return ResponseEntity.ok(this.postService.toggleLikePost(token, postId, effectiveType));
     }
 
