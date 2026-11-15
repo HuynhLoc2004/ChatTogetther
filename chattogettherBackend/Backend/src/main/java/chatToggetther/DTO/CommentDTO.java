@@ -27,5 +27,17 @@ public class CommentDTO {
 
     private Long likesCount = 0L;
     private Boolean isLiked = false;
+
+    public Long getUserId() {
+        return authorId;
+    }
+
+    public String getUsername() {
+        return authorAccount;
+    }
+
+    public String getAvatarUrl() {
+        return authorAvatar;
+    }
 }
 

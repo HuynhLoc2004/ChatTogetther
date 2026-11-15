@@ -6,8 +6,7 @@ import {
 } from 'lucide-react';
 import axiosClient, { BACKEND_URL } from '../api/axiosClient';
 import toast from 'react-hot-toast';
-import SockJS from 'sockjs-client';
-import Stomp from 'stompjs';
+import { createStompClient } from '../utils/stompClient';
 import { UserAvatar } from '../pages/Home';
 
 export const ResonanceMatchModal = ({
@@ -239,10 +238,7 @@ export const ResonanceMatchModal = ({
 
     let isMounted = true;
     try {
-      const socketUrl = BACKEND_URL ? `${BACKEND_URL}/ws-gs-guide` : '/ws-gs-guide';
-      const socket = new SockJS(socketUrl, null, { transports: ['websocket'] });
-      const client = Stomp.over(socket);
-      client.debug = null;
+      const client = createStompClient();
       stompClientRef.current = client;
 
       client.connect({}, () => {

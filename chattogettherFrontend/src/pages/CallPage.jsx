@@ -4,10 +4,9 @@ import {
   Mic, MicOff, Video, VideoOff, PhoneOff, Monitor, MonitorOff, 
   Users, Volume2, Shield, ArrowLeft, Radio, Sparkles, PhoneCall
 } from 'lucide-react';
-import SockJS from 'sockjs-client';
-import Stomp from 'stompjs';
-import axiosClient, { BACKEND_URL } from '../api/axiosClient';
+import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
+import { createStompClient } from '../utils/stompClient';
 import { UserAvatar } from './Home';
 
 const ICE_SERVERS = {
@@ -271,7 +270,7 @@ const CallPage = () => {
     } else {
       navigate(-1);
     }
-  }, [notify, sendCallSignal, cleanupCall, stopRingAudio, isVideoParam, isVideoCall, isDirectCall, isRoomCall, userId, roomId, navigate]);
+  }, [sendCallSignal, cleanupCall, stopRingAudio, isVideoParam, isVideoCall, isDirectCall, isRoomCall, userId, roomId, navigate]);
 
   // 7. Handle Signal Incoming
   const handleCallSignal = useCallback(async (msg) => {
@@ -397,11 +396,8 @@ const CallPage = () => {
           }
         };
 
-        // Kết nối WebSocket STOMP chuẩn không kèm đuôi /api
-        const socketUrl = BACKEND_URL ? `${BACKEND_URL}/ws-gs-guide` : '/ws-gs-guide';
-        const socket = new SockJS(socketUrl, null, { transports: ['websocket'] });
-        const stomp = Stomp.over(socket);
-        stomp.debug = null; // Tắt log console
+        // Kết nối WebSocket STOMP chuẩn native browser
+        const stomp = createStompClient();
         stompClient.current = stomp;
 
         stomp.connect({}, async () => {

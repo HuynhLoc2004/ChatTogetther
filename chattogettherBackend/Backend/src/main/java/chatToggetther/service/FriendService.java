@@ -76,6 +76,9 @@ public class FriendService {
         if (senderId == null) {
             throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
         }
+        if (receiverId == null) {
+            throw new AppException(400, "Thiếu ID người nhận lời mời", 400);
+        }
         if (senderId.equals(receiverId)) {
             throw new AppException(400, "Bạn không thể gửi lời mời kết bạn cho chính mình", 400);
         }
@@ -136,6 +139,9 @@ public class FriendService {
         if (receiverId == null) {
             throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
         }
+        if (senderId == null) {
+            throw new AppException(400, "Thiếu ID người gửi lời mời", 400);
+        }
 
         UserEntity receiver = userRepository.findById(receiverId).orElseThrow(() ->
             new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "User không tồn tại", 404)
@@ -183,6 +189,9 @@ public class FriendService {
         Long currentUserId = SecurityUtils.extractUserId(token);
         if (currentUserId == null) {
             throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
+        }
+        if (targetId == null) {
+            throw new AppException(400, "Thiếu ID đối tượng", 400);
         }
 
         UserEntity u1 = userRepository.findById(currentUserId).orElseThrow(() ->
@@ -244,5 +253,38 @@ public class FriendService {
         List<UserDTO> dtos = list.stream().map(f -> mapToDTO(f.getUser(), "PENDING_RECEIVED")).collect(Collectors.toList());
 
         return new ResponseData<>(200, "Lấy danh sách lời mời kết bạn thành công", dtos);
+    }
+
+    @Transactional(readOnly = true)
+    public ResponseData<String> getFriendshipStatus(JwtAuthenticationToken token, Long targetId) {
+        Long currentUserId = SecurityUtils.extractUserId(token);
+        if (currentUserId == null || targetId == null || currentUserId.equals(targetId)) {
+            return new ResponseData<>(200, "Trạng thái quan hệ bạn bè", "NONE");
+        }
+
+        UserEntity u1 = userRepository.findById(currentUserId).orElse(null);
+        UserEntity u2 = userRepository.findById(targetId).orElse(null);
+        if (u1 == null || u2 == null) {
+            return new ResponseData<>(200, "Trạng thái quan hệ bạn bè", "NONE");
+        }
+
+        Optional<FriendshipEntity> existing = friendshipRepository.findFriendshipBetween(u1, u2);
+        if (existing.isEmpty()) {
+            return new ResponseData<>(200, "Chưa kết bạn", "NONE");
+        }
+
+        FriendshipEntity f = existing.get();
+        if ("ACCEPTED".equalsIgnoreCase(f.getStatus())) {
+            return new ResponseData<>(200, "Đã là bạn bè", "ACCEPTED");
+        }
+        if ("PENDING".equalsIgnoreCase(f.getStatus())) {
+            if (f.getUser().getId().equals(currentUserId)) {
+                return new ResponseData<>(200, "Đã gửi lời mời", "PENDING_SENT");
+            } else {
+                return new ResponseData<>(200, "Nhận được lời mời", "PENDING_RECEIVED");
+            }
+        }
+
+        return new ResponseData<>(200, "Chưa kết bạn", "NONE");
     }
 }

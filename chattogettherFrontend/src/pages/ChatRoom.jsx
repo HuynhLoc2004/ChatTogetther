@@ -15,8 +15,7 @@ import FriendsModal from './FriendsModal';
 import TalovinLogo from '../components/TalovinLogo';
 import GroupCollageAvatar from '../components/GroupCollageAvatar';
 import { UserAvatar } from './Home';
-import SockJS from 'sockjs-client';
-import Stomp from 'stompjs';
+import { createStompClient } from '../utils/stompClient';
 import toast from 'react-hot-toast';
 import { CHAT_THEMES, getThemeById } from '../utils/chatThemes';
 
@@ -891,10 +890,7 @@ const ChatRoom = () => {
       }
 
       // 2. Kết nối STOMP
-      const socketUrl = BACKEND_URL ? `${BACKEND_URL}/ws-gs-guide` : '/ws-gs-guide';
-      const socket = new SockJS(socketUrl, null, { transports: ['websocket'] });
-      const client = Stomp.over(socket);
-      client.debug = null;
+      const client = createStompClient();
       stompClient.current = client;
 
       client.connect({}, () => {

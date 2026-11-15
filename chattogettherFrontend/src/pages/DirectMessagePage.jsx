@@ -1,18 +1,17 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { 
   ArrowLeft, Search, MessageSquare, Phone, PhoneOff, Video, VideoOff, 
   Mic, MicOff, Send, Image as ImageIcon, Smile, MoreVertical, User, 
-  Clock, CheckCircle2, ChevronDown, Volume2, Shield, Share2, Sparkles
+  Clock, CheckCircle2, ChevronDown, Volume2, Shield, Share2, Sparkles,
+  PhoneCall, PhoneMissed
 } from 'lucide-react';
-import axiosClient, { BACKEND_URL } from '../api/axiosClient';
+import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
-import SockJS from 'sockjs-client';
-import Stomp from 'stompjs';
+import { createStompClient } from '../utils/stompClient';
 import { UserAvatar } from './Home';
 import TalovinLogo from '../components/TalovinLogo';
 import MobileBottomNav from '../components/MobileBottomNav';
-import { PhoneCall, PhoneMissed } from 'lucide-react';
 
 const ICE_SERVERS = {
   iceServers: [
@@ -22,8 +21,13 @@ const ICE_SERVERS = {
 };
 
 export const DirectMessagePage = () => {
-  const { userId: urlTargetUserId } = useParams();
+  const { userId: routeUserId } = useParams();
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
   const navigate = useNavigate();
+
+  const urlTargetUserId = routeUserId || searchParams.get('userId') || searchParams.get('user_id');
+  const passedTargetUser = location.state?.targetUser || location.state?.partner;
 
   const currentUserId = localStorage.getItem('user_id');
   const currentUserName = localStorage.getItem('nickname') || localStorage.getItem('account') || 'Bạn';
@@ -138,15 +142,19 @@ export const DirectMessagePage = () => {
     }
   }, [currentUserId, scrollToBottom]);
 
-  // Kích hoạt khi URL param thay đổi
+  // Kích hoạt khi URL param hoặc targetUser thay đổi
   const lastTargetIdRef = useRef(null);
   useEffect(() => {
-    if (urlTargetUserId && urlTargetUserId !== lastTargetIdRef.current) {
+    if (urlTargetUserId && (urlTargetUserId !== lastTargetIdRef.current || !activePartner)) {
       lastTargetIdRef.current = urlTargetUserId;
       const foundInFriends = friends.find(f => f.id?.toString() === urlTargetUserId?.toString());
-      openDirectChat(urlTargetUserId, foundInFriends);
+      const effectivePartner = passedTargetUser || foundInFriends;
+      if (effectivePartner && !foundInFriends) {
+        setFriends(prev => [effectivePartner, ...prev.filter(f => f.id?.toString() !== urlTargetUserId?.toString())]);
+      }
+      openDirectChat(urlTargetUserId, effectivePartner);
     }
-  }, [urlTargetUserId, friends, openDirectChat]);
+  }, [urlTargetUserId, friends, passedTargetUser, activePartner, openDirectChat]);
 
   // 3. Kết nối WebSocket
   useEffect(() => {
@@ -154,11 +162,7 @@ export const DirectMessagePage = () => {
     const token = localStorage.getItem('accesstoken');
 
     try {
-      const socketUrl = BACKEND_URL ? `${BACKEND_URL}/ws-gs-guide` : '/ws-gs-guide';
-      const socket = new SockJS(socketUrl, null, { transports: ['websocket'] });
-      client = Stomp.over(socket);
-      client.debug = () => {};
-
+      client = createStompClient();
       client.connect({ Authorization: `Bearer ${token}` }, () => {
         stompClient.current = client;
 

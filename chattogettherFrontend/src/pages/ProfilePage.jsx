@@ -7,7 +7,7 @@ import {
   Shield, Sparkles, Loader2, Users, Radio, Headphones,
   Mic, Play, Pause, Square, RotateCcw, AudioLines, Volume2,
   VolumeX, Music, Tag, CornerDownRight, Send, ChevronDown,
-  Compass, Plus, User
+  Compass, Plus, User, UserMinus
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
@@ -374,16 +374,25 @@ const ProfilePage = () => {
     }
   }, [effectiveUserId]);
 
-  // 3. Nạp danh sách bạn bè
+  // 3. Nạp danh sách bạn bè & kiểm tra quan hệ bạn bè chính xác
   const fetchUserFriends = useCallback(async () => {
     try {
       setLoadingFriends(true);
       const res = await axiosClient.get('/friends/list');
       if (res.data?.data) {
         setUserFriends(res.data.data);
-        if (!isMe && effectiveUserId) {
-          const isFriend = res.data.data.some(f => String(f.id) === String(effectiveUserId));
-          if (isFriend) setFriendStatus('ACCEPTED');
+      }
+      if (!isMe && effectiveUserId) {
+        try {
+          const statusRes = await axiosClient.get(`/friends/status/${effectiveUserId}`);
+          if (statusRes.data?.data) {
+            setFriendStatus(statusRes.data.data);
+          }
+        } catch (_) {
+          if (res.data?.data) {
+            const isFriend = res.data.data.some(f => String(f.id) === String(effectiveUserId));
+            if (isFriend) setFriendStatus('ACCEPTED');
+          }
         }
       }
     } catch (e) {
@@ -538,16 +547,94 @@ const ProfilePage = () => {
     }
   };
 
-  // Gửi lời mời kết bạn
+  // 1. Gửi lời mời kết bạn (Optimistic UI)
   const handleSendFriendRequest = async () => {
-    if (!effectiveUserId) return;
+    if (!effectiveUserId || processingFriend) return;
     setProcessingFriend(true);
+    setFriendStatus('PENDING_SENT');
     try {
-      await axiosClient.post(`/friends/request/${effectiveUserId}`);
-      setFriendStatus('PENDING_SENT');
-      toast.success("Đã gửi lời mời kết nối tần số!");
+      await axiosClient.post(`/friends/request/${effectiveUserId}`, null, {
+        params: { receiver_id: effectiveUserId }
+      });
+      toast.success("Đã gửi lời mời kết bạn!");
     } catch (err) {
-      toast.error(err.response?.data?.message || "Không thể gửi yêu cầu!");
+      setFriendStatus('NONE');
+      toast.error(err.response?.data?.message || "Không thể gửi yêu cầu kết bạn!");
+    } finally {
+      setProcessingFriend(false);
+    }
+  };
+
+  // 2. Chấp nhận lời mời kết bạn
+  const handleAcceptFriendRequest = async () => {
+    if (!effectiveUserId || processingFriend) return;
+    setProcessingFriend(true);
+    setFriendStatus('ACCEPTED');
+    try {
+      await axiosClient.post(`/friends/accept/${effectiveUserId}`, null, {
+        params: { sender_id: effectiveUserId }
+      });
+      toast.success("Đã đồng ý kết bạn!");
+      fetchUserFriends();
+    } catch (err) {
+      setFriendStatus('PENDING_RECEIVED');
+      toast.error(err.response?.data?.message || "Không thể chấp nhận lời mời!");
+    } finally {
+      setProcessingFriend(false);
+    }
+  };
+
+  // 3. Từ chối lời mời kết bạn
+  const handleDeclineFriendRequest = async () => {
+    if (!effectiveUserId || processingFriend) return;
+    setProcessingFriend(true);
+    setFriendStatus('NONE');
+    try {
+      await axiosClient.post(`/friends/decline/${effectiveUserId}`, null, {
+        params: { sender_id: effectiveUserId }
+      });
+      toast.success("Đã từ chối lời mời kết bạn.");
+    } catch (err) {
+      setFriendStatus('PENDING_RECEIVED');
+      toast.error(err.response?.data?.message || "Lỗi thao tác!");
+    } finally {
+      setProcessingFriend(false);
+    }
+  };
+
+  // 4. Hủy lời mời kết bạn đã gửi
+  const handleCancelFriendRequest = async () => {
+    if (!effectiveUserId || processingFriend) return;
+    setProcessingFriend(true);
+    setFriendStatus('NONE');
+    try {
+      await axiosClient.post(`/friends/cancel/${effectiveUserId}`, null, {
+        params: { friend_id: effectiveUserId }
+      });
+      toast.success("Đã hủy lời mời kết bạn.");
+    } catch (err) {
+      setFriendStatus('PENDING_SENT');
+      toast.error(err.response?.data?.message || "Không thể hủy lời mời!");
+    } finally {
+      setProcessingFriend(false);
+    }
+  };
+
+  // 5. Hủy kết bạn (Unfriend)
+  const handleUnfriend = async () => {
+    if (!effectiveUserId || processingFriend) return;
+    if (!window.confirm("Bạn có chắc chắn muốn hủy kết bạn với người này không?")) return;
+    setProcessingFriend(true);
+    setFriendStatus('NONE');
+    try {
+      await axiosClient.post(`/friends/remove/${effectiveUserId}`, null, {
+        params: { friend_id: effectiveUserId }
+      });
+      toast.success("Đã hủy kết bạn.");
+      fetchUserFriends();
+    } catch (err) {
+      setFriendStatus('ACCEPTED');
+      toast.error(err.response?.data?.message || "Lỗi khi hủy kết bạn!");
     } finally {
       setProcessingFriend(false);
     }
@@ -834,41 +921,140 @@ const ProfilePage = () => {
               {/* Hàng nút hành động (Touch-friendly h-10) */}
               <div>
                 {!isMe ? (
-                  <div className="grid grid-cols-2 gap-2.5">
+                  <div>
                     {friendStatus === 'ACCEPTED' ? (
-                      <div className="h-10 rounded-xl bg-zinc-900 text-zinc-300 border border-zinc-800 text-xs font-semibold flex items-center justify-center gap-1.5 select-none shadow-sm">
-                        <UserCheck size={14} className="text-emerald-400" />
-                        <span>Bạn bè</span>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <button
+                          type="button"
+                          onClick={handleUnfriend}
+                          disabled={processingFriend}
+                          className="h-10 rounded-xl bg-zinc-900 hover:bg-rose-500/10 text-zinc-300 hover:text-rose-400 border border-zinc-800 hover:border-rose-500/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-sm group"
+                          title="Bấm để hủy kết bạn"
+                        >
+                          <UserCheck size={14} className="text-emerald-400 group-hover:hidden" />
+                          <UserMinus size={14} className="hidden group-hover:block" />
+                          <span className="group-hover:hidden">Bạn bè</span>
+                          <span className="hidden group-hover:inline">Hủy kết bạn</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/messages?userId=${effectiveUserId}`, {
+                              state: {
+                                targetUser: {
+                                  id: effectiveUserId,
+                                  account: profile?.account,
+                                  nickname: profile?.nickname || profile?.account,
+                                  avatar: profile?.avatar
+                                }
+                              }
+                            });
+                          }}
+                          className="h-10 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs transition-colors duration-150 active:scale-[0.98] flex items-center justify-center gap-1.5 shadow-sm"
+                          title="Gửi tin nhắn trực tiếp"
+                        >
+                          <MessageSquare size={14} />
+                          <span>Nhắn tin</span>
+                        </button>
                       </div>
                     ) : friendStatus === 'PENDING_SENT' ? (
-                      <div className="h-10 rounded-xl bg-zinc-900 text-zinc-400 border border-zinc-800 text-xs font-semibold flex items-center justify-center gap-1.5 select-none shadow-sm">
-                        <Clock size={14} />
-                        <span>Đã gửi lời mời</span>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <button
+                          type="button"
+                          onClick={handleCancelFriendRequest}
+                          disabled={processingFriend}
+                          className="h-10 rounded-xl bg-zinc-900 hover:bg-rose-500/10 text-zinc-400 hover:text-rose-400 border border-zinc-800 hover:border-rose-500/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-sm group"
+                          title="Bấm để hủy lời mời đã gửi"
+                        >
+                          <Clock size={14} className="group-hover:hidden" />
+                          <X size={14} className="hidden group-hover:block" />
+                          <span className="group-hover:hidden">Đã gửi lời mời</span>
+                          <span className="hidden group-hover:inline">Hủy lời mời</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/messages?userId=${effectiveUserId}`, {
+                              state: {
+                                targetUser: {
+                                  id: effectiveUserId,
+                                  account: profile?.account,
+                                  nickname: profile?.nickname || profile?.account,
+                                  avatar: profile?.avatar
+                                }
+                              }
+                            });
+                          }}
+                          className="h-10 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs transition-colors duration-150 active:scale-[0.98] flex items-center justify-center gap-1.5 shadow-sm"
+                          title="Gửi tin nhắn trực tiếp"
+                        >
+                          <MessageSquare size={14} />
+                          <span>Nhắn tin</span>
+                        </button>
+                      </div>
+                    ) : friendStatus === 'PENDING_RECEIVED' ? (
+                      <div className="space-y-2">
+                        <div className="text-[11px] text-zinc-400 text-center font-medium">Người này đã gửi lời mời kết bạn</div>
+                        <div className="grid grid-cols-2 gap-2.5">
+                          <button
+                            type="button"
+                            onClick={handleAcceptFriendRequest}
+                            disabled={processingFriend}
+                            className="h-10 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all active:scale-95 disabled:opacity-50"
+                          >
+                            <Check size={14} />
+                            <span>Chấp nhận</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleDeclineFriendRequest}
+                            disabled={processingFriend}
+                            className="h-10 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800 text-xs font-medium flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
+                          >
+                            <X size={14} />
+                            <span>Từ chối</span>
+                          </button>
+                        </div>
                       </div>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={handleSendFriendRequest}
-                        disabled={processingFriend}
-                        className="h-10 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 font-semibold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50"
-                      >
-                        <UserPlus size={14} />
-                        <span>{processingFriend ? '...' : 'Kết bạn'}</span>
-                      </button>
-                    )}
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <button
+                          type="button"
+                          onClick={handleSendFriendRequest}
+                          disabled={processingFriend}
+                          className="h-10 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 font-semibold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50"
+                        >
+                          <UserPlus size={14} />
+                          <span>{processingFriend ? '...' : 'Kết bạn'}</span>
+                        </button>
 
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/messages/${targetUserId}`);
-                      }}
-                      className="h-10 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs transition-colors duration-150 active:scale-[0.98] flex items-center justify-center gap-1.5 shadow-sm"
-                      title="Gửi tin nhắn cho người này"
-                    >
-                      <MessageSquare size={14} />
-                      <span>Nhắn tin</span>
-                    </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/messages?userId=${effectiveUserId}`, {
+                              state: {
+                                targetUser: {
+                                  id: effectiveUserId,
+                                  account: profile?.account,
+                                  nickname: profile?.nickname || profile?.account,
+                                  avatar: profile?.avatar
+                                }
+                              }
+                            });
+                          }}
+                          className="h-10 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs transition-colors duration-150 active:scale-[0.98] flex items-center justify-center gap-1.5 shadow-sm"
+                          title="Gửi tin nhắn trực tiếp"
+                        >
+                          <MessageSquare size={14} />
+                          <span>Nhắn tin</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <button

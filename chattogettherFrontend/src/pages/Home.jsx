@@ -17,8 +17,6 @@ import axiosClient, { BACKEND_URL } from '../api/axiosClient';
 import { saveRoomsOffline, getRoomsOffline } from '../utils/offlineDB';
 import UserProfileModal from './UserProfileModal';
 import FriendsModal from './FriendsModal';
-import SockJS from 'sockjs-client';
-import Stomp from 'stompjs';
 import toast from 'react-hot-toast';
 import TalovinLogo from '../components/TalovinLogo';
 import GroupCollageAvatar from '../components/GroupCollageAvatar';
@@ -30,6 +28,7 @@ import UserAvatar from '../components/UserAvatar';
 import MobileBottomNav from '../components/MobileBottomNav';
 import PostReactionDock, { REACTION_DEFINITIONS } from '../components/PostReactionDock';
 import { playReactionPop, playCommentSend, playRemoveTick, updateSoundConfig } from '../utils/soundEffects';
+import { createStompClient } from '../utils/stompClient';
 import { formatCompactCount } from '../utils/numberFormat';
 import { useAuth } from '../context/AuthContext';
 
@@ -1966,10 +1965,7 @@ const Home = ({ initialTab }) => {
 
     let stompClient = null;
     try {
-      const socketUrl = BACKEND_URL ? `${BACKEND_URL}/ws-gs-guide` : '/ws-gs-guide';
-      const socket = new SockJS(socketUrl, null, { transports: ['websocket'] });
-      stompClient = Stomp.over(socket);
-      stompClient.debug = () => { };
+      stompClient = createStompClient();
       stompClient.connect({}, () => {
         if (!isMounted) return;
         stompClient.subscribe('/topic/rooms', () => fetchRooms(true));

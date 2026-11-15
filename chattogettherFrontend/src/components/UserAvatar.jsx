@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
 
 /**
- * Component UserAvatar duy nhất toàn hệ thống Talovin.
+ * Component UserAvatar chuẩn duy nhất toàn hệ thống Talovin.
  * - Ưu tiên ảnh thật nếu có (object-cover).
- * - Nếu không có ảnh thật: sinh avatar fallback theo công thức cố định duy nhất dựa trên username / account / id.
- * - Tuyệt đối không fallback sang 'user' hay 'guest' gây lệch seed màu.
+ * - Nếu không có ảnh thật: sinh avatar fallback theo công thức cố định duy nhất dựa trên username / account (lowercase).
+ * - Fallback dự phòng là String(userId).
+ * - Tuyệt đối không dùng displayName hay postId để tránh sinh 2 hình khác nhau cho cùng 1 user.
  * - Nếu user đang tải (undefined hoặc chưa có bất kỳ thông tin nào): render skeleton pulse.
  */
 const UserAvatar = ({
   user,
   avatar,
   name,
+  username,
+  account,
   userId,
   size = 36,
   className = '',
@@ -19,15 +22,31 @@ const UserAvatar = ({
   title,
   alt
 }) => {
-  // Bóc tách dữ liệu linh hoạt từ prop `user` hoặc các props độc lập
-  const rawAvatar = user?.avatarUrl || user?.avatar || avatar;
-  const rawId = user?.id || user?.userId || userId;
-  const rawName = user?.username || user?.account || user?.nickname || user?.displayName || name;
+  // 1. Bóc tách dữ liệu avatar thật
+  const rawAvatar = user?.avatarUrl || user?.avatar || user?.authorAvatar || avatar;
+  const rawId = user?.id || user?.userId || user?.authorId || userId;
 
-  // Tính toán seed cố định: Ưu tiên username/account hoặc id cụ thể
-  const effectiveSeed = (rawName || (rawId ? String(rawId) : '')).trim();
+  // 2. Khóa cứng seed fallback theo DUY NHẤT username / account (lowercase).
+  // Tuyệt đối không dùng displayName hay nickname có khoảng trắng gây lệch màu giữa các trang!
+  const candidateUsername = (
+    user?.account ||
+    user?.username ||
+    user?.authorAccount ||
+    username ||
+    account ||
+    (typeof name === 'string' && !name.includes(' ') && name.length <= 32 ? name : null)
+  );
 
-  // Kiểm tra trạng thái đang tải (chưa có bất kỳ thông tin nào về user)
+  let effectiveSeed = '';
+  if (candidateUsername && typeof candidateUsername === 'string') {
+    effectiveSeed = candidateUsername.trim().toLowerCase();
+  } else if (rawId) {
+    effectiveSeed = String(rawId).trim();
+  } else if (name && typeof name === 'string') {
+    effectiveSeed = name.trim().toLowerCase();
+  }
+
+  // Kiểm tra trạng thái đang tải
   const isLoading = !rawAvatar && !effectiveSeed;
 
   // URL fallback Dicebear cố định theo seed duy nhất
@@ -42,7 +61,7 @@ const UserAvatar = ({
     setHasError(false);
   }, [rawAvatar, effectiveSeed]);
 
-  // Nếu hoàn toàn chưa có thông tin user -> Render skeleton tròn chuẩn Dark Zinc
+  // Skeleton tròn chuẩn Dark Zinc khi đang tải
   if (isLoading) {
     return (
       <div
@@ -59,7 +78,7 @@ const UserAvatar = ({
     );
   }
 
-  // Quyết định nguồn ảnh: nếu có ảnh thật và chưa lỗi -> dùng ảnh thật; ngược lại dùng Dicebear
+  // Quyết định nguồn ảnh
   const imgSrc = (!hasError && rawAvatar && rawAvatar.trim())
     ? rawAvatar.trim()
     : fallbackUrl;
@@ -67,8 +86,8 @@ const UserAvatar = ({
   return (
     <img
       src={imgSrc}
-      alt={alt || rawName || 'Avatar'}
-      title={title || rawName || ''}
+      alt={alt || candidateUsername || name || 'Avatar'}
+      title={title || candidateUsername || name || ''}
       onClick={onClick}
       loading="lazy"
       className={`user-avatar-img select-none ${className}`}

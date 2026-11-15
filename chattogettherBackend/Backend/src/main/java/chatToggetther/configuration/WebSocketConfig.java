@@ -21,7 +21,11 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // Endpoint để client kết nối (Handshake) - hỗ trợ localhost, IP LAN, mobile
+        // 1. Endpoint WebSocket thuần chuẩn (ws://, wss://) - Zero unload permissions violation
+        registry.addEndpoint("/ws-gs-guide", "/ws")
+                .setAllowedOriginPatterns("*");
+
+        // 2. Endpoint hỗ trợ SockJS fallback
         registry.addEndpoint("/ws-gs-guide")
                 .setAllowedOriginPatterns("*")
                 .withSockJS();

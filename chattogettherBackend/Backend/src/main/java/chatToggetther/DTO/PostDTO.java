@@ -67,4 +67,16 @@ public class PostDTO {
     private Boolean isFriendInteraction;
     private String friendInteractionAccount;
     private String socialContext;
+
+    public Long getUserId() {
+        return authorId;
+    }
+
+    public String getUsername() {
+        return authorAccount;
+    }
+
+    public String getAvatarUrl() {
+        return authorAvatar;
+    }
 }

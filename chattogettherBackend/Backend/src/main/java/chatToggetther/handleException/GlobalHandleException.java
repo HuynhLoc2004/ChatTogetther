@@ -59,7 +59,16 @@ public class GlobalHandleException {
         responseErr.setCode(404);
         responseErr.setStatusCode(404);
         responseErr.setTime(new Date());
-        responseErr.setMessage("Nội dung hoặc bài viết này không tồn tại hoặc đã được gỡ bỏ.");
+        String path = e.getResourcePath() != null ? e.getResourcePath() : "";
+        if (path.contains("posts")) {
+            responseErr.setMessage("Nội dung hoặc bài viết này không tồn tại hoặc đã được gỡ bỏ.");
+        } else if (path.contains("friends")) {
+            responseErr.setMessage("Yêu cầu bạn bè hoặc tài khoản không tồn tại.");
+        } else if (path.contains("users") || path.contains("profile")) {
+            responseErr.setMessage("Người dùng không tồn tại hoặc đã xóa tài khoản.");
+        } else {
+            responseErr.setMessage("Tài nguyên yêu cầu không tồn tại.");
+        }
         return ResponseEntity.status(404).body(responseErr);
     }
 

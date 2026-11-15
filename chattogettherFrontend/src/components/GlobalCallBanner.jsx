@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Phone, PhoneOff, Video, Volume2 } from 'lucide-react';
-import SockJS from 'sockjs-client';
-import Stomp from 'stompjs';
-import axiosClient, { BACKEND_URL } from '../api/axiosClient';
+import axiosClient from '../api/axiosClient';
+import { createStompClient } from '../utils/stompClient';
 import { UserAvatar } from '../pages/Home';
 
 const GlobalCallBanner = () => {
@@ -98,10 +97,7 @@ const GlobalCallBanner = () => {
     if (!effectiveUserId) return;
 
     let isMounted = true;
-    const socketUrl = BACKEND_URL ? `${BACKEND_URL}/ws-gs-guide` : '/ws-gs-guide';
-    const socket = new SockJS(socketUrl, null, { transports: ['websocket'] });
-    const client = Stomp.over(socket);
-    client.debug = null;
+    const client = createStompClient();
     stompClient.current = client;
 
     client.connect({}, () => {
