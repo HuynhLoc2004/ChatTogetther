@@ -29,7 +29,7 @@ import ChallengeDeckModal from '../components/ChallengeDeckModal';
 import UserAvatar from '../components/UserAvatar';
 import MobileBottomNav from '../components/MobileBottomNav';
 import PostReactionDock, { REACTION_DEFINITIONS } from '../components/PostReactionDock';
-import { playReactionPop, playCommentSend, playRemoveTick } from '../utils/soundEffects';
+import { playReactionPop, playCommentSend, playRemoveTick, updateSoundConfig } from '../utils/soundEffects';
 import { formatCompactCount } from '../utils/numberFormat';
 import { useAuth } from '../context/AuthContext';
 
@@ -51,61 +51,17 @@ const getAudioCtx = () => {
   return window._talovinAudioCtx;
 };
 
-// Âm thanh khi thả Tim / Bày tỏ cảm xúc (Pop bubble nảy êm tai, âm lượng rõ nét)
+// Âm thanh khi thả Tim / Bày tỏ cảm xúc (Pop pha lê trong suốt chuẩn Apple/iOS, không đục)
 export const playHeartSound = () => {
   try {
-    const ctx = getAudioCtx();
-    if (!ctx) return;
-    if (ctx.state === 'suspended') {
-      ctx.resume().catch(() => { });
-    }
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    osc.type = 'sine';
-    const now = ctx.currentTime;
-
-    osc.frequency.setValueAtTime(420, now);
-    osc.frequency.exponentialRampToValueAtTime(880, now + 0.12);
-
-    gain.gain.setValueAtTime(0.35, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
-
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-
-    osc.start(now);
-    osc.stop(now + 0.15);
+    playReactionPop();
   } catch (_) { }
 };
 
-// Âm thanh khi gửi Phản hồi / Bình luận thành công (Chime đôi thánh thót)
+// Âm thanh khi gửi Phản hồi / Bình luận thành công (Chime đôi thánh thót, trong vắt)
 export const playCommentSuccessSound = () => {
   try {
-    const ctx = getAudioCtx();
-    if (!ctx) return;
-    if (ctx.state === 'suspended') {
-      ctx.resume().catch(() => { });
-    }
-    const now = ctx.currentTime;
-
-    [587.33, 880.00].forEach((freq, idx) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-
-      osc.type = 'triangle';
-      const startAt = now + idx * 0.08;
-      osc.frequency.setValueAtTime(freq, startAt);
-
-      gain.gain.setValueAtTime(0.30, startAt);
-      gain.gain.exponentialRampToValueAtTime(0.001, startAt + 0.24);
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-
-      osc.start(startAt);
-      osc.stop(startAt + 0.25);
-    });
+    playCommentSend();
   } catch (_) { }
 };
 
@@ -1595,7 +1551,6 @@ const Home = ({ initialTab }) => {
     const text = commentInputs[postId]?.trim();
     if (!text) return;
 
-    playCommentSend();
     const replyTarget = replyTargetMap[postId];
     const payload = {
       content: text,
@@ -1987,6 +1942,24 @@ const Home = ({ initialTab }) => {
       checkActiveRoom();
       fetchFriends();
       fetchPendingFriendsCount();
+
+      // Đồng bộ cấu hình âm thanh & hệ thống từ API công khai
+      try {
+        axiosClient.get('/public/system-config').then(res => {
+          if (res.data?.data && isMounted) {
+            const cfg = res.data.data;
+            setSystemConfig(cfg);
+            if (cfg.sound_theme || cfg.sound_volume !== undefined || cfg.sound_reaction_enabled !== undefined || cfg.sound_comment_enabled !== undefined) {
+              updateSoundConfig({
+                theme: cfg.sound_theme,
+                volume: cfg.sound_volume !== undefined ? Number(cfg.sound_volume) : undefined,
+                reactionEnabled: cfg.sound_reaction_enabled !== undefined ? String(cfg.sound_reaction_enabled) === 'true' : undefined,
+                commentEnabled: cfg.sound_comment_enabled !== undefined ? String(cfg.sound_comment_enabled) === 'true' : undefined
+              });
+            }
+          }
+        }).catch(() => {});
+      } catch (_) {}
     };
 
     init();
@@ -2042,6 +2015,14 @@ const Home = ({ initialTab }) => {
                     setReportReasons(parsed);
                   }
                 } catch { }
+              }
+              if (cfg.sound_theme || cfg.sound_volume !== undefined || cfg.sound_reaction_enabled !== undefined || cfg.sound_comment_enabled !== undefined) {
+                updateSoundConfig({
+                  theme: cfg.sound_theme,
+                  volume: cfg.sound_volume !== undefined ? Number(cfg.sound_volume) : undefined,
+                  reactionEnabled: cfg.sound_reaction_enabled !== undefined ? String(cfg.sound_reaction_enabled) === 'true' : undefined,
+                  commentEnabled: cfg.sound_comment_enabled !== undefined ? String(cfg.sound_comment_enabled) === 'true' : undefined
+                });
               }
             }
           } catch (e) {

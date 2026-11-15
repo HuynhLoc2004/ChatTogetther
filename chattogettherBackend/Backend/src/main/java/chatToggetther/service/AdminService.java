@@ -359,6 +359,10 @@ public class AdminService {
         if (!map.containsKey("icebreaker_hourly_limit")) map.put("icebreaker_hourly_limit", "3");
         if (!map.containsKey("maintenance_mode")) map.put("maintenance_mode", "false");
         if (!map.containsKey("announcement_banner")) map.put("announcement_banner", "");
+        if (!map.containsKey("sound_theme")) map.put("sound_theme", "CRYSTAL_POP");
+        if (!map.containsKey("sound_volume")) map.put("sound_volume", "70");
+        if (!map.containsKey("sound_reaction_enabled")) map.put("sound_reaction_enabled", "true");
+        if (!map.containsKey("sound_comment_enabled")) map.put("sound_comment_enabled", "true");
 
         return new ResponseData<>(200, "Lấy cấu hình hệ thống thành công", map);
     }

@@ -8,12 +8,20 @@ import {
   AlertTriangle, CheckCircle2, ChevronRight, Sliders, LayoutGrid,
   ShieldCheck, ShieldAlert, KeyRound, Palette, ExternalLink, Layers,
   FolderCog, Save, UserCheck, ShieldPlus, LogOut, Menu, Globe,
-  FileText, Repeat, RotateCcw, AlertOctagon, Heart, Signal, Disc3, Clock, Headphones, Pin
+  FileText, Repeat, RotateCcw, AlertOctagon, Heart, Signal, Disc3, Clock, Headphones, Pin,
+  Volume2, VolumeX, SlidersHorizontal, BellRing
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
 import TalovinLogo from '../components/TalovinLogo';
 import UserAvatar from '../components/UserAvatar';
+import { 
+  playReactionPop, 
+  playCommentSend, 
+  playRemoveTick, 
+  updateSoundConfig, 
+  getSoundConfig 
+} from '../utils/soundEffects';
 
 // ==========================================
 // ĐỊNH NGHĨA HỆ THỐNG QUYỀN HẠN & VAI TRÒ CHUẨN (RBAC)
@@ -83,7 +91,9 @@ export const AdminDashboard = () => {
   // State cho các Module gộp (7 Tabs chuẩn mực)
   const [radioMusicSubTab, setRadioMusicSubTab] = useState('intents'); // 'intents' | 'music'
   const [communitySubTab, setCommunitySubTab] = useState('groups'); // 'groups' | 'categories' | 'posts' | 'reports'
-  const [cardsVibesSubTab, setCardsVibesSubTab] = useState('challenges'); // 'challenges' | 'vibes' | 'reactions'
+  const [cardsVibesSubTab, setCardsVibesSubTab] = useState('challenges'); // 'challenges' | 'vibes' | 'reactions' | 'sounds'
+  const [soundConfig, setSoundConfig] = useState(() => getSoundConfig());
+  const [isSavingSound, setIsSavingSound] = useState(false);
   const [adminReactions, setAdminReactions] = useState([]);
   const [loadingReactions, setLoadingReactions] = useState(false);
   const [isReactionModalOpen, setIsReactionModalOpen] = useState(false);
@@ -581,6 +591,16 @@ export const AdminDashboard = () => {
             announcement_banner: d.announcement_banner || ''
           });
         }
+        if (d.sound_theme || d.sound_volume !== undefined || d.sound_reaction_enabled !== undefined || d.sound_comment_enabled !== undefined) {
+          const loadedSound = {
+            theme: d.sound_theme || 'CRYSTAL_POP',
+            volume: d.sound_volume !== undefined ? Number(d.sound_volume) : 70,
+            reactionEnabled: d.sound_reaction_enabled !== undefined ? String(d.sound_reaction_enabled) === 'true' : true,
+            commentEnabled: d.sound_comment_enabled !== undefined ? String(d.sound_comment_enabled) === 'true' : true
+          };
+          setSoundConfig(loadedSound);
+          updateSoundConfig(loadedSound);
+        }
       }
     } catch (e) {
       console.error("Lỗi nạp cấu hình hệ thống:", e);
@@ -954,6 +974,24 @@ export const AdminDashboard = () => {
       toast.error(err.response?.data?.message || "Không thể cập nhật cấu hình");
     } finally {
       setIsSavingConfig(false);
+    }
+  };
+
+  const handleSaveSoundConfig = async () => {
+    try {
+      setIsSavingSound(true);
+      const payload = {
+        sound_theme: soundConfig.theme,
+        sound_volume: String(soundConfig.volume),
+        sound_reaction_enabled: String(soundConfig.reactionEnabled),
+        sound_comment_enabled: String(soundConfig.commentEnabled)
+      };
+      await saveConfigToBackend(payload, "Đã cập nhật cấu hình âm thanh hệ thống thành công!");
+      updateSoundConfig(soundConfig);
+    } catch (err) {
+      toast.error("Không thể lưu cấu hình âm thanh!");
+    } finally {
+      setIsSavingSound(false);
     }
   };
 
@@ -2740,6 +2778,17 @@ const handleAddTrack = async (e) => {
                   >
                     Biểu Tượng Cảm Xúc ({adminReactions.length})
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setCardsVibesSubTab('sounds')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all ${
+                      cardsVibesSubTab === 'sounds'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Âm Thanh Tương Tác
+                  </button>
                 </div>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
@@ -3040,6 +3089,17 @@ const handleAddTrack = async (e) => {
                   >
                     Biểu Tượng Cảm Xúc ({adminReactions.length})
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setCardsVibesSubTab('sounds')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all ${
+                      cardsVibesSubTab === 'sounds'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Âm Thanh Tương Tác
+                  </button>
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
@@ -3155,6 +3215,17 @@ const handleAddTrack = async (e) => {
                     }`}
                   >
                     Biểu Tượng Cảm Xúc ({adminReactions.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCardsVibesSubTab('sounds')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all ${
+                      cardsVibesSubTab === 'sounds'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Âm Thanh Tương Tác
                   </button>
                 </div>
 
@@ -3405,6 +3476,321 @@ const handleAddTrack = async (e) => {
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* ====================================================
+                TAB: QUẢN LÝ HIỆU ỨNG ÂM THANH TƯƠNG TÁC (SOUND EFFECTS & HAPTICS)
+                ==================================================== */}
+            {(activeTab === 'cards_vibes' || activeTab === 'challenges' || activeTab === 'vibes') && (hasPermission('TL_PERM_CHALLENGE_MANAGE') || hasPermission('TL_PERM_TOPIC_MANAGE')) && cardsVibesSubTab === 'sounds' && (
+              <div className="space-y-6 animate-fade-in">
+                {/* SUB-TAB CHUYỂN ĐỔI: THẺ BÀI & CẢM XÚC */}
+                <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-3 mb-5">
+                  <button
+                    type="button"
+                    onClick={() => setCardsVibesSubTab('challenges')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all ${
+                      cardsVibesSubTab === 'challenges'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Câu hỏi Thử thách ({challenges.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCardsVibesSubTab('vibes')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all ${
+                      cardsVibesSubTab === 'vibes'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Thẻ Cảm Xúc Sảnh ({parsedVibes.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCardsVibesSubTab('reactions')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all ${
+                      cardsVibesSubTab === 'reactions'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Biểu Tượng Cảm Xúc ({adminReactions.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCardsVibesSubTab('sounds')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all ${
+                      cardsVibesSubTab === 'sounds'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Âm Thanh Tương Tác
+                  </button>
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-xl font-bold text-zinc-100 tracking-tight flex items-center gap-2">
+                      <Volume2 size={20} className="text-zinc-400" />
+                      <span>Cấu Hình Âm Thanh Tương Tác (Haptic Audio)</span>
+                    </h2>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      Tùy chỉnh gói âm thanh khi thả tim, phản hồi và bình luận. Âm thanh Web Audio pha lê trong trẻo, không trễ mạng và triệt tiêu 100% tiếng đục.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSaveSoundConfig}
+                    disabled={isSavingSound}
+                    className="h-9 px-4 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs flex items-center gap-2 shadow-sm transition-all disabled:opacity-50"
+                  >
+                    <Save size={14} />
+                    <span>{isSavingSound ? 'Đang lưu...' : 'Lưu Cấu Hình'}</span>
+                  </button>
+                </div>
+
+                {/* Grid 2 Cột Cấu Hình & Bảng Nghe Thử */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                  {/* Cột Trái (7 cols): Chọn Gói Âm Thanh & Tùy Chọn */}
+                  <div className="lg:col-span-7 space-y-4">
+                    {/* Thẻ Chọn Theme */}
+                    <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-5 space-y-4">
+                      <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
+                        <Sparkles size={14} className="text-zinc-400" />
+                        <span>Gói Âm Sắc Hệ Thống (Sound Scheme)</span>
+                      </h3>
+
+                      <div className="space-y-2.5">
+                        {[
+                          {
+                            id: 'CRYSTAL_POP',
+                            name: 'Pha Lê Trong Suốt (Chuẩn Apple / iOS)',
+                            tag: 'Khuyên Dùng',
+                            desc: 'Âm thanh bọt nước trong vắt (820Hz - 1520Hz) kết hợp tia lấp lánh và chime đôi thanh khiết. Tuyệt đối không có âm trầm đục.',
+                            badge: 'Rõ & Trong'
+                          },
+                          {
+                            id: 'BUBBLE_DROP',
+                            name: 'Giọt Nước Tự Nhiên (Telegram Style)',
+                            tag: 'Thư Giãn',
+                            desc: 'Tiếng giọt sương mềm mại tự nhiên, êm tai, mang lại cảm giác chill nhẹ nhàng.',
+                            badge: 'Mộc & Êm'
+                          },
+                          {
+                            id: 'MODERN_SNAP',
+                            name: 'Snap Công Nghệ Tối Giản',
+                            tag: 'Minimal',
+                            desc: 'Click snap dứt khoát cực ngắn và chime công nghệ hiện đại, phản hồi xúc giác tinh tế.',
+                            badge: 'Gọn & Dứt Khoát'
+                          },
+                          {
+                            id: 'MUTED',
+                            name: 'Tắt Toàn Bộ Âm Thanh (Silent Mode)',
+                            tag: 'Tắt Tiếng',
+                            desc: 'Hệ thống giữ im lặng tuyệt đối khi tương tác trên toàn mạng xã hội.',
+                            badge: 'Im Lặng'
+                          }
+                        ].map((item) => {
+                          const isSelected = soundConfig.theme === item.id;
+                          return (
+                            <div
+                              key={item.id}
+                              onClick={() => setSoundConfig(prev => ({ ...prev, theme: item.id }))}
+                              className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-start justify-between gap-3 ${
+                                isSelected
+                                  ? 'bg-zinc-800/80 border-zinc-500 shadow-sm'
+                                  : 'bg-zinc-950/60 border-zinc-800/70 hover:border-zinc-700 hover:bg-zinc-900/60'
+                              }`}
+                            >
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-xs font-semibold ${isSelected ? 'text-white' : 'text-zinc-200'}`}>
+                                    {item.name}
+                                  </span>
+                                  <span className="font-mono text-[10px] px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-300 border border-zinc-700/60">
+                                    {item.tag}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-zinc-400 mt-1 leading-relaxed">
+                                  {item.desc}
+                                </p>
+                              </div>
+                              <div className="shrink-0 pt-0.5">
+                                <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all ${
+                                  isSelected ? 'border-white bg-white text-zinc-950' : 'border-zinc-700 bg-zinc-900'
+                                }`}>
+                                  {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-zinc-950" />}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Thẻ Điều Khiển Âm Lượng & Bộ Lọc */}
+                    <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-5 space-y-4">
+                      <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
+                        <SlidersHorizontal size={14} className="text-zinc-400" />
+                        <span>Mức Âm Lượng & Bật/Tắt Riêng Biệt</span>
+                      </h3>
+
+                      {/* Slider âm lượng */}
+                      <div>
+                        <div className="flex items-center justify-between text-xs mb-2">
+                          <span className="text-zinc-400 font-medium">Âm lượng hiệu ứng</span>
+                          <span className="font-mono text-zinc-200 font-bold tabular-nums bg-zinc-800 px-2 py-0.5 rounded border border-zinc-700">
+                            {soundConfig.volume}%
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          step="5"
+                          value={soundConfig.volume}
+                          onChange={(e) => setSoundConfig(prev => ({ ...prev, volume: Number(e.target.value) }))}
+                          className="w-full accent-white h-1.5 bg-zinc-800 rounded-lg cursor-pointer"
+                        />
+                      </div>
+
+                      {/* Toggles */}
+                      <div className="pt-2 border-t border-zinc-800/60 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-xs font-medium text-zinc-200">Âm thanh khi Thả Tim / Thả Cảm Xúc</div>
+                            <div className="text-[11px] text-zinc-400">Phát âm thanh khi người dùng thả tim bài viết hoặc phản hồi</div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setSoundConfig(prev => ({ ...prev, reactionEnabled: !prev.reactionEnabled }))}
+                            className={`w-11 h-6 rounded-full transition-colors relative focus:outline-none ${
+                              soundConfig.reactionEnabled ? 'bg-white' : 'bg-zinc-800'
+                            }`}
+                          >
+                            <span
+                              className={`absolute top-1 left-1 bg-zinc-950 w-4 h-4 rounded-full transition-transform ${
+                                soundConfig.reactionEnabled ? 'translate-x-5' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-xs font-medium text-zinc-200">Âm thanh khi Gửi Bình Luận Thành Công</div>
+                            <div className="text-[11px] text-zinc-400">Phát chime hoàn tất tinh tế khi bình luận được gửi lên hệ thống</div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setSoundConfig(prev => ({ ...prev, commentEnabled: !prev.commentEnabled }))}
+                            className={`w-11 h-6 rounded-full transition-colors relative focus:outline-none ${
+                              soundConfig.commentEnabled ? 'bg-white' : 'bg-zinc-800'
+                            }`}
+                          >
+                            <span
+                              className={`absolute top-1 left-1 bg-zinc-950 w-4 h-4 rounded-full transition-transform ${
+                                soundConfig.commentEnabled ? 'translate-x-5' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Cột Phải (5 cols): Bảng Nghe Thử Trực Tiếp (Live Soundboard Preview) */}
+                  <div className="lg:col-span-5 space-y-4">
+                    <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-5 space-y-4">
+                      <div>
+                        <h3 className="text-xs font-bold text-zinc-200 uppercase tracking-wider flex items-center gap-2">
+                          <Play size={14} className="text-zinc-400" />
+                          <span>Nghe Thử Tức Thì (Live Preview)</span>
+                        </h3>
+                        <p className="text-[11px] text-zinc-400 mt-1">
+                          Bấm vào các nút bên dưới để nghe thử trực tiếp âm thanh tương ứng với gói đang chọn ({soundConfig.theme}) ở mức âm lượng {soundConfig.volume}%.
+                        </p>
+                      </div>
+
+                      <div className="space-y-3 pt-2">
+                        {/* Nút 1: Nghe Thả Cảm Xúc / Tim */}
+                        <button
+                          type="button"
+                          onClick={() => playReactionPop(soundConfig.theme, soundConfig.volume)}
+                          className="w-full p-3 rounded-xl bg-zinc-950/70 hover:bg-zinc-800 border border-zinc-800/80 hover:border-zinc-700 text-left transition-all flex items-center justify-between group active:scale-[0.99]"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-rose-400 group-hover:scale-110 transition-transform">
+                              <Heart size={16} fill="currentColor" />
+                            </div>
+                            <div>
+                              <div className="text-xs font-semibold text-zinc-100">Tiếng Thả Tim & Cảm Xúc</div>
+                              <div className="text-[10.5px] text-zinc-500 font-mono">playReactionPop()</div>
+                            </div>
+                          </div>
+                          <span className="text-xs font-medium text-zinc-400 group-hover:text-white px-2.5 py-1 rounded-md bg-zinc-900 border border-zinc-800">
+                            Phát Thử
+                          </span>
+                        </button>
+
+                        {/* Nút 2: Nghe Gửi Bình Luận */}
+                        <button
+                          type="button"
+                          onClick={() => playCommentSend(soundConfig.theme, soundConfig.volume)}
+                          className="w-full p-3 rounded-xl bg-zinc-950/70 hover:bg-zinc-800 border border-zinc-800/80 hover:border-zinc-700 text-left transition-all flex items-center justify-between group active:scale-[0.99]"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300 group-hover:scale-110 transition-transform">
+                              <MessageSquare size={16} />
+                            </div>
+                            <div>
+                              <div className="text-xs font-semibold text-zinc-100">Tiếng Gửi Bình Luận</div>
+                              <div className="text-[10.5px] text-zinc-500 font-mono">playCommentSend()</div>
+                            </div>
+                          </div>
+                          <span className="text-xs font-medium text-zinc-400 group-hover:text-white px-2.5 py-1 rounded-md bg-zinc-900 border border-zinc-800">
+                            Phát Thử
+                          </span>
+                        </button>
+
+                        {/* Nút 3: Nghe Gỡ Cảm Xúc */}
+                        <button
+                          type="button"
+                          onClick={() => playRemoveTick(soundConfig.volume)}
+                          className="w-full p-3 rounded-xl bg-zinc-950/70 hover:bg-zinc-800 border border-zinc-800/80 hover:border-zinc-700 text-left transition-all flex items-center justify-between group active:scale-[0.99]"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 group-hover:scale-110 transition-transform">
+                              <RotateCcw size={15} />
+                            </div>
+                            <div>
+                              <div className="text-xs font-semibold text-zinc-100">Tiếng Gỡ Tim / Hủy</div>
+                              <div className="text-[10.5px] text-zinc-500 font-mono">playRemoveTick()</div>
+                            </div>
+                          </div>
+                          <span className="text-xs font-medium text-zinc-400 group-hover:text-white px-2.5 py-1 rounded-md bg-zinc-900 border border-zinc-800">
+                            Phát Thử
+                          </span>
+                        </button>
+                      </div>
+
+                      {/* Lưu ý kỹ thuật */}
+                      <div className="p-3 rounded-xl bg-zinc-950/40 border border-zinc-800/50 text-[11px] text-zinc-400 space-y-1">
+                        <div className="font-semibold text-zinc-300 flex items-center gap-1.5">
+                          <CheckCircle2 size={13} className="text-zinc-400" />
+                          <span>Đồng Bộ Tự Động Toàn Mạng</span>
+                        </div>
+                        <p>
+                          Khi lưu cấu hình, máy chủ sẽ tự động phát tín hiệu WebSocket STOMP <code className="text-zinc-300 bg-zinc-900 px-1 py-0.5 rounded font-mono text-[10px]">/topic/system-config</code> để toàn bộ người dùng đang online cập nhật âm thanh mới ngay tức khắc mà không cần reload trang.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
