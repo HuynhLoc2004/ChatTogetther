@@ -410,8 +410,8 @@ const Home = ({ initialTab }) => {
   const [hotSearches, setHotSearches] = useState([]);
   const [activeReactionPicker, setActiveReactionPicker] = useState(null);
   const reactionTimeoutRef = useRef(null);
-  const reactionDebounceMapRef = useRef(new Map());
-  const reactionIntentMapRef = useRef(new Map());
+  const reactionInFlightMapRef = useRef(new Map());
+  const reactionDesiredStateRef = useRef(new Map());
 
   // Lắng nghe click bên ngoài, di chuột ra ngoài và cuộn trang để đóng reactions popup
   useEffect(() => {
@@ -1262,18 +1262,24 @@ const Home = ({ initialTab }) => {
     }
   };
 
-  // Thả cảm xúc với cơ chế Optimistic 0ms + Debounce Mutex chống race condition khi spam click
-  const handleReactPost = useCallback((postId, reactionType) => {
+  // Thả cảm xúc với cơ chế Optimistic 0ms + Mutex chống race condition tuyệt đối
+  const handleReactPost = useCallback(async (postId, reactionType) => {
     if (!postId) return;
+    const strPostId = String(postId);
     const targetType = (reactionType || 'HEART').toUpperCase();
+
+    let nextIsLiked = true;
+    let nextReaction = targetType;
 
     // 1. Cập nhật Optimistic 0ms trên danh sách bài viết ngoài Sảnh
     setPosts(prev => prev.map(p => {
-      if (String(p.id) !== String(postId)) return p;
+      if (String(p.id) !== strPostId) return p;
       const wasLiked = p.isLikedByMe;
       const sameType = p.myReaction === targetType;
 
       if (wasLiked && sameType) {
+        nextIsLiked = false;
+        nextReaction = null;
         return {
           ...p,
           isLikedByMe: false,
@@ -1281,6 +1287,8 @@ const Home = ({ initialTab }) => {
           likesCount: Math.max(0, (p.likesCount || 1) - 1)
         };
       } else {
+        nextIsLiked = true;
+        nextReaction = targetType;
         return {
           ...p,
           isLikedByMe: true,
@@ -1292,7 +1300,7 @@ const Home = ({ initialTab }) => {
 
     // 2. Cập nhật Optimistic 0ms cho modal bài viết chi tiết nếu đang mở
     setSelectedThreadPost(prev => {
-      if (!prev || String(prev.id) !== String(postId)) return prev;
+      if (!prev || String(prev.id) !== strPostId) return prev;
       const wasLiked = prev.isLikedByMe;
       const sameType = prev.myReaction === targetType;
 
@@ -1313,59 +1321,75 @@ const Home = ({ initialTab }) => {
       }
     });
 
-    // 3. Quản lý Debounce & Mutex theo từng postId
-    const strPostId = String(postId);
-    reactionIntentMapRef.current.set(strPostId, targetType);
+    // 3. Ghi nhận trạng thái mong muốn mới nhất của người dùng
+    reactionDesiredStateRef.current.set(strPostId, {
+      isLiked: nextIsLiked,
+      reactionType: nextReaction
+    });
 
-    const existingTimer = reactionDebounceMapRef.current.get(strPostId);
-    if (existingTimer) {
-      clearTimeout(existingTimer);
+    // Nếu đang có request in-flight cho bài viết này, nó sẽ tiếp tục xử lý sau khi hoàn thành
+    if (reactionInFlightMapRef.current.get(strPostId)) {
+      return;
     }
 
-    const timer = setTimeout(async () => {
-      const intentType = reactionIntentMapRef.current.get(strPostId);
-      reactionIntentMapRef.current.delete(strPostId);
-      reactionDebounceMapRef.current.delete(strPostId);
+    reactionInFlightMapRef.current.set(strPostId, true);
 
-      try {
+    try {
+      while (true) {
+        const desired = reactionDesiredStateRef.current.get(strPostId);
+        const sendType = desired?.reactionType || targetType;
+
         const res = await axiosClient.post(`/posts/${postId}/react`, null, {
-          params: { type: intentType || 'HEART' }
+          params: { type: sendType || 'HEART' }
         });
-        if (res.data && res.data.data) {
-          const summary = res.data.data;
+
+        const serverSummary = res?.data?.data;
+        const latestDesired = reactionDesiredStateRef.current.get(strPostId);
+
+        // Kiểm tra xem trạng thái server trả về có trùng khớp với mong muốn mới nhất không
+        const serverLiked = !!serverSummary?.userReaction;
+        if (latestDesired && latestDesired.isLiked !== serverLiked) {
+          // Người dùng đã ấn thêm trong lúc request đang bay, lặp lại để đồng bộ
+          continue;
+        }
+
+        // Đã đồng bộ hoàn tất, cập nhật summary an toàn
+        if (serverSummary) {
           setPosts(prev => prev.map(p => {
             if (String(p.id) !== strPostId) return p;
             return {
               ...p,
-              isLikedByMe: !!summary.userReaction,
-              myReaction: summary.userReaction,
-              likesCount: summary.totalCount,
-              reactionStats: summary,
-              topReactions: summary.topReactions
+              isLikedByMe: !!serverSummary.userReaction,
+              myReaction: serverSummary.userReaction,
+              likesCount: serverSummary.totalCount,
+              reactionStats: serverSummary,
+              topReactions: serverSummary.topReactions
             };
           }));
           setSelectedThreadPost(prev => {
             if (!prev || String(prev.id) !== strPostId) return prev;
             return {
               ...prev,
-              isLikedByMe: !!summary.userReaction,
-              myReaction: summary.userReaction,
-              likesCount: summary.totalCount,
-              reactionStats: summary,
-              topReactions: summary.topReactions
+              isLikedByMe: !!serverSummary.userReaction,
+              myReaction: serverSummary.userReaction,
+              likesCount: serverSummary.totalCount,
+              reactionStats: serverSummary,
+              topReactions: serverSummary.topReactions
             };
           });
         }
-      } catch (err) {
-        console.warn("Lỗi sync cảm xúc:", err);
-        if (err.response?.status === 404) {
-          setPosts(prev => prev.filter(p => String(p.id) !== strPostId));
-          setSelectedThreadPost(prev => (prev && String(prev.id) === strPostId) ? null : prev);
-        }
+        break;
       }
-    }, 300);
-
-    reactionDebounceMapRef.current.set(strPostId, timer);
+    } catch (err) {
+      console.warn("Lỗi sync cảm xúc:", err);
+      if (err.response?.status === 404) {
+        setPosts(prev => prev.filter(p => String(p.id) !== strPostId));
+        setSelectedThreadPost(prev => (prev && String(prev.id) === strPostId) ? null : prev);
+      }
+    } finally {
+      reactionInFlightMapRef.current.delete(strPostId);
+      reactionDesiredStateRef.current.delete(strPostId);
+    }
   }, []);
 
   // Bình luận
@@ -1957,7 +1981,14 @@ const Home = ({ initialTab }) => {
       stompClient.connect({}, () => {
         if (!isMounted) return;
         stompClient.subscribe('/topic/rooms', () => fetchRooms(true));
-        stompClient.subscribe('/topic/posts', () => fetchPosts(true));
+        stompClient.subscribe('/topic/posts', (msg) => {
+          const body = msg?.body || '';
+          // Bỏ qua khi chỉ là sự kiện cập nhật cảm xúc hoặc like bình luận để tránh reload lại toàn bộ feed gây giật nhảy màn hình
+          if (body === 'POST_REACTION_UPDATED' || body === 'COMMENT_LIKED') {
+            return;
+          }
+          fetchPosts(true);
+        });
         stompClient.subscribe('/topic/system-config', (message) => {
           try {
             const cfg = JSON.parse(message.body);

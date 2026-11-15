@@ -41,26 +41,17 @@ const PostReactionDock = ({
     return getReactionMeta(post.myReaction);
   }, [post?.myReaction]);
 
-  // Danh sách top 5 biểu tượng cảm xúc nhiều lượt nhất
-  const topReactions = useMemo(() => {
-    if (post?.topReactions && Array.isArray(post.topReactions) && post.topReactions.length > 0) {
-      return post.topReactions.slice(0, 5);
-    }
-    if (post?.reactionStats?.topReactions && Array.isArray(post.reactionStats.topReactions)) {
-      return post.reactionStats.topReactions.slice(0, 5);
-    }
-    return [];
-  }, [post?.topReactions, post?.reactionStats]);
-
-  // Tooltip tóm tắt số lượng từng cảm xúc
+  // Tooltip tóm tắt
   const reactionTooltip = useMemo(() => {
-    if (topReactions.length === 0) return `${post?.likesCount || 0} lượt thích`;
-    const parts = topReactions.map(r => `${r.emoji} ${r.count}`);
-    return parts.join(' · ');
-  }, [topReactions, post?.likesCount]);
+    const list = post?.topReactions || post?.reactionStats?.topReactions;
+    if (Array.isArray(list) && list.length > 0) {
+      return list.map(r => `${r.emoji} ${r.count}`).join(' · ');
+    }
+    return `${post?.likesCount || 0} lượt thích`;
+  }, [post?.topReactions, post?.reactionStats, post?.likesCount]);
 
   const commitReaction = (type) => {
-    if (post.isLikedByMe && post.myReaction === type) {
+    if (post.isLikedByMe && (post.myReaction === type || (!post.myReaction && type === 'HEART'))) {
       playRemoveTick();
     } else {
       playReactionPop();
@@ -69,12 +60,15 @@ const PostReactionDock = ({
     if (onReact) onReact(post.id, type);
   };
 
-  // ================== DESKTOP HOVER HANDLING ==================
+  // ================== DESKTOP HOVER HANDLING (CHỈ TRÊN MÀN HÌNH CÓ CON TRỎ CHUỘT) ==================
   const handleMouseEnter = () => {
+    if (typeof window !== 'undefined' && window.matchMedia && !window.matchMedia('(hover: hover)').matches) {
+      return; // Không mở bằng hover trên điện thoại/màn hình cảm ứng
+    }
     if (hoverCloseTimerRef.current) clearTimeout(hoverCloseTimerRef.current);
     hoverOpenTimerRef.current = setTimeout(() => {
       if (setActivePickerId) setActivePickerId(post.id);
-    }, 180);
+    }, 380);
   };
 
   const handleMouseLeave = () => {
@@ -83,7 +77,7 @@ const PostReactionDock = ({
       if (setActivePickerId && activePickerId === post.id) {
         setActivePickerId(null);
       }
-    }, 350);
+    }, 250);
   };
 
   // ================== MOBILE TOUCH / LONG-PRESS HANDLING ==================
@@ -105,7 +99,7 @@ const PostReactionDock = ({
         try { navigator.vibrate(25); } catch (_) {}
       }
       if (setActivePickerId) setActivePickerId(post.id);
-    }, 280);
+    }, 360);
   };
 
   const handleTouchMove = (e) => {
@@ -114,15 +108,14 @@ const PostReactionDock = ({
     const dy = Math.abs(touch.clientY - touchStartPosRef.current.y);
 
     if (!isLongPressRef.current) {
-      if (dx > 10 || dy > 10) {
-        // Người dùng đang cuộn feed: hủy timer long-press
+      if (dx > 8 || dy > 8) {
         isScrollingRef.current = true;
         if (touchStartTimerRef.current) clearTimeout(touchStartTimerRef.current);
       }
       return;
     }
 
-    // Đang trong chế độ long-press: kiểm tra vuốt qua emoji trong dock
+    // Đang mở dock qua nhấn giữ: phát hiện vuốt qua emoji
     const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
     const itemEl = targetEl?.closest('[data-reaction-type]');
     if (itemEl) {
@@ -136,7 +129,6 @@ const PostReactionDock = ({
   const handleTouchEnd = (e) => {
     if (touchStartTimerRef.current) clearTimeout(touchStartTimerRef.current);
 
-    // Nếu người dùng đang cuộn lướt bài viết, không kích hoạt thả reaction
     if (isScrollingRef.current) {
       return;
     }
@@ -144,29 +136,19 @@ const PostReactionDock = ({
     handledTouchRef.current = true;
     setTimeout(() => {
       handledTouchRef.current = false;
-    }, 400);
-
-    const pressDuration = Date.now() - touchStartTimeRef.current;
+    }, 450);
 
     if (!isLongPressRef.current) {
-      // Tap nhanh (< 280ms)
+      // Tap nhanh trên điện thoại: Toggle thả tim ngay lập tức
       e.stopPropagation();
-      if (isPickerOpen) {
-        // Nếu dock đang mở, tap lại sẽ đóng dock
-        if (setActivePickerId) setActivePickerId(null);
-      } else {
-        commitReaction(post.myReaction || 'HEART');
-      }
+      if (setActivePickerId) setActivePickerId(null);
+      commitReaction(post.isLikedByMe ? (post.myReaction || 'HEART') : 'HEART');
     } else {
-      // Đã mở menu qua long-press
+      // Nhấn giữ trên điện thoại
       e.stopPropagation();
       if (highlightedType) {
-        // Người dùng trượt ngón tay trực tiếp lên emoji rồi nhả tay
         commitReaction(highlightedType);
         setHighlightedType(null);
-      } else {
-        // Người dùng chỉ nhấn giữ để mở menu rồi nhấc ngón tay lên:
-        // GIỮ MENU MỞ để người dùng chạm chọn emoji mong muốn!
       }
     }
   };
@@ -179,13 +161,9 @@ const PostReactionDock = ({
 
   const handleClick = (e) => {
     e.stopPropagation();
-    // Bỏ qua nếu vừa được xử lý bằng TouchEnd (tránh duplicate trigger trên mobile)
     if (handledTouchRef.current) return;
-    if (isPickerOpen) {
-      if (setActivePickerId) setActivePickerId(null);
-      return;
-    }
-    commitReaction(post.myReaction || 'HEART');
+    if (setActivePickerId) setActivePickerId(null);
+    commitReaction(post.isLikedByMe ? (post.myReaction || 'HEART') : 'HEART');
   };
 
   useEffect(() => {
@@ -203,7 +181,7 @@ const PostReactionDock = ({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Nút Reaction chính */}
+      {/* Nút Reaction chính - Kích thước ổn định tuyệt đối, không nhảy layout */}
       <button
         type="button"
         onTouchStart={handleTouchStart}
@@ -211,44 +189,27 @@ const PostReactionDock = ({
         onTouchEnd={handleTouchEnd}
         onTouchCancel={handleTouchCancel}
         onClick={handleClick}
-        className={`action-btn select-none touch-manipulation ${post.isLikedByMe ? 'active-liked text-rose-500' : 'text-zinc-400 hover:text-white'}`}
-        title={currentReaction ? currentReaction.label : "Thả cảm xúc"}
+        className={`action-btn select-none touch-manipulation min-w-[48px] h-8 px-2 flex items-center justify-center rounded-lg transition-colors duration-150 ${
+          post.isLikedByMe ? 'text-rose-500 font-semibold active-liked' : 'text-zinc-400 hover:text-white'
+        }`}
+        title={reactionTooltip}
       >
-        {post.isLikedByMe && currentReaction ? (
-          <span className="reaction-active-emoji text-sm select-none leading-none inline-block transform hover:scale-110 transition-transform">
+        {post.isLikedByMe && currentReaction && currentReaction.type !== 'HEART' ? (
+          <span className="text-sm select-none leading-none inline-block transform scale-110">
             {currentReaction.emoji}
           </span>
         ) : (
           <Heart
-            size={15}
+            size={16}
             strokeWidth={1.5}
             fill={post.isLikedByMe ? "#f43f5e" : "none"}
-            color={post.isLikedByMe ? "#f43f5e" : "currentColor"}
+            className={post.isLikedByMe ? "text-rose-500 scale-105 transition-transform" : "text-zinc-400 group-hover:text-rose-400 transition-colors"}
           />
         )}
 
-        {/* Hiển thị Top 5 Biểu tượng cảm xúc (nếu có) + Số lượng đếm gọn formatCompactCount */}
-        {topReactions.length > 0 ? (
-          <div className="flex items-center gap-1 ml-1" title={reactionTooltip}>
-            <div className="flex items-center -space-x-1.5 overflow-hidden">
-              {topReactions.map(r => (
-                <span
-                  key={r.type}
-                  className="text-xs inline-block transform hover:scale-125 transition-transform"
-                >
-                  {r.emoji}
-                </span>
-              ))}
-            </div>
-            <span className="font-mono text-xs ml-0.5 tabular-nums">
-              {formatCompactCount(post.likesCount || 0)}
-            </span>
-          </div>
-        ) : (
-          <span className="font-mono text-xs tabular-nums ml-1">
-            {formatCompactCount(post.likesCount || 0)}
-          </span>
-        )}
+        <span className={`font-mono text-xs tabular-nums ml-1.5 transition-colors ${post.isLikedByMe ? 'text-rose-500 font-semibold' : 'text-zinc-400'}`}>
+          {formatCompactCount(post.likesCount || 0)}
+        </span>
       </button>
 
       {/* Dock Chọn Biểu Tượng Cảm Xúc (Desktop Hover / Mobile Long-Press) */}
