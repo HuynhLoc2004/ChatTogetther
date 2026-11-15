@@ -47,6 +47,24 @@ public class RoomController {
         return ResponseEntity.ok(this.chatService.getOrCreateDirectRoom(jwtAuth, targetUserId));
     }
 
+    @RequestMapping(value = {"/{roomId}/mute", "/{roomId}/notification"}, method = {RequestMethod.PATCH, RequestMethod.PUT, RequestMethod.POST})
+    public ResponseEntity<ResponseData<java.util.Map<String, Object>>> toggleMuteRoom(
+            Authentication authentication,
+            @PathVariable("roomId") Long roomId
+    ) {
+        JwtAuthenticationToken jwtAuth = (authentication instanceof JwtAuthenticationToken) ? (JwtAuthenticationToken) authentication : null;
+        return ResponseEntity.ok(this.roomService.toggleMuteRoom(jwtAuth, roomId));
+    }
+
+    @GetMapping({"/{roomId}/mute", "/{roomId}/notification-status"})
+    public ResponseEntity<ResponseData<java.util.Map<String, Object>>> getMuteStatus(
+            Authentication authentication,
+            @PathVariable("roomId") Long roomId
+    ) {
+        JwtAuthenticationToken jwtAuth = (authentication instanceof JwtAuthenticationToken) ? (JwtAuthenticationToken) authentication : null;
+        return ResponseEntity.ok(this.roomService.getMuteStatus(jwtAuth, roomId));
+    }
+
     @PostMapping({"/create", "/create-room"})
     public ResponseEntity<ResponseData<CreateRoomResponseDTO>> createRoom(JwtAuthenticationToken jwtAuthenticationToken , @RequestBody @Valid RoomRequest roomRequest, HttpServletResponse httpServletResponse){
         return ResponseEntity.ok(this.roomService.createRoom(jwtAuthenticationToken , roomRequest, httpServletResponse));

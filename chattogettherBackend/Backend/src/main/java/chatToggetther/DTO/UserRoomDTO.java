@@ -18,4 +18,5 @@ public class UserRoomDTO {
     private List<LocalDateTime> timeLeft;
     private UserDTO userDTO;
     private Boolean isAdmin;
+    private Boolean muted = false;
 }

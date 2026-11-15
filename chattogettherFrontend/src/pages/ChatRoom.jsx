@@ -6,7 +6,8 @@ import {
   Phone, PhoneOff, PhoneMissed, PhoneCall, Mic, MicOff, WifiOff, User, UserCheck, ArrowLeft,
   Video, VideoOff, Volume2, VolumeX, Minimize2, Maximize2, ChevronDown,
   Image as ImageIcon, Smile, Palette, Play, Pause,
-  ExternalLink, Square, Camera, RefreshCw, Share2, Disc3, Sparkles
+  ExternalLink, Square, Camera, RefreshCw, Share2, Disc3, Sparkles,
+  Bell, BellOff
 } from 'lucide-react';
 import axiosClient, { BACKEND_URL } from '../api/axiosClient';
 import { saveMessagesOffline, getMessagesOffline, getRoomsOffline } from '../utils/offlineDB';
@@ -97,6 +98,57 @@ const ChatRoom = () => {
   const [isVideoCall, setIsVideoCall] = useState(false);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
+
+  // Trạng thái thông báo phòng (Bật/Tắt chuông phòng)
+  const [isRoomNotificationMuted, setIsRoomNotificationMuted] = useState(false);
+
+  // Xin quyền Notification hệ thống khi user vào phòng chat
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
+    }
+  }, []);
+
+  // Lấy trạng thái mute thông báo của phòng từ server
+  useEffect(() => {
+    if (!roomId) return;
+    const fetchMuteStatus = async () => {
+      try {
+        const res = await axiosClient.get(`/rooms/${roomId}/mute`);
+        if (res?.data?.data) {
+          setIsRoomNotificationMuted(Boolean(res.data.data.isMuted ?? res.data.data.muted));
+        }
+      } catch (_) {
+        const myMember = roomInfo?.userRoomDTOList?.find(u => u.userDTO?.id?.toString() === currentUserId?.toString());
+        if (myMember) {
+          setIsRoomNotificationMuted(Boolean(myMember.muted));
+        }
+      }
+    };
+    fetchMuteStatus();
+  }, [roomId, roomInfo?.userRoomDTOList, currentUserId]);
+
+  const handleToggleRoomNotification = async () => {
+    if (!roomId) return;
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
+    }
+    const nextState = !isRoomNotificationMuted;
+    setIsRoomNotificationMuted(nextState);
+    try {
+      const res = await axiosClient.patch(`/rooms/${roomId}/mute`);
+      const serverMuted = res?.data?.data?.isMuted ?? nextState;
+      setIsRoomNotificationMuted(serverMuted);
+      if (serverMuted) {
+        toast("Đã tắt thông báo phòng này", { icon: "🔕", id: `mute-${roomId}` });
+      } else {
+        toast.success("Đã bật thông báo phòng này", { id: `mute-${roomId}` });
+      }
+    } catch (err) {
+      setIsRoomNotificationMuted(!nextState);
+      toast.error("Không thể thay đổi trạng thái thông báo!");
+    }
+  };
   const [callDuration, setCallDuration] = useState(0);
   const [incomingCall, setIncomingCall] = useState(null);
   const [privateCallTarget, setPrivateCallTarget] = useState(null);
@@ -1649,6 +1701,19 @@ const ChatRoom = () => {
             >
               <Video size={13} className="text-zinc-300" />
               <span className="hidden sm:inline">Gọi Video nhóm</span>
+            </button>
+
+            <button 
+              type="button"
+              onClick={handleToggleRoomNotification}
+              className="w-9 h-9 rounded-xl bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-300 hover:text-white flex items-center justify-center transition-colors"
+              title={isRoomNotificationMuted ? "Đã tắt thông báo phòng (Bấm để bật)" : "Đang bật thông báo phòng (Bấm để tắt)"}
+            >
+              {isRoomNotificationMuted ? (
+                <BellOff size={15} className="text-zinc-500" />
+              ) : (
+                <Bell size={15} className="text-emerald-400" />
+              )}
             </button>
 
             <button 

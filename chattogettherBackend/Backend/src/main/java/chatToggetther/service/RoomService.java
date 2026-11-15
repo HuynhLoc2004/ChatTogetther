@@ -149,6 +149,7 @@ public class RoomService {
                             }
                             userRoomDTO.setUserDTO(userDTO);
                             userRoomDTO.setIsAdmin(ur.getIsAdmin());
+                            userRoomDTO.setMuted(Boolean.TRUE.equals(ur.getMuted()));
                             return userRoomDTO;
                         }).collect(Collectors.toList());
                 
@@ -198,6 +199,7 @@ public class RoomService {
                     }
                     userRoomDTO.setUserDTO(userDTO);
                     userRoomDTO.setIsAdmin(ur.getIsAdmin());
+                    userRoomDTO.setMuted(Boolean.TRUE.equals(ur.getMuted()));
                     return userRoomDTO;
                 }).collect(Collectors.toList());
 
@@ -519,5 +521,69 @@ public class RoomService {
         messagingTemplate.convertAndSend("/topic/rooms", "ROOM_UPDATED");
 
         return new ResponseData<>(200, "Ủy quyền quản trị thành công", true);
+    }
+
+    @Transactional
+    public ResponseData<java.util.Map<String, Object>> toggleMuteRoom(JwtAuthenticationToken token, Long roomId) {
+        Long userId = SecurityUtils.extractUserId(token);
+        if (userId == null) {
+            throw new AppException(401, "Chưa xác thực người dùng", 401);
+        }
+        UserEntity user = this.userRepository.findById(userId)
+                .orElseThrow(() -> new AppException(404, "Người dùng không tồn tại", 404));
+        UserRoomEntity ur = user.getUserRoomEntity();
+        if (ur == null || ur.getRoomEntity() == null || !ur.getRoomEntity().getId().equals(roomId)) {
+            RoomEntity room = this.roomRepository.findById(roomId)
+                    .orElseThrow(() -> new AppException(404, "Phòng không tồn tại", 404));
+            ur = room.getUserRoomEntityList().stream()
+                    .filter(item -> item.getUserEntity() != null && item.getUserEntity().getId().equals(userId))
+                    .findFirst()
+                    .orElse(null);
+        }
+
+        if (ur == null) {
+            throw new AppException(400, "Bạn chưa tham gia phòng này", 400);
+        }
+
+        boolean currentMuted = Boolean.TRUE.equals(ur.getMuted());
+        boolean newMuted = !currentMuted;
+        ur.setMuted(newMuted);
+        this.userRoomRepository.save(ur);
+
+        java.util.Map<String, Object> res = new java.util.HashMap<>();
+        res.put("roomId", roomId);
+        res.put("isMuted", newMuted);
+        res.put("muted", newMuted);
+        return new ResponseData<>(200, newMuted ? "Đã tắt thông báo phòng" : "Đã bật thông báo phòng", res);
+    }
+
+    @Transactional
+    public ResponseData<java.util.Map<String, Object>> getMuteStatus(JwtAuthenticationToken token, Long roomId) {
+        Long userId = SecurityUtils.extractUserId(token);
+        if (userId == null) {
+            throw new AppException(401, "Chưa xác thực người dùng", 401);
+        }
+        UserEntity user = this.userRepository.findById(userId).orElse(null);
+        boolean isMuted = false;
+        if (user != null && user.getUserRoomEntity() != null && user.getUserRoomEntity().getRoomEntity() != null 
+                && user.getUserRoomEntity().getRoomEntity().getId().equals(roomId)) {
+            isMuted = Boolean.TRUE.equals(user.getUserRoomEntity().getMuted());
+        } else {
+            RoomEntity room = this.roomRepository.findById(roomId).orElse(null);
+            if (room != null && room.getUserRoomEntityList() != null) {
+                UserRoomEntity ur = room.getUserRoomEntityList().stream()
+                        .filter(item -> item.getUserEntity() != null && item.getUserEntity().getId().equals(userId))
+                        .findFirst()
+                        .orElse(null);
+                if (ur != null) {
+                    isMuted = Boolean.TRUE.equals(ur.getMuted());
+                }
+            }
+        }
+        java.util.Map<String, Object> res = new java.util.HashMap<>();
+        res.put("roomId", roomId);
+        res.put("isMuted", isMuted);
+        res.put("muted", isMuted);
+        return new ResponseData<>(200, "Trạng thái thông báo phòng", res);
     }
 }

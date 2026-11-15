@@ -120,6 +120,33 @@ public class ChatService {
                 this.simpMessagingTemplate.convertAndSend("/topic/messages/" + partnerId, sendMessageDTO);
                 this.simpMessagingTemplate.convertAndSend("/topic/messages/" + userId, sendMessageDTO);
             }
+
+            // Bắn sự kiện tin nhắn nhóm qua kênh riêng (tuyệt đối không tạo bản ghi Notification ở Chuông Sảnh)
+            if (!isDm && roomEntity.getUserRoomEntityList() != null) {
+                String contentPreview = messageEntity.getMessage();
+                if (contentPreview != null && contentPreview.length() > 100) {
+                    contentPreview = contentPreview.substring(0, 97) + "...";
+                }
+                java.util.Map<String, Object> alertPayload = new java.util.HashMap<>();
+                alertPayload.put("roomId", roomEntity.getId());
+                alertPayload.put("roomName", roomEntity.getRoomName());
+                alertPayload.put("senderId", userId);
+                alertPayload.put("senderUsername", senderUsername);
+                alertPayload.put("senderDisplayName", senderNickname);
+                alertPayload.put("senderAvatar", senderAvatar);
+                alertPayload.put("contentPreview", contentPreview);
+                alertPayload.put("createdAt", now.toString());
+
+                for (UserRoomEntity ur : roomEntity.getUserRoomEntityList()) {
+                    if (ur.getUserEntity() != null && Boolean.TRUE.equals(ur.getActive())) {
+                        Long memberId = ur.getUserEntity().getId();
+                        if (!memberId.equals(userId) && !Boolean.TRUE.equals(ur.getMuted())) {
+                            this.simpMessagingTemplate.convertAndSendToUser(memberId.toString(), "/queue/room-alerts", alertPayload);
+                            this.simpMessagingTemplate.convertAndSend("/topic/room-alerts/" + memberId, alertPayload);
+                        }
+                    }
+                }
+            }
             
             return new ResponseData<>(ErrorCode.SUCCESS.getCode() , "gửi tin nhắn thành công" , true);
     }

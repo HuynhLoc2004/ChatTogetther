@@ -45,4 +45,7 @@ public class UserRoomEntity {
 
     @Column(name = "is_admin", columnDefinition = "BOOLEAN")
     private Boolean isAdmin = false;
+
+    @Column(name = "muted", columnDefinition = "BOOLEAN")
+    private Boolean muted = false;
 }
