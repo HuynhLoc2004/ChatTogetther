@@ -115,23 +115,48 @@ export const DirectMessagePage = () => {
   // 2. Mở hoặc tạo đoạn chat khi có urlTargetUserId
   const openDirectChat = useCallback(async (targetId, fallbackPartner = null) => {
     if (!targetId || targetId.toString() === currentUserId?.toString()) return;
-    setPartnerNotFound(false);
+    
+    // Nếu có thông tin người bạn từ danh sách hoặc state chuyển qua, luôn giữ thông tin hiển thị
     if (fallbackPartner) {
       setActivePartner(fallbackPartner);
+      setPartnerNotFound(false);
     }
+
     try {
       setLoadingMessages(true);
-      let res;
+      let res = null;
+
+      // Thử gọi lấy phòng chat 1-1 bằng targetId (ID số)
       try {
         res = await axiosClient.get(`/message/direct/${targetId}`);
-      } catch (errDirect) {
-        res = await axiosClient.post(`/rooms/direct/${targetId}`);
+      } catch (err1) {
+        // Nếu thất bại và có username của đối phương, thử bằng username
+        if (fallbackPartner?.account && fallbackPartner.account.toString() !== targetId.toString()) {
+          try {
+            res = await axiosClient.get(`/message/direct/${fallbackPartner.account}`);
+          } catch (_) {}
+        }
+        // Fallback sang endpoint phòng
+        if (!res) {
+          try {
+            res = await axiosClient.post(`/rooms/direct/${targetId}`);
+          } catch (_) {
+            if (fallbackPartner?.account) {
+              try {
+                res = await axiosClient.post(`/rooms/direct/${fallbackPartner.account}`);
+              } catch (_) {}
+            }
+          }
+        }
       }
 
       if (res?.data?.data) {
         const { roomId, targetUser } = res.data.data;
         setActiveRoomId(roomId);
-        setActivePartner(targetUser || fallbackPartner);
+        if (targetUser) {
+          setActivePartner(targetUser);
+        }
+        setPartnerNotFound(false);
 
         // Nạp lịch sử tin nhắn của phòng DM này
         try {
@@ -145,37 +170,41 @@ export const DirectMessagePage = () => {
         } catch (_) {
           setMessages([]);
         }
-      }
-    } catch (e) {
-      console.error('Lỗi mở chat 1-1:', e);
-      if (e.response?.status === 404) {
+      } else if (!fallbackPartner) {
         setPartnerNotFound(true);
         setActiveRoomId(null);
         setMessages([]);
-      } else {
-        const msg = e.response?.data?.message;
-        if (msg) {
-          toast.error(msg, { id: `dm-err-${targetId}` });
-        }
+      }
+    } catch (e) {
+      console.error('Lỗi mở chat 1-1:', e);
+      if (!fallbackPartner && e.response?.status === 404) {
+        setPartnerNotFound(true);
+        setActiveRoomId(null);
+        setMessages([]);
       }
     } finally {
       setLoadingMessages(false);
     }
   }, [currentUserId, scrollToBottom]);
 
-  // Kích hoạt khi URL param hoặc targetUser thay đổi
+  // Kích hoạt khi URL param hoặc targetUser thay đổi (Chống vòng lặp vô tận)
   const lastTargetIdRef = useRef(null);
   useEffect(() => {
-    if (urlTargetUserId && (urlTargetUserId !== lastTargetIdRef.current || !activePartner)) {
-      lastTargetIdRef.current = urlTargetUserId;
-      const foundInFriends = friends.find(f => f.id?.toString() === urlTargetUserId?.toString());
-      const effectivePartner = passedTargetUser || foundInFriends;
-      if (effectivePartner && !foundInFriends) {
+    if (!urlTargetUserId) return;
+    if (urlTargetUserId === lastTargetIdRef.current && activePartner) return;
+
+    lastTargetIdRef.current = urlTargetUserId;
+    const foundInFriends = friends.find(f => f.id?.toString() === urlTargetUserId?.toString() || f.account === urlTargetUserId);
+    const effectivePartner = passedTargetUser || foundInFriends;
+
+    if (effectivePartner) {
+      setActivePartner(effectivePartner);
+      if (!foundInFriends) {
         setFriends(prev => [effectivePartner, ...prev.filter(f => f.id?.toString() !== urlTargetUserId?.toString())]);
       }
-      openDirectChat(urlTargetUserId, effectivePartner);
     }
-  }, [urlTargetUserId, friends, passedTargetUser, activePartner, openDirectChat]);
+    openDirectChat(urlTargetUserId, effectivePartner);
+  }, [urlTargetUserId, passedTargetUser, friends.length, openDirectChat]);
 
   // 3. Kết nối WebSocket
   useEffect(() => {
