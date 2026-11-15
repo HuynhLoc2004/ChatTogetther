@@ -193,9 +193,14 @@ const parsePostMedia = (raw, fallbackPost = null) => {
           jsonStr = JSON.parse(`"${jsonStr}"`);
         }
         const parsed = JSON.parse(jsonStr);
+        const parsedUrl = parsed.mediaUrl || '';
+        const isDetectedVideo = parsed.mediaType === 'video' ||
+          parsedUrl.includes('video') ||
+          /\.(mp4|mov|webm|m4v|3gp|mkv|avi)(\?.*)?$/i.test(parsedUrl) ||
+          parsedUrl.startsWith('data:video/');
         return {
           mediaUrl: parsed.mediaUrl || null,
-          mediaType: parsed.mediaType || (parsed.mediaUrl?.includes('video') ? 'video' : 'image'),
+          mediaType: parsed.mediaType || (isDetectedVideo ? 'video' : 'image'),
           audioUrl: parsed.audioUrl || directAudio || null,
           audioDuration: parsed.audioDuration || directDuration || null
         };
@@ -204,8 +209,8 @@ const parsePostMedia = (raw, fallbackPost = null) => {
       }
     }
     const isExplicitAudio = trimmed.includes('voice') || trimmed.includes('audio') || trimmed.startsWith('data:audio/') || trimmed.match(/\.(mp3|wav|ogg|m4a|aac)(\?.*)?$/i);
-    const isVideo = !isExplicitAudio && (trimmed.match(/\.(mp4|mov)(\?.*)?$/i) || trimmed.startsWith('data:video/'));
-    const isAudio = isExplicitAudio || trimmed.match(/\.(mp3|wav|ogg|m4a|aac|webm)(\?.*)?$/i);
+    const isVideo = !isExplicitAudio && (trimmed.match(/\.(mp4|mov|webm|m4v|3gp|mkv|avi)(\?.*)?$/i) || trimmed.includes('/video/') || trimmed.startsWith('data:video/'));
+    const isAudio = isExplicitAudio || trimmed.match(/\.(mp3|wav|ogg|m4a|aac)(\?.*)?$/i);
     if (isAudio) {
       return {
         mediaUrl: null,
@@ -450,6 +455,16 @@ const Home = ({ initialTab }) => {
 
   // Multimedia Signals State (Ảnh/Film webp + Ghi âm giọng nói 15s)
   const [attachedMedia, setAttachedMedia] = useState(null); // { url, type, name }
+  const [previewVideoMuted, setPreviewVideoMuted] = useState(false);
+  const [unmutedVideoPosts, setUnmutedVideoPosts] = useState({});
+
+  const togglePostVideoSound = (postId, e) => {
+    if (e) e.stopPropagation();
+    setUnmutedVideoPosts(prev => ({
+      ...prev,
+      [postId]: !prev[postId]
+    }));
+  };
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const [voiceDuration, setVoiceDuration] = useState(0);
   const [voiceBlob, setVoiceBlob] = useState(null);
@@ -915,7 +930,12 @@ const Home = ({ initialTab }) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.type.startsWith('image/')) {
+    const fileName = (file.name || '').toLowerCase();
+    const fileType = (file.type || '').toLowerCase();
+    const isImage = fileType.startsWith('image/') || /\.(jpe?g|png|webp|gif|bmp|heic|heif|svg)$/i.test(fileName);
+    const isVideo = fileType.startsWith('video/') || /\.(mp4|mov|webm|m4v|3gp|mkv|avi)$/i.test(fileName);
+
+    if (isImage) {
       const reader = new FileReader();
       reader.onload = (event) => {
         const img = new Image();
@@ -946,11 +966,13 @@ const Home = ({ initialTab }) => {
         img.src = event.target.result;
       };
       reader.readAsDataURL(file);
-    } else if (file.type.startsWith('video/')) {
-      if (file.size > 15 * 1024 * 1024) {
-        toast.error("Video ngắn tối đa 15MB!");
+    } else if (isVideo) {
+      if (file.size > 25 * 1024 * 1024) {
+        toast.error("Video clip tối đa 25MB! Vui lòng chọn clip ngắn hơn.");
+        e.target.value = '';
         return;
       }
+      const loadingToastId = toast.loading("Đang chuẩn bị video có âm thanh...");
       const reader = new FileReader();
       reader.onload = (event) => {
         setAttachedMedia({
@@ -958,10 +980,21 @@ const Home = ({ initialTab }) => {
           type: 'video',
           name: file.name
         });
-        toast.success("Đã đính kèm video ngắn!");
+        setPreviewVideoMuted(false); // Cho phép nghe âm thanh gốc ngay trong preview
+        toast.dismiss(loadingToastId);
+        toast.success("Đã đính kèm video (giữ nguyên âm thanh gốc)!");
+      };
+      reader.onerror = () => {
+        toast.dismiss(loadingToastId);
+        toast.error("Không thể đọc tệp video này!");
       };
       reader.readAsDataURL(file);
+    } else {
+      toast.error("Định dạng tệp không được hỗ trợ!");
     }
+
+    // Reset input để người dùng có thể chọn lại cùng một file nếu vừa xóa
+    e.target.value = '';
   };
 
   // Thu âm giọng nói 15s (MediaRecorder API)
@@ -2804,16 +2837,36 @@ const Home = ({ initialTab }) => {
 
                 {/* Preview Ảnh / Video ngắn đã nén */}
                 {attachedMedia && (
-                  <div className="composer-attached-preview">
+                  <div className="composer-attached-preview relative group">
                     {attachedMedia.type === 'video' ? (
-                      <video
-                        src={attachedMedia.url}
-                        autoPlay
-                        loop
-                        muted
-                        playsInline
-                        className="preview-media-element"
-                      />
+                      <div className="relative w-full h-full flex items-center justify-center bg-black/60 rounded-xl overflow-hidden">
+                        <video
+                          src={attachedMedia.url}
+                          autoPlay
+                          loop
+                          muted={previewVideoMuted}
+                          playsInline
+                          className="preview-media-element"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setPreviewVideoMuted(prev => !prev)}
+                          className="absolute bottom-2 left-2 px-2.5 py-1 rounded-lg bg-black/80 backdrop-blur-md text-[11px] font-mono text-white/95 flex items-center gap-1.5 shadow-lg border border-white/10 hover:bg-black transition-all z-10"
+                          title={previewVideoMuted ? "Bật âm thanh video gốc" : "Tắt tiếng"}
+                        >
+                          {previewVideoMuted ? (
+                            <>
+                              <VolumeX size={13} className="text-zinc-400" />
+                              <span>Tắt tiếng</span>
+                            </>
+                          ) : (
+                            <>
+                              <Volume2 size={13} className="text-emerald-400" />
+                              <span>Âm thanh gốc</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     ) : (
                       <img
                         src={attachedMedia.url}
@@ -3001,7 +3054,7 @@ const Home = ({ initialTab }) => {
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept="image/*,video/mp4,video/webm"
+                      accept="image/*,video/*"
                       style={{ display: 'none' }}
                       onChange={handleFileSelect}
                     />
@@ -3356,13 +3409,34 @@ const Home = ({ initialTab }) => {
                             {parsedMedia.mediaType === 'video' ? (
                               <div className="relative w-full overflow-hidden rounded-xl">
                                 <video
+                                  key={`vid-${post.id}-${unmutedVideoPosts[post.id] ? 'unmuted' : 'muted'}`}
                                   src={parsedMedia.mediaUrl}
                                   autoPlay
                                   loop
-                                  muted
+                                  muted={!unmutedVideoPosts[post.id]}
                                   playsInline
                                   className="post-media-video group-hover/media:brightness-95 transition-all"
                                 />
+                                <div className="absolute bottom-2.5 left-2.5 flex items-center gap-2 z-10">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => togglePostVideoSound(post.id, e)}
+                                    className="px-2.5 py-1 rounded-lg bg-black/80 backdrop-blur-md text-[11px] font-mono text-white/95 flex items-center gap-1.5 shadow-lg border border-white/10 hover:bg-black transition-all"
+                                    title={unmutedVideoPosts[post.id] ? "Tắt tiếng" : "Bật âm thanh video gốc"}
+                                  >
+                                    {unmutedVideoPosts[post.id] ? (
+                                      <>
+                                        <Volume2 size={13} className="text-emerald-400" />
+                                        <span>Bật tiếng</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <VolumeX size={13} className="text-zinc-400" />
+                                        <span>Tắt tiếng</span>
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
                                 <div className="absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-lg bg-black/75 backdrop-blur-md text-[11px] font-mono text-white/95 flex items-center gap-1.5 shadow-lg opacity-85 group-hover/media:opacity-100 transition-opacity">
                                   <Maximize2 size={12} />
                                   <span>Phóng to</span>
@@ -5159,7 +5233,7 @@ const Home = ({ initialTab }) => {
                       {media.mediaUrl && (
                         <div className="rounded-xl overflow-hidden border border-zinc-800">
                           {media.mediaType === 'video' ? (
-                            <video src={media.mediaUrl} controls autoPlay loop muted playsInline className="w-full max-h-[340px] object-cover" />
+                            <video src={media.mediaUrl} controls autoPlay loop playsInline className="w-full max-h-[340px] object-cover" />
                           ) : (
                             <img src={media.mediaUrl} alt="Media" className="w-full max-h-[340px] object-cover" />
                           )}
@@ -5381,7 +5455,7 @@ const Home = ({ initialTab }) => {
                       {media.mediaUrl && (
                         <div className="rounded-2xl overflow-hidden border border-zinc-800">
                           {media.mediaType === 'video' ? (
-                            <video src={media.mediaUrl} controls autoPlay loop muted playsInline className="w-full max-h-[380px] object-cover" />
+                            <video src={media.mediaUrl} controls autoPlay loop playsInline className="w-full max-h-[380px] object-cover" />
                           ) : (
                             <img src={media.mediaUrl} alt="Media" className="w-full max-h-[380px] object-cover" />
                           )}

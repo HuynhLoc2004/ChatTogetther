@@ -5,7 +5,7 @@ import {
   Settings, LogOut, Trash2, Camera, Lock, Globe, FileText, ChevronRight, ChevronDown, X,
   ArrowLeft, MessageSquare, PhoneCall, Radio, Send, Image as ImageIcon,
   Heart, MessageCircle, Sparkles, Flame, Check, CornerDownRight, Play, Pause,
-  Volume2, Share2, MoreVertical, UserPlus, Flag, Mic, Square, RotateCcw, Star,
+  Volume2, VolumeX, Share2, MoreVertical, UserPlus, Flag, Mic, Square, RotateCcw, Star,
   Sliders, Edit3, AlertTriangle, Layers, Pin, Clock, Bookmark
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
@@ -61,17 +61,22 @@ const parsePostMedia = (raw, fallbackPost = null) => {
           jsonStr = JSON.parse(`"${jsonStr}"`);
         }
         const parsed = JSON.parse(jsonStr);
+        const parsedUrl = parsed.mediaUrl || '';
+        const isDetectedVideo = parsed.mediaType === 'video' ||
+          parsedUrl.includes('video') ||
+          /\.(mp4|mov|webm|m4v|3gp|mkv|avi)(\?.*)?$/i.test(parsedUrl) ||
+          parsedUrl.startsWith('data:video/');
         return {
           mediaUrl: parsed.mediaUrl || null,
-          mediaType: parsed.mediaType || (parsed.mediaUrl?.includes('video') ? 'video' : 'image'),
+          mediaType: parsed.mediaType || (isDetectedVideo ? 'video' : 'image'),
           audioUrl: parsed.audioUrl || directAudio || null,
           audioDuration: parsed.audioDuration || directDuration || null
         };
       } catch (e) {}
     }
     const isExplicitAudio = trimmed.includes('voice') || trimmed.includes('audio') || trimmed.startsWith('data:audio/') || trimmed.match(/\.(mp3|wav|ogg|m4a|aac)(\?.*)?$/i);
-    const isVideo = !isExplicitAudio && (trimmed.match(/\.(mp4|mov)(\?.*)?$/i) || trimmed.startsWith('data:video/'));
-    const isAudio = isExplicitAudio || trimmed.match(/\.(mp3|wav|ogg|m4a|aac|webm)(\?.*)?$/i);
+    const isVideo = !isExplicitAudio && (trimmed.match(/\.(mp4|mov|webm|m4v|3gp|mkv|avi)(\?.*)?$/i) || trimmed.includes('/video/') || trimmed.startsWith('data:video/'));
+    const isAudio = isExplicitAudio || trimmed.match(/\.(mp3|wav|ogg|m4a|aac)(\?.*)?$/i);
     if (isAudio) {
       return { mediaUrl: null, mediaType: 'audio', audioUrl: trimmed, audioDuration: directDuration || null };
     }
@@ -123,6 +128,7 @@ export const CommunitySection = ({
   const [pendingPosts, setPendingPosts] = useState([]);
   const [loadingPendingPosts, setLoadingPendingPosts] = useState(false);
   const [groupDedicatedPosts, setGroupDedicatedPosts] = useState([]);
+  const [unmutedGroupVideos, setUnmutedGroupVideos] = useState({});
 
   // Tương tác bài viết trong nhóm
   const [activeReactionPicker, setActiveReactionPicker] = useState(null);
@@ -1658,14 +1664,38 @@ export const CommunitySection = ({
                             }}
                           >
                             {parsedMedia.mediaType === 'video' ? (
-                              <video 
-                                src={parsedMedia.mediaUrl} 
-                                autoPlay 
-                                loop 
-                                muted 
-                                playsInline 
-                                className="w-full h-full object-cover max-h-80" 
-                              />
+                              <div className="relative w-full h-full">
+                                <video 
+                                  key={`group-vid-${post.id}-${unmutedGroupVideos[post.id] ? 'unmuted' : 'muted'}`}
+                                  src={parsedMedia.mediaUrl} 
+                                  autoPlay 
+                                  loop 
+                                  muted={!unmutedGroupVideos[post.id]} 
+                                  playsInline 
+                                  className="w-full h-full object-cover max-h-80" 
+                                />
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setUnmutedGroupVideos(prev => ({ ...prev, [post.id]: !prev[post.id] }));
+                                  }}
+                                  className="absolute bottom-2.5 left-2.5 px-2.5 py-1 rounded-lg bg-black/80 backdrop-blur-md text-[11px] font-mono text-white/95 flex items-center gap-1.5 shadow-lg border border-white/10 hover:bg-black transition-all z-10"
+                                  title={unmutedGroupVideos[post.id] ? "Tắt tiếng" : "Bật âm thanh video gốc"}
+                                >
+                                  {unmutedGroupVideos[post.id] ? (
+                                    <>
+                                      <Volume2 size={12} className="text-emerald-400" />
+                                      <span>Bật tiếng</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <VolumeX size={12} className="text-zinc-400" />
+                                      <span>Tắt tiếng</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
                             ) : (
                               <img 
                                 src={parsedMedia.mediaUrl} 

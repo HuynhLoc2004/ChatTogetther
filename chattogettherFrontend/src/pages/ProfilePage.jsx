@@ -1665,7 +1665,7 @@ const ProfilePage = () => {
                       {media.mediaUrl && (
                         <div className="rounded-xl overflow-hidden border border-zinc-800">
                           {media.mediaType === 'video' ? (
-                            <video src={media.mediaUrl} controls autoPlay loop muted playsInline className="w-full max-h-[340px] object-cover" />
+                            <video src={media.mediaUrl} controls autoPlay loop playsInline className="w-full max-h-[340px] object-cover" />
                           ) : (
                             <img 
                               src={media.mediaUrl} 
