@@ -6,7 +6,7 @@ import {
   Camera, Upload, Trash2, Heart, MessageSquare, Share2,
   Shield, Sparkles, Loader2, Users, Radio, Headphones,
   Mic, Play, Pause, Square, RotateCcw, AudioLines, Volume2,
-  VolumeX, Music, Tag
+  VolumeX, Music, Tag, CornerDownRight, Send
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
@@ -28,16 +28,21 @@ const parsePostMedia = (raw, fallbackPost = null) => {
           jsonStr = JSON.parse(`"${jsonStr}"`);
         }
         const parsed = JSON.parse(jsonStr);
+        let parsedMedia = parsed.mediaUrl || null;
+        let parsedAudio = parsed.audioUrl || directAudio || null;
+        if (parsedMedia && (parsedMedia.match(/\.(mp3|wav|ogg|m4a|aac|webm)(\?.*)?$/i) || parsedMedia.startsWith('data:audio/'))) {
+          if (!parsedAudio) parsedAudio = parsedMedia;
+          parsedMedia = null;
+        }
         return {
-          mediaUrl: parsed.mediaUrl || null,
-          mediaType: parsed.mediaType || (parsed.mediaUrl?.includes('video') ? 'video' : 'image'),
-          audioUrl: parsed.audioUrl || directAudio || null,
+          mediaUrl: parsedMedia,
+          mediaType: parsed.mediaType || (parsedMedia?.includes('video') ? 'video' : 'image'),
+          audioUrl: parsedAudio,
           audioDuration: parsed.audioDuration || directDuration || null
         };
       } catch (e) {}
     }
-    const isVideo = trimmed.match(/\.(mp4|webm|mov)(\?.*)?$/i) || trimmed.startsWith('data:video/');
-    const isAudio = trimmed.match(/\.(mp3|wav|ogg|m4a|aac)(\?.*)?$/i) || trimmed.startsWith('data:audio/') || (trimmed.includes('webm') && !isVideo);
+    const isAudio = trimmed.match(/\.(mp3|wav|ogg|m4a|aac|webm)(\?.*)?$/i) || trimmed.startsWith('data:audio/') || trimmed.includes('audio');
     if (isAudio) {
       return {
         mediaUrl: null,
@@ -46,6 +51,7 @@ const parsePostMedia = (raw, fallbackPost = null) => {
         audioDuration: directDuration || null
       };
     }
+    const isVideo = trimmed.match(/\.(mp4|mov)(\?.*)?$/i) || trimmed.startsWith('data:video/');
     return {
       mediaUrl: trimmed,
       mediaType: isVideo ? 'video' : 'image',
@@ -98,6 +104,110 @@ const ProfilePage = () => {
   const [friendStatus, setFriendStatus] = useState('NONE'); // 'NONE' | 'PENDING_SENT' | 'ACCEPTED'
   const [processingFriend, setProcessingFriend] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  // Post Detail Modal State on Profile
+  const [selectedDetailPost, setSelectedDetailPost] = useState(null);
+  const [detailCommentsMap, setDetailCommentsMap] = useState({});
+  const [detailCommentInput, setDetailCommentInput] = useState('');
+  const [detailReplyTarget, setDetailReplyTarget] = useState(null);
+  const [submittingDetailComment, setSubmittingDetailComment] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && selectedDetailPost) {
+        setSelectedDetailPost(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedDetailPost]);
+
+  const fetchCommentsForPost = async (postId) => {
+    try {
+      const res = await axiosClient.get(`/posts/${postId}/comments`);
+      if (res.data && res.data.data) {
+        setDetailCommentsMap(prev => ({ ...prev, [postId]: res.data.data }));
+      }
+    } catch (err) {
+      console.warn("Lỗi lấy bình luận trên trang cá nhân:", err);
+    }
+  };
+
+  const handlePostCardClick = (e, post, autoFocusComment = false) => {
+    const selection = window.getSelection()?.toString();
+    if (selection && selection.trim().length > 0) return;
+
+    setSelectedDetailPost(post);
+    fetchCommentsForPost(post.id);
+    if (autoFocusComment) {
+      setTimeout(() => {
+        const input = document.getElementById('profile-detail-comment-input');
+        if (input) input.focus();
+      }, 200);
+    }
+  };
+
+  const handleAddDetailComment = async (postId) => {
+    const text = detailCommentInput.trim();
+    if (!text) return;
+
+    const payload = {
+      content: text,
+      parentId: detailReplyTarget?.commentId || null,
+      replyToUser: detailReplyTarget?.authorAccount || null
+    };
+
+    try {
+      setSubmittingDetailComment(true);
+      const res = await axiosClient.post(`/posts/${postId}/comments`, payload);
+      if (res.data && res.data.data) {
+        setDetailCommentsMap(prev => ({
+          ...prev,
+          [postId]: [...(prev[postId] || []), res.data.data]
+        }));
+        setDetailCommentInput('');
+        setDetailReplyTarget(null);
+        // Cập nhật số lượng comment trên bài viết ngoài trang cá nhân
+        setUserPosts(prev => prev.map(p => p.id === postId ? { ...p, commentsCount: (p.commentsCount || 0) + 1 } : p));
+        setSelectedDetailPost(prev => prev && prev.id === postId ? { ...prev, commentsCount: (prev.commentsCount || 0) + 1 } : prev);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Lỗi gửi phản hồi!");
+    } finally {
+      setSubmittingDetailComment(false);
+    }
+  };
+
+  const handleToggleLikeDetailComment = async (postId, commentId) => {
+    if (!postId || !commentId) return;
+    playHeartSound();
+    setDetailCommentsMap(prev => {
+      const list = prev[postId] || [];
+      return {
+        ...prev,
+        [postId]: list.map(c => {
+          if (String(c.id) === String(commentId)) {
+            const wasLiked = Boolean(c.isLiked);
+            const count = Number(c.likesCount || 0);
+            return {
+              ...c,
+              isLiked: !wasLiked,
+              likesCount: wasLiked ? Math.max(0, count - 1) : count + 1
+            };
+          }
+          return c;
+        })
+      };
+    });
+
+    try {
+      await axiosClient.post(`/posts/${postId}/comments/${commentId}/like`).catch(() =>
+        axiosClient.post(`/posts/comments/${commentId}/like`)
+      );
+    } catch (e) {
+      fetchCommentsForPost(postId);
+    }
+  };
 
   // Voice Bio 10s State
   const [voiceBioUrl, setVoiceBioUrl] = useState(() => {
@@ -908,7 +1018,8 @@ const ProfilePage = () => {
                   userPosts.map(post => (
                     <article
                       key={post.id}
-                      className="p-5 rounded-2xl bg-zinc-900/80 border border-zinc-800/80 hover:border-zinc-700/80 transition-all space-y-3.5 shadow-sm"
+                      onClick={(e) => handlePostCardClick(e, post)}
+                      className="p-5 rounded-2xl bg-zinc-900/80 border border-zinc-800/80 hover:border-zinc-700/80 hover:bg-zinc-900 cursor-pointer transition-all space-y-3.5 shadow-sm"
                     >
                       {/* Header tác giả */}
                       <div className="flex items-center justify-between">
@@ -948,21 +1059,32 @@ const ProfilePage = () => {
                         return (
                           <div className="space-y-2.5 my-2">
                             {media.mediaUrl && (
-                              <div className="rounded-xl overflow-hidden border border-zinc-800">
+                              <div className="rounded-xl overflow-hidden border border-zinc-800" onClick={(e) => e.stopPropagation()}>
                                 {media.mediaType === 'video' ? (
                                   <video src={media.mediaUrl} controls className="w-full max-h-[380px] object-cover" />
                                 ) : (
-                                  <img src={media.mediaUrl} alt="Post media" className="w-full max-h-[380px] object-cover" />
+                                  <img 
+                                    src={media.mediaUrl} 
+                                    alt="Khoảnh khắc" 
+                                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                    className="w-full max-h-[380px] object-cover" 
+                                  />
                                 )}
                               </div>
                             )}
 
                             {media.audioUrl && (
-                              <div className="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 shadow-sm flex items-center justify-between gap-3 group hover:border-zinc-700 transition-all">
+                              <div 
+                                className="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 shadow-sm flex items-center justify-between gap-3 group hover:border-zinc-700 transition-all"
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 <div className="flex items-center gap-3 min-w-0">
                                   <button
                                     type="button"
-                                    onClick={() => handleTogglePlayPostVoice(post.id, media.audioUrl)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleTogglePlayPostVoice(post.id, media.audioUrl);
+                                    }}
                                     className="w-10 h-10 rounded-full bg-white text-zinc-950 hover:bg-zinc-200 active:scale-95 flex items-center justify-center flex-shrink-0 shadow-md transition-all"
                                     title={playingVoicePostId === post.id ? "Tạm dừng" : "Nghe ghi âm"}
                                   >
@@ -996,12 +1118,15 @@ const ProfilePage = () => {
                         );
                       })()}
 
-                      {/* Hàng tương tác (Ẩn khung bình luận mặc định) */}
+                      {/* Hàng tương tác */}
                       <div className="flex items-center justify-between pt-2 border-t border-zinc-800/60 text-xs text-zinc-400">
                         <div className="flex items-center gap-4">
                           <button
                             type="button"
-                            onClick={() => handleLikePost(post.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleLikePost(post.id);
+                            }}
                             className={`flex items-center gap-1.5 transition-colors ${post.isLikedByMe ? 'text-rose-500 font-semibold' : 'hover:text-white'
                               }`}
                           >
@@ -1011,9 +1136,12 @@ const ProfilePage = () => {
 
                           <button
                             type="button"
-                            onClick={() => navigate('/')}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePostCardClick(e, post, true);
+                            }}
                             className="flex items-center gap-1.5 hover:text-white transition-colors"
-                            title="Xem thảo luận tại sảnh chính"
+                            title="Xem thảo luận & phản hồi"
                           >
                             <MessageSquare size={15} />
                             <span>{post.commentsCount || 0}</span>
@@ -1333,6 +1461,312 @@ const ProfilePage = () => {
               >
                 Đăng xuất
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CHI TIẾT BÀI VIẾT TRÊN TRANG CÁ NHÂN */}
+      {selectedDetailPost && (
+        <div 
+          className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center p-0 sm:p-5 bg-black/80 backdrop-blur-md"
+          onClick={() => setSelectedDetailPost(null)}
+        >
+          <div 
+            className="relative w-full sm:w-[860px] lg:w-[940px] h-[100dvh] sm:h-[82vh] sm:max-h-[740px] sm:min-h-[560px] bg-zinc-950 border-0 sm:border border-zinc-800 sm:rounded-3xl flex flex-col overflow-hidden shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header Modal */}
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-zinc-800 bg-zinc-900/60 flex-shrink-0">
+              <button 
+                type="button"
+                onClick={() => setSelectedDetailPost(null)}
+                className="p-1.5 rounded-xl hover:bg-zinc-800 text-zinc-300 hover:text-white transition-all active:scale-95 flex items-center gap-2 text-xs font-semibold"
+                title="Quay lại"
+              >
+                <ArrowLeft size={18} />
+                <span>Chi tiết bài viết</span>
+              </button>
+
+              <button 
+                type="button"
+                onClick={() => setSelectedDetailPost(null)}
+                className="w-8 h-8 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center transition-colors"
+                title="Đóng (ESC)"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Layout nội dung: Mobile 1 cột cuộn; PC Dual-View 2 cột */}
+            <div className="flex-1 flex flex-col sm:flex-row overflow-hidden min-h-0 bg-zinc-950">
+              {/* CỘT BÀI VIẾT CHÍNH (Mobile: phần trên; Desktop: 48% bên trái) */}
+              <div className="w-full sm:w-[48%] flex flex-col border-b sm:border-b-0 sm:border-r border-zinc-800 p-5 overflow-y-auto space-y-4 bg-zinc-900/30">
+                {/* Tác giả */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <UserAvatar
+                      avatar={selectedDetailPost.authorAvatar || profile?.avatar}
+                      name={selectedDetailPost.authorNickname || profile?.nickname}
+                      size={40}
+                      className="rounded-xl"
+                    />
+                    <div>
+                      <span className="text-sm font-bold text-white block">
+                        {selectedDetailPost.authorNickname || profile?.nickname || 'Người dùng'}
+                      </span>
+                      <span className="text-xs font-mono text-zinc-400">
+                        {selectedDetailPost.formattedTime || TIME_FORMATTER(selectedDetailPost.createdAt)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {selectedDetailPost.vibe && (
+                    <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 border border-zinc-700">
+                      {selectedDetailPost.vibe}
+                    </span>
+                  )}
+                </div>
+
+                {/* Nội dung bài viết */}
+                {selectedDetailPost.content && (selectedDetailPost.content.trim() !== 'Ghi âm giọng nói' || !parsePostMedia(selectedDetailPost.imageUrl, selectedDetailPost).audioUrl) && (
+                  <p className="text-sm text-zinc-200 leading-relaxed whitespace-pre-wrap">
+                    {selectedDetailPost.content}
+                  </p>
+                )}
+
+                {/* Media (Ảnh / Video / Voice) */}
+                {(() => {
+                  const media = parsePostMedia(selectedDetailPost.imageUrl, selectedDetailPost);
+                  if (!media.mediaUrl && !media.audioUrl) return null;
+                  return (
+                    <div className="space-y-3 my-2">
+                      {media.mediaUrl && (
+                        <div className="rounded-xl overflow-hidden border border-zinc-800">
+                          {media.mediaType === 'video' ? (
+                            <video src={media.mediaUrl} controls autoPlay loop muted playsInline className="w-full max-h-[340px] object-cover" />
+                          ) : (
+                            <img 
+                              src={media.mediaUrl} 
+                              alt="Khoảnh khắc" 
+                              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                              className="w-full max-h-[340px] object-cover" 
+                            />
+                          )}
+                        </div>
+                      )}
+
+                      {/* Trình phát Voice Note */}
+                      {media.audioUrl && (
+                        <div className="p-3.5 rounded-2xl bg-zinc-900 border border-zinc-800 shadow-lg flex items-center gap-3.5">
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePlayPostVoice(selectedDetailPost.id, media.audioUrl)}
+                            className="w-10 h-10 rounded-full bg-white text-zinc-950 hover:bg-zinc-200 active:scale-95 flex items-center justify-center flex-shrink-0 shadow-md transition-all"
+                            title={playingVoicePostId === selectedDetailPost.id ? "Tạm dừng" : "Nghe ghi âm"}
+                          >
+                            {playingVoicePostId === selectedDetailPost.id ? (
+                              <Pause size={16} className="fill-zinc-950" />
+                            ) : (
+                              <Play size={16} className="fill-zinc-950 ml-0.5" />
+                            )}
+                          </button>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center gap-1.5">
+                                <Mic size={13} className="text-emerald-400" />
+                                <span className="text-xs font-semibold text-zinc-200">
+                                  {playingVoicePostId === selectedDetailPost.id ? "Đang phát giọng nói..." : "Tín hiệu giọng nói"}
+                                </span>
+                              </div>
+                              <span className="text-xs font-mono tabular-nums text-zinc-400">
+                                {media.audioDuration ? `00:${media.audioDuration < 10 ? `0${media.audioDuration}` : media.audioDuration}` : '00:15'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1 h-4 overflow-hidden">
+                              {[35, 70, 50, 90, 60, 85, 45, 100, 75, 80, 55, 95].map((h, idx) => (
+                                <span
+                                  key={idx}
+                                  className={`w-1 rounded-full transition-all duration-200 ${
+                                    playingVoicePostId === selectedDetailPost.id
+                                      ? 'bg-emerald-400 animate-pulse'
+                                      : 'bg-zinc-700'
+                                  }`}
+                                  style={{
+                                    height: playingVoicePostId === selectedDetailPost.id ? `${Math.max(25, (h * ((idx % 3) + 1)) % 100)}%` : `${h * 0.4}%`
+                                  }}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Hàng chỉ số tương tác */}
+                <div className="flex items-center gap-4 py-2 text-xs text-zinc-400 border-y border-zinc-800">
+                  <span><strong className="text-white font-mono">{selectedDetailPost.likesCount || 0}</strong> lượt thích</span>
+                  <span>•</span>
+                  <span><strong className="text-white font-mono">{selectedDetailPost.commentsCount || (detailCommentsMap[selectedDetailPost.id]?.length || 0)}</strong> phản hồi</span>
+                </div>
+
+                {/* Nút Like nhanh */}
+                <div className="flex items-center gap-3 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleLikePost(selectedDetailPost.id);
+                      setSelectedDetailPost(prev => prev ? {
+                        ...prev,
+                        isLikedByMe: !prev.isLikedByMe,
+                        likesCount: prev.isLikedByMe ? Math.max(0, (prev.likesCount || 0) - 1) : (prev.likesCount || 0) + 1
+                      } : prev);
+                    }}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all active:scale-95 text-xs ${
+                      selectedDetailPost.isLikedByMe
+                        ? 'bg-rose-500/10 border-rose-500/30 text-rose-500 font-semibold'
+                        : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white'
+                    }`}
+                  >
+                    <Heart size={15} className={selectedDetailPost.isLikedByMe ? 'fill-rose-500' : ''} />
+                    <span>{selectedDetailPost.isLikedByMe ? 'Đã thích' : 'Thích bài viết'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const input = document.getElementById('profile-detail-comment-input');
+                      if (input) input.focus();
+                    }}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-300 hover:text-white text-xs transition-all active:scale-95"
+                  >
+                    <MessageSquare size={15} />
+                    <span>Viết phản hồi</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* CỘT BÌNH LUẬN (Mobile: phần dưới; Desktop: 52% bên phải) */}
+              <div className="w-full sm:w-[52%] flex flex-col flex-1 min-h-0 bg-zinc-950">
+                <div className="px-5 py-3 border-b border-zinc-800 flex items-center justify-between flex-shrink-0 bg-zinc-900/40">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare size={14} className="text-zinc-400" />
+                    <span className="text-xs font-bold text-zinc-200 uppercase tracking-wider">
+                      Dòng thảo luận ({detailCommentsMap[selectedDetailPost.id]?.length || selectedDetailPost.commentsCount || 0})
+                    </span>
+                  </div>
+                  <span className="text-[11px] font-mono text-zinc-500">Phản hồi phân cấp</span>
+                </div>
+
+                {/* Danh sách bình luận */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
+                  {(!detailCommentsMap[selectedDetailPost.id] || detailCommentsMap[selectedDetailPost.id].length === 0) ? (
+                    <div className="py-12 text-center text-zinc-500 text-xs">
+                      <MessageSquare size={20} className="mx-auto mb-2 opacity-40 text-zinc-600" />
+                      Chưa có phản hồi nào. Hãy là người đầu tiên để lại suy nghĩ!
+                    </div>
+                  ) : (
+                    detailCommentsMap[selectedDetailPost.id].map(cmt => (
+                      <div key={cmt.id} className="p-3 rounded-xl bg-zinc-900/60 border border-zinc-800/80 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <UserAvatar
+                              avatar={cmt.authorAvatar}
+                              name={cmt.authorNickname || cmt.authorAccount}
+                              size={28}
+                              className="rounded-lg"
+                            />
+                            <div>
+                              <span className="text-xs font-semibold text-white block">
+                                {cmt.authorNickname || cmt.authorAccount || 'Thành viên'}
+                              </span>
+                              <span className="text-[10px] font-mono text-zinc-400">
+                                @{cmt.authorAccount || 'user'} • {cmt.formattedTime || TIME_FORMATTER(cmt.createdAt)}
+                              </span>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleToggleLikeDetailComment(selectedDetailPost.id, cmt.id)}
+                            className={`flex items-center gap-1 text-[11px] transition-colors ${
+                              cmt.isLiked ? 'text-rose-500 font-bold' : 'text-zinc-400 hover:text-white'
+                            }`}
+                          >
+                            <Heart size={12} className={cmt.isLiked ? 'fill-rose-500 text-rose-500' : ''} />
+                            {Number(cmt.likesCount || 0) > 0 && <span className="font-mono">{cmt.likesCount}</span>}
+                          </button>
+                        </div>
+
+                        <p className="text-xs text-zinc-300 leading-relaxed pl-9">
+                          {cmt.replyToUser && (
+                            <span className="text-sky-400 font-mono mr-1.5">@{cmt.replyToUser}</span>
+                          )}
+                          {cmt.content}
+                        </p>
+
+                        <div className="flex items-center gap-2 pl-9 pt-0.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDetailReplyTarget({
+                                commentId: cmt.id,
+                                authorAccount: cmt.authorAccount || 'user',
+                                authorNickname: cmt.authorNickname || cmt.authorAccount || 'Thành viên'
+                              });
+                              const input = document.getElementById('profile-detail-comment-input');
+                              if (input) input.focus();
+                            }}
+                            className="text-[11px] text-zinc-400 hover:text-white flex items-center gap-1 transition-colors"
+                          >
+                            <CornerDownRight size={11} />
+                            <span>Trả lời</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Ô nhập bình luận ở đáy modal */}
+                <div className="p-3.5 bg-zinc-900/90 border-t border-zinc-800 flex items-center gap-3 flex-shrink-0">
+                  <div className="flex-1 min-w-0">
+                    {detailReplyTarget && (
+                      <div className="flex items-center justify-between text-[11px] text-zinc-400 pb-1 mb-1 border-b border-zinc-800">
+                        <span>Đang trả lời <strong>@{detailReplyTarget.authorAccount}</strong></span>
+                        <button
+                          type="button"
+                          onClick={() => setDetailReplyTarget(null)}
+                          className="text-zinc-400 hover:text-white"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    )}
+                    <input
+                      id="profile-detail-comment-input"
+                      type="text"
+                      value={detailCommentInput}
+                      onChange={(e) => setDetailCommentInput(e.target.value)}
+                      placeholder={`Phản hồi bài viết của @${selectedDetailPost.authorAccount || profile?.account || 'user'}...`}
+                      className="w-full bg-transparent border-none text-xs text-white focus:outline-none placeholder-zinc-500"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleAddDetailComment(selectedDetailPost.id);
+                      }}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleAddDetailComment(selectedDetailPost.id)}
+                    disabled={submittingDetailComment || !detailCommentInput.trim()}
+                    className="px-4 py-1.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs transition-all disabled:opacity-40 disabled:hover:bg-white active:scale-95 flex items-center gap-1.5 flex-shrink-0"
+                  >
+                    <span>{submittingDetailComment ? 'Đang gửi...' : 'Đăng'}</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

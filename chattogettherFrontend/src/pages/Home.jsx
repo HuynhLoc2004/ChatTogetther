@@ -569,16 +569,17 @@ const Home = ({ initialTab }) => {
   // Thanh thông báo nổi thời gian thực (Floating Notification Banner)
   const [floatingNotif, setFloatingNotif] = useState(null);
 
-  // Lắng nghe phím Esc để đóng Lightbox xem đa phương tiện
+  // Lắng nghe phím Esc để đóng Lightbox xem đa phương tiện và Modal chi tiết bài viết
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && lightboxMedia) {
-        setLightboxMedia(null);
+      if (e.key === 'Escape') {
+        if (lightboxMedia) setLightboxMedia(null);
+        else if (selectedThreadPost) setSelectedThreadPost(null);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [lightboxMedia]);
+  }, [lightboxMedia, selectedThreadPost]);
 
   const [systemConfig, setSystemConfig] = useState({
     brand_name: 'Talovin',
@@ -1300,6 +1301,21 @@ const Home = ({ initialTab }) => {
       }
       return { ...prev, [postId]: next };
     });
+  };
+
+  const handlePostCardClick = (e, post, autoFocusComment = false) => {
+    // Không mở modal nếu người dùng đang bôi đen / chọn văn bản để sao chép
+    const selection = window.getSelection()?.toString();
+    if (selection && selection.trim().length > 0) return;
+
+    setSelectedThreadPost(post);
+    fetchComments(post.id);
+    if (autoFocusComment) {
+      setTimeout(() => {
+        const input = document.getElementById('thread-modal-reply-input') || document.getElementById('thread-mobile-reply-input');
+        if (input) input.focus();
+      }, 200);
+    }
   };
 
   const fetchComments = async (postId) => {
@@ -3120,14 +3136,20 @@ const Home = ({ initialTab }) => {
                   const parsedMedia = parsePostMedia(post.imageUrl, post);
 
                   return (
-                    <article key={post.id} id={`post-${post.id}`} className="post-item-card">
+                    <article 
+                      key={post.id} 
+                      id={`post-${post.id}`} 
+                      className="post-item-card cursor-pointer transition-colors hover:bg-zinc-900/40"
+                      onClick={(e) => handlePostCardClick(e, post)}
+                    >
                       {post.groupId && (
                         <div className="post-community-header-bar flex items-center justify-between pb-2 mb-2.5 border-b border-zinc-800/80 text-xs">
                           <div className="flex items-center gap-1.5 min-w-0">
                             <span className="text-zinc-400 font-mono text-[11px] shrink-0">Tần số từ •</span>
                             <span 
                               className="text-zinc-100 font-semibold hover:underline cursor-pointer truncate" 
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 if (post.groupId) navigate(`/communities/${post.groupId}`);
                                 else setActiveTab('groups');
                               }}
@@ -3178,7 +3200,10 @@ const Home = ({ initialTab }) => {
                       <div className="post-header-row">
                         <div 
                           className="post-avatar-click cursor-pointer" 
-                          onClick={() => navigate(`/profile/${post.authorId || post.userId}`)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/profile/${post.authorId || post.userId}`);
+                          }}
                         >
                           <UserAvatar 
                             avatar={post.authorAvatar} 
@@ -3191,7 +3216,10 @@ const Home = ({ initialTab }) => {
                           <div className="post-name-line">
                             <span 
                               className="author-display-name cursor-pointer hover:underline"
-                              onClick={() => navigate(`/profile/${post.authorId || post.userId}`)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/profile/${post.authorId || post.userId}`);
+                              }}
                             >
                               {post.authorNickname || post.authorAccount || "Thành viên"}
                             </span>
@@ -3203,7 +3231,15 @@ const Home = ({ initialTab }) => {
                               </span>
                             )}
 
-                            <span className="author-handle font-mono">@{post.authorAccount || "user"}</span>
+                            <span 
+                              className="author-handle font-mono cursor-pointer hover:underline"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/profile/${post.authorId || post.userId}`);
+                              }}
+                            >
+                              @{post.authorAccount || "user"}
+                            </span>
                             <span className="text-zinc-600">·</span>
                             <span className="post-time-meta font-mono">{post.formattedTime || "Vừa xong"}</span>
 
@@ -3240,7 +3276,10 @@ const Home = ({ initialTab }) => {
                                     <button
                                       key={idx}
                                       type="button"
-                                      onClick={() => setActiveFilterTag(activeFilterTag === clean ? null : clean)}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setActiveFilterTag(activeFilterTag === clean ? null : clean);
+                                      }}
                                       className={`post-topic-chip ${activeFilterTag === clean ? 'active' : ''}`}
                                       title={`Lọc theo chủ đề: ${clean}`}
                                     >
@@ -3258,7 +3297,10 @@ const Home = ({ initialTab }) => {
                         <div className="post-header-actions">
                           <button 
                             type="button"
-                            onClick={() => handleToggleSavePost(post.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleSavePost(post.id);
+                            }}
                             className={`btn-save-post ${isSaved ? 'saved' : ''}`}
                             title={isSaved ? "Bỏ lưu bài viết" : "Lưu bài viết"}
                           >
@@ -3268,7 +3310,10 @@ const Home = ({ initialTab }) => {
                           <div className="post-menu-container">
                             <button 
                               type="button"
-                              onClick={() => setPostMenuOpenId(postMenuOpenId === post.id ? null : post.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPostMenuOpenId(postMenuOpenId === post.id ? null : post.id);
+                              }}
                               className="post-menu-btn"
                               title="Tùy chọn bài viết"
                             >
@@ -3276,19 +3321,25 @@ const Home = ({ initialTab }) => {
                             </button>
 
                             {postMenuOpenId === post.id && (
-                              <div className="post-menu-dropdown animate-fade-in">
+                              <div className="post-menu-dropdown animate-fade-in" onClick={(e) => e.stopPropagation()}>
                                 {isMe ? (
                                   <>
                                     <button 
                                       type="button" 
-                                      onClick={() => handleOpenEditPost(post)} 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleOpenEditPost(post);
+                                      }} 
                                       className="post-menu-item"
                                     >
                                       <Edit3 size={13} /> Sửa bài viết
                                     </button>
                                     <button 
                                       type="button" 
-                                      onClick={() => handleDeletePost(post.id)} 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeletePost(post.id);
+                                      }} 
                                       className="post-menu-item danger"
                                     >
                                       <Trash2 size={13} /> Xóa bài viết
@@ -3297,7 +3348,10 @@ const Home = ({ initialTab }) => {
                                 ) : (
                                   <button 
                                     type="button" 
-                                    onClick={() => handleOpenReportModal(post.id)} 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleOpenReportModal(post.id);
+                                    }} 
                                     className="post-menu-item text-amber-400 hover:text-amber-300"
                                   >
                                     <Flag size={13} /> Báo cáo vi phạm
@@ -3307,7 +3361,10 @@ const Home = ({ initialTab }) => {
                                 {isAdminUser && !isMe && (
                                   <button 
                                     type="button" 
-                                    onClick={() => handleDeletePost(post.id)} 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeletePost(post.id);
+                                    }} 
                                     className="post-menu-item danger"
                                   >
                                     <Trash2 size={13} /> Xóa bài (Admin)
@@ -3319,13 +3376,9 @@ const Home = ({ initialTab }) => {
                         </div>
                       </div>
 
-                      {/* Nội dung bài viết: Bấm vào để mở Thread Detail View (giống Threads) */}
+                      {/* Nội dung bài viết */}
                       <div 
-                        className="post-body-content cursor-pointer"
-                        onClick={() => {
-                          setSelectedThreadPost(post);
-                          fetchComments(post.id);
-                        }}
+                        className="post-body-content"
                       >
                         {/* Chỉ hiển thị chữ nếu không phải là nhãn fallback 'Ghi âm giọng nói' khi đã có audioUrl */}
                         {post.content && (post.content.trim() !== 'Ghi âm giọng nói' || !parsedMedia.audioUrl) && (
@@ -3427,7 +3480,10 @@ const Home = ({ initialTab }) => {
                         >
                           <button 
                             type="button"
-                            onClick={() => handleReactPost(post.id, post.myReaction || 'HEART')}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleReactPost(post.id, post.myReaction || 'HEART');
+                            }}
                             className={`action-btn ${post.isLikedByMe ? 'active-liked' : ''}`}
                             title={currentReaction ? currentReaction.label : "Thả cảm xúc"}
                           >
@@ -3476,11 +3532,14 @@ const Home = ({ initialTab }) => {
                           )}
                         </div>
 
-                        {/* Nút bình luận: Bật/tắt xem thảo luận trực tiếp */}
+                        {/* Nút bình luận: Mở modal chi tiết & focus ô nhập */}
                         <button 
                           type="button"
-                          onClick={() => handleToggleComments(post.id)}
-                          className={`action-btn ${expandedComments[post.id] ? 'text-sky-400 font-semibold' : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handlePostCardClick(e, post, true);
+                          }}
+                          className={`action-btn ${selectedThreadPost?.id === post.id ? 'text-sky-400 font-semibold' : ''}`}
                           title="Bình luận & Thảo luận"
                         >
                           <MessageSquare size={15} strokeWidth={1.5} />
@@ -3489,7 +3548,10 @@ const Home = ({ initialTab }) => {
 
                         <button 
                           type="button"
-                          onClick={() => setSharePost(post)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSharePost(post);
+                          }}
                           className="action-btn"
                           title="Chia sẻ bài viết"
                         >
