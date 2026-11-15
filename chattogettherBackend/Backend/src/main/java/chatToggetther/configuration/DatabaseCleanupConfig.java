@@ -37,4 +37,17 @@ public class DatabaseCleanupConfig {
             e.printStackTrace();
         }
     }
+
+    @PostConstruct
+    @Transactional
+    public void cleanupLegacyDmUserRooms() {
+        try {
+            int count = userRoomRepository.deleteDmUserRooms();
+            if (count > 0) {
+                System.out.println(">>> Đã giải phóng " + count + " bản ghi user_room cũ từ các phòng chat 1-1.");
+            }
+        } catch (Exception e) {
+            System.err.println(">>> Bỏ qua dọn dẹp user_room phòng 1-1: " + e.getMessage());
+        }
+    }
 }

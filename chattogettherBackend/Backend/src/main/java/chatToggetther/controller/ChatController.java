@@ -1,6 +1,7 @@
 package chatToggetther.controller;
 
 import chatToggetther.Customize.ResponseData;
+import chatToggetther.Customize.AppException;
 import chatToggetther.DTO.SendMessageDTO;
 import chatToggetther.DataRequest.MessageRequest;
 import chatToggetther.service.ChatService;
@@ -12,7 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/message")
+@RequestMapping({"/api/message", "/api/messages"})
 public class ChatController {
     private final ChatService chatService;
 
@@ -22,8 +23,50 @@ public class ChatController {
 
     @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('WRITE')")
     @PostMapping("/send")
-    public ResponseEntity<ResponseData<Boolean>> sendMessage(JwtAuthenticationToken jwtAuthenticationToken , @RequestParam("user_room") Long user_room , @RequestBody MessageRequest messageRequest){
-        return ResponseEntity.ok(this.chatService.sendMessage(jwtAuthenticationToken , messageRequest , user_room));
+    public ResponseEntity<ResponseData<Boolean>> sendMessage(
+            JwtAuthenticationToken jwtAuthenticationToken,
+            @RequestParam(value = "user_room", required = false) Long user_room,
+            @RequestBody MessageRequest messageRequest
+    ) {
+        return ResponseEntity.ok(this.chatService.sendMessage(jwtAuthenticationToken, messageRequest, user_room));
+    }
+
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('WRITE')")
+    @PostMapping
+    public ResponseEntity<ResponseData<Boolean>> postMessageDirect(
+            JwtAuthenticationToken jwtAuthenticationToken,
+            @RequestParam(value = "user_room", required = false) Long userRoomParam,
+            @RequestBody Map<String, Object> body
+    ) {
+        MessageRequest req = new MessageRequest();
+        String msg = (String) body.get("message");
+        if (msg == null) msg = (String) body.get("content");
+        req.setMessage(msg);
+
+        Long effectiveRoomId = userRoomParam;
+        if (effectiveRoomId == null && body.get("user_room") != null) {
+            try {
+                effectiveRoomId = Long.valueOf(body.get("user_room").toString());
+            } catch (Exception ignored) {}
+        }
+        if (effectiveRoomId == null && body.get("roomId") != null) {
+            try {
+                effectiveRoomId = Long.valueOf(body.get("roomId").toString());
+            } catch (Exception ignored) {}
+        }
+        if (effectiveRoomId == null && body.get("targetUserId") != null) {
+            try {
+                Long targetUserId = Long.valueOf(body.get("targetUserId").toString());
+                ResponseData<Map<String, Object>> dmRes = this.chatService.getOrCreateDirectRoom(jwtAuthenticationToken, targetUserId);
+                if (dmRes.getData() != null && dmRes.getData().get("roomId") != null) {
+                    effectiveRoomId = Long.valueOf(dmRes.getData().get("roomId").toString());
+                }
+            } catch (Exception ignored) {}
+        }
+        if (effectiveRoomId == null) {
+            throw new AppException(400, "Thiếu tham số phòng trò chuyện (user_room hoặc targetUserId)", 400);
+        }
+        return ResponseEntity.ok(this.chatService.sendMessage(jwtAuthenticationToken, req, effectiveRoomId));
     }
 
     @GetMapping("/history")

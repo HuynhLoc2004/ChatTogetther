@@ -22,6 +22,7 @@ import org.springframework.stereotype.Service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Map;
 import java.util.HashMap;
@@ -61,6 +62,7 @@ public class ChatService {
 
             // Tự động đảm bảo quyền và trạng thái hoạt động trong phòng trước khi gửi
             boolean isDm = roomEntity.getPassword() != null && roomEntity.getPassword().startsWith("DM_");
+            Long partnerId = null;
             if (isDm) {
                 String[] parts = roomEntity.getPassword().split("_");
                 if (parts.length >= 3) {
@@ -70,6 +72,7 @@ public class ChatService {
                         if (!userId.equals(u1) && !userId.equals(u2)) {
                             throw new AppException(403, "Bạn không có quyền gửi tin nhắn trong cuộc trò chuyện riêng tư này", 403);
                         }
+                        partnerId = userId.equals(u1) ? u2 : u1;
                     } catch (NumberFormatException ignored) {}
                 }
             } else {
@@ -107,6 +110,10 @@ public class ChatService {
             
             this.simpMessagingTemplate.convertAndSend("/topic/room/" + user_room, sendMessageDTO);
             this.simpMessagingTemplate.convertAndSend("/topic/" + user_room, sendMessageDTO);
+            if (partnerId != null) {
+                this.simpMessagingTemplate.convertAndSend("/topic/messages/" + partnerId, sendMessageDTO);
+                this.simpMessagingTemplate.convertAndSend("/topic/messages/" + userId, sendMessageDTO);
+            }
             
             return new ResponseData<>(ErrorCode.SUCCESS.getCode() , "gửi tin nhắn thành công" , true);
     }
@@ -165,21 +172,28 @@ public class ChatService {
 
         String directKey = "DM_" + Math.min(myId, targetUserId) + "_" + Math.max(myId, targetUserId);
 
-        // Tìm kiếm phòng DM theo directKey trong password (không phân biệt active để tránh trùng lặp)
-        List<RoomEntity> existing = roomRepository.findAll();
-        RoomEntity dmRoom = existing.stream()
-                .filter(r -> directKey.equals(r.getPassword()))
-                .findFirst()
-                .orElse(null);
+        // 1. Tìm kiếm Idempotent phòng chat 1-1 bằng directKey
+        RoomEntity dmRoom = roomRepository.findByPassword(directKey).orElse(null);
+        if (dmRoom == null) {
+            List<RoomEntity> existing = roomRepository.findAll();
+            dmRoom = existing.stream()
+                    .filter(r -> directKey.equals(r.getPassword()))
+                    .findFirst()
+                    .orElse(null);
+        }
 
         if (dmRoom != null) {
+            // Tách bạch hoàn toàn: dọn sạch mọi UserRoomEntity tàn dư trong phòng DM để không gây lỗi unique key
+            if (dmRoom.getUserRoomEntityList() != null && !dmRoom.getUserRoomEntityList().isEmpty()) {
+                dmRoom.getUserRoomEntityList().clear();
+            }
             if (!Boolean.TRUE.equals(dmRoom.getActive())) {
                 dmRoom.setActive(true);
-                dmRoom = roomRepository.save(dmRoom);
             }
+            dmRoom = roomRepository.save(dmRoom);
         } else {
-            String myName = me.getNickname() != null && !me.getNickname().isEmpty() ? me.getNickname() : me.getAccount();
-            String targetName = target.getNickname() != null && !target.getNickname().isEmpty() ? target.getNickname() : target.getAccount();
+            String myName = (me.getNickname() != null && !me.getNickname().trim().isEmpty()) ? me.getNickname() : me.getAccount();
+            String targetName = (target.getNickname() != null && !target.getNickname().trim().isEmpty()) ? target.getNickname() : target.getAccount();
 
             dmRoom = new RoomEntity();
             dmRoom.setActive(true);
@@ -188,16 +202,18 @@ public class ChatService {
             dmRoom.setPassword(directKey);
             dmRoom.setAvatar(target.getAvatar() != null ? target.getAvatar() : me.getAvatar());
             dmRoom.setLocalDateTime(LocalDateTime.now());
+            dmRoom.setUserRoomEntityList(new ArrayList<>());
 
             try {
-                // Lưu trực tiếp dmRoom mà không tạo UserRoomEntity để tránh xung đột unique key user_room_user_id
+                // Tuyệt đối không tạo UserRoomEntity cho phòng DM để tránh xung đột với phòng công cộng
                 dmRoom = roomRepository.saveAndFlush(dmRoom);
             } catch (Exception ex) {
-                // Nếu bị duplicate key do 2 bên cùng click mở chat cùng lúc, truy vấn lại phòng vừa tạo
-                dmRoom = roomRepository.findAll().stream()
-                        .filter(r -> directKey.equals(r.getPassword()))
-                        .findFirst()
-                        .orElseThrow(() -> new AppException(500, "Không thể khởi tạo cuộc trò chuyện: " + ex.getMessage(), 500));
+                // Nếu bị duplicate do 2 bên cùng nhấn mở đồng thời
+                dmRoom = roomRepository.findByPassword(directKey)
+                        .orElseGet(() -> roomRepository.findAll().stream()
+                                .filter(r -> directKey.equals(r.getPassword()))
+                                .findFirst()
+                                .orElseThrow(() -> new AppException(500, "Không thể khởi tạo cuộc trò chuyện: " + ex.getMessage(), 500)));
             }
         }
 

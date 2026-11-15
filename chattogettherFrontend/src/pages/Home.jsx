@@ -1957,8 +1957,8 @@ const Home = ({ initialTab }) => {
               });
             }
           }
-        }).catch(() => {});
-      } catch (_) {}
+        }).catch(() => { });
+      } catch (_) { }
     };
 
     init();

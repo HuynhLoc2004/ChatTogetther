@@ -137,7 +137,11 @@ export const DirectMessagePage = () => {
     } catch (e) {
       console.error('Lỗi mở chat 1-1:', e);
       if (e.response?.status !== 404) {
-        toast.error(e.response?.data?.message || 'Không thể kết nối cuộc trò chuyện riêng tư', { id: `dm-err-${targetId}` });
+        // Chỉ hiện thông báo nếu không phải lỗi huỷ hoặc chuyển trang
+        const msg = e.response?.data?.message;
+        if (msg && !msg.includes('đã tham gia một phòng khác')) {
+          toast.error(msg, { id: `dm-err-${targetId}` });
+        }
       }
     } finally {
       setLoadingMessages(false);
@@ -175,6 +179,31 @@ export const DirectMessagePage = () => {
               handleCallSignal(JSON.parse(message.body));
             } catch (e) {}
           });
+
+          // Nhận thông báo tin nhắn mới gửi trực tiếp cho user
+          client.subscribe(`/topic/messages/${currentUserId}`, (message) => {
+            try {
+              const newMsg = JSON.parse(message.body);
+              setMessages(prev => {
+                if (prev.some(m => m.id === newMsg.id)) return prev;
+                const hasPending = prev.some(m => m.pending && m.message === newMsg.message);
+                if (hasPending) {
+                  return prev.map(m => (m.pending && m.message === newMsg.message) ? newMsg : m);
+                }
+                return [...prev, newMsg];
+              });
+
+              if (newMsg.userId) {
+                setFriends(prev => prev.map(f => {
+                  if (f.id?.toString() === newMsg.userId?.toString()) {
+                    return { ...f, lastMessage: newMsg.message, lastMessageTime: newMsg.timeSend };
+                  }
+                  return f;
+                }));
+              }
+              setTimeout(() => scrollToBottom(true), 60);
+            } catch (e) {}
+          });
         }
 
         // Nhận tin nhắn trong phòng DM đang chọn
@@ -184,8 +213,18 @@ export const DirectMessagePage = () => {
               const newMsg = JSON.parse(message.body);
               setMessages(prev => {
                 if (prev.some(m => m.id === newMsg.id)) return prev;
+                const hasPending = prev.some(m => m.pending && m.message === newMsg.message);
+                if (hasPending) {
+                  return prev.map(m => (m.pending && m.message === newMsg.message) ? newMsg : m);
+                }
                 return [...prev, newMsg];
               });
+              setFriends(prev => prev.map(f => {
+                if (f.id?.toString() === activePartner?.id?.toString()) {
+                  return { ...f, lastMessage: newMsg.message, lastMessageTime: newMsg.timeSend };
+                }
+                return f;
+              }));
               setTimeout(() => scrollToBottom(true), 60);
             } catch (e) {}
           });
@@ -200,27 +239,73 @@ export const DirectMessagePage = () => {
         client.disconnect();
       }
     };
-  }, [currentUserId, activeRoomId, scrollToBottom]);
+  }, [currentUserId, activeRoomId, activePartner, scrollToBottom]);
 
-  // 4. Gửi tin nhắn 1-1
+  // 4. Gửi tin nhắn 1-1 (Hỗ trợ Optimistic UI & fallback tự lấy roomId)
   const handleSendMessage = async (e) => {
     if (e) e.preventDefault();
-    if (!textInput.trim() || !activeRoomId || sending) return;
+    if (!textInput.trim() || sending) return;
 
     const content = textInput.trim();
+    const tempId = 'temp-' + Date.now();
+    const now = new Date();
+    const formattedTime = now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+
+    // Optimistic UI: hiển thị ngay lập tức trong danh sách tin nhắn
+    const optimisticMsg = {
+      id: tempId,
+      userId: Number(currentUserId),
+      message: content,
+      timeSend: now.toISOString(),
+      formattedTime: formattedTime,
+      pending: true
+    };
+
+    setMessages(prev => [...prev, optimisticMsg]);
     setTextInput('');
     setSending(true);
+    setTimeout(() => scrollToBottom(true), 40);
+
+    // Cập nhật ngay preview tin nhắn cuối cùng trên sidebar bên trái
+    setFriends(prev => {
+      const partnerIdStr = activePartner?.id?.toString();
+      return prev.map(f => {
+        if (f.id?.toString() === partnerIdStr) {
+          return { ...f, lastMessage: content, lastMessageTime: now.toISOString() };
+        }
+        return f;
+      });
+    });
 
     try {
+      let targetRoom = activeRoomId;
+      if (!targetRoom && activePartner?.id) {
+        const roomRes = await axiosClient.get(`/message/direct/${activePartner.id}`);
+        if (roomRes?.data?.data?.roomId) {
+          targetRoom = roomRes.data.data.roomId;
+          setActiveRoomId(targetRoom);
+        }
+      }
+
+      if (!targetRoom) {
+        throw new Error("Không thể xác định phòng trò chuyện");
+      }
+
       await axiosClient.post('/message/send', {
         message: content,
-        timeSend: new Date().toISOString()
+        timeSend: now.toISOString()
       }, {
-        params: { user_room: activeRoomId }
+        params: { user_room: targetRoom }
       });
+
+      // Đánh dấu tin nhắn gửi thành công
+      setMessages(prev => prev.map(m => m.id === tempId ? { ...m, pending: false } : m));
       setTimeout(() => scrollToBottom(true), 60);
     } catch (err) {
-      toast.error('Không thể gửi tin nhắn');
+      console.error("Lỗi gửi tin nhắn 1-1:", err);
+      toast.error(err.response?.data?.message || 'Không thể gửi tin nhắn');
+      // Hoàn tác tin nhắn nếu gửi thất bại
+      setMessages(prev => prev.filter(m => m.id !== tempId));
       setTextInput(content);
     } finally {
       setSending(false);
@@ -623,16 +708,16 @@ export const DirectMessagePage = () => {
                   >
                     <div className="relative shrink-0">
                       <UserAvatar avatar={activePartner.avatar} name={activePartner.nickname || activePartner.account} size={38} />
-                      <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-zinc-950 ${activePartner.isOnline ? 'bg-emerald-500' : 'bg-zinc-600'}`} />
+                      <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-zinc-950 ${(isUserOnline(activePartner.id) || Boolean(activePartner.isOnline)) ? 'bg-emerald-500' : 'bg-zinc-600'}`} />
                     </div>
 
                     <div className="min-w-0">
                       <h3 className="font-bold text-xs sm:text-sm text-zinc-100 group-hover:text-white truncate">
                         {activePartner.nickname || activePartner.account}
                       </h3>
-                      <span className={`text-[10px] font-mono flex items-center gap-1 ${(isUserOnline(activePartner.id) || activePartner.isOnline) ? 'text-emerald-400' : 'text-zinc-500'}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${(isUserOnline(activePartner.id) || activePartner.isOnline) ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-600'}`}></span>
-                        {(isUserOnline(activePartner.id) || activePartner.isOnline) ? 'Trực tuyến' : 'Ngoại tuyến'} • Xem hồ sơ
+                      <span className={`text-[10px] font-mono flex items-center gap-1 ${(isUserOnline(activePartner.id) || Boolean(activePartner.isOnline)) ? 'text-emerald-400' : 'text-zinc-500'}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${(isUserOnline(activePartner.id) || Boolean(activePartner.isOnline)) ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-600'}`}></span>
+                        {(isUserOnline(activePartner.id) || Boolean(activePartner.isOnline)) ? 'Trực tuyến' : 'Ngoại tuyến'} • Xem hồ sơ
                       </span>
                     </div>
                   </div>
@@ -717,7 +802,7 @@ export const DirectMessagePage = () => {
                     return (
                       <div 
                         key={msg.id || index}
-                        className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} space-y-1`}
+                        className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} space-y-1 ${msg.pending ? 'opacity-70' : ''}`}
                       >
                         <div 
                           className={`max-w-[78%] sm:max-w-[65%] px-4 py-2.5 rounded-2xl text-xs leading-relaxed break-words shadow-sm ${
@@ -728,8 +813,12 @@ export const DirectMessagePage = () => {
                         >
                           {msg.message}
                         </div>
-                        <span className="text-[10px] font-mono text-zinc-500 px-1">
-                          {msg.formattedTime || (msg.timeSend ? new Date(msg.timeSend).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '')}
+                        <span className="text-[10px] font-mono text-zinc-500 px-1 flex items-center gap-1">
+                          {msg.pending ? (
+                            <span className="italic text-zinc-400">Đang gửi...</span>
+                          ) : (
+                            msg.formattedTime || (msg.timeSend ? new Date(msg.timeSend).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '')
+                          )}
                         </span>
                       </div>
                     );
@@ -747,6 +836,12 @@ export const DirectMessagePage = () => {
                   type="text"
                   value={textInput}
                   onChange={(e) => setTextInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage(e);
+                    }
+                  }}
                   placeholder={`Nhắn tin cho ${activePartner.nickname || activePartner.account}...`}
                   className="flex-1 px-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-700 font-sans"
                 />
