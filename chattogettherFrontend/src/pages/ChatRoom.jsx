@@ -336,6 +336,9 @@ const ChatRoom = () => {
           id: m.id,
           text: m.message,
           sender: m.nickname,
+          senderId: m.senderId || (m.userId ? m.userId.toString() : ''),
+          senderUsername: m.senderUsername || '',
+          senderAvatar: m.senderAvatar || m.avatar || '',
           userId: m.userId ? m.userId.toString() : '',
           time: m.formattedTime || formatMsgTime(m),
           rawTime: m.timeSend
@@ -1010,6 +1013,9 @@ const ChatRoom = () => {
                   id: msgId,
                   text: receivedMsg.message,
                   sender: receivedMsg.nickname,
+                  senderId: receivedMsg.senderId || (receivedMsg.userId ? receivedMsg.userId.toString() : ''),
+                  senderUsername: receivedMsg.senderUsername || '',
+                  senderAvatar: receivedMsg.senderAvatar || receivedMsg.avatar || '',
                   userId: receivedMsg.userId ? receivedMsg.userId.toString() : '',
                   time: receivedMsg.formattedTime || formatMsgTime(receivedMsg),
                   rawTime: receivedMsg.timeSend || new Date().toISOString()
@@ -1071,6 +1077,9 @@ const ChatRoom = () => {
       id: tempId,
       text: trimmed,
       sender: myNickname,
+      senderId: (currentUserId || '').toString(),
+      senderUsername: localStorage.getItem('account') || '',
+      senderAvatar: localStorage.getItem('user_avatar') || localStorage.getItem('avatar') || '',
       userId: (currentUserId || '').toString(),
       time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false }),
       rawTime: new Date().toISOString()
@@ -1457,7 +1466,7 @@ const ChatRoom = () => {
                       title="Đang trực tuyến - Nhấp để xem hồ sơ & kết bạn"
                     >
                       <div className="member-avatar">
-                         <UserAvatar avatar={ur.userDTO?.avatar} name={ur.userDTO?.nickname} size={30} />
+                         <UserAvatar avatarUrl={ur.userDTO?.avatar} username={ur.userDTO?.account} name={ur.userDTO?.nickname} size={30} />
                          <span className="online-indicator" title="Đang trực tuyến"></span>
                       </div>
                       <div className="member-info">
@@ -1503,7 +1512,7 @@ const ChatRoom = () => {
                       title="Ngoại tuyến - Nhấp để xem hồ sơ & kết bạn"
                     >
                       <div className="member-avatar">
-                         <UserAvatar avatar={ur.userDTO?.avatar} name={ur.userDTO?.nickname} size={30} />
+                         <UserAvatar avatarUrl={ur.userDTO?.avatar} username={ur.userDTO?.account} name={ur.userDTO?.nickname} size={30} />
                          <span className="offline-indicator" title="Ngoại tuyến"></span>
                       </div>
                       <div className="member-info">
@@ -1748,15 +1757,26 @@ const ChatRoom = () => {
               }
 
               // 3. Render Tin nhắn người dùng
+              const senderMember = roomInfo?.userRoomDTOList?.find(
+                u => u.userDTO?.id?.toString() === (msg.senderId || msg.userId)?.toString()
+              );
+              const effectiveUsername = msg.senderUsername || senderMember?.userDTO?.account || msg.sender;
+              const effectiveAvatar = msg.senderAvatar || msg.avatar || senderMember?.userDTO?.avatar;
+
               return (
                 <div key={msg.id || index} className={`msg-group ${isMe ? 'msg-me' : 'msg-them'}`}>
                   {!isMe && (
                     <div 
                       className="msg-avatar cursor-pointer"
-                      onClick={() => setSelectedProfileUserId(msg.userId)}
+                      onClick={() => setSelectedProfileUserId(msg.senderId || msg.userId)}
                       title={`Xem thông tin của ${msg.sender}`}
                     >
-                       <UserAvatar avatar={msg.avatar} name={msg.sender} size={28} />
+                       <UserAvatar 
+                         avatarUrl={effectiveAvatar} 
+                         username={effectiveUsername} 
+                         name={msg.sender} 
+                         size={28} 
+                       />
                     </div>
                   )}
 
@@ -1764,7 +1784,7 @@ const ChatRoom = () => {
                     {!isMe && (
                       <span 
                         className="msg-sender"
-                        onClick={() => setSelectedProfileUserId(msg.userId)}
+                        onClick={() => setSelectedProfileUserId(msg.senderId || msg.userId)}
                         title={`Xem thông tin của ${msg.sender}`}
                       >
                         {msg.sender}

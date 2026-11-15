@@ -98,6 +98,8 @@ public class ChatService {
 
             String senderNickname = (userEntity.getNickname() != null && !userEntity.getNickname().trim().isEmpty())
                     ? userEntity.getNickname() : userEntity.getAccount();
+            String senderUsername = userEntity.getAccount();
+            String senderAvatar = userEntity.getAvatar();
 
             SendMessageDTO sendMessageDTO = new SendMessageDTO();
             sendMessageDTO.setId(messageEntity.getId());
@@ -105,7 +107,11 @@ public class ChatService {
             sendMessageDTO.setTimeSend(now);
             sendMessageDTO.setTime_retrieve(now);
             sendMessageDTO.setUserId(userId);
+            sendMessageDTO.setSenderId(userId);
             sendMessageDTO.setNickname(senderNickname);
+            sendMessageDTO.setSenderUsername(senderUsername);
+            sendMessageDTO.setSenderAvatar(senderAvatar);
+            sendMessageDTO.setAvatar(senderAvatar);
             sendMessageDTO.setFormattedTime(now.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")));
             
             this.simpMessagingTemplate.convertAndSend("/topic/room/" + user_room, sendMessageDTO);
@@ -147,13 +153,25 @@ public class ChatService {
             }
             dto.setTimeSend(displayTime); 
             dto.setFormattedTime(displayTime.format(formatter));
-            dto.setUserId(m.getUserEntity() != null ? m.getUserEntity().getId() : 0L);
-            String nickname = "Hệ thống";
+            
             if (m.getUserEntity() != null) {
-                nickname = (m.getUserEntity().getNickname() != null && !m.getUserEntity().getNickname().trim().isEmpty())
-                        ? m.getUserEntity().getNickname() : m.getUserEntity().getAccount();
+                UserEntity u = m.getUserEntity();
+                dto.setUserId(u.getId());
+                dto.setSenderId(u.getId());
+                String nickname = (u.getNickname() != null && !u.getNickname().trim().isEmpty())
+                        ? u.getNickname() : u.getAccount();
+                dto.setNickname(nickname);
+                dto.setSenderUsername(u.getAccount());
+                dto.setSenderAvatar(u.getAvatar());
+                dto.setAvatar(u.getAvatar());
+            } else {
+                dto.setUserId(0L);
+                dto.setSenderId(0L);
+                dto.setNickname("Hệ thống");
+                dto.setSenderUsername("system");
+                dto.setSenderAvatar(null);
+                dto.setAvatar(null);
             }
-            dto.setNickname(nickname);
             return dto;
         }).collect(Collectors.toList());
         return new ResponseData<>(200, "Lấy lịch sử tin nhắn thành công", history);

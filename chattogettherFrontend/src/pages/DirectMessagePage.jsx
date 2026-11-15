@@ -654,7 +654,7 @@ export const DirectMessagePage = () => {
                     }`}
                   >
                     <div className="relative shrink-0">
-                      <UserAvatar avatar={partner.avatar} name={partner.nickname || partner.account} size={42} />
+                      <UserAvatar avatarUrl={partner.avatar} username={partner.account} name={partner.nickname || partner.account} size={42} />
                       <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-zinc-950 ${isPartnerOnline ? 'bg-emerald-500' : 'bg-zinc-600'}`} />
                     </div>
 
@@ -712,7 +712,7 @@ export const DirectMessagePage = () => {
                     title="Xem trang cá nhân"
                   >
                     <div className="relative shrink-0">
-                      <UserAvatar avatar={activePartner.avatar} name={activePartner.nickname || activePartner.account} size={38} />
+                      <UserAvatar avatarUrl={activePartner.avatar} username={activePartner.account} name={activePartner.nickname || activePartner.account} size={38} />
                       <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-zinc-950 ${(isUserOnline(activePartner.id) || Boolean(activePartner.isOnline)) ? 'bg-emerald-500' : 'bg-zinc-600'}`} />
                     </div>
 

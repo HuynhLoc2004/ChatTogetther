@@ -11,6 +11,7 @@ import React, { useState, useEffect } from 'react';
 const UserAvatar = ({
   user,
   avatar,
+  avatarUrl,
   name,
   username,
   account,
@@ -22,28 +23,23 @@ const UserAvatar = ({
   title,
   alt
 }) => {
-  // 1. Bóc tách dữ liệu avatar thật
-  const rawAvatar = user?.avatarUrl || user?.avatar || user?.authorAvatar || avatar;
-  const rawId = user?.id || user?.userId || user?.authorId || userId;
+  // 1. Luôn ưu tiên avatarUrl hoặc avatar thật từ prop/user
+  const rawAvatar = avatarUrl || avatar || user?.avatarUrl || user?.avatar || user?.authorAvatar;
 
-  // 2. Khóa cứng seed fallback theo DUY NHẤT username / account (lowercase).
-  // Tuyệt đối không dùng displayName hay nickname có khoảng trắng gây lệch màu giữa các trang!
+  // 2. Khóa cứng quy tắc: luôn ưu tiên avatarUrl, nếu chưa có thì tính seed theo duy nhất username.trim().toLowerCase()
+  // (tuyệt đối không dùng id, messageId hay displayName làm seed) để cột thành viên bên trái và khung tin nhắn bên phải luôn khớp nhau 100%.
   const candidateUsername = (
+    username ||
+    account ||
     user?.account ||
     user?.username ||
     user?.authorAccount ||
-    username ||
-    account ||
     (typeof name === 'string' && !name.includes(' ') && name.length <= 32 ? name : null)
   );
 
   let effectiveSeed = '';
   if (candidateUsername && typeof candidateUsername === 'string') {
     effectiveSeed = candidateUsername.trim().toLowerCase();
-  } else if (rawId) {
-    effectiveSeed = String(rawId).trim();
-  } else if (name && typeof name === 'string') {
-    effectiveSeed = name.trim().toLowerCase();
   }
 
   // Kiểm tra trạng thái đang tải
