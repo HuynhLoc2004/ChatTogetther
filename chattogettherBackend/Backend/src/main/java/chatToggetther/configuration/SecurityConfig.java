@@ -51,7 +51,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/api/users/create", "/api/auth/login", "/api/challenges", "/api/posts/track-search", "/api/public/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/rooms/info-rooms", "/api/rooms/my-active-room", "/api/rooms/active", "/api/rooms/*/online-users", "/api/groups", "/api/groups/**", "/api/communities", "/api/communities/**", "/api/auth/refresh_token", "/api/ping", "/api/posts", "/api/posts/**", "/api/tracks", "/api/tracks/**", "/api/challenges", "/api/challenges/**", "/api/system/**", "/api/match/config", "/api/match/stations", "/api/match/audio/**", "/api/public/**", "/api/notifications", "/api/notifications/**").permitAll()
-                        .requestMatchers("/ws-gs-guide/**").permitAll()
+                        .requestMatchers("/ws-gs-guide", "/ws-gs-guide/**", "/ws", "/ws/**", "/ws-native", "/ws-native/**", "/ws-sockjs", "/ws-sockjs/**").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .anyRequest().authenticated()
                 )

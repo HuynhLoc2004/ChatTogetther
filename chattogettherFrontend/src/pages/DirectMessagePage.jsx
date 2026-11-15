@@ -328,12 +328,28 @@ export const DirectMessagePage = () => {
         if (!targetIdentifier) {
           throw new Error("Không thể xác định người nhận");
         }
-        let roomRes;
+        let roomRes = null;
         try {
           roomRes = await axiosClient.get(`/message/direct/${targetIdentifier}`);
         } catch (_) {
-          roomRes = await axiosClient.post(`/rooms/direct/${targetIdentifier}`);
+          if (activePartner?.account && activePartner.account.toString() !== targetIdentifier.toString()) {
+            try {
+              roomRes = await axiosClient.get(`/message/direct/${activePartner.account}`);
+            } catch (_) {}
+          }
+          if (!roomRes) {
+            try {
+              roomRes = await axiosClient.post(`/rooms/direct/${targetIdentifier}`);
+            } catch (_) {
+              if (activePartner?.account) {
+                try {
+                  roomRes = await axiosClient.post(`/rooms/direct/${activePartner.account}`);
+                } catch (_) {}
+              }
+            }
+          }
         }
+
         if (roomRes?.data?.data?.roomId) {
           targetRoom = roomRes.data.data.roomId;
           setActiveRoomId(targetRoom);

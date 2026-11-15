@@ -55,7 +55,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
         // Bỏ qua các yêu cầu OPTIONS (CORS Preflight) và WebSocket handshake
         String method = request.getMethod();
         String uri = request.getRequestURI();
-        if ("OPTIONS".equalsIgnoreCase(method) || uri.startsWith("/ws-gs-guide")) {
+        if ("OPTIONS".equalsIgnoreCase(method) || 
+            uri.startsWith("/ws-gs-guide") || 
+            uri.startsWith("/ws") || 
+            uri.startsWith("/ws-native") || 
+            uri.startsWith("/ws-sockjs")) {
             filterChain.doFilter(request, response);
             return;
         }

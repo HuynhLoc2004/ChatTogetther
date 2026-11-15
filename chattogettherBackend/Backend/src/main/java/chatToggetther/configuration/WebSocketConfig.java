@@ -22,11 +22,12 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         // 1. Endpoint WebSocket thuần chuẩn (ws://, wss://) - Zero unload permissions violation
-        registry.addEndpoint("/ws-gs-guide", "/ws")
+        // Tuyệt đối không gọi withSockJS() trên endpoint này để Native WebSocket kết nối trực tiếp thành công
+        registry.addEndpoint("/ws-gs-guide", "/ws", "/ws-native")
                 .setAllowedOriginPatterns("*");
 
-        // 2. Endpoint hỗ trợ SockJS fallback
-        registry.addEndpoint("/ws-gs-guide")
+        // 2. Endpoint hỗ trợ SockJS fallback riêng biệt
+        registry.addEndpoint("/ws-sockjs")
                 .setAllowedOriginPatterns("*")
                 .withSockJS();
     }
