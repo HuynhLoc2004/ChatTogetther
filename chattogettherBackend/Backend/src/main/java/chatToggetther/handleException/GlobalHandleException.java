@@ -46,10 +46,10 @@ public class GlobalHandleException {
         responseErr.setCode(ErrorCode.DATA_INTEGRITY_VIOLATION.getCode());
         String message = ex.getRootCause() != null ? ex.getRootCause().getMessage() : ex.getMessage();
         responseErr.setTime(new Date());
-        if (message != null && message.contains("user_id")) {
+        if (message != null && message.contains("user_room") && message.contains("user_id")) {
            responseErr.setMessage("Người dùng này đã tham gia một phòng khác rồi. Vui lòng thoát phòng cũ trước khi tạo phòng mới.");
         } else {
-            responseErr.setMessage("Vi phạm ràng buộc dữ liệu trong hệ thống.");
+            responseErr.setMessage("Dữ liệu đã tồn tại hoặc vi phạm ràng buộc hệ thống.");
         }
         return ResponseEntity.status(responseErr.getStatusCode()).body(responseErr);
     }

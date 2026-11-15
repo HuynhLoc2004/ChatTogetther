@@ -48,6 +48,7 @@ public class FriendService {
         dto.setLocation(u.getLocation());
         dto.setBio(u.getBio());
         dto.setActive(u.getActive());
+        dto.setIsOnline(chatToggetther.controller.RoomPresenceController.isUserOnline(u.getId()));
         dto.setFriendshipStatus(status);
         dto.setRoles(u.getRoles());
 
@@ -215,6 +216,8 @@ public class FriendService {
             new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "User không tồn tại", 404)
         );
 
+        chatToggetther.controller.RoomPresenceController.recordHeartbeat(currentUserId);
+
         List<FriendshipEntity> list = friendshipRepository.findAllAcceptedFriends(user);
         List<UserDTO> dtos = list.stream().map(f -> {
             UserEntity other = f.getUser().getId().equals(currentUserId) ? f.getFriend() : f.getUser();
@@ -234,6 +237,8 @@ public class FriendService {
         UserEntity user = userRepository.findById(currentUserId).orElseThrow(() ->
             new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "User không tồn tại", 404)
         );
+
+        chatToggetther.controller.RoomPresenceController.recordHeartbeat(currentUserId);
 
         List<FriendshipEntity> list = friendshipRepository.findPendingRequestsFor(user);
         List<UserDTO> dtos = list.stream().map(f -> mapToDTO(f.getUser(), "PENDING_RECEIVED")).collect(Collectors.toList());

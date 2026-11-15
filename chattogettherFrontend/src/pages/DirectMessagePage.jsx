@@ -76,6 +76,16 @@ export const DirectMessagePage = () => {
     }
   }, []);
 
+  // Heartbeat định kỳ gửi lên server để duy trì trạng thái online
+  useEffect(() => {
+    const sendHeartbeat = () => {
+      axiosClient.post('/presence/heartbeat').catch(() => {});
+    };
+    sendHeartbeat();
+    const interval = setInterval(sendHeartbeat, 25000);
+    return () => clearInterval(interval);
+  }, []);
+
   // 1. Tải danh sách bạn bè
   useEffect(() => {
     const fetchFriends = async () => {
@@ -97,6 +107,9 @@ export const DirectMessagePage = () => {
   // 2. Mở hoặc tạo đoạn chat khi có urlTargetUserId
   const openDirectChat = useCallback(async (targetId, fallbackPartner = null) => {
     if (!targetId || targetId.toString() === currentUserId?.toString()) return;
+    if (fallbackPartner) {
+      setActivePartner(fallbackPartner);
+    }
     try {
       setLoadingMessages(true);
       const res = await axiosClient.get(`/message/direct/${targetId}`);
@@ -110,11 +123,15 @@ export const DirectMessagePage = () => {
         if (histRes?.data?.data) {
           setMessages(histRes.data.data);
           setTimeout(() => scrollToBottom(false), 80);
+        } else {
+          setMessages([]);
         }
       }
     } catch (e) {
       console.error('Lỗi mở chat 1-1:', e);
-      toast.error('Không thể kết nối cuộc trò chuyện riêng tư');
+      if (e.response?.status !== 404) {
+        toast.error(e.response?.data?.message || 'Không thể kết nối cuộc trò chuyện riêng tư', { id: `dm-err-${targetId}` });
+      }
     } finally {
       setLoadingMessages(false);
     }
@@ -467,13 +484,14 @@ export const DirectMessagePage = () => {
           
           <div className="h-4 w-[1px] bg-zinc-800"></div>
 
-          <TalovinLogo size={22} />
-          <span className="font-semibold text-sm tracking-tight text-zinc-100 font-sans">
-            Tin nhắn
-          </span>
-          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-900 text-zinc-400 border border-zinc-800 hidden sm:inline">
-            Mã hóa E2E
-          </span>
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300">
+              <MessageSquare size={14} />
+            </div>
+            <span className="font-bold text-sm tracking-tight text-white font-sans">
+              Hộp thư Tin nhắn
+            </span>
+          </div>
         </div>
 
         <button
@@ -524,6 +542,7 @@ export const DirectMessagePage = () => {
             ) : (
               filteredConversations.map((partner) => {
                 const isSelected = activePartner?.id?.toString() === partner.id?.toString();
+                const isPartnerOnline = Boolean(partner.isOnline);
                 return (
                   <div
                     key={partner.id}
@@ -539,7 +558,7 @@ export const DirectMessagePage = () => {
                   >
                     <div className="relative shrink-0">
                       <UserAvatar avatar={partner.avatar} name={partner.nickname || partner.account} size={42} />
-                      <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-zinc-950" />
+                      <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-zinc-950 ${isPartnerOnline ? 'bg-emerald-500' : 'bg-zinc-600'}`} />
                     </div>
 
                     <div className="min-w-0 flex-1">
@@ -547,7 +566,9 @@ export const DirectMessagePage = () => {
                         <h4 className="font-semibold text-xs truncate text-zinc-100">
                           {partner.nickname || partner.account}
                         </h4>
-                        <span className="text-[10px] font-mono text-zinc-500">Trực tuyến</span>
+                        <span className="text-[10px] font-mono text-zinc-500">
+                          {isPartnerOnline ? 'Trực tuyến' : 'Ngoại tuyến'}
+                        </span>
                       </div>
                       <p className="text-[11px] text-zinc-400 truncate">
                         @{partner.account} • Nhấp để mở trò chuyện
@@ -595,16 +616,16 @@ export const DirectMessagePage = () => {
                   >
                     <div className="relative shrink-0">
                       <UserAvatar avatar={activePartner.avatar} name={activePartner.nickname || activePartner.account} size={38} />
-                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-zinc-950" />
+                      <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-zinc-950 ${activePartner.isOnline ? 'bg-emerald-500' : 'bg-zinc-600'}`} />
                     </div>
 
                     <div className="min-w-0">
                       <h3 className="font-bold text-xs sm:text-sm text-zinc-100 group-hover:text-white truncate">
                         {activePartner.nickname || activePartner.account}
                       </h3>
-                      <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                        Đang hoạt động • Xem hồ sơ
+                      <span className={`text-[10px] font-mono flex items-center gap-1 ${activePartner.isOnline ? 'text-emerald-400' : 'text-zinc-500'}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${activePartner.isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-600'}`}></span>
+                        {activePartner.isOnline ? 'Đang hoạt động' : 'Ngoại tuyến'} • Xem hồ sơ
                       </span>
                     </div>
                   </div>

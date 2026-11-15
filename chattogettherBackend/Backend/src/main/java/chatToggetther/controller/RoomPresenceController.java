@@ -23,8 +23,52 @@ public class RoomPresenceController {
     private static final ConcurrentHashMap<Long, ConcurrentHashMap<Long, Long>> ROOM_PRESENCE = new ConcurrentHashMap<>();
     private static final long HEARTBEAT_TIMEOUT_MS = 35_000L; // 35 giây nếu mất kết nối thì coi như ngoại tuyến
 
+    // Lưu trữ người dùng trực tuyến toàn cục (Global Online Presence)
+    public static final ConcurrentHashMap<Long, Long> GLOBAL_USER_PRESENCE = new ConcurrentHashMap<>();
+    public static final long GLOBAL_HEARTBEAT_TIMEOUT_MS = 45_000L;
+
+    public static boolean isUserOnline(Long userId) {
+        if (userId == null) return false;
+        Long lastSeen = GLOBAL_USER_PRESENCE.get(userId);
+        if (lastSeen == null) return false;
+        return (System.currentTimeMillis() - lastSeen) <= GLOBAL_HEARTBEAT_TIMEOUT_MS;
+    }
+
+    public static void recordHeartbeat(Long userId) {
+        if (userId != null) {
+            GLOBAL_USER_PRESENCE.put(userId, System.currentTimeMillis());
+        }
+    }
+
     public RoomPresenceController(SimpMessagingTemplate messagingTemplate) {
         this.messagingTemplate = messagingTemplate;
+    }
+
+    /**
+     * API gửi nhịp tim định kỳ (Heartbeat) của người dùng hiện tại
+     */
+    @org.springframework.web.bind.annotation.PostMapping("/api/presence/heartbeat")
+    public ResponseEntity<ResponseData<Boolean>> postGlobalHeartbeat(org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken token) {
+        Long userId = chatToggetther.Customize.SecurityUtils.extractUserId(token);
+        if (userId != null) {
+            recordHeartbeat(userId);
+        }
+        return ResponseEntity.ok(new ResponseData<>(200, "Heartbeat OK", true));
+    }
+
+    /**
+     * API lấy danh sách User IDs đang trực tuyến toàn hệ thống
+     */
+    @GetMapping("/api/public/online-users")
+    public ResponseEntity<ResponseData<List<Long>>> getGlobalOnlineUsers() {
+        long now = System.currentTimeMillis();
+        List<Long> onlineList = new ArrayList<>();
+        GLOBAL_USER_PRESENCE.forEach((uid, ts) -> {
+            if (now - ts <= GLOBAL_HEARTBEAT_TIMEOUT_MS) {
+                onlineList.add(uid);
+            }
+        });
+        return ResponseEntity.ok(new ResponseData<>(200, "Danh sách người dùng trực tuyến", onlineList));
     }
 
     /**

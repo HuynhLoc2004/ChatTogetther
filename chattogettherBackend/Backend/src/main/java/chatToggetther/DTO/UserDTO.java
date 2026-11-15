@@ -36,4 +36,7 @@ public class UserDTO {
     private Double personalFrequency;
     private Long favoriteMusicId;
     private String matchIntentCode;
+
+    // Trạng thái trực tuyến Realtime
+    private Boolean isOnline;
 }

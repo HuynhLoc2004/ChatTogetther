@@ -855,18 +855,21 @@ public class PostService {
 
             double score = 0.0;
 
+            String cleanAuthorAcc = authorAccount.replaceAll("^@+", "").trim();
+            String cleanAuthorNick = authorNick.replaceAll("^@+", "").trim();
+
             // 1. Khớp theo tác giả bài viết (@account hoặc nickname)
             if (!cleanKw.isEmpty()) {
-                if (authorAccount.equalsIgnoreCase(cleanKw)) {
-                    score += 250.0; // Ưu tiên số 1: Tác giả chính là username cần tìm
-                } else if (authorAccount.contains(cleanKw)) {
-                    score += 120.0;
+                if (cleanAuthorAcc.equalsIgnoreCase(cleanKw)) {
+                    score += 350.0; // Ưu tiên số 1: Tác giả chính là username cần tìm
+                } else if (cleanAuthorAcc.contains(cleanKw)) {
+                    score += 150.0;
                 }
 
-                if (authorNick.equalsIgnoreCase(cleanKw)) {
-                    score += 200.0; // Tác giả chính là nickname cần tìm
-                } else if (authorNick.contains(cleanKw)) {
-                    score += 100.0;
+                if (cleanAuthorNick.equalsIgnoreCase(cleanKw)) {
+                    score += 300.0; // Tác giả chính là nickname cần tìm
+                } else if (cleanAuthorNick.contains(cleanKw)) {
+                    score += 120.0;
                 }
             }
 
@@ -921,8 +924,8 @@ public class PostService {
         }
 
         // 5. Thuật toán mở rộng đề xuất chủ đề liên quan (Deep Semantic & Related Topic Expansion)
-        // Chỉ mở rộng đề xuất nếu KHÔNG PHẢI tìm đích danh theo @username và kết quả trực tiếp ít hơn 6 bài
-        if (!isUsernameQuery && scoredList.size() < 6 && !potentialRecommendations.isEmpty()) {
+        // Nếu kết quả ít hơn 6 bài hoặc không tìm thấy bài trực tiếp, bổ sung các bài viết sôi nổi
+        if (scoredList.size() < 6 && !potentialRecommendations.isEmpty()) {
             Set<String> matchedVibes = scoredList.stream()
                     .map(sp -> sp.post.getVibe())
                     .filter(v -> v != null && !v.trim().isEmpty())
@@ -938,7 +941,9 @@ public class PostService {
                 if (hasSameVibe) {
                     recommendedList.add(new ScoredPost(recPost, engagementScore + 100.0, true, "Gợi ý chủ đề liên quan: #" + recPost.getVibe()));
                 } else if (engagementScore > 0) {
-                    recommendedList.add(new ScoredPost(recPost, engagementScore, true, "Đề xuất sôi nổi trong sảnh"));
+                    recommendedList.add(new ScoredPost(recPost, engagementScore, true, isUsernameQuery ? "Gợi ý bài viết sôi nổi sảnh chính" : "Đề xuất sôi nổi trong sảnh"));
+                } else {
+                    recommendedList.add(new ScoredPost(recPost, 1.0, true, "Gợi ý khám phá cộng đồng"));
                 }
             }
 

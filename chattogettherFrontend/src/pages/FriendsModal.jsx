@@ -146,28 +146,11 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
     }
   };
 
-  // Mở đoạn chat 1-1 ngay lập tức
-  const handleOpenDirectChat = async (friend) => {
-    try {
-      const myName = localStorage.getItem('nickname') || 'Tôi';
-      const friendName = friend.nickname || friend.account || 'Bạn bè';
-      const roomName = `Chat: ${myName} & ${friendName}`;
-      
-      const res = await axiosClient.post('/rooms/create-room', {
-        roomName: roomName,
-        password: null
-      });
-
-      if (res.data && res.data.data) {
-        toast.success(`Đang mở đoạn chat cùng ${friendName}!`);
-        onClose();
-        navigate(`/room/${res.data.data.id}`);
-      }
-    } catch (err) {
-      if (onSelectUser) {
-        onSelectUser(friend.id);
-      }
-    }
+  // Mở đoạn chat 1-1 ngay lập tức qua /messages/:userId
+  const handleOpenDirectChat = (friend) => {
+    if (!friend?.id) return;
+    onClose();
+    navigate(`/messages/${friend.id}`);
   };
 
   // Gọi thoại 1-1

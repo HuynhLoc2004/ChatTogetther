@@ -165,26 +165,40 @@ public class ChatService {
 
         String directKey = "DM_" + Math.min(myId, targetUserId) + "_" + Math.max(myId, targetUserId);
 
+        // Tìm kiếm phòng DM theo directKey trong password (không phân biệt active để tránh trùng lặp)
         List<RoomEntity> existing = roomRepository.findAll();
         RoomEntity dmRoom = existing.stream()
-                .filter(r -> Boolean.TRUE.equals(r.getActive()) && directKey.equals(r.getPassword()))
+                .filter(r -> directKey.equals(r.getPassword()))
                 .findFirst()
                 .orElse(null);
 
-        if (dmRoom == null) {
+        if (dmRoom != null) {
+            if (!Boolean.TRUE.equals(dmRoom.getActive())) {
+                dmRoom.setActive(true);
+                dmRoom = roomRepository.save(dmRoom);
+            }
+        } else {
             String myName = me.getNickname() != null && !me.getNickname().isEmpty() ? me.getNickname() : me.getAccount();
             String targetName = target.getNickname() != null && !target.getNickname().isEmpty() ? target.getNickname() : target.getAccount();
 
             dmRoom = new RoomEntity();
             dmRoom.setActive(true);
-            dmRoom.setRoomName(myName + " & " + targetName);
+            dmRoom.setRoomName("Chat: " + myName + " & " + targetName + "_" + directKey);
             dmRoom.setDescription("Cuộc trò chuyện riêng tư 1-1");
             dmRoom.setPassword(directKey);
-            dmRoom.setAvatar(target.getAvatar());
+            dmRoom.setAvatar(target.getAvatar() != null ? target.getAvatar() : me.getAvatar());
             dmRoom.setLocalDateTime(LocalDateTime.now());
 
-            // Lưu trực tiếp dmRoom mà không tạo UserRoomEntity để tránh xung đột unique key user_room_user_id
-            dmRoom = roomRepository.saveAndFlush(dmRoom);
+            try {
+                // Lưu trực tiếp dmRoom mà không tạo UserRoomEntity để tránh xung đột unique key user_room_user_id
+                dmRoom = roomRepository.saveAndFlush(dmRoom);
+            } catch (Exception ex) {
+                // Nếu bị duplicate key do 2 bên cùng click mở chat cùng lúc, truy vấn lại phòng vừa tạo
+                dmRoom = roomRepository.findAll().stream()
+                        .filter(r -> directKey.equals(r.getPassword()))
+                        .findFirst()
+                        .orElseThrow(() -> new AppException(500, "Không thể khởi tạo cuộc trò chuyện: " + ex.getMessage(), 500));
+            }
         }
 
         Map<String, Object> targetData = new HashMap<>();

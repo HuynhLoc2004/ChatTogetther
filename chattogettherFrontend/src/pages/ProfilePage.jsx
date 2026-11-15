@@ -13,6 +13,55 @@ import toast from 'react-hot-toast';
 import TalovinLogo from '../components/TalovinLogo';
 import { UserAvatar, playHeartSound } from './Home';
 
+const parsePostMedia = (raw, fallbackPost = null) => {
+  const directAudio = fallbackPost?.audioUrl || fallbackPost?.voiceUrl || fallbackPost?.audio || null;
+  const directDuration = fallbackPost?.audioDuration || null;
+
+  if (!raw && !directAudio) return { mediaUrl: null, mediaType: null, audioUrl: null, audioDuration: null };
+
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('{\\"') && trimmed.endsWith('\\"}'))) {
+      try {
+        let jsonStr = trimmed;
+        if (jsonStr.startsWith('{\\"')) {
+          jsonStr = JSON.parse(`"${jsonStr}"`);
+        }
+        const parsed = JSON.parse(jsonStr);
+        return {
+          mediaUrl: parsed.mediaUrl || null,
+          mediaType: parsed.mediaType || (parsed.mediaUrl?.includes('video') ? 'video' : 'image'),
+          audioUrl: parsed.audioUrl || directAudio || null,
+          audioDuration: parsed.audioDuration || directDuration || null
+        };
+      } catch (e) {}
+    }
+    const isVideo = trimmed.match(/\.(mp4|webm|mov)(\?.*)?$/i) || trimmed.startsWith('data:video/');
+    const isAudio = trimmed.match(/\.(mp3|wav|ogg|m4a|aac)(\?.*)?$/i) || trimmed.startsWith('data:audio/') || (trimmed.includes('webm') && !isVideo);
+    if (isAudio) {
+      return {
+        mediaUrl: null,
+        mediaType: 'audio',
+        audioUrl: trimmed,
+        audioDuration: directDuration || null
+      };
+    }
+    return {
+      mediaUrl: trimmed,
+      mediaType: isVideo ? 'video' : 'image',
+      audioUrl: directAudio || null,
+      audioDuration: directDuration || null
+    };
+  }
+
+  return {
+    mediaUrl: null,
+    mediaType: null,
+    audioUrl: directAudio || null,
+    audioDuration: directDuration || null
+  };
+};
+
 const TIME_FORMATTER = (dateStr) => {
   if (!dateStr) return 'Vừa xong';
   try {
@@ -58,6 +107,45 @@ const ProfilePage = () => {
   const [isRecordingBio, setIsRecordingBio] = useState(false);
   const [recordTimeLeft, setRecordTimeLeft] = useState(10);
   const [tempBioBlob, setTempBioBlob] = useState(null);
+
+  // Voice note player for user posts
+  const [playingVoicePostId, setPlayingVoicePostId] = useState(null);
+  const voicePostAudioRef = useRef(null);
+
+  const handleTogglePlayPostVoice = (postId, audioUrl) => {
+    if (!audioUrl) return;
+    if (playingVoicePostId === postId) {
+      if (voicePostAudioRef.current) {
+        voicePostAudioRef.current.pause();
+      }
+      setPlayingVoicePostId(null);
+    } else {
+      if (voicePostAudioRef.current) {
+        voicePostAudioRef.current.pause();
+      }
+      const audio = new Audio(audioUrl);
+      voicePostAudioRef.current = audio;
+      audio.onended = () => setPlayingVoicePostId(null);
+      audio.onerror = () => {
+        toast.error('Không thể phát âm thanh này');
+        setPlayingVoicePostId(null);
+      };
+      audio.play().then(() => {
+        setPlayingVoicePostId(postId);
+      }).catch(err => {
+        console.error('Lỗi phát âm thanh bài viết:', err);
+        setPlayingVoicePostId(null);
+      });
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (voicePostAudioRef.current) {
+        voicePostAudioRef.current.pause();
+      }
+    };
+  }, []);
 
   const voiceBioAudioRef = useRef(null);
   const bioRecorderRef = useRef(null);
@@ -475,6 +563,28 @@ const ProfilePage = () => {
 
       {/* BỐ CỤC 2 CỘT CHUẨN: MOBILE 1 CỘT -> DESKTOP 12 CỘT */}
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-4 sm:py-8">
+        {loading && !profile ? (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start animate-pulse">
+            <aside className="lg:col-span-4 space-y-5">
+              <div className="bg-zinc-900/60 border border-zinc-800/80 p-6 rounded-2xl space-y-5">
+                <div className="flex items-start gap-4">
+                  <div className="w-20 h-20 rounded-2xl bg-zinc-800" />
+                  <div className="space-y-2 flex-1 pt-2">
+                    <div className="h-5 w-32 bg-zinc-800 rounded-lg" />
+                    <div className="h-3 w-20 bg-zinc-800/80 rounded" />
+                  </div>
+                </div>
+                <div className="h-10 bg-zinc-800/60 rounded-xl" />
+                <div className="h-16 bg-zinc-800/40 rounded-xl" />
+              </div>
+            </aside>
+            <section className="lg:col-span-8 space-y-4">
+              <div className="h-12 bg-zinc-900/60 border border-zinc-800/80 rounded-xl" />
+              <div className="h-36 bg-zinc-900/60 border border-zinc-800/80 rounded-2xl" />
+              <div className="h-36 bg-zinc-900/60 border border-zinc-800/80 rounded-2xl" />
+            </section>
+          </div>
+        ) : (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
           {/* ============================================================== */}
@@ -560,23 +670,23 @@ const ProfilePage = () => {
               {/* Hàng nút hành động (Touch-friendly h-10) */}
               <div>
                 {!isMe ? (
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 gap-2.5">
                     {friendStatus === 'ACCEPTED' ? (
-                      <div className="h-10 rounded-xl bg-zinc-800 text-zinc-200 border border-zinc-700 text-xs font-semibold flex items-center justify-center gap-1.5 select-none">
+                      <div className="h-10 rounded-xl bg-zinc-900 text-zinc-300 border border-zinc-800 text-xs font-semibold flex items-center justify-center gap-1.5 select-none shadow-sm">
                         <UserCheck size={14} className="text-emerald-400" />
                         <span>Bạn bè</span>
                       </div>
                     ) : friendStatus === 'PENDING_SENT' ? (
-                      <div className="h-10 rounded-xl bg-zinc-800 text-zinc-400 border border-zinc-700 text-xs font-semibold flex items-center justify-center gap-1.5 select-none">
+                      <div className="h-10 rounded-xl bg-zinc-900 text-zinc-400 border border-zinc-800 text-xs font-semibold flex items-center justify-center gap-1.5 select-none shadow-sm">
                         <Clock size={14} />
-                        <span>Đã gửi</span>
+                        <span>Đã gửi lời mời</span>
                       </div>
                     ) : (
                       <button
                         type="button"
                         onClick={handleSendFriendRequest}
                         disabled={processingFriend}
-                        className="h-10 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-md disabled:opacity-50"
+                        className="h-10 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 font-semibold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50"
                       >
                         <UserPlus size={14} />
                         <span>{processingFriend ? '...' : 'Kết bạn'}</span>
@@ -585,22 +695,15 @@ const ProfilePage = () => {
 
                     <button
                       type="button"
-                      onClick={() => navigate(`/messages/${targetUserId}`)}
-                      className="h-10 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 font-medium text-xs transition-colors duration-150 active:scale-[0.98] flex items-center justify-center gap-1.5"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/messages/${targetUserId}`);
+                      }}
+                      className="h-10 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs transition-colors duration-150 active:scale-[0.98] flex items-center justify-center gap-1.5 shadow-sm"
                       title="Gửi tin nhắn cho người này"
                     >
                       <MessageSquare size={14} />
                       <span>Nhắn tin</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/call/direct/${targetUserId}?type=audio`)}
-                      className="h-10 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 font-medium text-xs transition-colors duration-150 active:scale-[0.98] flex items-center justify-center gap-1.5"
-                      title="Gọi ngay với người này"
-                    >
-                      <PhoneCall size={14} className="text-zinc-300" />
-                      <span>Gọi ngay</span>
                     </button>
                   </div>
                 ) : (
@@ -839,15 +942,59 @@ const ProfilePage = () => {
                       </p>
 
                       {/* Media (Ảnh / Video / Voice) */}
-                      {post.imageUrl && (
-                        <div className="rounded-xl overflow-hidden border border-zinc-800 my-2">
-                          {post.imageUrl.includes('.mp4') || post.imageUrl.includes('video') ? (
-                            <video src={post.imageUrl} controls className="w-full max-h-[380px] object-cover" />
-                          ) : (
-                            <img src={post.imageUrl} alt="Post media" className="w-full max-h-[380px] object-cover" />
-                          )}
-                        </div>
-                      )}
+                      {(() => {
+                        const media = parsePostMedia(post.imageUrl, post);
+                        if (!media.mediaUrl && !media.audioUrl) return null;
+                        return (
+                          <div className="space-y-2.5 my-2">
+                            {media.mediaUrl && (
+                              <div className="rounded-xl overflow-hidden border border-zinc-800">
+                                {media.mediaType === 'video' ? (
+                                  <video src={media.mediaUrl} controls className="w-full max-h-[380px] object-cover" />
+                                ) : (
+                                  <img src={media.mediaUrl} alt="Post media" className="w-full max-h-[380px] object-cover" />
+                                )}
+                              </div>
+                            )}
+
+                            {media.audioUrl && (
+                              <div className="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 shadow-sm flex items-center justify-between gap-3 group hover:border-zinc-700 transition-all">
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleTogglePlayPostVoice(post.id, media.audioUrl)}
+                                    className="w-10 h-10 rounded-full bg-white text-zinc-950 hover:bg-zinc-200 active:scale-95 flex items-center justify-center flex-shrink-0 shadow-md transition-all"
+                                    title={playingVoicePostId === post.id ? "Tạm dừng" : "Nghe ghi âm"}
+                                  >
+                                    {playingVoicePostId === post.id ? (
+                                      <Pause size={16} className="fill-zinc-950" />
+                                    ) : (
+                                      <Play size={16} className="fill-zinc-950 ml-0.5" />
+                                    )}
+                                  </button>
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5">
+                                      <AudioLines size={14} className={playingVoicePostId === post.id ? "text-emerald-400 animate-pulse" : "text-zinc-500"} />
+                                      <span className="text-xs font-semibold text-zinc-200 truncate">
+                                        {playingVoicePostId === post.id ? "Đang phát giọng nói..." : "Ghi âm giọng nói"}
+                                      </span>
+                                    </div>
+                                    <span className="text-[11px] font-mono text-zinc-500">
+                                      {media.audioDuration ? `${media.audioDuration}s • ` : ''}Tín hiệu radio Talovin
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1 text-zinc-600">
+                                  <span className="w-1 h-3 rounded-full bg-zinc-700"></span>
+                                  <span className="w-1 h-5 rounded-full bg-zinc-600"></span>
+                                  <span className="w-1 h-2 rounded-full bg-zinc-700"></span>
+                                  <span className="w-1 h-4 rounded-full bg-zinc-600"></span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
 
                       {/* Hàng tương tác (Ẩn khung bình luận mặc định) */}
                       <div className="flex items-center justify-between pt-2 border-t border-zinc-800/60 text-xs text-zinc-400">
@@ -934,6 +1081,7 @@ const ProfilePage = () => {
           </section>
 
         </div>
+        )}
       </main>
 
       {/* MODAL CẬP NHẬT TẦN SỐ CÁ NHÂN & HỒ SƠ Ở GIỮA MÀN HÌNH (MAX-W-LG) */}
