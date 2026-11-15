@@ -3,6 +3,7 @@ package chatToggetther.controller;
 import chatToggetther.Customize.ResponseData;
 import chatToggetther.DTO.CommentDTO;
 import chatToggetther.DTO.PostDTO;
+import chatToggetther.DTO.ReactionSummaryDTO;
 import chatToggetther.DataRequest.CreateCommentRequest;
 import chatToggetther.DataRequest.CreatePostRequest;
 import chatToggetther.service.PostService;
@@ -73,6 +74,19 @@ public class PostController {
     ) {
         String reason = body != null ? body.get("reason") : null;
         return ResponseEntity.ok(this.postService.rejectPost(token, postId, reason));
+    }
+
+    @PostMapping("/{id}/react")
+    public ResponseEntity<ResponseData<ReactionSummaryDTO>> reactToPost(
+            JwtAuthenticationToken token,
+            @PathVariable("id") Long postId,
+            @RequestParam(value = "type", required = false) String reactionType,
+            @RequestBody(required = false) java.util.Map<String, String> body
+    ) {
+        String effectiveType = (reactionType != null && !reactionType.trim().isEmpty()) 
+                ? reactionType 
+                : (body != null ? body.get("type") : null);
+        return ResponseEntity.ok(this.postService.reactToPost(token, postId, effectiveType));
     }
 
     @PostMapping("/{id}/like")

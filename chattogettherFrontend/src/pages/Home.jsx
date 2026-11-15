@@ -28,6 +28,9 @@ import ResonanceMatchModal from '../components/ResonanceMatchModal';
 import ChallengeDeckModal from '../components/ChallengeDeckModal';
 import UserAvatar from '../components/UserAvatar';
 import MobileBottomNav from '../components/MobileBottomNav';
+import PostReactionDock, { REACTION_DEFINITIONS } from '../components/PostReactionDock';
+import { playReactionPop, playCommentSend, playRemoveTick } from '../utils/soundEffects';
+import { formatCompactCount } from '../utils/numberFormat';
 import { useAuth } from '../context/AuthContext';
 
 export { default as UserAvatar } from '../components/UserAvatar';
@@ -402,6 +405,8 @@ const Home = ({ initialTab }) => {
   const [hotSearches, setHotSearches] = useState([]);
   const [activeReactionPicker, setActiveReactionPicker] = useState(null);
   const reactionTimeoutRef = useRef(null);
+  const reactionDebounceMapRef = useRef(new Map());
+  const reactionIntentMapRef = useRef(new Map());
 
   // Lắng nghe click bên ngoài, di chuột ra ngoài và cuộn trang để đóng ngay reactions popup
   useEffect(() => {
@@ -481,6 +486,27 @@ const Home = ({ initialTab }) => {
 
   // Menu quản trị bài viết (Chỉnh sửa / Xóa)
   const [postMenuOpenId, setPostMenuOpenId] = useState(null);
+
+  // Tự động đóng menu 3 chấm khi click ra ngoài hoặc ấn Escape
+  useEffect(() => {
+    if (!postMenuOpenId) return;
+    const handlePointerDown = (e) => {
+      if (!e.target.closest('.post-menu-container')) {
+        setPostMenuOpenId(null);
+      }
+    };
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setPostMenuOpenId(null);
+      }
+    };
+    document.addEventListener('pointerdown', handlePointerDown, true);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown, true);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [postMenuOpenId]);
   const [editingPost, setEditingPost] = useState(null);
   const [editPostContent, setEditPostContent] = useState('');
   const [editPostImageUrl, setEditPostImageUrl] = useState('');
@@ -1196,14 +1222,12 @@ const Home = ({ initialTab }) => {
     }
   };
 
-  // Thả cảm xúc
-  const handleReactPost = async (postId, reactionType) => {
+  // Thả cảm xúc với cơ chế Optimistic 0ms + Debounce Mutex chống race condition khi spam click
+  const handleReactPost = useCallback((postId, reactionType) => {
     if (!postId) return;
-    playHeartSound();
-    setActiveReactionPicker(null);
-    const targetType = reactionType || 'HEART';
+    const targetType = (reactionType || 'HEART').toUpperCase();
 
-    // 1. Cập nhật Optimistic cho danh sách bài viết ngoài feed (hỗ trợ String và Number id)
+    // 1. Cập nhật Optimistic 0ms trên danh sách bài viết ngoài Sảnh
     setPosts(prev => prev.map(p => {
       if (String(p.id) !== String(postId)) return p;
       const wasLiked = p.isLikedByMe;
@@ -1221,15 +1245,15 @@ const Home = ({ initialTab }) => {
           ...p,
           isLikedByMe: true,
           myReaction: targetType,
-          likesCount: wasLiked ? p.likesCount : (p.likesCount || 0) + 1
+          likesCount: wasLiked ? (p.likesCount || 1) : (p.likesCount || 0) + 1
         };
       }
     }));
 
-    // 2. Đồng bộ tức thì cả selectedThreadPost (nếu đang mở trong Modal chi tiết)
+    // 2. Cập nhật Optimistic 0ms cho modal bài viết chi tiết nếu đang mở
     setSelectedThreadPost(prev => {
       if (!prev || String(prev.id) !== String(postId)) return prev;
-      const wasLiked = prev.isLikedByMe || (prev.myReaction != null);
+      const wasLiked = prev.isLikedByMe;
       const sameType = prev.myReaction === targetType;
 
       if (wasLiked && sameType) {
@@ -1244,30 +1268,65 @@ const Home = ({ initialTab }) => {
           ...prev,
           isLikedByMe: true,
           myReaction: targetType,
-          likesCount: wasLiked ? prev.likesCount : (prev.likesCount || 0) + 1
+          likesCount: wasLiked ? (prev.likesCount || 1) : (prev.likesCount || 0) + 1
         };
       }
     });
 
-    try {
-      const res = await axiosClient.post(`/posts/${postId}/like`, null, {
-        params: { type: targetType, reactionType: targetType }
-      });
-      if (res.data && res.data.data) {
-        const updatedPost = res.data.data;
-        setPosts(prev => prev.map(p => String(p.id) === String(postId) ? updatedPost : p));
-        setSelectedThreadPost(prev => (prev && String(prev.id) === String(postId)) ? updatedPost : prev);
-      }
-    } catch (err) {
-      console.warn("Lỗi thả cảm xúc:", err);
-      if (err.response?.status === 404) {
-        setPosts(prev => prev.filter(p => String(p.id) !== String(postId)));
-        setSelectedThreadPost(prev => (prev && String(prev.id) === String(postId)) ? null : prev);
-      } else {
-        fetchPosts(true);
-      }
+    // 3. Quản lý Debounce & Mutex theo từng postId
+    const strPostId = String(postId);
+    reactionIntentMapRef.current.set(strPostId, targetType);
+
+    const existingTimer = reactionDebounceMapRef.current.get(strPostId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
     }
-  };
+
+    const timer = setTimeout(async () => {
+      const intentType = reactionIntentMapRef.current.get(strPostId);
+      reactionIntentMapRef.current.delete(strPostId);
+      reactionDebounceMapRef.current.delete(strPostId);
+
+      try {
+        const res = await axiosClient.post(`/posts/${postId}/react`, null, {
+          params: { type: intentType || 'HEART' }
+        });
+        if (res.data && res.data.data) {
+          const summary = res.data.data;
+          setPosts(prev => prev.map(p => {
+            if (String(p.id) !== strPostId) return p;
+            return {
+              ...p,
+              isLikedByMe: !!summary.userReaction,
+              myReaction: summary.userReaction,
+              likesCount: summary.totalCount,
+              reactionStats: summary,
+              topReactions: summary.topReactions
+            };
+          }));
+          setSelectedThreadPost(prev => {
+            if (!prev || String(prev.id) !== strPostId) return prev;
+            return {
+              ...prev,
+              isLikedByMe: !!summary.userReaction,
+              myReaction: summary.userReaction,
+              likesCount: summary.totalCount,
+              reactionStats: summary,
+              topReactions: summary.topReactions
+            };
+          });
+        }
+      } catch (err) {
+        console.warn("Lỗi sync cảm xúc:", err);
+        if (err.response?.status === 404) {
+          setPosts(prev => prev.filter(p => String(p.id) !== strPostId));
+          setSelectedThreadPost(prev => (prev && String(prev.id) === strPostId) ? null : prev);
+        }
+      }
+    }, 300);
+
+    reactionDebounceMapRef.current.set(strPostId, timer);
+  }, []);
 
   // Bình luận
   const handleToggleComments = (postId) => {
@@ -1449,9 +1508,11 @@ const Home = ({ initialTab }) => {
   };
 
   const handleAddComment = async (postId) => {
+    if (submittingComment[postId]) return;
     const text = commentInputs[postId]?.trim();
     if (!text) return;
 
+    playCommentSend();
     const replyTarget = replyTargetMap[postId];
     const payload = {
       content: text,
@@ -3310,73 +3371,13 @@ const Home = ({ initialTab }) => {
                       {/* Thanh tương tác (Phẳng, không viền pill quanh từng nút) */}
                       <div className="post-actions-toolbar">
                         
-                        {/* Reaction Popover: Luôn đặt trên nút, KHÔNG che chữ, tự động biến mất khi rời chuột */}
-                        <div 
-                          className="reaction-drop-wrapper relative group"
-                          onMouseEnter={() => {
-                            if (reactionTimeoutRef.current) clearTimeout(reactionTimeoutRef.current);
-                            setActiveReactionPicker(post.id);
-                          }}
-                          onMouseLeave={() => {
-                            if (reactionTimeoutRef.current) clearTimeout(reactionTimeoutRef.current);
-                            reactionTimeoutRef.current = setTimeout(() => {
-                              setActiveReactionPicker(null);
-                            }, 180);
-                          }}
-                        >
-                          <button 
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleReactPost(post.id, post.myReaction || 'HEART');
-                            }}
-                            className={`action-btn ${post.isLikedByMe ? 'active-liked' : ''}`}
-                            title={currentReaction ? currentReaction.label : "Thả cảm xúc"}
-                          >
-                            {post.isLikedByMe && currentReaction ? (
-                              <span className="reaction-active-emoji text-sm select-none leading-none inline-block transform hover:scale-110 transition-transform">
-                                {currentReaction.emoji}
-                              </span>
-                            ) : (
-                              <Heart 
-                                size={15} 
-                                strokeWidth={1.5} 
-                                fill={post.isLikedByMe ? "#ef4444" : "none"} 
-                                color={post.isLikedByMe ? "#ef4444" : "currentColor"} 
-                              />
-                            )}
-                            <span className="font-mono text-xs">{post.likesCount || 0}</span>
-                          </button>
-
-                          {activeReactionPicker === post.id && (
-                            <div 
-                              className="reactions-popup-menu"
-                              onMouseEnter={() => {
-                                if (reactionTimeoutRef.current) clearTimeout(reactionTimeoutRef.current);
-                              }}
-                              onMouseLeave={() => {
-                                if (reactionTimeoutRef.current) clearTimeout(reactionTimeoutRef.current);
-                                setActiveReactionPicker(null);
-                              }}
-                            >
-                              {REACTION_EMOJIS.map(item => (
-                                <button
-                                  key={item.type}
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleReactPost(post.id, item.type);
-                                    setActiveReactionPicker(null);
-                                  }}
-                                  className="reaction-emoji-item"
-                                  title={item.label}
-                                >
-                                  {item.emoji}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
+                        {/* Reaction Dock: Hover desktop, Long-press drag mobile, Top 5 emojis, Compact count */}
+                        <PostReactionDock
+                          post={post}
+                          onReact={handleReactPost}
+                          activePickerId={activeReactionPicker}
+                          setActivePickerId={setActiveReactionPicker}
+                        />
 
                         {/* Nút bình luận: Mở modal chi tiết & focus ô nhập */}
                         <button 
@@ -5406,68 +5407,13 @@ const Home = ({ initialTab }) => {
 
                 {/* Hàng nút hành động nhanh với Reaction Popover đầy đủ emoji (KHÔNG CÓ NÚT ĐĂNG LẠI) */}
                 <div className="flex items-center justify-around py-1 border-b border-zinc-800/80 text-zinc-400 relative">
-                  {/* Cụm Thả Cảm Xúc / Emoji Popover */}
-                  <div 
-                    className="relative group reaction-drop-wrapper"
-                    onMouseEnter={() => {
-                      if (reactionTimeoutRef.current) clearTimeout(reactionTimeoutRef.current);
-                      setActiveReactionPicker(`modal_${selectedThreadPost.id}`);
-                    }}
-                    onMouseLeave={() => {
-                      if (reactionTimeoutRef.current) clearTimeout(reactionTimeoutRef.current);
-                      reactionTimeoutRef.current = setTimeout(() => {
-                        setActiveReactionPicker(null);
-                      }, 180);
-                    }}
-                  >
-                    <button 
-                      type="button"
-                      onClick={() => handleReactPost(selectedThreadPost.id, selectedThreadPost.myReaction || 'HEART')}
-                      className={`flex items-center gap-1.5 p-2 rounded-xl hover:text-white transition-all active:scale-95 ${
-                        selectedThreadPost.isLikedByMe || selectedThreadPost.myReaction ? 'text-rose-500 font-semibold' : ''
-                      }`}
-                    >
-                      {selectedThreadPost.myReaction && REACTION_EMOJIS.find(r => r.type === selectedThreadPost.myReaction) ? (
-                        <span className="text-base select-none leading-none inline-block transform hover:scale-110 transition-transform">
-                          {REACTION_EMOJIS.find(r => r.type === selectedThreadPost.myReaction).emoji}
-                        </span>
-                      ) : (
-                        <Heart 
-                          size={17} 
-                          className={selectedThreadPost.isLikedByMe || selectedThreadPost.myReaction ? 'fill-rose-500 text-rose-500' : ''} 
-                        />
-                      )}
-                      <span className="text-xs">
-                        {selectedThreadPost.myReaction && REACTION_EMOJIS.find(r => r.type === selectedThreadPost.myReaction)
-                          ? REACTION_EMOJIS.find(r => r.type === selectedThreadPost.myReaction).label
-                          : 'Thích'}
-                      </span>
-                    </button>
-
-                    {/* Popover Emoji Menu */}
-                    {activeReactionPicker === `modal_${selectedThreadPost.id}` && (
-                      <div 
-                        className="reactions-popup-menu"
-                        style={{ bottom: '100%', left: '0', marginBottom: '8px', zIndex: 60 }}
-                        onMouseLeave={() => setActiveReactionPicker(null)}
-                      >
-                        {REACTION_EMOJIS.map(item => (
-                          <button
-                            key={item.type}
-                            type="button"
-                            onClick={() => {
-                              handleReactPost(selectedThreadPost.id, item.type);
-                              setActiveReactionPicker(null);
-                            }}
-                            className="reaction-emoji-item"
-                            title={item.label}
-                          >
-                            {item.emoji}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  {/* Cụm Thả Cảm Xúc / Reaction Dock */}
+                  <PostReactionDock
+                    post={selectedThreadPost}
+                    onReact={handleReactPost}
+                    activePickerId={activeReactionPicker}
+                    setActivePickerId={setActiveReactionPicker}
+                  />
 
                   <button 
                     type="button"

@@ -28,5 +28,14 @@ public interface PostLikeRepository extends JpaRepository<PostLikeEntity, Long> 
 
     @Query("SELECT pl.post.id, pl.user.id, pl.user.account, pl.user.nickname FROM PostLikeEntity pl WHERE pl.post.id IN :postIds AND pl.user.id IN :friendIds")
     List<Object[]> findFriendLikesOnPosts(@Param("postIds") List<Long> postIds, @Param("friendIds") java.util.Set<Long> friendIds);
+
+    @Query("SELECT pl.reactionType, COUNT(pl.id) FROM PostLikeEntity pl WHERE pl.post.id = :postId GROUP BY pl.reactionType ORDER BY COUNT(pl.id) DESC")
+    List<Object[]> findReactionCountsByPostId(@Param("postId") Long postId);
+
+    @Query("SELECT pl.post.id, pl.reactionType, COUNT(pl.id) FROM PostLikeEntity pl WHERE pl.post.id IN :postIds GROUP BY pl.post.id, pl.reactionType")
+    List<Object[]> findReactionCountsByPostIds(@Param("postIds") List<Long> postIds);
+
+    @Query("SELECT pl.reactionType, COUNT(pl.id) FROM PostLikeEntity pl GROUP BY pl.reactionType ORDER BY COUNT(pl.id) DESC")
+    List<Object[]> countAllGroupedByReactionType();
 }
 

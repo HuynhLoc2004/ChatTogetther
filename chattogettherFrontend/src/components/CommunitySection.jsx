@@ -11,6 +11,7 @@ import {
 import axiosClient from '../api/axiosClient';
 import GroupCollageAvatar from './GroupCollageAvatar';
 import UserAvatar from './UserAvatar';
+import PostReactionDock from './PostReactionDock';
 import toast from 'react-hot-toast';
 
 // Biểu thức chính quy phòng chống tấn công SQL Injection và Script Injection
@@ -1692,70 +1693,13 @@ export const CommunitySection = ({
                         >
                           <div className="flex items-center gap-4 sm:gap-6">
                             {/* Like & Reaction Picker */}
-                            <div 
-                              className="relative"
-                              onMouseEnter={() => {
-                                if (reactionTimeoutRef.current) clearTimeout(reactionTimeoutRef.current);
-                                setActiveReactionPicker(post.id);
-                              }}
-                              onMouseLeave={() => {
-                                if (reactionTimeoutRef.current) clearTimeout(reactionTimeoutRef.current);
-                                reactionTimeoutRef.current = setTimeout(() => {
-                                  setActiveReactionPicker(null);
-                                }, 180);
-                              }}
-                            >
-                              <button
-                                type="button"
-                                onClick={() => handleReactPostInternal(post.id, post.myReaction || 'HEART')}
-                                className={`flex items-center gap-1.5 transition-colors ${
-                                  post.isLikedByMe ? 'text-rose-400 font-semibold' : 'text-zinc-400 hover:text-rose-400'
-                                }`}
-                                title={currentReaction ? currentReaction.label : "Thả cảm xúc"}
-                              >
-                                {post.isLikedByMe && currentReaction ? (
-                                  <span className="text-sm select-none inline-block transform hover:scale-110 transition-transform">
-                                    {currentReaction.emoji}
-                                  </span>
-                                ) : (
-                                  <Heart 
-                                    size={15} 
-                                    strokeWidth={1.5} 
-                                    fill={post.isLikedByMe ? "#ef4444" : "none"} 
-                                    color={post.isLikedByMe ? "#ef4444" : "currentColor"} 
-                                  />
-                                )}
-                                <span className="font-mono text-xs">{post.likesCount || 0}</span>
-                              </button>
-
-                              {activeReactionPicker === post.id && (
-                                <div 
-                                  className="absolute bottom-full left-0 mb-1.5 z-40 flex items-center gap-1 p-1 bg-zinc-900 border border-zinc-700 rounded-full shadow-2xl backdrop-blur-md"
-                                  onMouseEnter={() => {
-                                    if (reactionTimeoutRef.current) clearTimeout(reactionTimeoutRef.current);
-                                  }}
-                                  onMouseLeave={() => {
-                                    if (reactionTimeoutRef.current) clearTimeout(reactionTimeoutRef.current);
-                                    setActiveReactionPicker(null);
-                                  }}
-                                >
-                                  {REACTION_EMOJIS.map(item => (
-                                    <button
-                                      key={item.type}
-                                      type="button"
-                                      onClick={() => {
-                                        handleReactPostInternal(post.id, item.type);
-                                        setActiveReactionPicker(null);
-                                      }}
-                                      className="p-1.5 text-base hover:scale-125 transition-transform"
-                                      title={item.label}
-                                    >
-                                      {item.emoji}
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
+                            {/* Reaction Dock */}
+                            <PostReactionDock
+                              post={post}
+                              onReact={handleReactPostInternal}
+                              activePickerId={activeReactionPicker}
+                              setActivePickerId={setActiveReactionPicker}
+                            />
 
                             {/* Comment */}
                             <button

@@ -5,6 +5,8 @@ import chatToggetther.Customize.ResponseData;
 import chatToggetther.Customize.SecurityUtils;
 import chatToggetther.DTO.CommentDTO;
 import chatToggetther.DTO.PostDTO;
+import chatToggetther.DTO.ReactionCountDTO;
+import chatToggetther.DTO.ReactionSummaryDTO;
 import chatToggetther.DataRequest.CreateCommentRequest;
 import chatToggetther.DataRequest.CreatePostRequest;
 import chatToggetther.ENUMS.ErrorCode;
@@ -56,6 +58,7 @@ public class PostService {
     private final CommentLikeRepository commentLikeRepository;
     private final PostRepostRepository postRepostRepository;
     private final SearchTermRepository searchTermRepository;
+    private final ReactionService reactionService;
 
     // Cache danh sách tìm kiếm thịnh hành trong RAM để truy xuất siêu tốc <1ms
     private final List<java.util.Map<String, Object>> hotSearchesCache = new java.util.concurrent.CopyOnWriteArrayList<>();
@@ -76,7 +79,8 @@ public class PostService {
             PostReportRepository postReportRepository,
             CommentLikeRepository commentLikeRepository,
             PostRepostRepository postRepostRepository,
-            SearchTermRepository searchTermRepository
+            SearchTermRepository searchTermRepository,
+            ReactionService reactionService
     ) {
         this.postRepository = postRepository;
         this.postLikeRepository = postLikeRepository;
@@ -90,6 +94,7 @@ public class PostService {
         this.commentLikeRepository = commentLikeRepository;
         this.postRepostRepository = postRepostRepository;
         this.searchTermRepository = searchTermRepository;
+        this.reactionService = reactionService;
     }
 
     private PostDTO mapToPostDTO(PostEntity post, UserEntity currentUser) {
@@ -122,7 +127,10 @@ public class PostService {
         long repostsCount = this.postRepostRepository.countByPost(post);
         long hits = post.getSearchHits() != null ? post.getSearchHits() : 0L;
 
-        dto.setLikesCount(likesCount);
+        ReactionSummaryDTO reactionSummary = this.reactionService.getReactionSummary(post.getId(), currentUser, post);
+        dto.setReactionStats(reactionSummary);
+        dto.setTopReactions(reactionSummary.getTopReactions());
+        dto.setLikesCount((int) reactionSummary.getTotalCount());
         dto.setCommentsCount(commentsCount);
         dto.setRepostsCount((int) repostsCount);
         dto.setSearchHits(hits);
@@ -336,6 +344,30 @@ public class PostService {
             log.warn("Không thể tính recent velocity: {}", ex.getMessage());
         }
 
+        // 3.3. Nạp danh mục top cảm xúc của từng bài viết (Top Reactions Map)
+        Map<Long, List<ReactionCountDTO>> postTopReactionsMap = new HashMap<>();
+        try {
+            List<Object[]> reactionCounts = this.postLikeRepository.findReactionCountsByPostIds(postIds);
+            Map<Long, List<ReactionCountDTO>> tempMap = new HashMap<>();
+            for (Object[] row : reactionCounts) {
+                Long pId = (Long) row[0];
+                String rType = String.valueOf(row[1]).toUpperCase();
+                long rCount = ((Number) row[2]).longValue();
+                tempMap.computeIfAbsent(pId, k -> new ArrayList<>()).add(ReactionCountDTO.builder()
+                        .type(rType)
+                        .emoji(this.reactionService.getEmojiForType(rType))
+                        .label(this.reactionService.getLabelForType(rType))
+                        .count(rCount)
+                        .build());
+            }
+            for (Map.Entry<Long, List<ReactionCountDTO>> entry : tempMap.entrySet()) {
+                entry.getValue().sort((a, b) -> Long.compare(b.getCount(), a.getCount()));
+                postTopReactionsMap.put(entry.getKey(), entry.getValue().stream().limit(5).collect(Collectors.toList()));
+            }
+        } catch (Exception ex) {
+            log.warn("Lỗi load reaction counts: {}", ex.getMessage());
+        }
+
         // 4. Ánh xạ trực tiếp trên bộ nhớ RAM siêu tốc & Thuật toán Đề xuất Sảnh Trực Tuyến Thông Minh (Smart Feed Ranking)
         // Tìm các nhóm mà user đang bị BANNED để tuyệt đối không đề xuất bài
         Set<Long> bannedGroupIds = new HashSet<>();
@@ -480,6 +512,16 @@ public class PostService {
                 dto.setIsLikedByMe(false);
                 dto.setMyReaction(null);
             }
+
+            List<ReactionCountDTO> topReactions = postTopReactionsMap.getOrDefault(p.getId(), Collections.emptyList());
+            dto.setTopReactions(topReactions);
+            ReactionSummaryDTO summary = ReactionSummaryDTO.builder()
+                    .totalCount(likesCount)
+                    .topReactions(topReactions)
+                    .userReaction(dto.getMyReaction())
+                    .build();
+            dto.setReactionStats(summary);
+            dto.setLikesCount(likesCount);
 
             dtos.add(dto);
         }
@@ -732,6 +774,66 @@ public class PostService {
         } catch (Exception ignored) {}
 
         return new ResponseData<>(200, "Đã từ chối bài viết!", mapToPostDTO(post, currentUser));
+    }
+
+    @Transactional
+    public ResponseData<ReactionSummaryDTO> reactToPost(JwtAuthenticationToken token, Long postId, String reactionType) {
+        UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        if (currentUser == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
+        }
+
+        PostEntity post = this.postRepository.findById(postId).orElseThrow(() ->
+            new AppException(404, "Bài viết không tồn tại", 404)
+        );
+
+        String desiredReaction = (reactionType != null && !reactionType.trim().isEmpty()) 
+                ? reactionType.trim().toUpperCase() 
+                : "HEART";
+
+        Optional<PostLikeEntity> existingLike = this.postLikeRepository.findByPostAndUser(post, currentUser);
+        String finalUserReaction = null;
+        if (existingLike.isPresent()) {
+            PostLikeEntity like = existingLike.get();
+            if (desiredReaction.equalsIgnoreCase(like.getReactionType())) {
+                this.postLikeRepository.delete(like);
+                finalUserReaction = null;
+            } else {
+                like.setReactionType(desiredReaction);
+                like.setCreatedAt(LocalDateTime.now());
+                this.postLikeRepository.save(like);
+                finalUserReaction = desiredReaction;
+            }
+        } else {
+            PostLikeEntity like = new PostLikeEntity();
+            like.setPost(post);
+            like.setUser(currentUser);
+            like.setReactionType(desiredReaction);
+            like.setCreatedAt(LocalDateTime.now());
+            this.postLikeRepository.save(like);
+            finalUserReaction = desiredReaction;
+        }
+
+        ReactionSummaryDTO summary = this.reactionService.getReactionSummary(postId, currentUser, post);
+        summary.setUserReaction(finalUserReaction);
+
+        try {
+            this.messagingTemplate.convertAndSend("/topic/posts", "POST_REACTION_UPDATED");
+            if (finalUserReaction != null && post.getUser() != null && !post.getUser().getId().equals(currentUser.getId())) {
+                String senderName = currentUser.getNickname() != null && !currentUser.getNickname().isEmpty() ? currentUser.getNickname() : currentUser.getAccount();
+                Map<String, Object> notif = new HashMap<>();
+                notif.put("id", System.currentTimeMillis());
+                notif.put("type", "REACTION");
+                notif.put("postId", postId);
+                notif.put("reactionType", finalUserReaction);
+                notif.put("text", senderName + " đã bày tỏ cảm xúc với bài viết của bạn.");
+                notif.put("time", "Vừa xong");
+                notif.put("unread", true);
+                this.messagingTemplate.convertAndSend("/topic/user/" + post.getUser().getId() + "/notifications", notif);
+            }
+        } catch (Exception ignored) {}
+
+        return new ResponseData<>(200, "Thao tác thả cảm xúc thành công", summary);
     }
 
     @Transactional

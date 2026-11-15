@@ -82,7 +82,18 @@ export const AdminDashboard = () => {
   // State cho các Module gộp (7 Tabs chuẩn mực)
   const [radioMusicSubTab, setRadioMusicSubTab] = useState('intents'); // 'intents' | 'music'
   const [communitySubTab, setCommunitySubTab] = useState('groups'); // 'groups' | 'categories' | 'posts' | 'reports'
-  const [cardsVibesSubTab, setCardsVibesSubTab] = useState('challenges'); // 'challenges' | 'vibes'
+  const [cardsVibesSubTab, setCardsVibesSubTab] = useState('challenges'); // 'challenges' | 'vibes' | 'reactions'
+  const [adminReactions, setAdminReactions] = useState([]);
+  const [loadingReactions, setLoadingReactions] = useState(false);
+  const [isReactionModalOpen, setIsReactionModalOpen] = useState(false);
+  const [editingReaction, setEditingReaction] = useState(null);
+  const [reactionFormData, setReactionFormData] = useState({
+    code: '',
+    label: '',
+    emoji: '',
+    sortOrder: 0,
+    status: 'ACTIVE'
+  });
   const [usersRolesSubTab, setUsersRolesSubTab] = useState('users'); // 'users' | 'roles'
   const [isUploadingMusic, setIsUploadingMusic] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -326,7 +337,8 @@ export const AdminDashboard = () => {
         fetchReports(),
         fetchAdminPosts(),
         fetchAdminReposts(),
-        fetchFrequencyData()
+        fetchFrequencyData(),
+        fetchAdminReactions()
       ]);
     } catch (err) {
       console.error("Lỗi xác thực quyền:", err);
@@ -1019,6 +1031,89 @@ export const AdminDashboard = () => {
   };
 
   
+  // --- Quản lý Biểu Tượng Cảm Xúc (Reactions) ---
+  const fetchAdminReactions = async () => {
+    try {
+      setLoadingReactions(true);
+      const res = await axiosClient.get('/admin/reactions');
+      if (res?.data?.data) {
+        setAdminReactions(res.data.data);
+      }
+    } catch (e) {
+      console.warn("Không thể tải danh sách reactions:", e);
+    } finally {
+      setLoadingReactions(false);
+    }
+  };
+
+  const handleOpenAddReaction = () => {
+    setReactionFormData({
+      code: '',
+      label: '',
+      emoji: '',
+      sortOrder: (adminReactions.length + 1) * 10,
+      status: 'ACTIVE'
+    });
+    setEditingReaction(null);
+    setIsReactionModalOpen(true);
+  };
+
+  const handleOpenEditReaction = (item) => {
+    setReactionFormData({
+      code: item.code || '',
+      label: item.label || '',
+      emoji: item.emoji || '',
+      sortOrder: item.sortOrder || 0,
+      status: item.status || 'ACTIVE'
+    });
+    setEditingReaction(item);
+    setIsReactionModalOpen(true);
+  };
+
+  const handleSaveReaction = async (e) => {
+    e.preventDefault();
+    if (!reactionFormData.code.trim() || !reactionFormData.label.trim() || !reactionFormData.emoji.trim()) {
+      toast.error("Vui lòng điền đầy đủ Mã, Nhãn và Emoji!");
+      return;
+    }
+
+    try {
+      if (editingReaction) {
+        await axiosClient.put(`/admin/reactions/${editingReaction.id}`, reactionFormData);
+        toast.success("Đã cập nhật biểu tượng cảm xúc!");
+      } else {
+        await axiosClient.post('/admin/reactions', reactionFormData);
+        toast.success("Đã tạo mới biểu tượng cảm xúc!");
+      }
+      setIsReactionModalOpen(false);
+      fetchAdminReactions();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Lỗi lưu cấu hình cảm xúc");
+    }
+  };
+
+  const handleToggleReactionStatus = async (item) => {
+    const nextStatus = item.status === 'ACTIVE' ? 'HIDDEN' : 'ACTIVE';
+    try {
+      await axiosClient.put(`/admin/reactions/${item.id}`, { status: nextStatus });
+      toast.success(`Đã đổi trạng thái sang ${nextStatus === 'ACTIVE' ? 'Kích hoạt' : 'Ẩn'}`);
+      fetchAdminReactions();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Lỗi đổi trạng thái");
+    }
+  };
+
+  const handleDeleteReaction = async (item) => {
+    if (!window.confirm(`Bạn có chắc muốn xóa cảm xúc "${item.label}" (${item.emoji}) không?`)) return;
+    try {
+      await axiosClient.delete(`/admin/reactions/${item.id}`);
+      toast.success("Đã xóa cảm xúc!");
+      fetchAdminReactions();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Không thể xóa reaction hệ thống mặc định");
+    }
+  };
+
   const handleUploadMusicFile = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -2252,6 +2347,17 @@ const handleAddTrack = async (e) => {
                   >
                     Thẻ Cảm Xúc Sảnh ({parsedVibes.length})
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setCardsVibesSubTab('reactions')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all ${
+                      cardsVibesSubTab === 'reactions'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Biểu Tượng Cảm Xúc ({adminReactions.length})
+                  </button>
                 </div>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
@@ -2541,6 +2647,17 @@ const handleAddTrack = async (e) => {
                   >
                     Thẻ Cảm Xúc Sảnh ({parsedVibes.length})
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setCardsVibesSubTab('reactions')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all ${
+                      cardsVibesSubTab === 'reactions'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Biểu Tượng Cảm Xúc ({adminReactions.length})
+                  </button>
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
@@ -2614,6 +2731,229 @@ const handleAddTrack = async (e) => {
                     </div>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* ====================================================
+                TAB 5: QUẢN LÝ BIỂU TƯỢNG CẢM XÚC (REACTIONS)
+                ==================================================== */}
+            {(activeTab === 'cards_vibes' || activeTab === 'challenges' || activeTab === 'vibes') && (hasPermission('TL_PERM_CHALLENGE_MANAGE') || hasPermission('TL_PERM_TOPIC_MANAGE')) && cardsVibesSubTab === 'reactions' && (
+              <div className="space-y-6 animate-fade-in">
+                {/* SUB-TAB CHUYỂN ĐỔI: THẺ BÀI & CẢM XÚC */}
+                <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-3 mb-5">
+                  <button
+                    type="button"
+                    onClick={() => setCardsVibesSubTab('challenges')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all ${
+                      cardsVibesSubTab === 'challenges'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Câu hỏi Thử thách ({challenges.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCardsVibesSubTab('vibes')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all ${
+                      cardsVibesSubTab === 'vibes'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Thẻ Cảm Xúc Sảnh ({parsedVibes.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCardsVibesSubTab('reactions')}
+                    className={`h-9 px-4 rounded-xl text-xs font-medium transition-all ${
+                      cardsVibesSubTab === 'reactions'
+                        ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    Biểu Tượng Cảm Xúc ({adminReactions.length})
+                  </button>
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-xl font-bold text-zinc-100 tracking-tight">Quản Lý Biểu Tượng Cảm Xúc (Reactions)</h2>
+                    <p className="text-xs text-zinc-400 mt-0.5">Cấu hình danh mục biểu tượng cảm xúc, thứ tự sắp xếp và theo dõi tần suất thả cảm xúc toàn mạng xã hội</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleOpenAddReaction}
+                    className="h-9 px-3.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs flex items-center gap-2 shadow-sm transition-all"
+                  >
+                    <Plus size={14} />
+                    <span>Thêm Biểu Tượng Mới</span>
+                  </button>
+                </div>
+
+                {/* Bảng danh sách Reactions */}
+                <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl overflow-hidden shadow-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs text-zinc-300">
+                      <thead className="bg-zinc-900/90 border-b border-zinc-800 text-[11px] font-medium text-zinc-400 uppercase tracking-wider">
+                        <tr>
+                          <th className="py-3 px-4">Emoji & Tên</th>
+                          <th className="py-3 px-4">Mã Code</th>
+                          <th className="py-3 px-4 text-center">Thứ Tự</th>
+                          <th className="py-3 px-4 text-center">Lượt Dùng Toàn Mạng</th>
+                          <th className="py-3 px-4 text-center">Trạng Thái</th>
+                          <th className="py-3 px-4 text-right">Thao Tác</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-800/60">
+                        {adminReactions.map((item) => (
+                          <tr key={item.id} className="hover:bg-zinc-850/50 transition-colors">
+                            <td className="py-3.5 px-4">
+                              <div className="flex items-center gap-2.5">
+                                <span className="text-2xl leading-none select-none">{item.emoji}</span>
+                                <div>
+                                  <div className="font-semibold text-zinc-100">{item.label}</div>
+                                  <div className="text-[10px] text-zinc-500 font-mono">ID: #{item.id}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-4 font-mono font-medium text-zinc-300">
+                              {item.code}
+                            </td>
+                            <td className="py-3.5 px-4 text-center font-mono">
+                              {item.sortOrder || 0}
+                            </td>
+                            <td className="py-3.5 px-4 text-center font-mono text-zinc-200">
+                              {item.usageCount || 0}
+                            </td>
+                            <td className="py-3.5 px-4 text-center">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                item.status === 'ACTIVE'
+                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                  : 'bg-zinc-800 text-zinc-500 border border-zinc-700'
+                              }`}>
+                                {item.status === 'ACTIVE' ? 'Kích hoạt' : 'Đang ẩn'}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleReactionStatus(item)}
+                                  className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs transition-colors"
+                                  title={item.status === 'ACTIVE' ? "Tạm ẩn cảm xúc này" : "Kích hoạt cảm xúc này"}
+                                >
+                                  {item.status === 'ACTIVE' ? 'Ẩn' : 'Bật'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditReaction(item)}
+                                  className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors"
+                                  title="Chỉnh sửa thông tin"
+                                >
+                                  <Edit3 size={13} />
+                                </button>
+                                {!['HEART', 'FIRE', 'HAHA', 'WOW', 'LIKE', 'CROWN', 'CLAP'].includes(item.code) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteReaction(item)}
+                                    className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 transition-colors"
+                                    title="Xóa cảm xúc này"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Modal Thêm / Sửa Reaction */}
+                {isReactionModalOpen && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-5 shadow-2xl space-y-4">
+                      <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                        <h3 className="font-semibold text-zinc-100 text-base">
+                          {editingReaction ? 'Chỉnh Sửa Biểu Tượng Cảm Xúc' : 'Thêm Biểu Tượng Mới'}
+                        </h3>
+                        <button
+                          type="button"
+                          onClick={() => setIsReactionModalOpen(false)}
+                          className="w-7 h-7 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center"
+                        >
+                          <X size={15} />
+                        </button>
+                      </div>
+
+                      <form onSubmit={handleSaveReaction} className="space-y-3.5">
+                        <div>
+                          <label className="block text-xs font-medium text-zinc-400 mb-1">Mã Code (Chữ in hoa, VD: ROCKET)</label>
+                          <input
+                            type="text"
+                            value={reactionFormData.code}
+                            onChange={(e) => setReactionFormData(prev => ({ ...prev, code: e.target.value.toUpperCase().replace(/\s+/g, '_') }))}
+                            placeholder="ROCKET"
+                            disabled={!!editingReaction}
+                            className="w-full h-9 px-3 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white focus:outline-none focus:border-zinc-600 disabled:opacity-50 font-mono"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-zinc-400 mb-1">Emoji Biểu tượng</label>
+                            <input
+                              type="text"
+                              value={reactionFormData.emoji}
+                              onChange={(e) => setReactionFormData(prev => ({ ...prev, emoji: e.target.value }))}
+                              placeholder="🚀"
+                              className="w-full h-9 px-3 rounded-xl bg-zinc-950 border border-zinc-800 text-lg text-white text-center focus:outline-none focus:border-zinc-600"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-zinc-400 mb-1">Thứ tự ưu tiên</label>
+                            <input
+                              type="number"
+                              value={reactionFormData.sortOrder}
+                              onChange={(e) => setReactionFormData(prev => ({ ...prev, sortOrder: parseInt(e.target.value) || 0 }))}
+                              className="w-full h-9 px-3 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white focus:outline-none focus:border-zinc-600 font-mono"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-zinc-400 mb-1">Tên nhãn hiển thị</label>
+                          <input
+                            type="text"
+                            value={reactionFormData.label}
+                            onChange={(e) => setReactionFormData(prev => ({ ...prev, label: e.target.value }))}
+                            placeholder="Bay xa / Bùng cháy"
+                            className="w-full h-9 px-3 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white focus:outline-none focus:border-zinc-600"
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-800">
+                          <button
+                            type="button"
+                            onClick={() => setIsReactionModalOpen(false)}
+                            className="h-9 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs transition-colors"
+                          >
+                            Hủy
+                          </button>
+                          <button
+                            type="submit"
+                            className="h-9 px-4 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs transition-all shadow-sm"
+                          >
+                            Lưu Cảm Xúc
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

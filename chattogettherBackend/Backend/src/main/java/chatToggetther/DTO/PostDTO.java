@@ -42,8 +42,10 @@ public class PostDTO {
     private String repostedByUsername;
     private String repostedByNickname;
     private String repostedAt;
-    private String myReaction; // "HEART", "FIRE", "HAHA", "WOW", "LIKE", "CROWN"
+    private String myReaction; // "HEART", "FIRE", "HAHA", "WOW", "LIKE", "CROWN", "CLAP"
     private String reactionSummary; // e.g. "❤️ 🔥 😂"
+    private ReactionSummaryDTO reactionStats;
+    private List<ReactionCountDTO> topReactions;
 
     // Trạng thái gỡ bài / Xóa mềm & Lý do của Admin
     private Boolean isDeleted;
