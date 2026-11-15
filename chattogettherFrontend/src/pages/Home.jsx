@@ -408,9 +408,11 @@ const Home = ({ initialTab }) => {
   const reactionDebounceMapRef = useRef(new Map());
   const reactionIntentMapRef = useRef(new Map());
 
-  // Lắng nghe click bên ngoài, di chuột ra ngoài và cuộn trang để đóng ngay reactions popup
+  // Lắng nghe click bên ngoài, di chuột ra ngoài và cuộn trang để đóng reactions popup
   useEffect(() => {
     if (!activeReactionPicker) return;
+
+    let initialScrollY = typeof window !== 'undefined' ? window.scrollY : 0;
 
     const handleGlobalClick = (e) => {
       if (!e.target.closest('.reaction-drop-wrapper') && !e.target.closest('.reactions-popup-menu')) {
@@ -418,17 +420,22 @@ const Home = ({ initialTab }) => {
       }
     };
     const handleGlobalPointerMove = (e) => {
+      // Chỉ kích hoạt tự động đóng khi rời chuột trên Desktop (tránh tự đóng trên màn hình cảm ứng điện thoại)
+      if (e.pointerType !== 'mouse') return;
       if (!e.target.closest('.reaction-drop-wrapper') && !e.target.closest('.reactions-popup-menu')) {
         if (reactionTimeoutRef.current) clearTimeout(reactionTimeoutRef.current);
         reactionTimeoutRef.current = setTimeout(() => {
           setActiveReactionPicker(null);
-        }, 120);
+        }, 180);
       } else {
         if (reactionTimeoutRef.current) clearTimeout(reactionTimeoutRef.current);
       }
     };
     const handleGlobalScroll = () => {
-      setActiveReactionPicker(null);
+      // Chỉ đóng khi cuộn trang thực sự (> 25px) để không bị đóng bởi vi chạm trên màn hình cảm ứng
+      if (typeof window !== 'undefined' && Math.abs(window.scrollY - initialScrollY) > 25) {
+        setActiveReactionPicker(null);
+      }
     };
 
     document.addEventListener('pointerdown', handleGlobalClick);
@@ -1933,7 +1940,7 @@ const Home = ({ initialTab }) => {
                     });
                     setDynamicVibes(mapped);
                   }
-                } catch {}
+                } catch { }
               }
               if (cfg.menu_items) {
                 try {
@@ -1943,7 +1950,7 @@ const Home = ({ initialTab }) => {
                     parsed.forEach(m => { menuMap[m.id] = m; });
                     setDynamicMenu(menuMap);
                   }
-                } catch {}
+                } catch { }
               }
               if (cfg.report_reasons) {
                 try {
@@ -1951,7 +1958,7 @@ const Home = ({ initialTab }) => {
                   if (Array.isArray(parsed) && parsed.length > 0) {
                     setReportReasons(parsed);
                   }
-                } catch {}
+                } catch { }
               }
             }
           } catch (e) {

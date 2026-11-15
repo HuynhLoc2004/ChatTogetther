@@ -25,9 +25,12 @@ const PostReactionDock = ({
 }) => {
   const [highlightedType, setHighlightedType] = useState(null);
   const containerRef = useRef(null);
-  const touchStartTimerRef = useRef(null);
+  const touchStartPosRef = useRef({ x: 0, y: 0 });
   const touchStartTimeRef = useRef(0);
   const isLongPressRef = useRef(false);
+  const isScrollingRef = useRef(false);
+  const handledTouchRef = useRef(false);
+  const touchStartTimerRef = useRef(null);
   const hoverOpenTimerRef = useRef(null);
   const hoverCloseTimerRef = useRef(null);
 
@@ -84,23 +87,42 @@ const PostReactionDock = ({
   };
 
   // ================== MOBILE TOUCH / LONG-PRESS HANDLING ==================
-  const handleTouchStart = () => {
+  const handleTouchStart = (e) => {
+    e.stopPropagation();
+    const touch = e.touches[0];
+    touchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
     touchStartTimeRef.current = Date.now();
     isLongPressRef.current = false;
+    isScrollingRef.current = false;
+    handledTouchRef.current = false;
     setHighlightedType(null);
 
+    if (touchStartTimerRef.current) clearTimeout(touchStartTimerRef.current);
     touchStartTimerRef.current = setTimeout(() => {
+      if (isScrollingRef.current) return;
       isLongPressRef.current = true;
       if (typeof navigator !== 'undefined' && navigator.vibrate) {
-        try { navigator.vibrate(15); } catch (_) {}
+        try { navigator.vibrate(25); } catch (_) {}
       }
       if (setActivePickerId) setActivePickerId(post.id);
-    }, 260);
+    }, 280);
   };
 
   const handleTouchMove = (e) => {
-    if (!isLongPressRef.current || !isPickerOpen) return;
     const touch = e.touches[0];
+    const dx = Math.abs(touch.clientX - touchStartPosRef.current.x);
+    const dy = Math.abs(touch.clientY - touchStartPosRef.current.y);
+
+    if (!isLongPressRef.current) {
+      if (dx > 10 || dy > 10) {
+        // Người dùng đang cuộn feed: hủy timer long-press
+        isScrollingRef.current = true;
+        if (touchStartTimerRef.current) clearTimeout(touchStartTimerRef.current);
+      }
+      return;
+    }
+
+    // Đang trong chế độ long-press: kiểm tra vuốt qua emoji trong dock
     const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
     const itemEl = targetEl?.closest('[data-reaction-type]');
     if (itemEl) {
@@ -111,28 +133,59 @@ const PostReactionDock = ({
     }
   };
 
-  const handleTouchEnd = () => {
+  const handleTouchEnd = (e) => {
     if (touchStartTimerRef.current) clearTimeout(touchStartTimerRef.current);
+
+    // Nếu người dùng đang cuộn lướt bài viết, không kích hoạt thả reaction
+    if (isScrollingRef.current) {
+      return;
+    }
+
+    handledTouchRef.current = true;
+    setTimeout(() => {
+      handledTouchRef.current = false;
+    }, 400);
+
     const pressDuration = Date.now() - touchStartTimeRef.current;
 
-    if (!isLongPressRef.current && pressDuration < 260) {
-      // Tap ngắn: toggle cảm xúc mặc định
-      commitReaction(post.myReaction || 'HEART');
-      if (setActivePickerId) setActivePickerId(null);
-    } else if (isLongPressRef.current) {
-      // Nhả tay sau khi long-press / vuốt chọn
-      if (highlightedType) {
-        commitReaction(highlightedType);
+    if (!isLongPressRef.current) {
+      // Tap nhanh (< 280ms)
+      e.stopPropagation();
+      if (isPickerOpen) {
+        // Nếu dock đang mở, tap lại sẽ đóng dock
+        if (setActivePickerId) setActivePickerId(null);
+      } else {
+        commitReaction(post.myReaction || 'HEART');
       }
-      if (setActivePickerId) setActivePickerId(null);
-      setHighlightedType(null);
+    } else {
+      // Đã mở menu qua long-press
+      e.stopPropagation();
+      if (highlightedType) {
+        // Người dùng trượt ngón tay trực tiếp lên emoji rồi nhả tay
+        commitReaction(highlightedType);
+        setHighlightedType(null);
+      } else {
+        // Người dùng chỉ nhấn giữ để mở menu rồi nhấc ngón tay lên:
+        // GIỮ MENU MỞ để người dùng chạm chọn emoji mong muốn!
+      }
     }
   };
 
   const handleTouchCancel = () => {
     if (touchStartTimerRef.current) clearTimeout(touchStartTimerRef.current);
-    if (setActivePickerId) setActivePickerId(null);
+    isScrollingRef.current = true;
     setHighlightedType(null);
+  };
+
+  const handleClick = (e) => {
+    e.stopPropagation();
+    // Bỏ qua nếu vừa được xử lý bằng TouchEnd (tránh duplicate trigger trên mobile)
+    if (handledTouchRef.current) return;
+    if (isPickerOpen) {
+      if (setActivePickerId) setActivePickerId(null);
+      return;
+    }
+    commitReaction(post.myReaction || 'HEART');
   };
 
   useEffect(() => {
@@ -157,16 +210,8 @@ const PostReactionDock = ({
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onTouchCancel={handleTouchCancel}
-        onClick={(e) => {
-          e.stopPropagation();
-          // Desktop click hoặc fallback click
-          if (typeof window !== 'undefined' && 'ontouchstart' in window) {
-            // Touch đã được handle ở touchEnd
-            return;
-          }
-          commitReaction(post.myReaction || 'HEART');
-        }}
-        className={`action-btn select-none ${post.isLikedByMe ? 'active-liked text-rose-500' : 'text-zinc-400 hover:text-white'}`}
+        onClick={handleClick}
+        className={`action-btn select-none touch-manipulation ${post.isLikedByMe ? 'active-liked text-rose-500' : 'text-zinc-400 hover:text-white'}`}
         title={currentReaction ? currentReaction.label : "Thả cảm xúc"}
       >
         {post.isLikedByMe && currentReaction ? (
@@ -209,7 +254,8 @@ const PostReactionDock = ({
       {/* Dock Chọn Biểu Tượng Cảm Xúc (Desktop Hover / Mobile Long-Press) */}
       {isPickerOpen && (
         <div
-          className="reactions-popup-menu absolute bottom-[calc(100%+8px)] left-0 bg-zinc-900 border border-zinc-700/80 rounded-full px-2.5 py-1.5 shadow-2xl flex items-center gap-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 select-none"
+          className="reactions-popup-menu absolute bottom-[calc(100%+8px)] left-0 bg-zinc-900 border border-zinc-700/80 rounded-full px-2.5 py-1.5 shadow-2xl flex items-center gap-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 select-none max-w-[calc(100vw-24px)] overflow-x-auto"
+          style={{ touchAction: 'manipulation' }}
           onClick={(e) => e.stopPropagation()}
           onMouseEnter={() => {
             if (hoverCloseTimerRef.current) clearTimeout(hoverCloseTimerRef.current);
@@ -224,16 +270,20 @@ const PostReactionDock = ({
                 key={item.type}
                 type="button"
                 data-reaction-type={item.type}
+                onTouchEnd={(e) => {
+                  e.stopPropagation();
+                  commitReaction(item.type);
+                }}
                 onClick={(e) => {
                   e.stopPropagation();
                   commitReaction(item.type);
                 }}
-                className={`reaction-emoji-item p-1.5 text-xl sm:text-2xl rounded-full transition-all duration-150 transform hover:scale-130 hover:-translate-y-1 active:scale-95 flex items-center justify-center ${
+                className={`reaction-emoji-item p-1.5 text-xl sm:text-2xl rounded-full transition-all duration-150 transform hover:scale-130 hover:-translate-y-1 active:scale-95 flex items-center justify-center shrink-0 cursor-pointer ${
                   isHovered ? 'scale-130 -translate-y-1 bg-zinc-800' : ''
                 } ${isSelected ? 'bg-zinc-800/80 ring-1 ring-zinc-600' : ''}`}
                 title={item.label}
               >
-                <span>{item.emoji}</span>
+                <span className="pointer-events-none">{item.emoji}</span>
               </button>
             );
           })}

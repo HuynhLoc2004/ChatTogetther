@@ -128,6 +128,17 @@ export const CommunitySection = ({
   const [activeReactionPicker, setActiveReactionPicker] = useState(null);
   const reactionTimeoutRef = useRef(null);
 
+  useEffect(() => {
+    if (!activeReactionPicker) return;
+    const handleGlobalClick = (e) => {
+      if (!e.target.closest('.reaction-drop-wrapper') && !e.target.closest('.reactions-popup-menu')) {
+        setActiveReactionPicker(null);
+      }
+    };
+    document.addEventListener('pointerdown', handleGlobalClick);
+    return () => document.removeEventListener('pointerdown', handleGlobalClick);
+  }, [activeReactionPicker]);
+
   const handleReactPostInternal = async (postId, reactionType) => {
     const targetType = reactionType || 'HEART';
     setActiveReactionPicker(null);
