@@ -301,7 +301,9 @@ const Home = ({ initialTab }) => {
       setActiveTab('groups');
     }
   }, [location.pathname]);
-  const [isSpaceDrawerOpen, setIsSpaceDrawerOpen] = useState(false);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const isSpaceDrawerOpen = isMobileNavOpen;
+  const setIsSpaceDrawerOpen = setIsMobileNavOpen;
   const [isVibesExpanded, setIsVibesExpanded] = useState(false);
   const [isTabSwitching, setIsTabSwitching] = useState(false);
   const [pendingFriendsCount, setPendingFriendsCount] = useState(0);
@@ -311,11 +313,11 @@ const Home = ({ initialTab }) => {
   // Chuyển không gian mượt mà kèm hiệu ứng tải nhẹ (Soft transition)
   const handleSwitchTab = (tabId) => {
     if (tabId === activeTab) {
-      setIsSpaceDrawerOpen(false);
+      setIsMobileNavOpen(false);
       return;
     }
     setIsTabSwitching(true);
-    setIsSpaceDrawerOpen(false);
+    setIsMobileNavOpen(false);
     setActiveFilterTag(null);
     setActiveTab(tabId);
     setTimeout(() => {
@@ -2484,9 +2486,25 @@ const Home = ({ initialTab }) => {
           
           {/* Header Mobile */}
           <header className="mobile-top-bar sticky top-0 z-30 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80 h-14 px-3.5 flex items-center justify-between">
-            <div className="m-brand flex items-center cursor-pointer" onClick={handleLogoRefresh} title="Bấm để cuộn lên đầu & làm mới bài viết">
-              <TalovinLogo size={24} />
+            <div className="flex items-center gap-2.5">
+              {/* Nút Hamburger Menu với chấm thông báo đỏ khi có tin nhắn/bạn bè/thông báo chưa đọc */}
+              <button
+                type="button"
+                onClick={() => setIsMobileNavOpen(true)}
+                className="w-9 h-9 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300 hover:text-white transition-all active:scale-95 relative flex-shrink-0"
+                title="Mở bảng điều hướng nhanh"
+              >
+                <Menu size={16} strokeWidth={1.8} />
+                {(pendingFriendsCount > 0 || notifications.some(n => n.unread)) && (
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                )}
+              </button>
+
+              <div className="m-brand flex items-center cursor-pointer" onClick={handleLogoRefresh} title="Bấm để cuộn lên đầu & làm mới bài viết">
+                <TalovinLogo size={24} />
+              </div>
             </div>
+
             <div className="flex items-center gap-2">
               {/* Nút Tìm kiếm */}
               <button 
@@ -2574,10 +2592,10 @@ const Home = ({ initialTab }) => {
             </div>
           )}
 
-          {/* Thanh Tab điều hướng Sảnh (Hiện trên PC: md:flex, ẩn triệt để trên Mobile để giải phóng không gian) */}
-          <div className="stream-header hidden md:flex items-center justify-between">
-            {/* 1. MÀN HÌNH LỚN (PC / TABLET): Hiện đầy đủ các tab ngang thanh lịch */}
-            <div className="stream-tabs flex items-center">
+          {/* Thanh Tab điều hướng Sảnh (100% full width trên Mobile & PC, cuộn ngang mượt mà, loại bỏ hoàn toàn chuông trùng) */}
+          <div className="stream-header flex items-center justify-between w-full border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-md px-3 py-1.5">
+            {/* 1. Phân loại tab: Chiếm trọn bề ngang, cuộn ngang mượt mà */}
+            <div className="stream-tabs flex-1 flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <button 
                 type="button"
                 className={`stream-tab ${activeTab === 'feed' ? 'active' : ''}`}
@@ -2620,14 +2638,14 @@ const Home = ({ initialTab }) => {
               </button>
             </div>
 
-            {/* NÚT CHUÔNG THÔNG BÁO SẢNH (PC) */}
+            {/* NÚT CHUÔNG THÔNG BÁO SẢNH (Chỉ hiện trên PC, ẩn hoàn toàn trên Mobile để không trùng với chuông ở thanh trên cùng) */}
             <button 
               type="button"
               onClick={() => {
                 setIsNotifOpen(!isNotifOpen);
                 requestNotificationPermission();
               }} 
-              className="btn-header-notif flex relative"
+              className="btn-header-notif hidden md:flex relative ml-2"
               title="Thông báo sảnh (Mở ngăn kéo)"
             >
               <Bell size={15} strokeWidth={1.5} />
@@ -2640,90 +2658,237 @@ const Home = ({ initialTab }) => {
           </div>
 
           {/* ============================================================== */}
-          {/* SIDE DRAWER CHUYỂN KHÔNG GIAN CHO MOBILE (TRƯỢT MƯỢT MÀ 60/120FPS) */}
+          {/* MOBILE NAVIGATION DRAWER (TRƯỢT TỪ BÊN TRÁI SANG 60/120FPS) */}
           {/* ============================================================== */}
           <AnimatePresence>
-            {isSpaceDrawerOpen && (
+            {isMobileNavOpen && (
               <motion.div 
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={{ duration: 0.22, ease: "easeOut" }}
-                className="fixed inset-0 z-50 flex justify-end bg-black/65 backdrop-blur-md"
-                onClick={() => setIsSpaceDrawerOpen(false)}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="fixed inset-0 z-50 flex justify-start bg-black/75 backdrop-blur-sm"
+                onClick={() => setIsMobileNavOpen(false)}
               >
                 <motion.div 
-                  initial={{ x: "100%" }}
+                  initial={{ x: "-100%" }}
                   animate={{ x: 0 }}
-                  exit={{ x: "100%" }}
-                  transition={{ type: "spring", damping: 32, stiffness: 380, mass: 0.7 }}
+                  exit={{ x: "-100%" }}
+                  transition={{ type: "spring", damping: 30, stiffness: 350, mass: 0.8 }}
                   drag="x"
-                  dragConstraints={{ left: 0 }}
-                  dragElastic={{ right: 0.5 }}
+                  dragConstraints={{ right: 0 }}
+                  dragElastic={{ left: 0.4 }}
                   onDragEnd={(e, { offset, velocity }) => {
-                    if (offset.x > 80 || velocity.x > 300) {
-                      setIsSpaceDrawerOpen(false);
+                    if (offset.x < -80 || velocity.x < -300) {
+                      setIsMobileNavOpen(false);
                     }
                   }}
-                  className="w-[300px] max-w-[85vw] h-full bg-[#161923] border-l border-[#242b3b] p-5 shadow-2xl flex flex-col space-y-4 will-change-transform touch-pan-y"
+                  className="w-[300px] max-w-[85vw] h-full bg-zinc-950 border-r border-zinc-800 p-4 shadow-2xl flex flex-col justify-between will-change-transform touch-pan-y"
                   onClick={(e) => e.stopPropagation()}
                 >
-                <div className="flex items-center justify-between pb-3 border-b border-[#222838]">
-                  <div>
-                    <h3 className="text-sm font-bold text-white tracking-tight">Không gian trải nghiệm</h3>
-                    <p className="text-[11px] text-slate-400">Chuyển đổi khu vực hoạt động</p>
-                  </div>
-                  <button 
-                    type="button"
-                    onClick={() => setIsSpaceDrawerOpen(false)}
-                    className="w-8 h-8 rounded-full bg-[#1e2332] hover:bg-[#282f42] text-slate-400 hover:text-white flex items-center justify-center transition-colors"
-                  >
-                    <X size={15} />
-                  </button>
-                </div>
+                  {/* Top: Header Drawer */}
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between pb-3 border-b border-zinc-800/80">
+                      <div className="flex items-center gap-2">
+                        <TalovinLogo size={22} />
+                        <span className="font-bold text-sm text-zinc-100 font-sans tracking-tight">Talovin</span>
+                      </div>
+                      <button 
+                        type="button"
+                        onClick={() => setIsMobileNavOpen(false)}
+                        className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center transition-colors active:scale-95"
+                        title="Đóng menu"
+                      >
+                        <X size={15} />
+                      </button>
+                    </div>
 
-                <div className="space-y-2 flex-1 overflow-y-auto custom-dark-scrollbar">
-                  {[
-                    { id: 'feed', label: 'Sảnh trực tuyến', desc: 'Bảng tin chia sẻ khoảnh khắc & bài viết tự do', icon: Globe },
-                    { id: 'groups', label: 'Cộng đồng', desc: 'Khám phá các hội nhóm & chủ đề chuyên biệt', icon: Users },
-                    { id: 'trending', label: 'Thịnh hành', desc: 'Bài viết nhiều tương tác & chủ đề sôi nổi nhất', icon: Flame },
-                    { id: 'saved', label: 'Đã lưu', desc: 'Xem lại bài viết bạn đã bookmark đánh dấu', icon: Bookmark },
-                    { id: 'rooms', label: `Phòng thoại (${userAccessibleRooms.length})`, desc: 'Đàm thoại âm thanh trực tiếp độ trễ cực thấp', icon: Radio }
-                  ].map(item => {
-                    const isActive = activeTab === item.id;
-                    const IconComponent = item.icon;
-                    return (
+                    {/* Navigation Items List */}
+                    <div className="flex flex-col gap-1 overflow-y-auto max-h-[calc(100dvh-170px)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                      {/* Sảnh trực tuyến */}
                       <button
-                        key={item.id}
                         type="button"
                         onClick={() => {
-                          handleSwitchTab(item.id);
-                          setIsSpaceDrawerOpen(false);
+                          handleSwitchTab('feed');
+                          setIsMobileNavOpen(false);
                         }}
-                        className={`w-full flex items-center gap-3.5 p-3 rounded-2xl border transition-all text-left active:scale-[0.99] ${
-                          isActive 
-                            ? 'bg-[#202636] border-[#2f3950] shadow-sm text-white' 
-                            : 'bg-[#181b25] border-transparent hover:bg-[#1e2332] text-slate-300 hover:text-white'
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
+                          activeTab === 'feed'
+                            ? 'bg-zinc-800 text-white font-semibold'
+                            : 'text-zinc-300 hover:bg-zinc-900 hover:text-white'
                         }`}
                       >
-                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${isActive ? 'bg-[#283044] text-white' : 'bg-[#151720] text-slate-400'}`}>
-                          <IconComponent size={18} />
+                        <Globe size={16} className={activeTab === 'feed' ? 'text-white' : 'text-zinc-400'} />
+                        <span className="flex-1">Sảnh trực tuyến</span>
+                      </button>
+
+                      {/* Cộng đồng */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleSwitchTab('groups');
+                          setIsMobileNavOpen(false);
+                        }}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
+                          activeTab === 'groups'
+                            ? 'bg-zinc-800 text-white font-semibold'
+                            : 'text-zinc-300 hover:bg-zinc-900 hover:text-white'
+                        }`}
+                      >
+                        <Users size={16} className={activeTab === 'groups' ? 'text-white' : 'text-zinc-400'} />
+                        <span className="flex-1">Cộng đồng</span>
+                      </button>
+
+                      {/* Phòng đàm thoại */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleSwitchTab('rooms');
+                          setIsMobileNavOpen(false);
+                        }}
+                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
+                          activeTab === 'rooms'
+                            ? 'bg-zinc-800 text-white font-semibold'
+                            : 'text-zinc-300 hover:bg-zinc-900 hover:text-white'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Radio size={16} className={activeTab === 'rooms' ? 'text-white' : 'text-zinc-400'} />
+                          <span>Phòng đàm thoại</span>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <div className={`text-xs font-bold truncate ${isActive ? 'text-white' : 'text-slate-200'}`}>{item.label}</div>
-                          <div className="text-[11px] text-slate-400 truncate">{item.desc}</div>
-                        </div>
-                        {isActive && (
-                          <span className="w-2 h-2 rounded-full bg-slate-200 flex-shrink-0"></span>
+                        {userAccessibleRooms.length > 0 && (
+                          <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-800 text-zinc-300 border border-zinc-700">
+                            {userAccessibleRooms.length}
+                          </span>
                         )}
                       </button>
-                    );
-                  })}
-                </div>
+
+                      {/* Thịnh hành */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleSwitchTab('trending');
+                          setIsMobileNavOpen(false);
+                        }}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
+                          activeTab === 'trending'
+                            ? 'bg-zinc-800 text-white font-semibold'
+                            : 'text-zinc-300 hover:bg-zinc-900 hover:text-white'
+                        }`}
+                      >
+                        <Flame size={16} className={activeTab === 'trending' ? 'text-white' : 'text-zinc-400'} />
+                        <span className="flex-1">Thịnh hành</span>
+                      </button>
+
+                      {/* Đã lưu */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleSwitchTab('saved');
+                          setIsMobileNavOpen(false);
+                        }}
+                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
+                          activeTab === 'saved'
+                            ? 'bg-zinc-800 text-white font-semibold'
+                            : 'text-zinc-300 hover:bg-zinc-900 hover:text-white'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Bookmark size={16} className={activeTab === 'saved' ? 'text-white' : 'text-zinc-400'} />
+                          <span>Đã lưu</span>
+                        </div>
+                        {Array.isArray(savedPostIds) && savedPostIds.length > 0 && (
+                          <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-800 text-zinc-300 border border-zinc-700">
+                            {savedPostIds.length}
+                          </span>
+                        )}
+                      </button>
+
+                      <div className="my-1 border-t border-zinc-800/80" />
+
+                      {/* Tin nhắn */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsMobileNavOpen(false);
+                          navigate('/messages');
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-zinc-300 hover:bg-zinc-900 hover:text-white transition-all text-left"
+                      >
+                        <MessageSquare size={16} className="text-zinc-400" />
+                        <span className="flex-1">Tin nhắn</span>
+                      </button>
+
+                      {/* Bạn bè */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsMobileNavOpen(false);
+                          setIsFriendsOpen(true);
+                        }}
+                        className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium text-zinc-300 hover:bg-zinc-900 hover:text-white transition-all text-left"
+                      >
+                        <div className="flex items-center gap-3">
+                          <Users size={16} className="text-zinc-400" />
+                          <span>Bạn bè</span>
+                        </div>
+                        {pendingFriendsCount > 0 && (
+                          <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                            {pendingFriendsCount}
+                          </span>
+                        )}
+                      </button>
+
+                      {/* Hồ sơ & Huy hiệu */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsMobileNavOpen(false);
+                          navigate('/profile');
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-zinc-300 hover:bg-zinc-900 hover:text-white transition-all text-left"
+                      >
+                        <User size={16} className="text-zinc-400" />
+                        <span className="flex-1">Hồ sơ & Huy hiệu</span>
+                      </button>
+
+                      {/* Bảng Quản Trị (Nếu admin) */}
+                      {isAdminUser && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsMobileNavOpen(false);
+                            navigate('/admin');
+                          }}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all text-left mt-1"
+                        >
+                          <Shield size={16} className="text-emerald-300" />
+                          <span className="flex-1">Bảng Quản Trị</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Bottom: User Account Card */}
+                  <div
+                    onClick={() => {
+                      setIsMobileNavOpen(false);
+                      navigate('/profile');
+                    }}
+                    className="p-3 rounded-2xl bg-zinc-900/90 border border-zinc-800 flex items-center gap-3 cursor-pointer hover:bg-zinc-800/80 transition-all active:scale-[0.98]"
+                    title="Mở trang cá nhân"
+                  >
+                    <UserAvatar user={currentUser} size={36} />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-semibold text-white truncate font-sans">{currentUserName}</div>
+                      <div className="text-[11px] text-zinc-400 font-mono truncate">@{currentUserAccount}</div>
+                    </div>
+                    <ChevronRight size={14} className="text-zinc-500 flex-shrink-0" />
+                  </div>
+                </motion.div>
               </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            )}
+          </AnimatePresence>
 
           {/* THANH BÁO HIỆU SOFT TRANSITION KHI CHUYỂN TAB */}
           {isTabSwitching && (
@@ -2749,9 +2914,9 @@ const Home = ({ initialTab }) => {
           {/* KHU VỰC B: BỘ TẠO TÍN HIỆU ĐA PHƯƠNG TIỆN (Multimedia Composer) */}
           {/* ============================================================== */}
           {activeTab === 'feed' && (
-            <div className="feed-composer-wrapper">
+            <div className="feed-composer-wrapper pt-1 sm:pt-3">
               {/* THANH TRẠNG THÁI NHANH 1 DÒNG (COMPACT AUDIO BAR — xl:hidden) */}
-              <div className="h-11 px-3 mb-3 rounded-xl bg-zinc-900/90 border border-zinc-800/90 flex items-center justify-between gap-2 xl:hidden shadow-sm">
+              <div className="h-10 px-3 mb-2 rounded-xl bg-zinc-900/90 border border-zinc-800/90 flex items-center justify-between gap-2 xl:hidden shadow-sm">
                 <div className="flex items-center gap-2 min-w-0">
                   <div className="w-6 h-6 rounded-lg bg-zinc-800 border border-zinc-700/80 flex items-center justify-center text-zinc-300 shrink-0">
                     <Radio size={12} />
@@ -5403,7 +5568,7 @@ const Home = ({ initialTab }) => {
 
               {/* Ô nhập bình luận cố định ở đáy mobile view */}
               <div className="p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-[#12131a] border-t border-zinc-800 flex items-center gap-2.5 flex-shrink-0">
-                <UserAvatar avatar={currentUserAvatar} name={currentUserName} size={32} />
+                <UserAvatar user={currentUser} avatar={currentUserAvatar} name={currentUserName} size={32} />
                 <div className="flex-1 min-w-0">
                   {replyTargetMap[selectedThreadPost.id] && (
                     <div className="flex items-center justify-between text-[11px] text-zinc-400 pb-1 mb-1 border-b border-zinc-800">
@@ -5674,7 +5839,7 @@ const Home = ({ initialTab }) => {
 
                 {/* Ô NHẬP PHẢN HỒI (Cố định ở đáy cột phải) */}
                 <div className="p-3.5 bg-[#12131a] border-t border-zinc-800/80 flex items-center gap-3 flex-shrink-0">
-                  <UserAvatar avatar={currentUserAvatar} name={currentUserName} size={32} />
+                  <UserAvatar user={currentUser} avatar={currentUserAvatar} name={currentUserName} size={32} />
                   <div className="flex-1 min-w-0">
                     {replyTargetMap[selectedThreadPost.id] && (
                       <div className="flex items-center justify-between text-[11px] text-zinc-400 pb-1 mb-1 border-b border-zinc-800">
@@ -8094,7 +8259,14 @@ const Home = ({ initialTab }) => {
             padding-bottom: calc(120px + env(safe-area-inset-bottom, 24px)); 
           }
           .stream-header {
-            display: none !important;
+            display: flex !important;
+            padding: 4px 10px;
+            top: 56px;
+            position: sticky;
+            z-index: 25;
+            background: rgba(9, 9, 11, 0.92);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(39, 39, 42, 0.8);
           }
           .stream-tabs {
             gap: 4px;
