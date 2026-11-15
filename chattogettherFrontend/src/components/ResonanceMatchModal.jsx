@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { 
-  Radio, Mic, MicOff, Volume2, VolumeX, Play, Pause, RefreshCw, 
+import {
+  Radio, Mic, MicOff, Volume2, VolumeX, Play, Pause, RefreshCw,
   PhoneCall, ArrowLeft, X, Signal, ChevronLeft, ChevronRight, Square,
   Compass, MessageSquareShare, Users, Sparkles, Check, Disc3
 } from 'lucide-react';
@@ -10,11 +10,11 @@ import SockJS from 'sockjs-client';
 import Stomp from 'stompjs';
 import { UserAvatar } from '../pages/Home';
 
-export const ResonanceMatchModal = ({ 
-  isOpen, 
-  onClose, 
-  currentUserId, 
-  currentUserAccount, 
+export const ResonanceMatchModal = ({
+  isOpen,
+  onClose,
+  currentUserId,
+  currentUserAccount,
   currentUserName,
   navigate
 }) => {
@@ -267,10 +267,10 @@ export const ResonanceMatchModal = ({
                 return updated;
               });
             }
-          } catch (e) {}
+          } catch (e) { }
         });
-      }, () => {});
-    } catch (err) {}
+      }, () => { });
+    } catch (err) { }
 
     return () => {
       isMounted = false;
@@ -333,7 +333,7 @@ export const ResonanceMatchModal = ({
       if (ctx.state === 'suspended') ctx.resume();
 
       if (noiseSourceRef.current) {
-        try { noiseSourceRef.current.stop(); } catch (e) {}
+        try { noiseSourceRef.current.stop(); } catch (e) { }
       }
 
       const bufferSize = ctx.sampleRate * 2;
@@ -363,16 +363,16 @@ export const ResonanceMatchModal = ({
       noiseSourceRef.current = whiteNoise;
       noiseGainRef.current = gainNode;
       isAudioReadyRef.current = true;
-    } catch (err) {}
+    } catch (err) { }
   };
 
   const stopWebAudioNoise = () => {
     if (noiseSourceRef.current) {
-      try { noiseSourceRef.current.stop(); } catch (e) {}
+      try { noiseSourceRef.current.stop(); } catch (e) { }
       noiseSourceRef.current = null;
     }
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-      try { audioContextRef.current.suspend(); } catch (e) {}
+      try { audioContextRef.current.suspend(); } catch (e) { }
     }
     isAudioReadyRef.current = false;
   };
@@ -397,7 +397,7 @@ export const ResonanceMatchModal = ({
         if (stationAudioRef.current.src !== fullUrl) {
           stationAudioRef.current.src = fullUrl;
           stationAudioRef.current.volume = isMuted ? 0 : 1;
-          stationAudioRef.current.play().catch(() => {});
+          stationAudioRef.current.play().catch(() => { });
         }
       }
     } else {
@@ -703,7 +703,7 @@ export const ResonanceMatchModal = ({
     try {
       await axiosClient.delete('/match/broadcast');
       toast.success("Đã dừng trạm phát sóng FM cá nhân.");
-    } catch (e) {}
+    } catch (e) { }
     setIsBroadcasting(false);
     setBroadcastInfo(null);
     fetchData();
@@ -723,14 +723,14 @@ export const ResonanceMatchModal = ({
   const totalOffsetPx = (frequency - 88.0) * 140;
 
   return (
-    <div 
+    <div
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in font-sans select-none"
       onClick={handleModalClose}
     >
       <audio ref={stationAudioRef} loop className="hidden" />
       <audio ref={previewAudioRef} onEnded={() => setIsPlayingPreview(false)} className="hidden" />
 
-      <div 
+      <div
         className="w-[92vw] max-w-md md:max-w-xl h-[600px] sm:h-[640px] max-h-[88dvh] bg-zinc-950 border border-zinc-800 rounded-2xl md:rounded-3xl shadow-2xl overflow-hidden flex flex-col text-zinc-100"
         onClick={(e) => e.stopPropagation()}
       >
@@ -779,11 +779,10 @@ export const ResonanceMatchModal = ({
           <button
             type="button"
             onClick={() => setActiveTab('tune')}
-            className={`py-2 px-3 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-2 ${
-              activeTab === 'tune'
-                ? 'bg-white text-zinc-950 font-semibold shadow-sm'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
-            }`}
+            className={`py-2 px-3 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-2 ${activeTab === 'tune'
+              ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+              : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+              }`}
           >
             <Compass size={14} />
             <span>Dò Sóng (Tìm người)</span>
@@ -795,11 +794,10 @@ export const ResonanceMatchModal = ({
               stopAutoScan();
               setActiveTab('broadcast');
             }}
-            className={`py-2 px-3 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-2 ${
-              activeTab === 'broadcast'
-                ? 'bg-white text-zinc-950 font-semibold shadow-sm'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
-            }`}
+            className={`py-2 px-3 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-2 ${activeTab === 'broadcast'
+              ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+              : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+              }`}
           >
             <Mic size={14} />
             <span>Phát Sóng Của Tôi (5s)</span>
@@ -833,7 +831,7 @@ export const ResonanceMatchModal = ({
                   <ChevronLeft size={14} />
                 </button>
 
-                <div 
+                <div
                   ref={chipScrollRef}
                   onWheel={(e) => {
                     if (e.deltaY && chipScrollRef.current) {
@@ -849,11 +847,10 @@ export const ResonanceMatchModal = ({
                       setScanNotice(null);
                       setSelectedIntentFilter('ALL');
                     }}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-mono whitespace-nowrap transition-all border shrink-0 ${
-                      selectedIntentFilter === 'ALL'
-                        ? 'bg-white text-zinc-950 font-semibold border-white'
-                        : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-white hover:border-zinc-700'
-                    }`}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-mono whitespace-nowrap transition-all border shrink-0 ${selectedIntentFilter === 'ALL'
+                      ? 'bg-white text-zinc-950 font-semibold border-white'
+                      : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-white hover:border-zinc-700'
+                      }`}
                   >
                     Tất cả (88 - 108 MHz)
                   </button>
@@ -871,11 +868,10 @@ export const ResonanceMatchModal = ({
                           const max = it.freqEnd != null ? Number(it.freqEnd.toFixed(1)) : 108.0;
                           setFrequency(prev => Math.min(max, Math.max(min, prev)));
                         }}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-mono whitespace-nowrap transition-all border shrink-0 ${
-                          isSelected
-                            ? 'bg-white text-zinc-950 font-semibold border-white'
-                            : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-white hover:border-zinc-700'
-                        }`}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-mono whitespace-nowrap transition-all border shrink-0 ${isSelected
+                          ? 'bg-white text-zinc-950 font-semibold border-white'
+                          : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-white hover:border-zinc-700'
+                          }`}
                       >
                         {it.title} ({it.freqStart?.toFixed(0)}-{it.freqEnd?.toFixed(0)} MHz)
                       </button>
@@ -897,7 +893,7 @@ export const ResonanceMatchModal = ({
 
               {/* Mặt đồng hồ Tuner & Thước chia vạch */}
               <div className="p-5 sm:p-6 rounded-3xl bg-zinc-950 border border-zinc-800 text-center relative shadow-inner space-y-3">
-                
+
                 {/* Tín hiệu bắt sóng */}
                 <div className="flex items-center justify-center min-h-[24px]">
                   {isAutoScanning ? (
@@ -929,7 +925,7 @@ export const ResonanceMatchModal = ({
                 </div>
 
                 {/* THƯỚC CHIA VẠCH ĐỒNG BỘ TUYỆT ĐỐI */}
-                <div 
+                <div
                   ref={rulerRef}
                   onMouseDown={handleRulerMouseDown}
                   onMouseMove={handleRulerMouseMove}
@@ -947,7 +943,7 @@ export const ResonanceMatchModal = ({
                   </div>
 
                   {/* Dải vạch thước: cố định width 2814px (201 vạch * 14px) đồng bộ 100% với kim đỏ */}
-                  <div 
+                  <div
                     className="absolute top-0 bottom-0 flex items-end pb-2.5 transition-transform duration-75 will-change-transform"
                     style={{
                       left: '50%',
@@ -964,7 +960,7 @@ export const ResonanceMatchModal = ({
                       const hasStationHere = filteredStations.some(s => Math.abs(Number(s.frequency) - tickFreq) < 0.05);
 
                       return (
-                        <div 
+                        <div
                           key={idx}
                           className="flex flex-col items-center justify-end relative shrink-0"
                           style={{ width: '14px' }}
@@ -973,14 +969,13 @@ export const ResonanceMatchModal = ({
                             <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 absolute top-1 shadow-[0_0_6px_rgba(52,211,153,0.8)] animate-pulse" />
                           )}
 
-                          <div 
-                            className={`rounded-full transition-colors ${
-                              isMajor 
-                                ? 'w-[2px] h-7 bg-zinc-300' 
-                                : isHalf 
-                                ? 'w-[1.5px] h-4 bg-zinc-500' 
+                          <div
+                            className={`rounded-full transition-colors ${isMajor
+                              ? 'w-[2px] h-7 bg-zinc-300'
+                              : isHalf
+                                ? 'w-[1.5px] h-4 bg-zinc-500'
                                 : 'w-[1px] h-2 bg-zinc-700'
-                            }`} 
+                              }`}
                           />
 
                           {isMajor && (
@@ -1010,7 +1005,7 @@ export const ResonanceMatchModal = ({
                       <ChevronLeft size={14} /> -0.1
                     </button>
 
-                    <input 
+                    <input
                       type="range"
                       min={currentBand.min}
                       max={currentBand.max}
@@ -1042,11 +1037,10 @@ export const ResonanceMatchModal = ({
                   <button
                     type="button"
                     onClick={startAutoScan}
-                    className={`w-full h-10 rounded-xl border text-xs font-medium flex items-center justify-center gap-2 transition-all active:scale-[0.99] whitespace-nowrap ${
-                      isAutoScanning 
-                        ? 'bg-zinc-800 border-zinc-600 text-white animate-pulse'
-                        : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border-zinc-800'
-                    }`}
+                    className={`w-full h-10 rounded-xl border text-xs font-medium flex items-center justify-center gap-2 transition-all active:scale-[0.99] whitespace-nowrap ${isAutoScanning
+                      ? 'bg-zinc-800 border-zinc-600 text-white animate-pulse'
+                      : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border-zinc-800'
+                      }`}
                   >
                     <Compass size={14} className={isAutoScanning ? "animate-spin" : ""} />
                     <span>{isAutoScanning ? "Dừng quét" : "Quét tự động"}</span>
@@ -1061,10 +1055,10 @@ export const ResonanceMatchModal = ({
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="relative shrink-0">
-                        <UserAvatar 
-                          avatar={currentStation.avatarUrl} 
-                          name={currentStation.displayName || currentStation.username} 
-                          size={48} 
+                        <UserAvatar
+                          avatar={currentStation.avatarUrl}
+                          name={currentStation.displayName || currentStation.username}
+                          size={48}
                           className="w-12 h-12 rounded-xl border border-zinc-700"
                         />
                         <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 border-2 border-zinc-950 flex items-center justify-center">
@@ -1223,17 +1217,15 @@ export const ResonanceMatchModal = ({
                       <div
                         key={it.code}
                         onClick={() => handleSelectBroadcastIntent(it.code)}
-                        className={`p-3 rounded-2xl border cursor-pointer transition-all ${
-                          isSelected
-                            ? 'border-white bg-zinc-800/90 text-white shadow-sm ring-1 ring-white'
-                            : 'bg-zinc-950/80 border-zinc-800 text-zinc-300 hover:border-zinc-700'
-                        }`}
+                        className={`p-3 rounded-2xl border cursor-pointer transition-all ${isSelected
+                          ? 'border-white bg-zinc-800/90 text-white shadow-sm ring-1 ring-white'
+                          : 'bg-zinc-950/80 border-zinc-800 text-zinc-300 hover:border-zinc-700'
+                          }`}
                       >
                         <div className="flex items-center justify-between">
                           <h5 className="font-semibold text-xs text-white">{it.title}</h5>
-                          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-md border ${
-                            isSelected ? 'bg-white text-zinc-950 font-bold border-white' : 'bg-zinc-800 text-zinc-300 border-zinc-700'
-                          }`}>
+                          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-md border ${isSelected ? 'bg-white text-zinc-950 font-bold border-white' : 'bg-zinc-800 text-zinc-300 border-zinc-700'
+                            }`}>
                             {it.freqStart?.toFixed(0)}-{it.freqEnd?.toFixed(0)} MHz
                           </span>
                         </div>
@@ -1259,7 +1251,7 @@ export const ResonanceMatchModal = ({
                 </div>
 
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <button 
+                  <button
                     type="button"
                     onClick={() => {
                       const it = intents.find(i => i.code === broadcastIntentCode);
@@ -1272,7 +1264,7 @@ export const ResonanceMatchModal = ({
                     -0.1
                   </button>
 
-                  <button 
+                  <button
                     type="button"
                     onClick={() => {
                       const it = intents.find(i => i.code === broadcastIntentCode);
@@ -1285,8 +1277,8 @@ export const ResonanceMatchModal = ({
                     +0.1
                   </button>
 
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={() => handleRequestCollisionFreeSlot(broadcastIntentCode)}
                     className="h-8 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 text-xs font-mono flex items-center gap-1.5 transition-colors active:scale-95 shrink-0"
                     title="Cấp một tần số trống chưa ai chiếm trong dải"
@@ -1311,8 +1303,8 @@ export const ResonanceMatchModal = ({
                     </div>
 
                     <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-rose-500 transition-all duration-100" 
+                      <div
+                        className="h-full bg-rose-500 transition-all duration-100"
                         style={{ width: `${recordProgress}%` }}
                       />
                     </div>
@@ -1379,19 +1371,18 @@ export const ResonanceMatchModal = ({
                   type="button"
                   onClick={handlePublishBroadcast}
                   disabled={!recordedBlob || isSubmittingBroadcast}
-                  className={`w-full py-3.5 px-4 rounded-2xl font-semibold text-xs sm:text-sm transition-all active:scale-[0.98] shadow-md flex items-center justify-center gap-2 ${
-                    recordedBlob && !isSubmittingBroadcast
-                      ? 'bg-white hover:bg-zinc-200 text-zinc-950 shadow-white/10'
-                      : 'bg-zinc-900 border border-zinc-800 text-zinc-500 cursor-not-allowed opacity-60'
-                  }`}
+                  className={`w-full py-3.5 px-4 rounded-2xl font-semibold text-xs sm:text-sm transition-all active:scale-[0.98] shadow-md flex items-center justify-center gap-2 ${recordedBlob && !isSubmittingBroadcast
+                    ? 'bg-white hover:bg-zinc-200 text-zinc-950 shadow-white/10'
+                    : 'bg-zinc-900 border border-zinc-800 text-zinc-500 cursor-not-allowed opacity-60'
+                    }`}
                 >
                   <Radio size={16} />
                   <span>
-                    {isSubmittingBroadcast 
-                      ? "Đang tải dữ liệu phát sóng..." 
-                      : (recordedBlob 
-                          ? `Lên sóng tại ${broadcastFreqTarget.toFixed(1)} MHz` 
-                          : "Vui lòng thu âm 5s ở bước 3 để lên sóng")}
+                    {isSubmittingBroadcast
+                      ? "Đang tải dữ liệu phát sóng..."
+                      : (recordedBlob
+                        ? `Lên sóng tại ${broadcastFreqTarget.toFixed(1)} MHz`
+                        : "Vui lòng thu âm 5s ở bước 3 để lên sóng")}
                   </span>
                 </button>
               </div>

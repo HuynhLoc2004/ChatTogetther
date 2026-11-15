@@ -1,9 +1,9 @@
-import React, { Component, useState, useEffect, useCallback, useRef } from 'react';
+import React, { Component, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Users, LogOut, Plus, MessageSquare, Shield, User, X, Lock, Hash, 
-  CheckCircle, ArrowRight, WifiOff, Heart, MessageCircle, Share2, 
+import {
+  Users, LogOut, Plus, MessageSquare, Shield, User, X, Lock, Hash,
+  CheckCircle, ArrowRight, WifiOff, Heart, MessageCircle, Share2,
   Search, Sparkles, Send, Copy, Compass, Radio, ChevronRight, CornerDownRight,
   Bell, Bookmark, Flame, Gem, Crown, Volume2, VolumeX, Music, Play, Pause,
   Shuffle, Image as ImageIcon, CheckCircle2, Zap, Dices, Maximize2, Download,
@@ -46,7 +46,7 @@ const getAudioCtx = () => {
     window._talovinAudioCtx = new AudioCtx();
   }
   if (window._talovinAudioCtx.state === 'suspended') {
-    window._talovinAudioCtx.resume().catch(() => {});
+    window._talovinAudioCtx.resume().catch(() => { });
   }
   return window._talovinAudioCtx;
 };
@@ -57,7 +57,7 @@ export const playHeartSound = () => {
     const ctx = getAudioCtx();
     if (!ctx) return;
     if (ctx.state === 'suspended') {
-      ctx.resume().catch(() => {});
+      ctx.resume().catch(() => { });
     }
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -76,7 +76,7 @@ export const playHeartSound = () => {
 
     osc.start(now);
     osc.stop(now + 0.15);
-  } catch (_) {}
+  } catch (_) { }
 };
 
 // Âm thanh khi gửi Phản hồi / Bình luận thành công (Chime đôi thánh thót)
@@ -85,7 +85,7 @@ export const playCommentSuccessSound = () => {
     const ctx = getAudioCtx();
     if (!ctx) return;
     if (ctx.state === 'suspended') {
-      ctx.resume().catch(() => {});
+      ctx.resume().catch(() => { });
     }
     const now = ctx.currentTime;
 
@@ -106,7 +106,7 @@ export const playCommentSuccessSound = () => {
       osc.start(startAt);
       osc.stop(startAt + 0.25);
     });
-  } catch (_) {}
+  } catch (_) { }
 };
 
 class SectionErrorBoundary extends Component {
@@ -125,9 +125,9 @@ class SectionErrorBoundary extends Component {
       return (
         <div className="p-8 text-center rounded-2xl bg-zinc-900/60 border border-zinc-800 my-4 text-zinc-300">
           <p className="text-sm font-semibold mb-2">Đang làm mới dữ liệu khu vực này...</p>
-          <button 
-            type="button" 
-            onClick={() => this.setState({ hasError: false })} 
+          <button
+            type="button"
+            onClick={() => this.setState({ hasError: false })}
             className="px-4 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-xs font-medium border border-zinc-700"
           >
             Tải lại
@@ -233,7 +233,7 @@ const parsePostMedia = (raw, fallbackPost = null) => {
 // Helper tổ chức cây phân cấp bình luận chuẩn mực (Threaded Comments)
 const buildCommentThreads = (comments) => {
   if (!Array.isArray(comments) || comments.length === 0) return [];
-  
+
   const rootComments = [];
   const repliesMap = new Map();
 
@@ -612,7 +612,7 @@ const Home = ({ initialTab }) => {
           });
           setIsAdminUser(isAdmin);
         }
-      } catch (_) {}
+      } catch (_) { }
     };
     fetchUserProfile();
   }, [updateCurrentUser]);
@@ -635,7 +635,7 @@ const Home = ({ initialTab }) => {
                 });
                 setDynamicVibes(mapped);
               }
-            } catch {}
+            } catch { }
           }
           if (cfg.menu_items) {
             try {
@@ -645,7 +645,7 @@ const Home = ({ initialTab }) => {
                 parsed.forEach(m => { menuMap[m.id] = m; });
                 setDynamicMenu(menuMap);
               }
-            } catch {}
+            } catch { }
           }
           if (cfg.report_reasons) {
             try {
@@ -653,7 +653,7 @@ const Home = ({ initialTab }) => {
               if (Array.isArray(parsed) && parsed.length > 0) {
                 setReportReasons(parsed);
               }
-            } catch {}
+            } catch { }
           }
         }
       } catch (err) {
@@ -693,21 +693,21 @@ const Home = ({ initialTab }) => {
 
   const requestNotificationPermission = () => {
     if (typeof window !== 'undefined' && "Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission().catch(() => {});
+      Notification.requestPermission().catch(() => { });
     }
   };
 
   const handleMarkAllNotificationsRead = async () => {
     try {
       await axiosClient.put('/notifications/read-all');
-    } catch {}
+    } catch { }
     setNotifications(prev => prev.map(n => ({ ...n, unread: false, isRead: true })));
   };
 
   const handleClearAllNotifications = async () => {
     try {
       await axiosClient.delete('/notifications');
-    } catch {}
+    } catch { }
     setNotifications([]);
     if (currentUserId) {
       localStorage.removeItem(`talovin_notifs_${currentUserId}`);
@@ -719,7 +719,7 @@ const Home = ({ initialTab }) => {
     try {
       await axiosClient.post('/friends/accept', null, { params: { sender_id: senderId } });
       toast.success("Đã chấp nhận lời mời kết bạn!", { id: 'fr-act' });
-      setNotifications(prev => prev.map(n => 
+      setNotifications(prev => prev.map(n =>
         (n.id === notifId || (n.type === 'FRIEND_REQUEST' && n.actorId === senderId))
           ? { ...n, status: 'ACCEPTED', unread: false, isRead: true }
           : n
@@ -738,7 +738,7 @@ const Home = ({ initialTab }) => {
     try {
       await axiosClient.post('/friends/decline', null, { params: { sender_id: senderId } });
       toast.success("Đã từ chối lời mời kết bạn", { id: 'fr-act' });
-      setNotifications(prev => prev.map(n => 
+      setNotifications(prev => prev.map(n =>
         (n.id === notifId || (n.type === 'FRIEND_REQUEST' && n.actorId === senderId))
           ? { ...n, status: 'REJECTED', unread: false, isRead: true }
           : n
@@ -768,7 +768,7 @@ const Home = ({ initialTab }) => {
         if (currentUserId) {
           localStorage.setItem(`talovin_notifs_${currentUserId}`, serialized);
         }
-      } catch {}
+      } catch { }
     }
   }, [notifications, currentUserId]);
 
@@ -830,7 +830,7 @@ const Home = ({ initialTab }) => {
     if (room.userRoomDTOList && room.userRoomDTOList.some(ur => {
       const u = ur.userDTO || ur;
       return u && (
-        (account && u.account === account) || 
+        (account && u.account === account) ||
         (uid && u.id?.toString() === uid)
       );
     })) {
@@ -848,7 +848,7 @@ const Home = ({ initialTab }) => {
         toast((t) => (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span>Bạn đang trong phòng: <strong>#{room.nameroom || room.roomName}</strong></span>
-            <button 
+            <button
               onClick={() => { toast.dismiss(t.id); navigate(`/room/${room.id}`); }}
               style={{ background: '#f4f4f5', color: '#18181b', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontWeight: 600 }}
             >
@@ -869,7 +869,7 @@ const Home = ({ initialTab }) => {
   const fetchRooms = async (isSilent = false) => {
     try {
       if (!isSilent) setLoadingRooms(true);
-      const response = await axiosClient.get('/rooms/info-rooms'); 
+      const response = await axiosClient.get('/rooms/info-rooms');
       if (response.data && response.data.data) {
         setRooms(response.data.data);
         saveRoomsOffline(response.data.data);
@@ -894,7 +894,7 @@ const Home = ({ initialTab }) => {
         setPosts(response.data.data);
         try {
           localStorage.setItem('talovin_cached_posts', JSON.stringify(response.data.data.slice(0, 20)));
-        } catch (e) {}
+        } catch (e) { }
       }
     } catch (err) {
       console.error("Lỗi khi nạp bài viết:", err);
@@ -1178,7 +1178,7 @@ const Home = ({ initialTab }) => {
     setEditingPost(post);
     setEditPostContent(post.content || '');
     setEditPostImageUrl(post.imageUrl || '');
-    
+
     // Tách các thẻ tag nếu có
     const tags = [];
     if (post.vibe) {
@@ -1393,7 +1393,7 @@ const Home = ({ initialTab }) => {
 
     try {
       // Gọi cả 2 endpoint tương thích: có postId hoặc standalone
-      const res = await axiosClient.post(`/posts/${postId}/comments/${commentId}/like`).catch(() => 
+      const res = await axiosClient.post(`/posts/${postId}/comments/${commentId}/like`).catch(() =>
         axiosClient.post(`/posts/comments/${commentId}/like`)
       );
       if (res.data?.data) {
@@ -1472,7 +1472,7 @@ const Home = ({ initialTab }) => {
       if (res.data?.data) {
         setPendingFriendsCount(Array.isArray(res.data.data) ? res.data.data.length : 0);
       }
-    } catch {}
+    } catch { }
   };
 
   const fetchFriends = useCallback(async () => {
@@ -1627,7 +1627,7 @@ const Home = ({ initialTab }) => {
       if (res.data?.data) {
         setHotSearches(res.data.data);
       }
-    } catch {}
+    } catch { }
   };
 
   useEffect(() => {
@@ -1659,7 +1659,7 @@ const Home = ({ initialTab }) => {
       const updated = [kw, ...current.filter(item => typeof item === 'string' && item.toLowerCase() !== kw.toLowerCase())].slice(0, 8);
       localStorage.setItem('talovin_recent_searches', JSON.stringify(updated));
       setRecentSearches(updated);
-    } catch {}
+    } catch { }
 
     try {
       const res = await axiosClient.get('/posts/search', { params: { keyword: kw } });
@@ -1690,7 +1690,7 @@ const Home = ({ initialTab }) => {
       const updated = current.filter(t => typeof t === 'string' && t.toLowerCase() !== termToRemove.toLowerCase());
       localStorage.setItem('talovin_recent_searches', JSON.stringify(updated));
       setRecentSearches(updated);
-    } catch {}
+    } catch { }
   };
 
   const handleClearAllRecentSearches = () => {
@@ -1735,7 +1735,7 @@ const Home = ({ initialTab }) => {
       const nextSrc = nextTrack?.audioUrl || nextTrack?.audioSrc || nextTrack?.streamUrl || '';
       audioRef.current.src = nextSrc;
       if (isPlayingRadio) {
-        audioRef.current.play().catch(() => {});
+        audioRef.current.play().catch(() => { });
       }
     }
   };
@@ -1749,7 +1749,7 @@ const Home = ({ initialTab }) => {
       const prevSrc = prevTrack?.audioUrl || prevTrack?.audioSrc || prevTrack?.streamUrl || '';
       audioRef.current.src = prevSrc;
       if (isPlayingRadio) {
-        audioRef.current.play().catch(() => {});
+        audioRef.current.play().catch(() => { });
       }
     }
   };
@@ -1830,7 +1830,7 @@ const Home = ({ initialTab }) => {
 
     // Keep-alive ping định kỳ 8 phút để giữ máy chủ Render luôn thức khi người dùng đang mở web
     const keepAliveInterval = setInterval(() => {
-      axiosClient.get('/tracks').catch(() => {});
+      axiosClient.get('/tracks').catch(() => { });
     }, 8 * 60 * 1000);
 
     return () => {
@@ -1913,7 +1913,7 @@ const Home = ({ initialTab }) => {
       const socketUrl = BACKEND_URL ? `${BACKEND_URL}/ws-gs-guide` : '/ws-gs-guide';
       const socket = new SockJS(socketUrl, null, { transports: ['websocket'] });
       stompClient = Stomp.over(socket);
-      stompClient.debug = () => {};
+      stompClient.debug = () => { };
       stompClient.connect({}, () => {
         if (!isMounted) return;
         stompClient.subscribe('/topic/rooms', () => fetchRooms(true));
@@ -1990,8 +1990,8 @@ const Home = ({ initialTab }) => {
                 referenceId: notif.referenceId,
                 text: textContent,
                 title: notif.title || (notif.type === 'FRIEND_REQUEST' ? 'Lời mời kết bạn' :
-                                       notif.type === 'FRIEND_ACCEPTED' ? 'Chấp nhận kết bạn' :
-                                       notif.type === 'POST_TAKEDOWN' ? 'Kiểm duyệt nội dung' : 'Thông báo hệ thống'),
+                  notif.type === 'FRIEND_ACCEPTED' ? 'Chấp nhận kết bạn' :
+                    notif.type === 'POST_TAKEDOWN' ? 'Kiểm duyệt nội dung' : 'Thông báo hệ thống'),
                 type: notif.type || 'SYSTEM',
                 status: notif.status || (notif.type === 'FRIEND_REQUEST' ? 'PENDING' : 'COMPLETED'),
                 time: notif.time || 'Vừa xong',
@@ -2012,12 +2012,12 @@ const Home = ({ initialTab }) => {
               if (typeof window !== 'undefined' && "Notification" in window && Notification.permission === "granted") {
                 try {
                   const pushTitle = normalizedNotif.type === 'FRIEND_REQUEST' ? 'Talovin - Lời mời kết bạn' :
-                                    normalizedNotif.type === 'FRIEND_ACCEPTED' ? 'Talovin - Kết nối mới' : 'Talovin';
+                    normalizedNotif.type === 'FRIEND_ACCEPTED' ? 'Talovin - Kết nối mới' : 'Talovin';
                   new Notification(pushTitle, {
                     body: normalizedNotif.text,
                     icon: normalizedNotif.actorAvatar || "/logo.png"
                   });
-                } catch {}
+                } catch { }
               }
 
               if (notif.type === 'POST_TAKEDOWN') {
@@ -2043,7 +2043,7 @@ const Home = ({ initialTab }) => {
               if (call && call.callerId?.toString() !== currentUserId?.toString()) {
                 setGlobalIncomingCall(call);
               }
-            } catch (e) {}
+            } catch (e) { }
           });
 
           // Lắng nghe cuộc gọi nhóm trong hệ thống
@@ -2053,7 +2053,7 @@ const Home = ({ initialTab }) => {
               if (call && call.callerId?.toString() !== currentUserId?.toString()) {
                 setGlobalIncomingCall(call);
               }
-            } catch (e) {}
+            } catch (e) { }
           });
         }
       }, (err) => {
@@ -2153,7 +2153,7 @@ const Home = ({ initialTab }) => {
           entered.push(room.id);
           localStorage.setItem('talovin_entered_rooms', JSON.stringify(entered));
         }
-      } catch (e) {}
+      } catch (e) { }
       navigate(`/room/${room.id}`);
       return;
     }
@@ -2171,7 +2171,7 @@ const Home = ({ initialTab }) => {
               entered.push(room.id);
               localStorage.setItem('talovin_entered_rooms', JSON.stringify(entered));
             }
-          } catch (e) {}
+          } catch (e) { }
           navigate(`/room/${room.id}`);
         })
         .catch(() => {
@@ -2187,8 +2187,8 @@ const Home = ({ initialTab }) => {
   const userAccessibleRooms = safeRooms.filter(r => isUserInRoom(r) || (!r.hasPassword && !r.isPrivate));
 
   // Nguồn cấp bài viết: Nếu người dùng đã Enter tìm kiếm thì nạp kết quả server (Elastic-like), ngược lại dùng feed bình thường
-  const basePostsList = (activeSearchQuery && Array.isArray(searchResults)) 
-    ? searchResults 
+  const basePostsList = (activeSearchQuery && Array.isArray(searchResults))
+    ? searchResults
     : safePosts;
 
   const displayedPosts = basePostsList
@@ -2213,11 +2213,11 @@ const Home = ({ initialTab }) => {
         return 0;
       }
       if (activeTab === 'trending') {
-        const scoreA = (typeof a.trendingScore === 'number') 
-          ? a.trendingScore 
+        const scoreA = (typeof a.trendingScore === 'number')
+          ? a.trendingScore
           : (((a.searchHits || 0) * 10.0) + ((a.commentsCount || 0) * 3.0) + ((a.likesCount || 0) * 1.0));
-        const scoreB = (typeof b.trendingScore === 'number') 
-          ? b.trendingScore 
+        const scoreB = (typeof b.trendingScore === 'number')
+          ? b.trendingScore
           : (((b.searchHits || 0) * 10.0) + ((b.commentsCount || 0) * 3.0) + ((b.likesCount || 0) * 1.0));
         if (scoreB !== scoreA) {
           return scoreB - scoreA;
@@ -2252,22 +2252,22 @@ const Home = ({ initialTab }) => {
 
     return (
       <div key={cmt.id} className={isReply ? "cmt-reply-item" : "cmt-row cmt-root-row"}>
-        <div 
+        <div
           className="cursor-pointer flex-shrink-0"
           onClick={() => navigate(`/profile/${cmt.authorId}`)}
           title="Xem hồ sơ cá nhân"
         >
-          <UserAvatar 
-            avatar={cmt.authorAvatar} 
-            name={cmt.authorNickname || cmt.authorAccount} 
-            size={isReply ? 26 : 32} 
+          <UserAvatar
+            avatar={cmt.authorAvatar}
+            name={cmt.authorNickname || cmt.authorAccount}
+            size={isReply ? 26 : 32}
           />
         </div>
 
         <div className="cmt-bubble-content flex-1 min-w-0">
           <div className="cmt-header-row flex items-center justify-between">
             <div className="cmt-author-info flex items-center gap-1.5 min-w-0">
-              <span 
+              <span
                 className="cmt-user-name font-semibold text-xs text-[#f1f5f9] cursor-pointer hover:underline truncate"
                 onClick={() => navigate(`/profile/${cmt.authorId}`)}
               >
@@ -2283,8 +2283,8 @@ const Home = ({ initialTab }) => {
 
           {isEditingThisCmt ? (
             <div className="cmt-inline-edit-box my-1">
-              <input 
-                type="text" 
+              <input
+                type="text"
                 value={editingCommentText}
                 onChange={(e) => setEditingCommentText(e.target.value)}
                 className="w-full bg-[#181a24] border border-zinc-700 rounded-lg p-2 text-xs text-[#f1f5f9] focus:outline-none"
@@ -2318,8 +2318,8 @@ const Home = ({ initialTab }) => {
                   {Number(cmt.likesCount || 0) > 0 && <span>{cmt.likesCount}</span>}
                 </button>
 
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={() => {
                     setReplyTargetMap(prev => ({
                       ...prev,
@@ -2331,7 +2331,7 @@ const Home = ({ initialTab }) => {
                     }));
                     const input = document.getElementById('thread-modal-reply-input') || document.getElementById('thread-mobile-reply-input');
                     if (input) input.focus();
-                  }} 
+                  }}
                   className="flex items-center gap-1 text-[11px] hover:text-[#f1f5f9] transition-colors"
                 >
                   <CornerDownRight size={12} />
@@ -2339,18 +2339,18 @@ const Home = ({ initialTab }) => {
                 </button>
 
                 {isCmtMe && !isEditingThisCmt && (
-                  <button 
-                    type="button" 
-                    onClick={() => handleStartEditComment(cmt)} 
+                  <button
+                    type="button"
+                    onClick={() => handleStartEditComment(cmt)}
                     className="text-[11px] hover:text-[#f1f5f9] transition-colors"
                   >
                     Sửa
                   </button>
                 )}
                 {canDeleteCmt && (
-                  <button 
-                    type="button" 
-                    onClick={() => handleDeleteComment(targetPostId, cmt.id)} 
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteComment(targetPostId, cmt.id)}
                     className="text-[11px] hover:text-rose-400 transition-colors"
                   >
                     Xóa
@@ -2390,14 +2390,14 @@ const Home = ({ initialTab }) => {
 
   return (
     <div className="social-app-wrapper">
-      <audio 
-        ref={audioRef} 
-        src={currentTrack ? (currentTrack.audioUrl || currentTrack.audioSrc || currentTrack.streamUrl) : ""} 
+      <audio
+        ref={audioRef}
+        src={currentTrack ? (currentTrack.audioUrl || currentTrack.audioSrc || currentTrack.streamUrl) : ""}
         preload="none"
       />
       {/* Audio element ẩn để phát voice note của các bài viết */}
-      <audio 
-        ref={cardVoiceAudioRef} 
+      <audio
+        ref={cardVoiceAudioRef}
         onEnded={() => setPlayingVoicePostId(null)}
       />
 
@@ -2441,17 +2441,17 @@ const Home = ({ initialTab }) => {
               </div>
               {currentTrack ? (
                 <div className="radio-btns-row">
-                  <button 
+                  <button
                     type="button"
-                    onClick={togglePlayRadio} 
+                    onClick={togglePlayRadio}
                     className="btn-radio-toggle"
                     title={isPlayingRadio ? "Tạm dừng" : "Phát nhạc"}
                   >
                     {isPlayingRadio ? <Pause size={12} /> : <Play size={12} />}
                   </button>
-                  <button 
+                  <button
                     type="button"
-                    onClick={playNextRadio} 
+                    onClick={playNextRadio}
                     className="btn-radio-next"
                     title="Chuyển bài"
                   >
@@ -2469,7 +2469,7 @@ const Home = ({ initialTab }) => {
             {/* Menu Điều Hướng (Động từ Admin Dashboard) */}
             <div className="nav-menu">
               {dynamicMenu.lobby?.visible !== false && (
-                <button 
+                <button
                   className={`nav-item ${activeTab === 'feed' ? 'active' : ''}`}
                   onClick={() => { setActiveTab('feed'); setActiveFilterTag(null); }}
                 >
@@ -2479,7 +2479,7 @@ const Home = ({ initialTab }) => {
               )}
 
               {dynamicMenu.groups?.visible !== false && (
-                <button 
+                <button
                   className={`nav-item ${activeTab === 'groups' ? 'active' : ''}`}
                   onClick={() => { setActiveTab('groups'); setActiveFilterTag(null); }}
                 >
@@ -2489,7 +2489,7 @@ const Home = ({ initialTab }) => {
               )}
 
               {dynamicMenu.rooms?.visible !== false && (
-                <button 
+                <button
                   className={`nav-item ${activeTab === 'rooms' ? 'active' : ''}`}
                   onClick={() => { setActiveTab('rooms'); setActiveFilterTag(null); }}
                 >
@@ -2499,7 +2499,7 @@ const Home = ({ initialTab }) => {
               )}
 
               {dynamicMenu.trending?.visible !== false && (
-                <button 
+                <button
                   className={`nav-item ${activeTab === 'trending' ? 'active' : ''}`}
                   onClick={() => setActiveTab('trending')}
                 >
@@ -2509,7 +2509,7 @@ const Home = ({ initialTab }) => {
               )}
 
               {dynamicMenu.saved?.visible !== false && (
-                <button 
+                <button
                   className={`nav-item ${activeTab === 'saved' ? 'active' : ''}`}
                   onClick={() => setActiveTab('saved')}
                 >
@@ -2518,7 +2518,7 @@ const Home = ({ initialTab }) => {
                 </button>
               )}
 
-              <button 
+              <button
                 type="button"
                 className="nav-item"
                 onClick={() => navigate('/messages')}
@@ -2529,7 +2529,7 @@ const Home = ({ initialTab }) => {
               </button>
 
               {dynamicMenu.friends?.visible !== false && (
-                <button 
+                <button
                   className="nav-item flex items-center justify-between"
                   onClick={() => setIsFriendsOpen(true)}
                 >
@@ -2546,7 +2546,7 @@ const Home = ({ initialTab }) => {
               )}
 
               {dynamicMenu.profile?.visible !== false && (
-                <button 
+                <button
                   className="nav-item"
                   onClick={() => navigate('/profile')}
                 >
@@ -2557,7 +2557,7 @@ const Home = ({ initialTab }) => {
 
               {/* Nút vào Bảng Quản Trị Hệ Thống (Dành riêng cho Quản trị viên) */}
               {isAdminUser && (
-                <button 
+                <button
                   type="button"
                   className="nav-item border border-emerald-500/30 text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 transition-all font-semibold"
                   onClick={() => navigate('/admin')}
@@ -2571,8 +2571,8 @@ const Home = ({ initialTab }) => {
           </div>
 
           {/* User Profile & Account Dock Card (Chân Sidebar chuẩn phong cách Linear / Discord) */}
-          <div 
-            className="nav-user-dock cursor-pointer mt-3 shrink-0" 
+          <div
+            className="nav-user-dock cursor-pointer mt-3 shrink-0"
             onClick={() => navigate('/profile')}
             title="Quản lý tài khoản, hồ sơ & đăng xuất"
           >
@@ -2590,7 +2590,7 @@ const Home = ({ initialTab }) => {
         {/* CỘT 2: MAIN WORKSPACE (Sảnh trực tuyến & Tín hiệu đa phương tiện) */}
         {/* ============================================================== */}
         <main className="main-stream">
-          
+
           {/* Header Mobile */}
           <header className="mobile-top-bar sticky top-0 z-30 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80 h-14 px-4 flex items-center justify-between">
             {/* Bên trái: Logo Talovin nằm sát mép trái tự nhiên, thẳng hàng với lề bài viết bên dưới */}
@@ -2601,7 +2601,7 @@ const Home = ({ initialTab }) => {
             {/* Bên phải: 3 nút thao tác gọn gàng: Tìm kiếm, Chuông thông báo, Tin nhắn */}
             <div className="flex items-center gap-2">
               {/* 1. Icon Tìm kiếm */}
-              <button 
+              <button
                 type="button"
                 onClick={() => setShowMobileSearchBar(!showMobileSearchBar)}
                 className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-95 border ${showMobileSearchBar || activeSearchQuery ? 'bg-white text-black border-white' : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white'}`}
@@ -2611,12 +2611,12 @@ const Home = ({ initialTab }) => {
               </button>
 
               {/* 2. Icon Thông báo (Chuông) */}
-              <button 
+              <button
                 type="button"
                 onClick={() => {
                   setIsNotifOpen(!isNotifOpen);
                   requestNotificationPermission();
-                }} 
+                }}
                 className="w-9 h-9 rounded-full bg-zinc-900 border border-zinc-800 relative flex items-center justify-center text-zinc-300 hover:text-white transition-all active:scale-95"
                 title="Thông báo sảnh"
               >
@@ -2629,7 +2629,7 @@ const Home = ({ initialTab }) => {
               </button>
 
               {/* 3. Icon Tin nhắn (mở thẳng /messages kèm badge chưa đọc) */}
-              <button 
+              <button
                 type="button"
                 onClick={() => navigate('/messages')}
                 className="w-9 h-9 rounded-full bg-zinc-900 border border-zinc-800 relative flex items-center justify-center text-zinc-300 hover:text-white transition-all active:scale-95"
@@ -2648,7 +2648,7 @@ const Home = ({ initialTab }) => {
           {/* Thanh Search di động mở rộng (khi bấm kính lúp trên Mobile) */}
           {showMobileSearchBar && (
             <div className="sm:hidden px-3 py-2 bg-[#13151b] border-b border-[#232838] animate-slide-up">
-              <form 
+              <form
                 onSubmit={(e) => {
                   e.preventDefault();
                   executeSearch(searchInput);
@@ -2656,8 +2656,8 @@ const Home = ({ initialTab }) => {
                 className="flex items-center gap-2 p-1.5 rounded-xl bg-[#171a23] border border-[#242b3b]"
               >
                 <Search size={14} className="text-zinc-500 ml-1.5 flex-shrink-0" />
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   placeholder="Tìm kiếm nội dung, chủ đề..."
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
@@ -2670,7 +2670,7 @@ const Home = ({ initialTab }) => {
                     <X size={13} />
                   </button>
                 )}
-                <button 
+                <button
                   type="submit"
                   className="px-3 py-1 rounded-lg bg-white text-black text-xs font-semibold flex-shrink-0"
                 >
@@ -2684,7 +2684,7 @@ const Home = ({ initialTab }) => {
           <div className="stream-header flex items-center justify-between w-full border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-md px-3 py-1.5">
             {/* 1. Phân loại tab: Chiếm trọn bề ngang, cuộn ngang mượt mà */}
             <div className="stream-tabs flex-1 flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              <button 
+              <button
                 type="button"
                 className={`stream-tab ${activeTab === 'feed' ? 'active' : ''}`}
                 onClick={() => handleSwitchTab('feed')}
@@ -2692,7 +2692,7 @@ const Home = ({ initialTab }) => {
                 <Globe size={14} className="tab-icon flex-shrink-0" />
                 <span>Sảnh trực tuyến</span>
               </button>
-              <button 
+              <button
                 type="button"
                 className={`stream-tab ${activeTab === 'groups' ? 'active' : ''}`}
                 onClick={() => handleSwitchTab('groups')}
@@ -2700,7 +2700,7 @@ const Home = ({ initialTab }) => {
                 <Users size={14} className="tab-icon flex-shrink-0" />
                 <span>Cộng đồng</span>
               </button>
-              <button 
+              <button
                 type="button"
                 className={`stream-tab ${activeTab === 'trending' ? 'active' : ''}`}
                 onClick={() => handleSwitchTab('trending')}
@@ -2708,7 +2708,7 @@ const Home = ({ initialTab }) => {
                 <Flame size={14} className="tab-icon flex-shrink-0" />
                 <span>Thịnh hành</span>
               </button>
-              <button 
+              <button
                 type="button"
                 className={`stream-tab ${activeTab === 'saved' ? 'active' : ''}`}
                 onClick={() => handleSwitchTab('saved')}
@@ -2716,7 +2716,7 @@ const Home = ({ initialTab }) => {
                 <Bookmark size={14} className="tab-icon flex-shrink-0" />
                 <span>Đã lưu</span>
               </button>
-              <button 
+              <button
                 type="button"
                 className={`stream-tab ${activeTab === 'rooms' ? 'active' : ''}`}
                 onClick={() => handleSwitchTab('rooms')}
@@ -2726,7 +2726,7 @@ const Home = ({ initialTab }) => {
               </button>
 
               {/* Chip Thẻ thử thách (Bấm mở Modal Thẻ Bài Thử Thách) */}
-              <button 
+              <button
                 type="button"
                 onClick={() => setIsPartyWheelOpen(true)}
                 className="stream-tab !border-zinc-800 hover:!border-zinc-700 !text-zinc-300 hover:!text-white flex items-center gap-1.5 whitespace-nowrap active:scale-95"
@@ -2738,12 +2738,12 @@ const Home = ({ initialTab }) => {
             </div>
 
             {/* NÚT CHUÔNG THÔNG BÁO SẢNH (Chỉ hiện trên PC, ẩn hoàn toàn trên Mobile để không trùng với chuông ở thanh trên cùng) */}
-            <button 
+            <button
               type="button"
               onClick={() => {
                 setIsNotifOpen(!isNotifOpen);
                 requestNotificationPermission();
-              }} 
+              }}
               className="btn-header-notif !hidden md:!flex relative ml-2"
               title="Thông báo sảnh (Mở ngăn kéo)"
             >
@@ -2782,264 +2782,264 @@ const Home = ({ initialTab }) => {
           {activeTab === 'feed' && (
             <div className="feed-composer-wrapper pt-1 sm:pt-3">
               <div className="post-creator-box">
-              <div className="creator-input-row">
-                <UserAvatar user={currentUser} size={36} />
-                <div className="creator-field-wrap">
-                  <textarea 
-                    ref={newPostInputRef}
-                    rows="2" 
-                    placeholder="Bạn đang nghĩ gì? Chia sẻ câu chuyện, cảm xúc hoặc một khoảnh khắc cùng cộng đồng..."
-                    value={newPostContent}
-                    onChange={(e) => setNewPostContent(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              {/* Preview Ảnh / Video ngắn đã nén */}
-              {attachedMedia && (
-                <div className="composer-attached-preview">
-                  {attachedMedia.type === 'video' ? (
-                    <video 
-                      src={attachedMedia.url} 
-                      autoPlay 
-                      loop 
-                      muted 
-                      playsInline 
-                      className="preview-media-element" 
+                <div className="creator-input-row">
+                  <UserAvatar user={currentUser} size={36} />
+                  <div className="creator-field-wrap">
+                    <textarea
+                      ref={newPostInputRef}
+                      rows="2"
+                      placeholder="Bạn đang nghĩ gì? Chia sẻ câu chuyện, cảm xúc hoặc một khoảnh khắc cùng cộng đồng..."
+                      value={newPostContent}
+                      onChange={(e) => setNewPostContent(e.target.value)}
                     />
-                  ) : (
-                    <img 
-                      src={attachedMedia.url} 
-                      alt="Đính kèm" 
-                      className="preview-media-element" 
-                    />
-                  )}
-                  <button 
-                    type="button" 
-                    onClick={() => setAttachedMedia(null)} 
-                    className="btn-remove-attached"
-                    title="Xóa tệp đính kèm"
-                  >
-                    <X size={13} />
-                  </button>
-                </div>
-              )}
-
-              {/* Preview Ghi âm 15s */}
-              {isRecordingVoice ? (
-                <div className="voice-recording-indicator">
-                  <span className="rec-dot-pulsing"></span>
-                  <span className="font-mono text-xs text-rose-400">
-                    Đang thu âm: 00:{voiceDuration < 10 ? `0${voiceDuration}` : voiceDuration} / 00:15
-                  </span>
-                  <button 
-                    type="button" 
-                    onClick={stopVoiceRecording} 
-                    className="btn-stop-rec"
-                  >
-                    <Square size={11} fill="currentColor" /> Dừng
-                  </button>
-                </div>
-              ) : voiceBase64 ? (
-                <div className="voice-preview-deck">
-                  <button 
-                    type="button" 
-                    onClick={togglePlayVoicePreview} 
-                    className="btn-play-voice-preview"
-                    title={isPlayingVoicePreview ? "Tạm dừng" : "Nghe thử"}
-                  >
-                    {isPlayingVoicePreview ? <Pause size={12} /> : <Play size={12} />}
-                  </button>
-                  <div className="voice-waveform-preview">
-                    <span className={`wave-bar ${isPlayingVoicePreview ? 'playing' : ''}`}></span>
-                    <span className={`wave-bar ${isPlayingVoicePreview ? 'playing' : ''}`}></span>
-                    <span className={`wave-bar ${isPlayingVoicePreview ? 'playing' : ''}`}></span>
-                    <span className={`wave-bar ${isPlayingVoicePreview ? 'playing' : ''}`}></span>
-                    <span className={`wave-bar ${isPlayingVoicePreview ? 'playing' : ''}`}></span>
                   </div>
-                  <span className="font-mono text-xs text-zinc-300">
-                    00:{voiceDuration < 10 ? `0${voiceDuration}` : voiceDuration}
-                  </span>
-                  <button 
-                    type="button" 
-                    onClick={clearVoiceRecording} 
-                    className="btn-delete-voice" 
-                    title="Hủy ghi âm"
-                  >
-                    <Trash2 size={13} />
-                  </button>
                 </div>
-              ) : null}
 
-              {/* Chọn Vibe Tags: Icon thật có màu sắc trang nhã, không màu mè AI bóng bẩy */}
-              <div className="composer-vibes-wrapper my-2">
-                <div className="flex items-center justify-between mb-1.5 px-0.5">
-                  <span className="text-[11.5px] font-medium text-zinc-400 flex items-center gap-1.5 flex-wrap">
-                    <Smile size={13} className="text-zinc-400 flex-shrink-0" />
-                    <span>Chủ đề & Cảm xúc ({dynamicVibes.length})</span>
-                    {selectedVibe && (
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-200 border border-zinc-700">
-                        Đang chọn: {dynamicVibes.find(v => v.id === selectedVibe)?.label}
-                      </span>
+                {/* Preview Ảnh / Video ngắn đã nén */}
+                {attachedMedia && (
+                  <div className="composer-attached-preview">
+                    {attachedMedia.type === 'video' ? (
+                      <video
+                        src={attachedMedia.url}
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        className="preview-media-element"
+                      />
+                    ) : (
+                      <img
+                        src={attachedMedia.url}
+                        alt="Đính kèm"
+                        className="preview-media-element"
+                      />
                     )}
-                  </span>
-                  {dynamicVibes.length > 3 && (
                     <button
                       type="button"
-                      onClick={() => setIsVibesExpanded(!isVibesExpanded)}
-                      className="text-xs text-zinc-400 hover:text-zinc-200 flex items-center gap-1 transition-colors flex-shrink-0"
+                      onClick={() => setAttachedMedia(null)}
+                      className="btn-remove-attached"
+                      title="Xóa tệp đính kèm"
                     >
-                      <span>{isVibesExpanded ? 'Thu gọn' : 'Xem tất cả'}</span>
-                      <ChevronDown size={13} className={`transition-transform duration-200 ${isVibesExpanded ? 'rotate-180' : ''}`} />
+                      <X size={13} />
                     </button>
-                  )}
-                </div>
-
-                {isVibesExpanded ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-1.5 pt-0.5 pb-1 animate-fade-in">
-                    {dynamicVibes.map(v => {
-                      const IconComponent = v.icon || Tag;
-                      const isSelected = selectedVibe === v.id;
-                      return (
-                        <button
-                          key={v.id}
-                          type="button"
-                          onClick={() => setSelectedVibe(isSelected ? null : v.id)}
-                          className={`vibe-tag-pill w-full justify-center ${isSelected ? 'active' : ''}`}
-                        >
-                          <IconComponent size={13} strokeWidth={1.75} className={`vibe-icon flex-shrink-0 ${v.color || 'text-zinc-400'}`} />
-                          <span className="truncate">{v.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="vibe-tags-row flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
-                    {dynamicVibes.map(v => {
-                      const IconComponent = v.icon || Tag;
-                      const isSelected = selectedVibe === v.id;
-                      return (
-                        <button
-                          key={v.id}
-                          type="button"
-                          onClick={() => setSelectedVibe(isSelected ? null : v.id)}
-                          className={`vibe-tag-pill flex-shrink-0 ${isSelected ? 'active' : ''}`}
-                        >
-                          <IconComponent size={13} strokeWidth={1.75} className={`vibe-icon flex-shrink-0 ${v.color || 'text-zinc-400'}`} />
-                          <span>{v.label}</span>
-                        </button>
-                      );
-                    })}
                   </div>
                 )}
-              </div>
 
-              {/* Nhập Sparks / Chủ đề cộng đồng nếu mở */}
-              {showSparkInput && (
-                <div className="community-sparks-section animate-fade-in">
-                  <div className="custom-spark-input-row">
-                    <Hash size={14} className="spark-input-icon text-emerald-400" />
-                    <input 
-                      type="text" 
-                      placeholder="Gắn thẻ góc nhìn, #chủ đề quan tâm..."
-                      value={customTagInput}
-                      onChange={(e) => setCustomTagInput(e.target.value)}
-                      onKeyDown={handleAddCustomTag}
-                    />
-                    <button 
-                      type="button" 
-                      onClick={handleAddCustomTag}
-                      disabled={!customTagInput.trim()}
-                      className="btn-add-spark-action"
+                {/* Preview Ghi âm 15s */}
+                {isRecordingVoice ? (
+                  <div className="voice-recording-indicator">
+                    <span className="rec-dot-pulsing"></span>
+                    <span className="font-mono text-xs text-rose-400">
+                      Đang thu âm: 00:{voiceDuration < 10 ? `0${voiceDuration}` : voiceDuration} / 00:15
+                    </span>
+                    <button
+                      type="button"
+                      onClick={stopVoiceRecording}
+                      className="btn-stop-rec"
                     >
-                      <Plus size={12} /> <span>Thêm</span>
+                      <Square size={11} fill="currentColor" /> Dừng
                     </button>
                   </div>
+                ) : voiceBase64 ? (
+                  <div className="voice-preview-deck">
+                    <button
+                      type="button"
+                      onClick={togglePlayVoicePreview}
+                      className="btn-play-voice-preview"
+                      title={isPlayingVoicePreview ? "Tạm dừng" : "Nghe thử"}
+                    >
+                      {isPlayingVoicePreview ? <Pause size={12} /> : <Play size={12} />}
+                    </button>
+                    <div className="voice-waveform-preview">
+                      <span className={`wave-bar ${isPlayingVoicePreview ? 'playing' : ''}`}></span>
+                      <span className={`wave-bar ${isPlayingVoicePreview ? 'playing' : ''}`}></span>
+                      <span className={`wave-bar ${isPlayingVoicePreview ? 'playing' : ''}`}></span>
+                      <span className={`wave-bar ${isPlayingVoicePreview ? 'playing' : ''}`}></span>
+                      <span className={`wave-bar ${isPlayingVoicePreview ? 'playing' : ''}`}></span>
+                    </div>
+                    <span className="font-mono text-xs text-zinc-300">
+                      00:{voiceDuration < 10 ? `0${voiceDuration}` : voiceDuration}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={clearVoiceRecording}
+                      className="btn-delete-voice"
+                      title="Hủy ghi âm"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                ) : null}
 
-                  {/* Gợi ý chủ đề nhanh để người dùng không cần gõ thủ công */}
-                  <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pt-2 pb-0.5">
-                    <span className="text-[10px] text-zinc-500 font-mono flex-shrink-0">Gợi ý nhanh:</span>
-                    {['#tam_su', '#am_nhac', '#cong_nghe', '#doi_song', '#goc_nhin'].map(suggested => (
+                {/* Chọn Vibe Tags: Icon thật có màu sắc trang nhã, không màu mè AI bóng bẩy */}
+                <div className="composer-vibes-wrapper my-2">
+                  <div className="flex items-center justify-between mb-1.5 px-0.5">
+                    <span className="text-[11.5px] font-medium text-zinc-400 flex items-center gap-1.5 flex-wrap">
+                      <Smile size={13} className="text-zinc-400 flex-shrink-0" />
+                      <span>Chủ đề & Cảm xúc ({dynamicVibes.length})</span>
+                      {selectedVibe && (
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-200 border border-zinc-700">
+                          Đang chọn: {dynamicVibes.find(v => v.id === selectedVibe)?.label}
+                        </span>
+                      )}
+                    </span>
+                    {dynamicVibes.length > 3 && (
                       <button
-                        key={suggested}
                         type="button"
-                        onClick={() => {
-                          if (!selectedTags.includes(suggested)) {
-                            setSelectedTags(prev => [...prev, suggested]);
-                          }
-                        }}
-                        className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-zinc-850 hover:bg-zinc-800 text-zinc-300 hover:text-emerald-400 border border-zinc-700/60 flex-shrink-0 transition-colors active:scale-95"
+                        onClick={() => setIsVibesExpanded(!isVibesExpanded)}
+                        className="text-xs text-zinc-400 hover:text-zinc-200 flex items-center gap-1 transition-colors flex-shrink-0"
                       >
-                        {suggested}
+                        <span>{isVibesExpanded ? 'Thu gọn' : 'Xem tất cả'}</span>
+                        <ChevronDown size={13} className={`transition-transform duration-200 ${isVibesExpanded ? 'rotate-180' : ''}`} />
                       </button>
-                    ))}
+                    )}
                   </div>
 
-                  {selectedTags.length > 0 && (
-                    <div className="selected-sparks-wrap pt-1">
-                      {selectedTags.map(tag => (
-                        <span key={tag} className="active-spark-chip font-mono">
-                          {tag}
-                          <button type="button" onClick={() => handleRemoveTag(tag)} className="btn-remove-spark"><X size={10} /></button>
-                        </span>
-                      ))}
+                  {isVibesExpanded ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-1.5 pt-0.5 pb-1 animate-fade-in">
+                      {dynamicVibes.map(v => {
+                        const IconComponent = v.icon || Tag;
+                        const isSelected = selectedVibe === v.id;
+                        return (
+                          <button
+                            key={v.id}
+                            type="button"
+                            onClick={() => setSelectedVibe(isSelected ? null : v.id)}
+                            className={`vibe-tag-pill w-full justify-center ${isSelected ? 'active' : ''}`}
+                          >
+                            <IconComponent size={13} strokeWidth={1.75} className={`vibe-icon flex-shrink-0 ${v.color || 'text-zinc-400'}`} />
+                            <span className="truncate">{v.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="vibe-tags-row flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
+                      {dynamicVibes.map(v => {
+                        const IconComponent = v.icon || Tag;
+                        const isSelected = selectedVibe === v.id;
+                        return (
+                          <button
+                            key={v.id}
+                            type="button"
+                            onClick={() => setSelectedVibe(isSelected ? null : v.id)}
+                            className={`vibe-tag-pill flex-shrink-0 ${isSelected ? 'active' : ''}`}
+                          >
+                            <IconComponent size={13} strokeWidth={1.75} className={`vibe-icon flex-shrink-0 ${v.color || 'text-zinc-400'}`} />
+                            <span>{v.label}</span>
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
-              )}
 
-              {/* Toolbar đính kèm & Đăng bài */}
-              <div className="creator-bottom-row">
-                <div className="creator-left-tools">
-                  <input 
-                    ref={fileInputRef} 
-                    type="file" 
-                    accept="image/*,video/mp4,video/webm" 
-                    style={{ display: 'none' }} 
-                    onChange={handleFileSelect} 
-                  />
+                {/* Nhập Sparks / Chủ đề cộng đồng nếu mở */}
+                {showSparkInput && (
+                  <div className="community-sparks-section animate-fade-in">
+                    <div className="custom-spark-input-row">
+                      <Hash size={14} className="spark-input-icon text-emerald-400" />
+                      <input
+                        type="text"
+                        placeholder="Gắn thẻ góc nhìn, #chủ đề quan tâm..."
+                        value={customTagInput}
+                        onChange={(e) => setCustomTagInput(e.target.value)}
+                        onKeyDown={handleAddCustomTag}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddCustomTag}
+                        disabled={!customTagInput.trim()}
+                        className="btn-add-spark-action"
+                      >
+                        <Plus size={12} /> <span>Thêm</span>
+                      </button>
+                    </div>
 
-                  <button 
+                    {/* Gợi ý chủ đề nhanh để người dùng không cần gõ thủ công */}
+                    <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pt-2 pb-0.5">
+                      <span className="text-[10px] text-zinc-500 font-mono flex-shrink-0">Gợi ý nhanh:</span>
+                      {['#tam_su', '#am_nhac', '#cong_nghe', '#doi_song', '#goc_nhin'].map(suggested => (
+                        <button
+                          key={suggested}
+                          type="button"
+                          onClick={() => {
+                            if (!selectedTags.includes(suggested)) {
+                              setSelectedTags(prev => [...prev, suggested]);
+                            }
+                          }}
+                          className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-zinc-850 hover:bg-zinc-800 text-zinc-300 hover:text-emerald-400 border border-zinc-700/60 flex-shrink-0 transition-colors active:scale-95"
+                        >
+                          {suggested}
+                        </button>
+                      ))}
+                    </div>
+
+                    {selectedTags.length > 0 && (
+                      <div className="selected-sparks-wrap pt-1">
+                        {selectedTags.map(tag => (
+                          <span key={tag} className="active-spark-chip font-mono">
+                            {tag}
+                            <button type="button" onClick={() => handleRemoveTag(tag)} className="btn-remove-spark"><X size={10} /></button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Toolbar đính kèm & Đăng bài */}
+                <div className="creator-bottom-row">
+                  <div className="creator-left-tools">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*,video/mp4,video/webm"
+                      style={{ display: 'none' }}
+                      onChange={handleFileSelect}
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className={`btn-subtool ${attachedMedia ? 'active' : ''}`}
+                      title="Đính kèm hình ảnh hoặc video clip ngắn"
+                    >
+                      <ImageIcon size={15} strokeWidth={1.5} className="text-sky-400 flex-shrink-0" />
+                      <span>Ảnh<span className="hidden sm:inline"> / Video</span></span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={isRecordingVoice ? stopVoiceRecording : startVoiceRecording}
+                      className={`btn-subtool ${isRecordingVoice || voiceBase64 ? 'active-rose' : ''}`}
+                      title="Ghi âm giọng nói 15 giây"
+                    >
+                      <Mic size={15} strokeWidth={1.5} className="text-rose-400 flex-shrink-0" />
+                      <span>{isRecordingVoice ? 'Thu âm...' : (voiceBase64 ? 'Đã thu' : 'Ghi âm')}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowSparkInput(!showSparkInput)}
+                      className={`btn-subtool ${showSparkInput || selectedTags.length > 0 ? 'active' : ''}`}
+                      title="Gắn thẻ chủ đề bài viết"
+                    >
+                      <Tag size={15} strokeWidth={1.5} className="text-amber-400 flex-shrink-0" />
+                      <span><span className="hidden sm:inline">Gắn </span>chủ đề</span>
+                    </button>
+                  </div>
+
+                  <button
                     type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className={`btn-subtool ${attachedMedia ? 'active' : ''}`}
-                    title="Đính kèm hình ảnh hoặc video clip ngắn"
+                    onClick={handleCreatePost}
+                    disabled={isPosting || (!newPostContent.trim() && !attachedMedia && !voiceBase64)}
+                    className="btn-publish-submit"
                   >
-                    <ImageIcon size={15} strokeWidth={1.5} className="text-sky-400 flex-shrink-0" />
-                    <span>Ảnh<span className="hidden sm:inline"> / Video</span></span>
-                  </button>
-
-                  <button 
-                    type="button"
-                    onClick={isRecordingVoice ? stopVoiceRecording : startVoiceRecording}
-                    className={`btn-subtool ${isRecordingVoice || voiceBase64 ? 'active-rose' : ''}`}
-                    title="Ghi âm giọng nói 15 giây"
-                  >
-                    <Mic size={15} strokeWidth={1.5} className="text-rose-400 flex-shrink-0" />
-                    <span>{isRecordingVoice ? 'Thu âm...' : (voiceBase64 ? 'Đã thu' : 'Ghi âm')}</span>
-                  </button>
-
-                  <button 
-                    type="button"
-                    onClick={() => setShowSparkInput(!showSparkInput)}
-                    className={`btn-subtool ${showSparkInput || selectedTags.length > 0 ? 'active' : ''}`}
-                    title="Gắn thẻ chủ đề bài viết"
-                  >
-                    <Tag size={15} strokeWidth={1.5} className="text-amber-400 flex-shrink-0" />
-                    <span><span className="hidden sm:inline">Gắn </span>chủ đề</span>
+                    {isPosting ? 'Đang gửi...' : 'Đăng bài'}
                   </button>
                 </div>
-
-                <button 
-                  type="button"
-                  onClick={handleCreatePost}
-                  disabled={isPosting || (!newPostContent.trim() && !attachedMedia && !voiceBase64)}
-                  className="btn-publish-submit"
-                >
-                  {isPosting ? 'Đang gửi...' : 'Đăng bài'}
-                </button>
               </div>
-            </div>
             </div>
           )}
 
@@ -3060,8 +3060,8 @@ const Home = ({ initialTab }) => {
                       </span>
                     </span>
                   </div>
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={clearSearch}
                     className="flex-shrink-0 text-xs text-zinc-400 hover:text-white flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#1c1c1c] hover:bg-[#252525] border border-[#2e2e2e] transition-all"
                   >
@@ -3088,9 +3088,9 @@ const Home = ({ initialTab }) => {
                   <MessageSquare size={28} className="text-zinc-600 mb-2 mx-auto" />
                   <p className="text-zinc-400 text-sm">{activeSearchQuery ? `Không tìm thấy bài viết nào cho "${activeSearchQuery}".` : 'Chưa có bài viết nào ở chế độ xem này.'}</p>
                   {activeSearchQuery && (
-                    <button 
-                      type="button" 
-                      onClick={clearSearch} 
+                    <button
+                      type="button"
+                      onClick={clearSearch}
                       className="mt-3 px-3.5 py-1.5 rounded-xl bg-[#1c1c1c] hover:bg-[#252525] text-xs text-zinc-300 border border-[#2e2e2e] hover:text-white transition-colors"
                     >
                       Quay lại dòng thời gian
@@ -3106,15 +3106,15 @@ const Home = ({ initialTab }) => {
                   const parsedMedia = parsePostMedia(post.imageUrl, post);
 
                   return (
-                    <article 
-                      key={post.id} 
-                      id={`post-${post.id}`} 
+                    <article
+                      key={post.id}
+                      id={`post-${post.id}`}
                       className="post-item-card cursor-pointer transition-colors hover:bg-zinc-900/40"
                       onClick={(e) => handlePostCardClick(e, post)}
                     >
                       {post.groupId && (
                         <div className="flex items-center justify-between pb-1.5 mb-2 text-xs text-zinc-400 border-b border-zinc-800/60">
-                          <div 
+                          <div
                             className="flex items-center gap-1.5 min-w-0 hover:text-zinc-200 cursor-pointer"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -3162,23 +3162,23 @@ const Home = ({ initialTab }) => {
                       )}
 
                       <div className="post-header-row">
-                        <div 
-                          className="post-avatar-click cursor-pointer" 
+                        <div
+                          className="post-avatar-click cursor-pointer"
                           onClick={(e) => {
                             e.stopPropagation();
                             navigate(`/profile/${post.authorId || post.userId}`);
                           }}
                         >
-                          <UserAvatar 
-                            avatar={post.authorAvatar} 
-                            name={post.authorNickname || post.authorAccount} 
-                            size={36} 
+                          <UserAvatar
+                            avatar={post.authorAvatar}
+                            name={post.authorNickname || post.authorAccount}
+                            size={36}
                           />
                         </div>
 
                         <div className="post-header-info">
                           <div className="post-name-line">
-                            <span 
+                            <span
                               className="author-display-name cursor-pointer hover:underline"
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -3195,7 +3195,7 @@ const Home = ({ initialTab }) => {
                               </span>
                             )}
 
-                            <span 
+                            <span
                               className="author-handle font-mono cursor-pointer hover:underline"
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -3241,7 +3241,7 @@ const Home = ({ initialTab }) => {
 
                         {/* Nút lưu & menu thao tác */}
                         <div className="post-header-actions">
-                          <button 
+                          <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -3254,7 +3254,7 @@ const Home = ({ initialTab }) => {
                           </button>
 
                           <div className="post-menu-container">
-                            <button 
+                            <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -3270,34 +3270,34 @@ const Home = ({ initialTab }) => {
                               <div className="post-menu-dropdown animate-fade-in" onClick={(e) => e.stopPropagation()}>
                                 {isMe ? (
                                   <>
-                                    <button 
-                                      type="button" 
+                                    <button
+                                      type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         handleOpenEditPost(post);
-                                      }} 
+                                      }}
                                       className="post-menu-item"
                                     >
                                       <Edit3 size={13} /> Sửa bài viết
                                     </button>
-                                    <button 
-                                      type="button" 
+                                    <button
+                                      type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         handleDeletePost(post.id);
-                                      }} 
+                                      }}
                                       className="post-menu-item danger"
                                     >
                                       <Trash2 size={13} /> Xóa bài viết
                                     </button>
                                   </>
                                 ) : (
-                                  <button 
-                                    type="button" 
+                                  <button
+                                    type="button"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       handleOpenReportModal(post.id);
-                                    }} 
+                                    }}
                                     className="post-menu-item text-amber-400 hover:text-amber-300"
                                   >
                                     <Flag size={13} /> Báo cáo vi phạm
@@ -3305,12 +3305,12 @@ const Home = ({ initialTab }) => {
                                 )}
 
                                 {isAdminUser && !isMe && (
-                                  <button 
-                                    type="button" 
+                                  <button
+                                    type="button"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       handleDeletePost(post.id);
-                                    }} 
+                                    }}
                                     className="post-menu-item danger"
                                   >
                                     <Trash2 size={13} /> Xóa bài (Admin)
@@ -3323,7 +3323,7 @@ const Home = ({ initialTab }) => {
                       </div>
 
                       {/* Nội dung bài viết */}
-                      <div 
+                      <div
                         className="post-body-content"
                       >
                         {/* Chỉ hiển thị chữ nếu không phải là nhãn fallback 'Ghi âm giọng nói' khi đã có audioUrl */}
@@ -3333,7 +3333,7 @@ const Home = ({ initialTab }) => {
 
                         {/* Hiển thị Media: Ảnh hoặc Video ngắn tự động lặp muted + Click để mở toàn màn hình (Lightbox) */}
                         {parsedMedia.mediaUrl && (
-                          <div 
+                          <div
                             className="post-media-frame cursor-pointer group/media relative"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -3348,13 +3348,13 @@ const Home = ({ initialTab }) => {
                           >
                             {parsedMedia.mediaType === 'video' ? (
                               <div className="relative w-full overflow-hidden rounded-xl">
-                                <video 
-                                  src={parsedMedia.mediaUrl} 
-                                  autoPlay 
-                                  loop 
-                                  muted 
-                                  playsInline 
-                                  className="post-media-video group-hover/media:brightness-95 transition-all" 
+                                <video
+                                  src={parsedMedia.mediaUrl}
+                                  autoPlay
+                                  loop
+                                  muted
+                                  playsInline
+                                  className="post-media-video group-hover/media:brightness-95 transition-all"
                                 />
                                 <div className="absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-lg bg-black/75 backdrop-blur-md text-[11px] font-mono text-white/95 flex items-center gap-1.5 shadow-lg opacity-85 group-hover/media:opacity-100 transition-opacity">
                                   <Maximize2 size={12} />
@@ -3363,12 +3363,12 @@ const Home = ({ initialTab }) => {
                               </div>
                             ) : (
                               <div className="relative w-full overflow-hidden rounded-xl">
-                                <img 
-                                  src={parsedMedia.mediaUrl} 
-                                  alt="Khoảnh khắc" 
-                                  loading="lazy" 
+                                <img
+                                  src={parsedMedia.mediaUrl}
+                                  alt="Khoảnh khắc"
+                                  loading="lazy"
                                   onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                  className="post-media-image group-hover/media:scale-[1.01] transition-transform duration-300" 
+                                  className="post-media-image group-hover/media:scale-[1.01] transition-transform duration-300"
                                 />
                                 <div className="absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-lg bg-black/75 backdrop-blur-md text-[11px] font-mono text-white/95 flex items-center gap-1.5 shadow-lg opacity-0 group-hover/media:opacity-100 transition-opacity">
                                   <Maximize2 size={12} />
@@ -3381,11 +3381,11 @@ const Home = ({ initialTab }) => {
 
                         {/* Trình phát Voice Note ngắn trên thẻ */}
                         {parsedMedia.audioUrl && (
-                          <div 
+                          <div
                             className="post-voice-player-pill"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <button 
+                            <button
                               type="button"
                               onClick={() => handleTogglePlayPostVoice(post.id, parsedMedia.audioUrl)}
                               className="btn-play-card-voice"
@@ -3410,7 +3410,7 @@ const Home = ({ initialTab }) => {
 
                       {/* Thanh tương tác (Phẳng, không viền pill quanh từng nút) */}
                       <div className="post-actions-toolbar">
-                        
+
                         {/* Reaction Dock: Hover desktop, Long-press drag mobile, Top 5 emojis, Compact count */}
                         <PostReactionDock
                           post={post}
@@ -3420,7 +3420,7 @@ const Home = ({ initialTab }) => {
                         />
 
                         {/* Nút bình luận: Mở modal chi tiết & focus ô nhập */}
-                        <button 
+                        <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
@@ -3433,7 +3433,7 @@ const Home = ({ initialTab }) => {
                           <span className="font-mono text-xs">{post.commentsCount || 0}</span>
                         </button>
 
-                        <button 
+                        <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
@@ -3462,21 +3462,21 @@ const Home = ({ initialTab }) => {
 
                                   return (
                                     <div key={cmt.id} className={isReply ? "cmt-reply-item" : "cmt-row cmt-root-row"}>
-                                      <div 
+                                      <div
                                         className="cursor-pointer flex-shrink-0"
                                         onClick={() => navigate(`/profile/${cmt.authorId}`)}
                                         title="Xem hồ sơ cá nhân"
                                       >
-                                        <UserAvatar 
-                                          avatar={cmt.authorAvatar} 
-                                          name={cmt.authorNickname || cmt.authorAccount} 
-                                          size={isReply ? 24 : 30} 
+                                        <UserAvatar
+                                          avatar={cmt.authorAvatar}
+                                          name={cmt.authorNickname || cmt.authorAccount}
+                                          size={isReply ? 24 : 30}
                                         />
                                       </div>
                                       <div className={`cmt-bubble-content ${isReply ? 'reply-bubble' : 'root-bubble'}`}>
                                         <div className="cmt-header-row">
                                           <div className="cmt-author-info min-w-0">
-                                            <span 
+                                            <span
                                               className={`cmt-user-name ${isReply ? 'reply-name' : ''} cursor-pointer hover:underline truncate`}
                                               onClick={() => navigate(`/profile/${cmt.authorId}`)}
                                             >
@@ -3492,8 +3492,8 @@ const Home = ({ initialTab }) => {
 
                                         {isEditingThisCmt ? (
                                           <div className="cmt-inline-edit-box">
-                                            <input 
-                                              type="text" 
+                                            <input
+                                              type="text"
                                               value={editingCommentText}
                                               onChange={(e) => setEditingCommentText(e.target.value)}
                                               className="cmt-inline-edit-input"
@@ -3504,16 +3504,16 @@ const Home = ({ initialTab }) => {
                                               }}
                                             />
                                             <div className="cmt-inline-edit-actions">
-                                              <button 
-                                                type="button" 
-                                                onClick={() => setEditingCommentId(null)} 
+                                              <button
+                                                type="button"
+                                                onClick={() => setEditingCommentId(null)}
                                                 className="btn-cancel-inline-cmt"
                                               >
                                                 Hủy
                                               </button>
-                                              <button 
-                                                type="button" 
-                                                onClick={() => handleSaveEditComment(post.id, cmt.id)} 
+                                              <button
+                                                type="button"
+                                                onClick={() => handleSaveEditComment(post.id, cmt.id)}
                                                 disabled={isSavingComment}
                                                 className="btn-save-inline-cmt"
                                               >
@@ -3541,9 +3541,9 @@ const Home = ({ initialTab }) => {
                                                 className={`btn-cmt-act reaction ${cmt.isLiked ? 'liked text-rose-500 font-bold' : ''}`}
                                                 title={cmt.isLiked ? 'Bỏ thích phản hồi' : 'Thích phản hồi'}
                                               >
-                                                <Heart 
-                                                  size={11.5} 
-                                                  className={cmt.isLiked ? "fill-rose-500 text-rose-500 transition-all scale-105" : "transition-all"} 
+                                                <Heart
+                                                  size={11.5}
+                                                  className={cmt.isLiked ? "fill-rose-500 text-rose-500 transition-all scale-105" : "transition-all"}
                                                 />
                                                 {Number(cmt.likesCount || 0) > 0 && (
                                                   <span className="cmt-like-count font-mono text-[10.5px]">{cmt.likesCount}</span>
@@ -3551,8 +3551,8 @@ const Home = ({ initialTab }) => {
                                               </button>
 
                                               {/* Nút Trả lời */}
-                                              <button 
-                                                type="button" 
+                                              <button
+                                                type="button"
                                                 onClick={() => {
                                                   setReplyTargetMap(prev => ({
                                                     ...prev,
@@ -3564,7 +3564,7 @@ const Home = ({ initialTab }) => {
                                                   }));
                                                   const inputEl = document.getElementById(`comment-input-${post.id}`);
                                                   if (inputEl) inputEl.focus();
-                                                }} 
+                                                }}
                                                 className="btn-cmt-act reply"
                                                 title="Trả lời phản hồi này"
                                               >
@@ -3573,9 +3573,9 @@ const Home = ({ initialTab }) => {
                                               </button>
 
                                               {isCmtMe && !isEditingThisCmt && (
-                                                <button 
-                                                  type="button" 
-                                                  onClick={() => handleStartEditComment(cmt)} 
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleStartEditComment(cmt)}
                                                   className="btn-cmt-act"
                                                   title="Sửa phản hồi"
                                                 >
@@ -3584,9 +3584,9 @@ const Home = ({ initialTab }) => {
                                                 </button>
                                               )}
                                               {canDeleteCmt && (
-                                                <button 
-                                                  type="button" 
-                                                  onClick={() => handleDeleteComment(post.id, cmt.id)} 
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleDeleteComment(post.id, cmt.id)}
                                                   className="btn-cmt-act danger text-zinc-500 hover:text-rose-400"
                                                   title="Xóa phản hồi"
                                                 >
@@ -3626,8 +3626,8 @@ const Home = ({ initialTab }) => {
                                 <CornerDownRight size={12} className="text-sky-400" />
                                 <span>Đang trả lời <strong>@{replyTargetMap[post.id].authorAccount}</strong></span>
                               </div>
-                              <button 
-                                type="button" 
+                              <button
+                                type="button"
                                 onClick={() => setReplyTargetMap(prev => ({ ...prev, [post.id]: null }))}
                                 className="btn-cancel-reply"
                                 title="Hủy trả lời"
@@ -3639,10 +3639,10 @@ const Home = ({ initialTab }) => {
 
                           {/* Khung nhập phản hồi */}
                           <div className="cmt-input-form">
-                            <input 
+                            <input
                               id={`comment-input-${post.id}`}
-                              type="text" 
-                              placeholder={replyTargetMap[post.id] ? `Trả lời @${replyTargetMap[post.id].authorAccount}...` : "Viết phản hồi ngắn..."} 
+                              type="text"
+                              placeholder={replyTargetMap[post.id] ? `Trả lời @${replyTargetMap[post.id].authorAccount}...` : "Viết phản hồi ngắn..."}
                               value={commentInputs[post.id] || ''}
                               onChange={(e) => setCommentInputs({ ...commentInputs, [post.id]: e.target.value })}
                               onKeyDown={(e) => {
@@ -3652,8 +3652,8 @@ const Home = ({ initialTab }) => {
                                 }
                               }}
                             />
-                            <button 
-                              type="button" 
+                            <button
+                              type="button"
                               onClick={() => handleAddComment(post.id)}
                               disabled={submittingComment[post.id] || !commentInputs[post.id]?.trim()}
                               className="btn-submit-cmt"
@@ -3678,7 +3678,7 @@ const Home = ({ initialTab }) => {
           {/* ============================================================== */}
           {activeTab === 'groups' && (
             <SectionErrorBoundary>
-              <CommunitySection 
+              <CommunitySection
                 currentUserId={currentUserId}
                 currentUserName={currentUserName}
                 currentUserAvatar={currentUserAvatar}
@@ -3711,16 +3711,16 @@ const Home = ({ initialTab }) => {
             const publicRooms = safeRooms.filter(r => !isUserInRoom(r) && !r.hasPassword && !r.isPrivate);
 
             const renderRoomCard = (room, isJoined) => (
-              <div 
-                key={room.id} 
+              <div
+                key={room.id}
                 className="p-4 sm:p-5 rounded-2xl bg-[#141414] border border-[#1e1e1e] hover:border-[#2a2a2a] transition-all flex flex-col justify-between cursor-pointer shadow-sm hover:shadow-md"
                 onClick={() => onRoomCardClick(room)}
               >
                 <div className="flex items-start justify-between gap-3 mb-4">
                   <div className="flex items-center gap-3">
-                    <GroupCollageAvatar 
-                      avatar={room.avatar} 
-                      name={room.nameroom} 
+                    <GroupCollageAvatar
+                      avatar={room.avatar}
+                      name={room.nameroom}
                       members={room.userRoomDTOList || []}
                       size={46}
                       className="border border-[#222222]"
@@ -3751,7 +3751,7 @@ const Home = ({ initialTab }) => {
                 <div className="flex items-center justify-between pt-3 border-t border-[#1e1e1e]">
                   <div className="flex -space-x-2 overflow-hidden">
                     {room.userRoomDTOList?.slice(0, 4).map((ur, idx) => (
-                      <UserAvatar 
+                      <UserAvatar
                         key={ur.id || idx}
                         avatar={ur.userDTO?.avatar}
                         name={ur.userDTO?.nickname}
@@ -3766,8 +3766,8 @@ const Home = ({ initialTab }) => {
                     )}
                   </div>
 
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       onRoomCardClick(room);
@@ -3794,7 +3794,7 @@ const Home = ({ initialTab }) => {
                     </p>
                   </div>
                   <button onClick={() => setIsCreateModalOpen(true)} className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-black font-semibold text-xs shadow-md transition-all active:scale-95 w-full sm:w-auto">
-                    <Plus size={14} strokeWidth={2} /> 
+                    <Plus size={14} strokeWidth={2} />
                     <span>Tạo phòng mới</span>
                   </button>
                 </div>
@@ -3806,7 +3806,7 @@ const Home = ({ initialTab }) => {
                     <Radio size={32} className="mx-auto mb-3 text-zinc-600 opacity-60" />
                     <p className="text-zinc-400 text-sm font-medium mb-1">Chưa có phòng đàm thoại nào đang mở</p>
                     <p className="text-zinc-500 text-xs mb-4">Hãy tạo một phòng riêng để trò chuyện cùng bạn bè!</p>
-                    <button 
+                    <button
                       onClick={() => setIsCreateModalOpen(true)}
                       className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#222222] hover:bg-[#2a2a2a] text-zinc-200 text-xs font-medium border border-[#333333] transition-all"
                     >
@@ -3871,25 +3871,25 @@ const Home = ({ initialTab }) => {
         {/* CỘT 3: RIGHT DOCK (280px - 300px) - GHIM CỐ ĐỊNH STICKY */}
         {/* ============================================================== */}
         <aside className="widgets-sidebar sticky top-0 h-screen overflow-y-auto py-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden z-20">
-          
+
           {/* Ô Tìm Kiếm Gọn Gàng (Chỉ tìm khi Enter / Bấm Icon / Mobile Go - Có Dropdown Lịch Sử & Xu Hướng Hot) */}
           <div className="search-section-container relative">
-            <form 
+            <form
               onSubmit={(e) => {
                 e.preventDefault();
                 executeSearch(searchInput);
               }}
               className="search-input-wrap relative flex items-center"
             >
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 className="search-icon-btn p-1 text-zinc-500 hover:text-white transition-colors cursor-pointer"
                 title="Bấm để tìm kiếm"
               >
                 <Search size={14} strokeWidth={1.5} className={isSearching ? "animate-spin text-sky-400" : "search-icon-muted"} />
               </button>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 placeholder="Tìm kiếm nội dung, chủ đề..."
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
@@ -3897,9 +3897,9 @@ const Home = ({ initialTab }) => {
                 enterKeyHint="search"
               />
               {searchInput && (
-                <button 
-                  type="button" 
-                  onClick={clearSearch} 
+                <button
+                  type="button"
+                  onClick={clearSearch}
                   className="btn-clear-kw"
                   title="Xóa tìm kiếm"
                 >
@@ -3911,9 +3911,9 @@ const Home = ({ initialTab }) => {
             {/* POPUP GỢI Ý: TÌM KIẾM GẦN ĐÂY & XU HƯỚNG TÌM KIẾM HOT */}
             {isSearchDropdownOpen && (
               <>
-                <div 
-                  className="fixed inset-0 z-40" 
-                  onClick={() => setIsSearchDropdownOpen(false)} 
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setIsSearchDropdownOpen(false)}
                 />
                 <div className="absolute top-[calc(100%+8px)] left-0 right-0 z-50 p-3.5 rounded-2xl bg-[#141414] border border-[#222222] shadow-2xl space-y-3 animate-fade-in">
                   {/* Mục 1: Tìm kiếm gần đây */}
@@ -3923,8 +3923,8 @@ const Home = ({ initialTab }) => {
                         <span className="text-[11px] font-semibold text-zinc-400 flex items-center gap-1.5">
                           <Clock size={12} className="text-zinc-500" /> Tìm kiếm gần đây
                         </span>
-                        <button 
-                          type="button" 
+                        <button
+                          type="button"
                           onClick={handleClearAllRecentSearches}
                           className="text-[10px] text-zinc-500 hover:text-rose-400 transition-colors font-mono"
                         >
@@ -3933,7 +3933,7 @@ const Home = ({ initialTab }) => {
                       </div>
                       <div className="flex flex-wrap gap-1.5">
                         {recentSearches.map((term, idx) => (
-                          <div 
+                          <div
                             key={`recent-${idx}`}
                             className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#1a1a1a] hover:bg-[#222222] text-zinc-300 text-xs border border-[#262626] transition-all cursor-pointer group"
                             onClick={() => executeSearch(term)}
@@ -3998,9 +3998,9 @@ const Home = ({ initialTab }) => {
             <p className="widget-card-desc">
               Dò tìm sóng radio người lạ theo dải tần MHz hoặc tự thu âm 5 giây để phát thanh kết nối đàm thoại 1-1.
             </p>
-            <button 
-              type="button" 
-              onClick={() => setIsSpeedMatchOpen(true)} 
+            <button
+              type="button"
+              onClick={() => setIsSpeedMatchOpen(true)}
               className="btn-widget-action"
             >
               Dò sóng & Phát thanh
@@ -4016,9 +4016,9 @@ const Home = ({ initialTab }) => {
             <p className="widget-card-desc">
               Bốc ngẫu nhiên câu hỏi kích hoạt đối thoại hoặc thử thách vui cùng sảnh.
             </p>
-            <button 
-              type="button" 
-              onClick={() => setIsPartyWheelOpen(true)} 
+            <button
+              type="button"
+              onClick={() => setIsPartyWheelOpen(true)}
               className="btn-widget-action secondary"
             >
               Bốc câu hỏi ngẫu nhiên
@@ -4049,7 +4049,7 @@ const Home = ({ initialTab }) => {
       </div>
 
       {/* THANH ĐIỀU HƯỚNG DÀNH CHO MOBILE - 5 TAB CHUẨN THỰC DỤNG */}
-      <MobileBottomNav 
+      <MobileBottomNav
         activeTab={activeTab === 'groups' ? 'groups' : 'feed'}
         unreadMessagesCount={unreadMessagesCount}
         pendingFriendsCount={pendingFriendsCount}
@@ -4061,7 +4061,7 @@ const Home = ({ initialTab }) => {
       {/* FLOATING MOBILE MUSIC MINI-PLAYER (Hiện diện ghim trên điện thoại) */}
       {/* ============================================================== */}
       {currentTrack && isPlayingRadio && (
-        <div 
+        <div
           className="fixed bottom-[68px] left-3 right-3 sm:hidden z-[75] bg-zinc-900/95 backdrop-blur-md border border-zinc-800 rounded-2xl p-2.5 flex items-center justify-between shadow-2xl animate-fade-in"
           onClick={() => setShowMobileMusicSheet(true)}
         >
@@ -4106,11 +4106,11 @@ const Home = ({ initialTab }) => {
       {/* ============================================================== */}
       <AnimatePresence>
         {showMobileMusicSheet && (
-          <div 
+          <div
             className="fixed inset-0 z-[120] bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 select-none"
             onClick={() => setShowMobileMusicSheet(false)}
           >
-            <motion.div 
+            <motion.div
               initial={{ y: "100%", opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: "100%", opacity: 0 }}
@@ -4127,7 +4127,7 @@ const Home = ({ initialTab }) => {
                   <Music size={16} className="text-emerald-400" />
                   <span className="text-sm font-bold text-white tracking-wide">Nhạc Nền Không Gian</span>
                 </div>
-                <button 
+                <button
                   type="button"
                   onClick={() => setShowMobileMusicSheet(false)}
                   className="w-7 h-7 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center transition-colors"
@@ -4165,9 +4165,8 @@ const Home = ({ initialTab }) => {
                   {[40, 75, 55, 90, 65, 80, 45, 95, 70, 85, 50, 100, 60, 80].map((h, i) => (
                     <span
                       key={i}
-                      className={`w-1 rounded-full transition-all duration-200 ${
-                        isPlayingRadio ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-800'
-                      }`}
+                      className={`w-1 rounded-full transition-all duration-200 ${isPlayingRadio ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-800'
+                        }`}
                       style={{
                         height: isPlayingRadio ? `${Math.max(25, (h * ((i % 3) + 1)) % 100)}%` : '20%',
                         animationDelay: `${i * 70}ms`
@@ -4224,11 +4223,10 @@ const Home = ({ initialTab }) => {
                         <div
                           key={tr.id || idx}
                           onClick={() => handleSelectRadioTrack(idx)}
-                          className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all ${
-                            isCurrent 
-                              ? 'bg-zinc-900 border border-emerald-500/40 text-white' 
-                              : 'hover:bg-zinc-900/60 text-zinc-300'
-                          }`}
+                          className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all ${isCurrent
+                            ? 'bg-zinc-900 border border-emerald-500/40 text-white'
+                            : 'hover:bg-zinc-900/60 text-zinc-300'
+                            }`}
                         >
                           <div className="flex items-center gap-2.5 min-w-0 flex-1">
                             {isCurrent && isPlayingRadio ? (
@@ -4271,12 +4269,12 @@ const Home = ({ initialTab }) => {
 
       {/* MODAL LIGHTBOX XEM ĐA PHƯƠNG TIỆN TOÀN MÀN HÌNH (ẢNH & VIDEO) */}
       {lightboxMedia && (
-        <div 
+        <div
           className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-black/95 backdrop-blur-md p-2 sm:p-6 animate-fade-in select-none"
           onClick={() => setLightboxMedia(null)}
         >
           {/* Top Bar: Title/Author and Actions */}
-          <div 
+          <div
             className="w-full max-w-5xl flex items-center justify-between px-3 py-2 sm:py-3 text-white mb-2 z-10"
             onClick={(e) => e.stopPropagation()}
           >
@@ -4290,8 +4288,8 @@ const Home = ({ initialTab }) => {
             </div>
 
             <div className="flex items-center gap-2">
-              <a 
-                href={lightboxMedia.url} 
+              <a
+                href={lightboxMedia.url}
                 download={lightboxMedia.type === 'video' ? 'video-talovin.mp4' : 'image-talovin.webp'}
                 target="_blank"
                 rel="noreferrer"
@@ -4300,7 +4298,7 @@ const Home = ({ initialTab }) => {
               >
                 <Download size={16} />
               </a>
-              <button 
+              <button
                 type="button"
                 onClick={() => setLightboxMedia(null)}
                 className="p-2 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-all border border-zinc-700/60"
@@ -4312,30 +4310,30 @@ const Home = ({ initialTab }) => {
           </div>
 
           {/* Media Center Content */}
-          <div 
+          <div
             className="relative flex items-center justify-center max-w-5xl max-h-[82vh] w-full"
             onClick={(e) => e.stopPropagation()}
           >
             {lightboxMedia.type === 'video' ? (
-              <video 
-                src={lightboxMedia.url} 
-                controls 
-                autoPlay 
-                playsInline 
+              <video
+                src={lightboxMedia.url}
+                controls
+                autoPlay
+                playsInline
                 className="max-w-full max-h-[80vh] rounded-2xl shadow-2xl object-contain bg-black border border-zinc-800"
               />
             ) : (
-              <img 
-                src={lightboxMedia.url} 
-                alt="Xem ảnh lớn" 
-                className="max-w-full max-h-[80vh] rounded-2xl shadow-2xl object-contain bg-black/40 border border-zinc-800" 
+              <img
+                src={lightboxMedia.url}
+                alt="Xem ảnh lớn"
+                className="max-w-full max-h-[80vh] rounded-2xl shadow-2xl object-contain bg-black/40 border border-zinc-800"
               />
             )}
           </div>
 
           {/* Caption if exists */}
           {lightboxMedia.title && (
-            <div 
+            <div
               className="mt-3 max-w-2xl px-4 py-2 rounded-xl bg-zinc-900/80 border border-zinc-800/80 text-zinc-300 text-xs text-center truncate backdrop-blur-sm"
               onClick={(e) => e.stopPropagation()}
             >
@@ -4346,7 +4344,7 @@ const Home = ({ initialTab }) => {
       )}
 
       {/* MODAL BỘ GHÉP ĐÔI ĐỒNG ĐIỆU (RESONANCE MATCHMAKER 1-1) */}
-      <ResonanceMatchModal 
+      <ResonanceMatchModal
         isOpen={isSpeedMatchOpen}
         onClose={() => setIsSpeedMatchOpen(false)}
         currentUserId={currentUserId}
@@ -4385,7 +4383,7 @@ const Home = ({ initialTab }) => {
               </div>
               <button onClick={() => setSharePost(null)} className="btn-close-dialog"><X size={15} /></button>
             </div>
-            
+
             <div style={{ padding: '16px' }} className="space-y-4">
               {/* Nút Sao chép liên kết */}
               <button
@@ -4435,7 +4433,7 @@ const Home = ({ initialTab }) => {
       <AnimatePresence>
         {isCreateModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md" onClick={() => setIsCreateModalOpen(false)}>
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -4459,8 +4457,8 @@ const Home = ({ initialTab }) => {
                     <label className="text-zinc-300 text-xs font-semibold">Tên phòng *</label>
                     <span className="text-[10px] text-zinc-500 font-mono">{newRoomData.name.length}/60</span>
                   </div>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     placeholder="VD: Không gian trò chuyện cuối tuần"
                     value={newRoomData.name}
                     onChange={(e) => setNewRoomData({ ...newRoomData, name: e.target.value })}
@@ -4475,8 +4473,8 @@ const Home = ({ initialTab }) => {
                     <label className="text-zinc-300 text-xs font-semibold">Mật khẩu phòng (Tùy chọn)</label>
                     <span className="text-[10px] text-zinc-500 font-mono">Tối đa 30 ký tự</span>
                   </div>
-                  <input 
-                    type="password" 
+                  <input
+                    type="password"
                     placeholder="Để trống nếu là phòng công khai"
                     value={newRoomData.password}
                     onChange={(e) => setNewRoomData({ ...newRoomData, password: e.target.value })}
@@ -4514,8 +4512,8 @@ const Home = ({ initialTab }) => {
               {selectedRoom.hasPassword ? (
                 <div className="dialog-field">
                   <label>Mật khẩu phòng</label>
-                  <input 
-                    type="password" 
+                  <input
+                    type="password"
                     placeholder="Nhập mật khẩu phòng..."
                     value={joinData.password}
                     onChange={(e) => setJoinData({ ...joinData, password: e.target.value })}
@@ -4549,7 +4547,7 @@ const Home = ({ initialTab }) => {
             <form onSubmit={handleSaveEditPost} className="dialog-form">
               <div className="dialog-field">
                 <label>Nội dung</label>
-                <textarea 
+                <textarea
                   rows="4"
                   value={editPostContent}
                   onChange={(e) => setEditPostContent(e.target.value)}
@@ -4570,7 +4568,7 @@ const Home = ({ initialTab }) => {
 
       {/* MODAL HỒ SƠ */}
       {selectedProfileUserId && (
-        <UserProfileModal 
+        <UserProfileModal
           userId={selectedProfileUserId}
           onClose={() => setSelectedProfileUserId(null)}
           currentUserId={currentUserId}
@@ -4579,7 +4577,7 @@ const Home = ({ initialTab }) => {
 
       {/* MODAL BẠN BÈ */}
       {isFriendsOpen && (
-        <FriendsModal 
+        <FriendsModal
           isOpen={isFriendsOpen}
           onClose={() => setIsFriendsOpen(false)}
           currentUserId={currentUserId}
@@ -4603,15 +4601,15 @@ const Home = ({ initialTab }) => {
             </div>
             <p className="confirm-message">{confirmDialog.message}</p>
             <div className="confirm-actions-row">
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={closeConfirmDialog}
                 className="btn-confirm-cancel"
               >
                 Hủy
               </button>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => confirmDialog.onConfirm && confirmDialog.onConfirm()}
                 className={`btn-confirm-submit ${confirmDialog.isDanger ? 'danger' : ''}`}
               >
@@ -4626,18 +4624,17 @@ const Home = ({ initialTab }) => {
 
       {/* THANH THÔNG BÁO NỔI HỆ THỐNG THỜI GIAN THỰC (REALTIME FLOATING PILL) */}
       {floatingNotif && (
-        <div 
+        <div
           className="fixed top-14 left-1/2 -translate-x-1/2 z-[9999] max-w-md w-[92vw] sm:w-[420px] bg-zinc-950/95 border border-zinc-700/80 rounded-2xl p-3.5 shadow-2xl backdrop-blur-xl flex flex-col gap-2.5 animate-in slide-in-from-top-3 duration-200"
           style={{ boxShadow: '0 20px 40px -8px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.08)' }}
         >
           <div className="flex items-start gap-3">
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden ${
-              floatingNotif.type === 'POST_TAKEDOWN' 
-                ? 'bg-rose-500/15 border border-rose-500/30 text-rose-400'
-                : (floatingNotif.type === 'FRIEND_REQUEST' || floatingNotif.type === 'FRIEND')
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden ${floatingNotif.type === 'POST_TAKEDOWN'
+              ? 'bg-rose-500/15 border border-rose-500/30 text-rose-400'
+              : (floatingNotif.type === 'FRIEND_REQUEST' || floatingNotif.type === 'FRIEND')
                 ? 'bg-zinc-800 border border-zinc-700 text-zinc-200'
                 : 'bg-zinc-800 border border-zinc-700 text-zinc-300'
-            }`}>
+              }`}>
               {floatingNotif.actorAvatar ? (
                 <img src={floatingNotif.actorAvatar} alt="avatar" className="w-full h-full object-cover" />
               ) : floatingNotif.type === 'POST_TAKEDOWN' ? (
@@ -4657,9 +4654,9 @@ const Home = ({ initialTab }) => {
                 {floatingNotif.text}
               </p>
             </div>
-            <button 
-              type="button" 
-              onClick={() => setFloatingNotif(null)} 
+            <button
+              type="button"
+              onClick={() => setFloatingNotif(null)}
               className="text-zinc-500 hover:text-zinc-300 p-1 rounded-lg hover:bg-zinc-800 transition-colors flex-shrink-0"
               title="Đóng thông báo"
             >
@@ -4715,17 +4712,16 @@ const Home = ({ initialTab }) => {
                 </label>
                 <div className="space-y-2">
                   {reportReasons.map((r) => (
-                    <label 
-                      key={r.id} 
-                      className={`flex items-center gap-2.5 p-2.5 rounded-xl border cursor-pointer transition-all ${
-                        selectedReportReason === r.id 
-                          ? 'bg-rose-500/10 border-rose-500/40 text-rose-300' 
-                          : 'bg-zinc-950/70 border-zinc-800 text-zinc-300 hover:border-zinc-700'
-                      }`}
+                    <label
+                      key={r.id}
+                      className={`flex items-center gap-2.5 p-2.5 rounded-xl border cursor-pointer transition-all ${selectedReportReason === r.id
+                        ? 'bg-rose-500/10 border-rose-500/40 text-rose-300'
+                        : 'bg-zinc-950/70 border-zinc-800 text-zinc-300 hover:border-zinc-700'
+                        }`}
                     >
-                      <input 
-                        type="radio" 
-                        name="reportReason" 
+                      <input
+                        type="radio"
+                        name="reportReason"
                         value={r.id}
                         checked={selectedReportReason === r.id}
                         onChange={() => setSelectedReportReason(r.id)}
@@ -4741,7 +4737,7 @@ const Home = ({ initialTab }) => {
                 <label className="text-xs text-zinc-300 font-medium mb-1 block">
                   Mô tả chi tiết vi phạm (Không bắt buộc):
                 </label>
-                <textarea 
+                <textarea
                   rows={3}
                   value={customReportDetails}
                   onChange={(e) => setCustomReportDetails(e.target.value)}
@@ -4751,16 +4747,16 @@ const Home = ({ initialTab }) => {
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-800">
-                <button 
-                  type="button" 
-                  onClick={() => setReportingPostId(null)} 
+                <button
+                  type="button"
+                  onClick={() => setReportingPostId(null)}
                   className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold"
                 >
                   Hủy
                 </button>
-                <button 
-                  type="submit" 
-                  disabled={isSubmittingReport} 
+                <button
+                  type="submit"
+                  disabled={isSubmittingReport}
                   className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-md shadow-rose-950 flex items-center gap-1.5 disabled:opacity-50"
                 >
                   <Flag size={13} />
@@ -4777,7 +4773,7 @@ const Home = ({ initialTab }) => {
       {/* ============================================================== */}
       <AnimatePresence>
         {isNotifOpen && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -4785,7 +4781,7 @@ const Home = ({ initialTab }) => {
             className="fixed inset-0 z-[120] flex justify-end bg-black/70 sm:backdrop-blur-sm"
             onClick={() => setIsNotifOpen(false)}
           >
-            <motion.div 
+            <motion.div
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
@@ -4801,276 +4797,275 @@ const Home = ({ initialTab }) => {
               className="w-full sm:w-[420px] max-w-full h-full bg-zinc-950 border-l border-zinc-800 shadow-2xl flex flex-col will-change-transform transform-gpu touch-pan-y"
               onClick={(e) => e.stopPropagation()}
             >
-            {/* Header Drawer */}
-            <div className="flex items-center justify-between px-4 py-3.5 border-b border-zinc-800 bg-zinc-900 flex-shrink-0">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-200">
-                  <Bell size={16} strokeWidth={1.8} />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-white tracking-tight">Thông báo sảnh</span>
-                    {notifications.filter(n => n.unread).length > 0 && (
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-200 border border-zinc-700">
-                        {notifications.filter(n => n.unread).length} mới
-                      </span>
-                    )}
+              {/* Header Drawer */}
+              <div className="flex items-center justify-between px-4 py-3.5 border-b border-zinc-800 bg-zinc-900 flex-shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-200">
+                    <Bell size={16} strokeWidth={1.8} />
                   </div>
-                  <p className="text-[11px] text-zinc-400 m-0">Tương tác và cập nhật theo thời gian thực</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {notifications.some(n => n.unread) && (
-                  <button 
-                    type="button"
-                    onClick={handleMarkAllNotificationsRead} 
-                    className="text-xs text-zinc-400 hover:text-white px-2 py-1 rounded-lg hover:bg-zinc-800/50 transition-colors"
-                  >
-                    Đã đọc hết
-                  </button>
-                )}
-                <button 
-                  type="button"
-                  onClick={() => setIsNotifOpen(false)} 
-                  className="w-8 h-8 rounded-xl hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center transition-colors"
-                  title="Đóng"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-            </div>
-
-            {/* Body: Danh sách thông báo (Mới nhất ở trên xuống dưới) */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-2.5 custom-dark-scrollbar">
-              {notifications.length === 0 ? (
-                <div className="py-24 text-center px-4 text-zinc-400">
-                  <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mx-auto mb-3 text-zinc-500">
-                    <Bell size={22} className="opacity-60" />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-white tracking-tight">Thông báo sảnh</span>
+                      {notifications.filter(n => n.unread).length > 0 && (
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-200 border border-zinc-700">
+                          {notifications.filter(n => n.unread).length} mới
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-zinc-400 m-0">Tương tác và cập nhật theo thời gian thực</p>
                   </div>
-                  <p className="text-sm font-semibold text-zinc-200">Chưa có thông báo nào</p>
-                  <p className="text-xs text-zinc-400 mt-1 max-w-xs mx-auto leading-relaxed">
-                    Các lượt kết bạn, tương tác bài viết và thông báo hệ thống sẽ hiển thị ở đây.
-                  </p>
                 </div>
-              ) : (
-                notifications.map(n => {
-                  const isFriendReq = n.type === 'FRIEND_REQUEST';
-                  const isFriendAccepted = n.type === 'FRIEND_ACCEPTED';
-                  const hasPhoto = n.actorAvatar && !n.actorAvatar.includes('dicebear') && !n.actorAvatar.includes('bottts');
-                  const displayName = n.actorName || 'Thành viên';
 
-                  return (
-                    <div 
-                      key={n.id}
-                      onClick={() => {
-                        if (n.unread) {
-                          setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, unread: false, isRead: true } : item));
-                          axiosClient.put(`/notifications/${n.id}/read`).catch(() => {});
-                        }
-                        if (n.postId) {
-                          setIsNotifOpen(false);
-                          const targetPost = safePosts.find(p => p.id === n.postId);
-                          if (targetPost) {
-                            setSelectedThreadPost(targetPost);
-                            fetchComments(targetPost.id);
-                          } else {
-                            const el = document.getElementById(`post-${n.postId}`);
-                            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                          }
-                        }
-                      }}
-                      className={`p-3 rounded-2xl border transition-all flex items-start gap-3 ${
-                        n.unread 
-                          ? 'bg-zinc-900/90 border-zinc-700/80 shadow-md hover:border-zinc-500' 
-                          : 'bg-zinc-950/60 border-zinc-800/60 hover:bg-zinc-900/40 text-zinc-300'
-                      }`}
+                <div className="flex items-center gap-2">
+                  {notifications.some(n => n.unread) && (
+                    <button
+                      type="button"
+                      onClick={handleMarkAllNotificationsRead}
+                      className="text-xs text-zinc-400 hover:text-white px-2 py-1 rounded-lg hover:bg-zinc-800/50 transition-colors"
                     >
-                      {/* Left: Avatar */}
-                      <div className="flex-shrink-0 mt-0.5">
-                        {isFriendReq || isFriendAccepted ? (
-                          <div 
-                            className="w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 overflow-hidden flex items-center justify-center text-xs font-bold text-white shadow-sm cursor-pointer"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (n.actorId) {
-                                setIsNotifOpen(false);
-                                navigate(`/profile/${n.actorId}`);
-                              }
-                            }}
-                            title="Xem trang cá nhân"
-                          >
-                            {hasPhoto ? (
-                              <img src={n.actorAvatar} alt={displayName} className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-700 to-zinc-900 text-white font-bold text-xs">
-                                {displayName.charAt(0).toUpperCase()}
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-sm">
-                            {n.icon || (n.text?.includes('thích') || n.text?.includes('tim') ? '❤️' : n.text?.includes('bình luận') ? '💬' : '🔔')}
-                          </div>
-                        )}
-                      </div>
+                      Đã đọc hết
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIsNotifOpen(false)}
+                    className="w-8 h-8 rounded-xl hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center transition-colors"
+                    title="Đóng"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
 
-                      {/* Right: Nội dung thông báo */}
-                      <div className="flex-1 min-w-0">
-                        {isFriendReq ? (
-                          <div>
-                            <p className="text-xs text-zinc-200 leading-relaxed font-sans m-0">
-                              <span 
-                                className="font-bold text-white hover:underline cursor-pointer"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (n.actorId) {
-                                    setIsNotifOpen(false);
-                                    navigate(`/profile/${n.actorId}`);
-                                  }
-                                }}
-                              >
-                                {displayName}
-                              </span>
-                              {' '}đã gửi cho bạn một lời mời kết bạn.
-                            </p>
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className="text-[10px] text-zinc-400 font-mono">
-                                {n.time || 'Vừa xong'}
-                              </span>
-                              {n.unread && (
-                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
-                              )}
-                            </div>
+              {/* Body: Danh sách thông báo (Mới nhất ở trên xuống dưới) */}
+              <div className="flex-1 overflow-y-auto p-3 space-y-2.5 custom-dark-scrollbar">
+                {notifications.length === 0 ? (
+                  <div className="py-24 text-center px-4 text-zinc-400">
+                    <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mx-auto mb-3 text-zinc-500">
+                      <Bell size={22} className="opacity-60" />
+                    </div>
+                    <p className="text-sm font-semibold text-zinc-200">Chưa có thông báo nào</p>
+                    <p className="text-xs text-zinc-400 mt-1 max-w-xs mx-auto leading-relaxed">
+                      Các lượt kết bạn, tương tác bài viết và thông báo hệ thống sẽ hiển thị ở đây.
+                    </p>
+                  </div>
+                ) : (
+                  notifications.map(n => {
+                    const isFriendReq = n.type === 'FRIEND_REQUEST';
+                    const isFriendAccepted = n.type === 'FRIEND_ACCEPTED';
+                    const hasPhoto = n.actorAvatar && !n.actorAvatar.includes('dicebear') && !n.actorAvatar.includes('bottts');
+                    const displayName = n.actorName || 'Thành viên';
 
-                            {/* 2 Nút Đồng ý / Từ chối nếu PENDING */}
-                            {n.status === 'PENDING' && (
-                              <div className="grid grid-cols-2 gap-2 mt-2.5" onClick={(e) => e.stopPropagation()}>
-                                <button
-                                  type="button"
-                                  onClick={() => handleAcceptFriendRequest(n.actorId, n.id)}
-                                  className="h-8 rounded-lg bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs transition-all shadow-sm active:scale-95 flex items-center justify-center"
-                                >
-                                  Đồng ý
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeclineFriendRequest(n.actorId, n.id)}
-                                  className="h-8 rounded-lg bg-zinc-900 text-zinc-300 border border-zinc-800 hover:bg-zinc-800 font-semibold text-xs transition-all active:scale-95 flex items-center justify-center"
-                                >
-                                  Từ chối
-                                </button>
-                              </div>
-                            )}
-
-                            {n.status === 'ACCEPTED' && (
-                              <div className="mt-2 text-xs text-emerald-400 font-medium flex items-center gap-1">
-                                <CheckCircle2 size={13} />
-                                <span>Đã trở thành bạn bè</span>
-                              </div>
-                            )}
-
-                            {n.status === 'REJECTED' && (
-                              <div className="mt-2 text-xs text-zinc-500 font-medium">
-                                Đã từ chối lời mời
-                              </div>
-                            )}
-                          </div>
-                        ) : isFriendAccepted ? (
-                          <div>
-                            <p className="text-xs text-zinc-200 leading-relaxed font-sans m-0">
-                              <span 
-                                className="font-bold text-white hover:underline cursor-pointer"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (n.actorId) {
-                                    setIsNotifOpen(false);
-                                    navigate(`/profile/${n.actorId}`);
-                                  }
-                                }}
-                              >
-                                {displayName}
-                              </span>
-                              {' '}đã đồng ý kết bạn với bạn.
-                            </p>
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className="text-[10px] text-zinc-400 font-mono">
-                                {n.time || 'Vừa xong'}
-                              </span>
-                              {n.unread && (
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                              )}
-                            </div>
-                            <button
-                              type="button"
+                    return (
+                      <div
+                        key={n.id}
+                        onClick={() => {
+                          if (n.unread) {
+                            setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, unread: false, isRead: true } : item));
+                            axiosClient.put(`/notifications/${n.id}/read`).catch(() => { });
+                          }
+                          if (n.postId) {
+                            setIsNotifOpen(false);
+                            const targetPost = safePosts.find(p => p.id === n.postId);
+                            if (targetPost) {
+                              setSelectedThreadPost(targetPost);
+                              fetchComments(targetPost.id);
+                            } else {
+                              const el = document.getElementById(`post-${n.postId}`);
+                              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
+                          }
+                        }}
+                        className={`p-3 rounded-2xl border transition-all flex items-start gap-3 ${n.unread
+                          ? 'bg-zinc-900/90 border-zinc-700/80 shadow-md hover:border-zinc-500'
+                          : 'bg-zinc-950/60 border-zinc-800/60 hover:bg-zinc-900/40 text-zinc-300'
+                          }`}
+                      >
+                        {/* Left: Avatar */}
+                        <div className="flex-shrink-0 mt-0.5">
+                          {isFriendReq || isFriendAccepted ? (
+                            <div
+                              className="w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 overflow-hidden flex items-center justify-center text-xs font-bold text-white shadow-sm cursor-pointer"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setIsNotifOpen(false);
-                                navigate('/messages');
+                                if (n.actorId) {
+                                  setIsNotifOpen(false);
+                                  navigate(`/profile/${n.actorId}`);
+                                }
                               }}
-                              className="mt-2 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-200 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+                              title="Xem trang cá nhân"
                             >
-                              <MessageSquare size={12} />
-                              <span>Nhắn tin ngay</span>
-                            </button>
-                          </div>
-                        ) : (
-                          <div>
-                            <p className="text-xs text-zinc-100 leading-relaxed font-sans m-0">
-                              {n.text}
-                            </p>
-                            <div className="flex items-center gap-2 mt-1.5">
-                              <span className="text-[10px] text-zinc-400 font-mono">
-                                {n.time || 'Vừa xong'}
-                              </span>
-                              {n.unread && (
-                                <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse"></span>
+                              {hasPhoto ? (
+                                <img src={n.actorAvatar} alt={displayName} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-700 to-zinc-900 text-white font-bold text-xs">
+                                  {displayName.charAt(0).toUpperCase()}
+                                </div>
                               )}
                             </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-sm">
+                              {n.icon || (n.text?.includes('thích') || n.text?.includes('tim') ? '❤️' : n.text?.includes('bình luận') ? '💬' : '🔔')}
+                            </div>
+                          )}
+                        </div>
 
-            {/* Footer Drawer */}
-            <div className="p-3 border-t border-zinc-800/80 bg-[#09090b] flex items-center justify-between text-xs text-zinc-400 flex-shrink-0">
-              <span className="text-[11px] text-zinc-500">Thông báo tự động lưu trữ</span>
-              {notifications.length > 0 && (
-                <button 
-                  type="button"
-                  onClick={handleClearAllNotifications}
-                  className="text-zinc-400 hover:text-rose-400 transition-colors text-xs font-medium px-2 py-1 rounded-lg hover:bg-zinc-900"
-                >
-                  Xóa toàn bộ
-                </button>
-              )}
-            </div>
+                        {/* Right: Nội dung thông báo */}
+                        <div className="flex-1 min-w-0">
+                          {isFriendReq ? (
+                            <div>
+                              <p className="text-xs text-zinc-200 leading-relaxed font-sans m-0">
+                                <span
+                                  className="font-bold text-white hover:underline cursor-pointer"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (n.actorId) {
+                                      setIsNotifOpen(false);
+                                      navigate(`/profile/${n.actorId}`);
+                                    }
+                                  }}
+                                >
+                                  {displayName}
+                                </span>
+                                {' '}đã gửi cho bạn một lời mời kết bạn.
+                              </p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-[10px] text-zinc-400 font-mono">
+                                  {n.time || 'Vừa xong'}
+                                </span>
+                                {n.unread && (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                                )}
+                              </div>
+
+                              {/* 2 Nút Đồng ý / Từ chối nếu PENDING */}
+                              {n.status === 'PENDING' && (
+                                <div className="grid grid-cols-2 gap-2 mt-2.5" onClick={(e) => e.stopPropagation()}>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAcceptFriendRequest(n.actorId, n.id)}
+                                    className="h-8 rounded-lg bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs transition-all shadow-sm active:scale-95 flex items-center justify-center"
+                                  >
+                                    Đồng ý
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeclineFriendRequest(n.actorId, n.id)}
+                                    className="h-8 rounded-lg bg-zinc-900 text-zinc-300 border border-zinc-800 hover:bg-zinc-800 font-semibold text-xs transition-all active:scale-95 flex items-center justify-center"
+                                  >
+                                    Từ chối
+                                  </button>
+                                </div>
+                              )}
+
+                              {n.status === 'ACCEPTED' && (
+                                <div className="mt-2 text-xs text-emerald-400 font-medium flex items-center gap-1">
+                                  <CheckCircle2 size={13} />
+                                  <span>Đã trở thành bạn bè</span>
+                                </div>
+                              )}
+
+                              {n.status === 'REJECTED' && (
+                                <div className="mt-2 text-xs text-zinc-500 font-medium">
+                                  Đã từ chối lời mời
+                                </div>
+                              )}
+                            </div>
+                          ) : isFriendAccepted ? (
+                            <div>
+                              <p className="text-xs text-zinc-200 leading-relaxed font-sans m-0">
+                                <span
+                                  className="font-bold text-white hover:underline cursor-pointer"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (n.actorId) {
+                                      setIsNotifOpen(false);
+                                      navigate(`/profile/${n.actorId}`);
+                                    }
+                                  }}
+                                >
+                                  {displayName}
+                                </span>
+                                {' '}đã đồng ý kết bạn với bạn.
+                              </p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-[10px] text-zinc-400 font-mono">
+                                  {n.time || 'Vừa xong'}
+                                </span>
+                                {n.unread && (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setIsNotifOpen(false);
+                                  navigate('/messages');
+                                }}
+                                className="mt-2 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-200 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+                              >
+                                <MessageSquare size={12} />
+                                <span>Nhắn tin ngay</span>
+                              </button>
+                            </div>
+                          ) : (
+                            <div>
+                              <p className="text-xs text-zinc-100 leading-relaxed font-sans m-0">
+                                {n.text}
+                              </p>
+                              <div className="flex items-center gap-2 mt-1.5">
+                                <span className="text-[10px] text-zinc-400 font-mono">
+                                  {n.time || 'Vừa xong'}
+                                </span>
+                                {n.unread && (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse"></span>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Footer Drawer */}
+              <div className="p-3 border-t border-zinc-800/80 bg-[#09090b] flex items-center justify-between text-xs text-zinc-400 flex-shrink-0">
+                <span className="text-[11px] text-zinc-500">Thông báo tự động lưu trữ</span>
+                {notifications.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleClearAllNotifications}
+                    className="text-zinc-400 hover:text-rose-400 transition-colors text-xs font-medium px-2 py-1 rounded-lg hover:bg-zinc-900"
+                  >
+                    Xóa toàn bộ
+                  </button>
+                )}
+              </div>
+            </motion.div>
           </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+        )}
+      </AnimatePresence>
 
       {/* ============================================================== */}
       {/* MODAL CHI TIẾT BÀI VIẾT & DÒNG THẢO LUẬN (TALOVIN DUAL-VIEW) */}
       {/* ============================================================== */}
       {selectedThreadPost && (
-        <div 
+        <div
           className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center p-0 sm:p-5 bg-black/80 backdrop-blur-md modal-backdrop-smooth"
           onClick={() => setSelectedThreadPost(null)}
         >
           {/* Khung Modal Container: Trên mobile là full màn hình cố định, trên PC là Dual-View 2 cột */}
-          <div 
+          <div
             className="relative w-full sm:w-[940px] lg:w-[1040px] h-[100dvh] sm:h-[82vh] sm:max-h-[740px] sm:min-h-[580px] bg-[#0c0d12] border-0 sm:border border-zinc-800 sm:rounded-3xl flex flex-col overflow-hidden shadow-2xl modal-card-smooth"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header Modal View chung */}
             <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-zinc-800/80 bg-[#12131a] flex-shrink-0">
               <div className="flex items-center gap-2">
-                <button 
+                <button
                   type="button"
                   onClick={() => setSelectedThreadPost(null)}
                   className="p-1.5 rounded-xl hover:bg-zinc-800 text-zinc-300 hover:text-white transition-all active:scale-95 flex items-center gap-2 text-xs font-semibold"
@@ -5082,7 +5077,7 @@ const Home = ({ initialTab }) => {
               </div>
 
               <div className="flex items-center gap-2">
-                <button 
+                <button
                   type="button"
                   onClick={() => setSelectedThreadPost(null)}
                   className="w-8 h-8 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center transition-colors"
@@ -5102,19 +5097,19 @@ const Home = ({ initialTab }) => {
                 {/* Tác giả bài viết */}
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
-                    <div 
+                    <div
                       className="cursor-pointer flex-shrink-0"
                       onClick={() => navigate(`/profile/${selectedThreadPost.authorId || selectedThreadPost.userId}`)}
                     >
-                      <UserAvatar 
-                        avatar={selectedThreadPost.authorAvatar} 
-                        name={selectedThreadPost.authorNickname || selectedThreadPost.authorAccount} 
-                        size={40} 
+                      <UserAvatar
+                        avatar={selectedThreadPost.authorAvatar}
+                        name={selectedThreadPost.authorNickname || selectedThreadPost.authorAccount}
+                        size={40}
                       />
                     </div>
                     <div>
                       <div className="flex items-center gap-1.5">
-                        <span 
+                        <span
                           className="font-bold text-sm text-[#f1f5f9] hover:underline cursor-pointer"
                           onClick={() => navigate(`/profile/${selectedThreadPost.authorId || selectedThreadPost.userId}`)}
                         >
@@ -5195,11 +5190,10 @@ const Home = ({ initialTab }) => {
                               {[35, 70, 50, 90, 60, 85, 45, 100, 75, 80, 55, 95, 65, 80, 40, 70, 50, 65].map((h, idx) => (
                                 <span
                                   key={idx}
-                                  className={`w-1 rounded-full transition-all duration-200 ${
-                                    playingVoicePostId === selectedThreadPost.id
-                                      ? 'bg-emerald-400 animate-pulse'
-                                      : 'bg-zinc-700'
-                                  }`}
+                                  className={`w-1 rounded-full transition-all duration-200 ${playingVoicePostId === selectedThreadPost.id
+                                    ? 'bg-emerald-400 animate-pulse'
+                                    : 'bg-zinc-700'
+                                    }`}
                                   style={{
                                     height: playingVoicePostId === selectedThreadPost.id ? `${Math.max(25, (h * ((idx % 3) + 1)) % 100)}%` : `${h * 0.4}%`,
                                     animationDelay: `${idx * 50}ms`
@@ -5223,16 +5217,15 @@ const Home = ({ initialTab }) => {
 
                 {/* Nút hành động nhanh trên mobile (KHÔNG CÓ NÚT ĐĂNG LẠI) */}
                 <div className="flex items-center justify-around py-1 border-b border-zinc-800/80 text-zinc-400 relative">
-                  <button 
+                  <button
                     type="button"
                     onClick={() => handleReactPost(selectedThreadPost.id, selectedThreadPost.myReaction || 'HEART')}
-                    className={`flex items-center gap-1.5 p-2 rounded-lg transition-all active:scale-95 ${
-                      selectedThreadPost.isLikedByMe || selectedThreadPost.myReaction ? 'text-rose-500 font-semibold' : 'hover:text-white'
-                    }`}
+                    className={`flex items-center gap-1.5 p-2 rounded-lg transition-all active:scale-95 ${selectedThreadPost.isLikedByMe || selectedThreadPost.myReaction ? 'text-rose-500 font-semibold' : 'hover:text-white'
+                      }`}
                   >
-                    <Heart 
-                      size={18} 
-                      className={selectedThreadPost.isLikedByMe || selectedThreadPost.myReaction ? 'fill-rose-500 text-rose-500' : ''} 
+                    <Heart
+                      size={18}
+                      className={selectedThreadPost.isLikedByMe || selectedThreadPost.myReaction ? 'fill-rose-500 text-rose-500' : ''}
                     />
                     <span className="text-xs">
                       {selectedThreadPost.myReaction && REACTION_EMOJIS.find(r => r.type === selectedThreadPost.myReaction)
@@ -5241,7 +5234,7 @@ const Home = ({ initialTab }) => {
                     </span>
                   </button>
 
-                  <button 
+                  <button
                     type="button"
                     onClick={() => {
                       const input = document.getElementById('thread-mobile-reply-input');
@@ -5253,7 +5246,7 @@ const Home = ({ initialTab }) => {
                     <span className="text-xs">Phản hồi</span>
                   </button>
 
-                  <button 
+                  <button
                     type="button"
                     onClick={() => setSharePost(selectedThreadPost)}
                     className="flex items-center gap-1.5 p-2 rounded-lg hover:text-white transition-colors active:scale-95"
@@ -5285,8 +5278,8 @@ const Home = ({ initialTab }) => {
                   {replyTargetMap[selectedThreadPost.id] && (
                     <div className="flex items-center justify-between text-[11px] text-zinc-400 pb-1 mb-1 border-b border-zinc-800">
                       <span>Đang trả lời <strong>@{replyTargetMap[selectedThreadPost.id].authorAccount}</strong></span>
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         onClick={() => setReplyTargetMap(prev => ({ ...prev, [selectedThreadPost.id]: null }))}
                         className="text-zinc-400 hover:text-white"
                       >
@@ -5294,7 +5287,7 @@ const Home = ({ initialTab }) => {
                       </button>
                     </div>
                   )}
-                  <input 
+                  <input
                     id="thread-mobile-reply-input"
                     type="text"
                     value={commentInputs[selectedThreadPost.id] || ''}
@@ -5306,7 +5299,7 @@ const Home = ({ initialTab }) => {
                     }}
                   />
                 </div>
-                <button 
+                <button
                   type="button"
                   onClick={() => handleAddComment(selectedThreadPost.id)}
                   disabled={submittingComment[selectedThreadPost.id] || !commentInputs[selectedThreadPost.id]?.trim()}
@@ -5326,19 +5319,19 @@ const Home = ({ initialTab }) => {
                 {/* Header tác giả */}
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
-                    <div 
+                    <div
                       className="cursor-pointer flex-shrink-0"
                       onClick={() => navigate(`/profile/${selectedThreadPost.authorId || selectedThreadPost.userId}`)}
                     >
-                      <UserAvatar 
-                        avatar={selectedThreadPost.authorAvatar} 
-                        name={selectedThreadPost.authorNickname || selectedThreadPost.authorAccount} 
-                        size={42} 
+                      <UserAvatar
+                        avatar={selectedThreadPost.authorAvatar}
+                        name={selectedThreadPost.authorNickname || selectedThreadPost.authorAccount}
+                        size={42}
                       />
                     </div>
                     <div>
                       <div className="flex items-center gap-1.5">
-                        <span 
+                        <span
                           className="font-bold text-sm text-[#f1f5f9] hover:underline cursor-pointer"
                           onClick={() => navigate(`/profile/${selectedThreadPost.authorId || selectedThreadPost.userId}`)}
                         >
@@ -5419,11 +5412,10 @@ const Home = ({ initialTab }) => {
                               {[35, 70, 50, 90, 60, 85, 45, 100, 75, 80, 55, 95, 65, 80, 40, 70, 50, 65].map((h, idx) => (
                                 <span
                                   key={idx}
-                                  className={`w-1 rounded-full transition-all duration-200 ${
-                                    playingVoicePostId === selectedThreadPost.id
-                                      ? 'bg-emerald-400 animate-pulse'
-                                      : 'bg-zinc-700'
-                                  }`}
+                                  className={`w-1 rounded-full transition-all duration-200 ${playingVoicePostId === selectedThreadPost.id
+                                    ? 'bg-emerald-400 animate-pulse'
+                                    : 'bg-zinc-700'
+                                    }`}
                                   style={{
                                     height: playingVoicePostId === selectedThreadPost.id ? `${Math.max(25, (h * ((idx % 3) + 1)) % 100)}%` : `${h * 0.4}%`,
                                     animationDelay: `${idx * 50}ms`
@@ -5455,7 +5447,7 @@ const Home = ({ initialTab }) => {
                     setActivePickerId={setActiveReactionPicker}
                   />
 
-                  <button 
+                  <button
                     type="button"
                     onClick={() => {
                       const input = document.getElementById('thread-modal-reply-input');
@@ -5467,7 +5459,7 @@ const Home = ({ initialTab }) => {
                     <span className="text-xs">Phản hồi</span>
                   </button>
 
-                  <button 
+                  <button
                     type="button"
                     onClick={() => setSharePost(selectedThreadPost)}
                     className="flex items-center gap-1.5 p-2 rounded-xl hover:text-white transition-colors active:scale-95"
@@ -5501,8 +5493,8 @@ const Home = ({ initialTab }) => {
                     {replyTargetMap[selectedThreadPost.id] && (
                       <div className="flex items-center justify-between text-[11px] text-zinc-400 pb-1 mb-1 border-b border-zinc-800">
                         <span>Đang trả lời <strong>@{replyTargetMap[selectedThreadPost.id].authorAccount}</strong></span>
-                        <button 
-                          type="button" 
+                        <button
+                          type="button"
                           onClick={() => setReplyTargetMap(prev => ({ ...prev, [selectedThreadPost.id]: null }))}
                           className="text-zinc-400 hover:text-white"
                         >
@@ -5510,7 +5502,7 @@ const Home = ({ initialTab }) => {
                         </button>
                       </div>
                     )}
-                    <input 
+                    <input
                       id="thread-modal-reply-input"
                       type="text"
                       value={commentInputs[selectedThreadPost.id] || ''}
@@ -5522,7 +5514,7 @@ const Home = ({ initialTab }) => {
                       }}
                     />
                   </div>
-                  <button 
+                  <button
                     type="button"
                     onClick={() => handleAddComment(selectedThreadPost.id)}
                     disabled={submittingComment[selectedThreadPost.id] || !commentInputs[selectedThreadPost.id]?.trim()}
@@ -5540,7 +5532,8 @@ const Home = ({ initialTab }) => {
       {/* ============================================================== */}
       {/* CSS DARK GRAPHITE TOÀN DIỆN - THIẾT KẾ ĐỘC BẢN TALOVIN */}
       {/* ============================================================== */}
-      <style dangerouslySetInnerHTML={{ __html: `
+      <style dangerouslySetInnerHTML={{
+        __html: `
         :root {
           --social-bg: #13151b; /* Dark Graphite Slate sang trọng, không dùng đen kịt #101010 */
           --sidebar-bg: #101217;
