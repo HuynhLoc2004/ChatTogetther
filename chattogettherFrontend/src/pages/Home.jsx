@@ -754,11 +754,34 @@ const Home = ({ initialTab }) => {
   };
 
   const handleMarkAllNotificationsRead = async () => {
+    // 1. Cập nhật giao diện và xóa badge đỏ ngay lập tức (Zero lag)
+    setNotifications(prev => {
+      const next = prev.map(n => ({ ...n, unread: false, isRead: true }));
+      try {
+        if (currentUserId) {
+          localStorage.setItem(`talovin_notifs_${currentUserId}`, JSON.stringify(next));
+        }
+        localStorage.setItem('talovin_notifs_cache', JSON.stringify(next));
+      } catch (_) {}
+      return next;
+    });
+
+    // 2. Gửi request đồng bộ trạng thái đã đọc lên server
     try {
       await axiosClient.put('/notifications/read-all');
-    } catch { }
-    setNotifications(prev => prev.map(n => ({ ...n, unread: false, isRead: true })));
+    } catch (_) {
+      try {
+        await axiosClient.put('/api/notifications/read-all');
+      } catch (_) {}
+    }
   };
+
+  // Tự động đánh dấu đã xem / đã đọc toàn bộ thông báo ngay khi mở ngăn kéo chuông thông báo
+  useEffect(() => {
+    if (isNotifOpen && notifications.some(n => n.unread)) {
+      handleMarkAllNotificationsRead();
+    }
+  }, [isNotifOpen]);
 
   const handleClearAllNotifications = async () => {
     try {
@@ -2807,7 +2830,11 @@ const Home = ({ initialTab }) => {
               <button
                 type="button"
                 onClick={() => {
-                  setIsNotifOpen(!isNotifOpen);
+                  const next = !isNotifOpen;
+                  setIsNotifOpen(next);
+                  if (next) {
+                    handleMarkAllNotificationsRead();
+                  }
                   requestNotificationPermission();
                 }}
                 className="w-9 h-9 rounded-full bg-zinc-900 border border-zinc-800 relative flex items-center justify-center text-zinc-300 hover:text-white transition-all active:scale-95"
@@ -2934,7 +2961,11 @@ const Home = ({ initialTab }) => {
             <button
               type="button"
               onClick={() => {
-                setIsNotifOpen(!isNotifOpen);
+                const next = !isNotifOpen;
+                setIsNotifOpen(next);
+                if (next) {
+                  handleMarkAllNotificationsRead();
+                }
                 requestNotificationPermission();
               }}
               className="btn-header-notif !hidden md:!flex relative ml-2"
@@ -4870,41 +4901,50 @@ const Home = ({ initialTab }) => {
             }}
           >
             <div className="flex-shrink-0">
-              {floatingNotif.actorId ? (
-                <div className="relative w-9 h-9 shrink-0">
-                  <UserAvatar
-                    user={{
-                      id: floatingNotif.actorId,
-                      userId: floatingNotif.actorId,
-                      username: floatingNotif.actorUsername || floatingNotif.actorName,
-                      account: floatingNotif.actorUsername || floatingNotif.actorName,
-                      avatarUrl: floatingNotif.actorAvatar,
-                      avatar: floatingNotif.actorAvatar
-                    }}
-                    size={36}
-                    className="w-9 h-9 rounded-full"
-                  />
-                  <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-zinc-900 border border-zinc-700/80 flex items-center justify-center text-zinc-300 shadow-sm pointer-events-none">
-                    {(floatingNotif.type === 'POST_REACT' || floatingNotif.type === 'REACTION' || floatingNotif.type === 'COMMENT_LIKE' || floatingNotif.text?.includes('cảm xúc') || floatingNotif.text?.includes('thích') || floatingNotif.text?.includes('tim')) ? (
-                      <Heart size={8} className="text-zinc-300 fill-zinc-300" />
-                    ) : (floatingNotif.type === 'POST_COMMENT' || floatingNotif.type === 'COMMENT' || floatingNotif.type === 'COMMENT_REPLY' || floatingNotif.text?.includes('bình luận') || floatingNotif.text?.includes('phản hồi')) ? (
-                      <MessageSquare size={8} className="text-zinc-300 fill-zinc-300" />
-                    ) : (floatingNotif.type === 'POST_SHARE' || floatingNotif.type === 'REPOST' || floatingNotif.text?.includes('chia sẻ') || floatingNotif.text?.includes('đăng lại')) ? (
-                      <Share2 size={8} className="text-zinc-300" />
+              {(() => {
+                const fActorId = floatingNotif.actorId || floatingNotif.actor_id || floatingNotif.senderId || floatingNotif.userId;
+                let fUsername = floatingNotif.actorUsername || floatingNotif.actor_username || floatingNotif.actorName || floatingNotif.senderUsername || floatingNotif.username || floatingNotif.account;
+                const fAvatar = floatingNotif.actorAvatar || floatingNotif.actor_avatar || floatingNotif.senderAvatar || floatingNotif.avatar || floatingNotif.userAvatar;
+                let fDisplayName = floatingNotif.actorDisplayName || floatingNotif.actorName || floatingNotif.senderDisplayName || fUsername;
+                if (!fUsername && floatingNotif.text) {
+                  const match = floatingNotif.text.match(/^([^ ]+)\s+(đã\s+)/i);
+                  if (match) fUsername = match[1];
+                }
+                const fIsUser = Boolean(fActorId || fUsername || fAvatar || (floatingNotif.type && floatingNotif.type !== 'SYSTEM' && floatingNotif.type !== 'ANNOUNCEMENT' && floatingNotif.type !== 'POST_TAKEDOWN'));
+
+                return fIsUser ? (
+                  <div className="relative w-9 h-9 shrink-0">
+                    <UserAvatar
+                      avatarUrl={fAvatar}
+                      username={fUsername}
+                      account={fUsername}
+                      name={fDisplayName}
+                      userId={fActorId}
+                      size={36}
+                      className="w-9 h-9 rounded-full"
+                    />
+                    <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-zinc-900 border border-zinc-700/80 flex items-center justify-center text-zinc-300 shadow-sm pointer-events-none">
+                      {(floatingNotif.type === 'POST_REACT' || floatingNotif.type === 'REACTION' || floatingNotif.type === 'COMMENT_LIKE' || floatingNotif.text?.includes('cảm xúc') || floatingNotif.text?.includes('thích') || floatingNotif.text?.includes('tim')) ? (
+                        <Heart size={8} className="text-rose-400 fill-rose-400" />
+                      ) : (floatingNotif.type === 'POST_COMMENT' || floatingNotif.type === 'COMMENT' || floatingNotif.type === 'COMMENT_REPLY' || floatingNotif.text?.includes('bình luận') || floatingNotif.text?.includes('phản hồi')) ? (
+                        <MessageSquare size={8} className="text-emerald-400 fill-emerald-400" />
+                      ) : (floatingNotif.type === 'POST_SHARE' || floatingNotif.type === 'REPOST' || floatingNotif.text?.includes('chia sẻ') || floatingNotif.text?.includes('đăng lại')) ? (
+                        <Share2 size={8} className="text-sky-400" />
+                      ) : (
+                        <UserPlus size={8} className="text-amber-400" />
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden bg-zinc-800 border border-zinc-700 text-zinc-300">
+                    {floatingNotif.type === 'POST_TAKEDOWN' ? (
+                      <AlertTriangle size={16} />
                     ) : (
-                      <UserPlus size={8} className="text-zinc-300" />
+                      <Bell size={16} />
                     )}
                   </div>
-                </div>
-              ) : (
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden bg-zinc-800 border border-zinc-700 text-zinc-300">
-                  {floatingNotif.type === 'POST_TAKEDOWN' ? (
-                    <AlertTriangle size={16} />
-                  ) : (
-                    <Bell size={16} />
-                  )}
-                </div>
-              )}
+                );
+              })()}
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-xs font-bold text-zinc-100 flex items-center justify-between">
@@ -5117,9 +5157,26 @@ const Home = ({ initialTab }) => {
                   notifications.map(n => {
                     const isFriendReq = n.type === 'FRIEND_REQUEST';
                     const isFriendAccepted = n.type === 'FRIEND_ACCEPTED';
-                    const displayName = n.actorDisplayName || n.actorName || n.actorUsername || 'Thành viên';
                     const targetPostId = n.targetPostId || n.postId || n.referenceId;
                     const isPostNotif = ['POST_REACT', 'POST_COMMENT', 'COMMENT_REPLY', 'COMMENT_LIKE', 'POST_SHARE', 'REACTION', 'COMMENT', 'REPOST'].includes(n.type) || !!targetPostId;
+
+                    // Trích xuất thông tin người tương tác từ mọi trường có thể có
+                    const effectiveActorId = n.actorId || n.actor_id || n.senderId || n.sender_id || n.userId || n.user_id;
+                    let effectiveUsername = n.actorUsername || n.actor_username || n.actorAccount || n.senderUsername || n.username || n.account || n.actorName;
+                    const effectiveAvatar = n.actorAvatar || n.actor_avatar || n.senderAvatar || n.avatar || n.userAvatar;
+                    let effectiveDisplayName = n.actorDisplayName || n.actorName || n.actor_name || n.senderDisplayName || n.senderName || effectiveUsername;
+                    if (!effectiveUsername && (n.text || n.content || n.message)) {
+                      const txt = n.text || n.content || n.message || '';
+                      const match = txt.match(/^([^ ]+)\s+(đã\s+)/i);
+                      if (match) {
+                        effectiveUsername = match[1];
+                        if (!effectiveDisplayName || effectiveDisplayName === 'Thành viên') {
+                          effectiveDisplayName = match[1];
+                        }
+                      }
+                    }
+                    const isUserInteraction = Boolean(effectiveActorId || effectiveUsername || effectiveAvatar || (n.type && n.type !== 'SYSTEM' && n.type !== 'ANNOUNCEMENT' && n.type !== 'POST_TAKEDOWN'));
+                    const displayName = effectiveDisplayName || 'Thành viên';
 
                     return (
                       <div
@@ -5130,46 +5187,47 @@ const Home = ({ initialTab }) => {
                           : 'bg-zinc-950/60 border-zinc-800/60 hover:bg-zinc-900/40 text-zinc-300'
                           }`}
                       >
-                        {/* Left: Avatar & Interaction Badge */}
+                        {/* Left: Avatar người tương tác & Interaction Badge */}
                         <div className="flex-shrink-0 mt-0.5">
-                          {n.actorId ? (
+                          {isUserInteraction ? (
                             <div className="relative w-10 h-10 shrink-0">
                               <UserAvatar
-                                user={{
-                                  id: n.actorId,
-                                  userId: n.actorId,
-                                  username: n.actorUsername || n.actorName,
-                                  account: n.actorUsername || n.actorName,
-                                  avatarUrl: n.actorAvatar,
-                                  avatar: n.actorAvatar
-                                }}
+                                avatarUrl={effectiveAvatar}
+                                username={effectiveUsername}
+                                account={effectiveUsername}
+                                name={effectiveDisplayName}
+                                userId={effectiveActorId}
                                 size={40}
                                 className="w-10 h-10 rounded-full hover:opacity-90 transition-opacity"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  if (n.actorId) {
+                                  if (effectiveActorId) {
                                     setIsNotifOpen(false);
-                                    navigate(`/profile/${n.actorId}`);
+                                    navigate(`/profile/${effectiveActorId}`);
                                   }
                                 }}
                                 title={`Xem trang cá nhân ${displayName}`}
                               />
-                              {/* Huy hiệu nhỏ đơn sắc Dark Zinc ở góc dưới phải avatar */}
+                              {/* Huy hiệu nhỏ loại tương tác ở góc dưới phải avatar */}
                               <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-zinc-900 border border-zinc-700/80 flex items-center justify-center text-zinc-300 shadow-sm pointer-events-none">
                                 {(n.type === 'POST_REACT' || n.type === 'REACTION' || n.type === 'COMMENT_LIKE' || n.text?.includes('cảm xúc') || n.text?.includes('thích') || n.text?.includes('tim')) ? (
-                                  <Heart size={9} className="text-zinc-300 fill-zinc-300" />
+                                  <Heart size={9} className="text-rose-400 fill-rose-400" />
                                 ) : (n.type === 'POST_COMMENT' || n.type === 'COMMENT' || n.type === 'COMMENT_REPLY' || n.text?.includes('bình luận') || n.text?.includes('phản hồi')) ? (
-                                  <MessageSquare size={9} className="text-zinc-300 fill-zinc-300" />
+                                  <MessageSquare size={9} className="text-emerald-400 fill-emerald-400" />
                                 ) : (n.type === 'POST_SHARE' || n.type === 'REPOST' || n.text?.includes('chia sẻ') || n.text?.includes('đăng lại')) ? (
-                                  <Share2 size={9} className="text-zinc-300" />
+                                  <Share2 size={9} className="text-sky-400" />
                                 ) : (
-                                  <UserPlus size={9} className="text-zinc-300" />
+                                  <UserPlus size={9} className="text-amber-400" />
                                 )}
                               </div>
                             </div>
                           ) : (
                             <div className="w-10 h-10 rounded-full bg-zinc-800/90 border border-zinc-700 flex items-center justify-center text-zinc-300 shrink-0">
-                              <Bell size={18} strokeWidth={1.8} />
+                              {n.type === 'POST_TAKEDOWN' ? (
+                                <AlertTriangle size={18} className="text-amber-400" />
+                              ) : (
+                                <Bell size={18} strokeWidth={1.8} />
+                              )}
                             </div>
                           )}
                         </div>
