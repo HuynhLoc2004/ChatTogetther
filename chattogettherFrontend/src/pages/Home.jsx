@@ -2357,7 +2357,12 @@ const Home = ({ initialTab }) => {
               // TUYỆT ĐỐI không đưa tin nhắn chat vào danh sách Chuông thông báo (Bell icon)
               if (!isChatMsg) {
                 setNotifications(prev => [normalizedNotif, ...prev.filter(n => n.id !== normalizedNotif.id)]);
-                setFloatingNotif(normalizedNotif);
+                setQuickReplyText('');
+                setIsTypingQuickReply(false);
+                setFloatingNotif({
+                  ...normalizedNotif,
+                  notifKey: `notif_${normalizedNotif.id || Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+                });
               }
 
               if (notif.type === 'FRIEND_REQUEST' || notif.type === 'FRIEND_ACCEPTED') {
@@ -2415,6 +2420,7 @@ const Home = ({ initialTab }) => {
                 const content = alert.contentPreview || alert.message || 'Đã gửi một tin nhắn';
                 const floatingMsg = {
                   id: alert.roomId ? `msg_${alert.roomId}_${Date.now()}` : Date.now(),
+                  notifKey: `msg_${senderId}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
                   type: 'MESSAGE',
                   senderId: senderId,
                   actorId: senderId,
@@ -2424,6 +2430,8 @@ const Home = ({ initialTab }) => {
                   content: content,
                   time: 'Vừa xong'
                 };
+                setQuickReplyText('');
+                setIsTypingQuickReply(false);
                 setFloatingNotif(floatingMsg);
 
                 // Cập nhật số tin nhắn chưa đọc
@@ -5291,7 +5299,8 @@ const Home = ({ initialTab }) => {
       {/* THANH THÔNG BÁO NỔI HỆ THỐNG THỜI GIAN THỰC (REALTIME FLOATING PILL) */}
       {floatingNotif && (
         <div
-          className="fixed top-14 left-1/2 -translate-x-1/2 z-[9999] max-w-md w-[92vw] sm:w-[420px] bg-zinc-950/95 border border-zinc-700/80 rounded-2xl p-3.5 shadow-2xl backdrop-blur-xl flex flex-col gap-2.5 animate-in slide-in-from-top-3 duration-200"
+          key={floatingNotif.notifKey || floatingNotif.id || Date.now()}
+          className="fixed top-14 left-1/2 -translate-x-1/2 z-[9999] max-w-md w-[92vw] sm:w-[420px] bg-zinc-950/95 border border-zinc-700/80 rounded-2xl p-3.5 shadow-2xl backdrop-blur-xl flex flex-col gap-2.5 animate-floating-notif"
           style={{ boxShadow: '0 20px 40px -8px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.08)' }}
         >
           <div
@@ -6324,6 +6333,25 @@ const Home = ({ initialTab }) => {
         }
         .drawer-slide-right {
           animation: slideInRight 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        /* Hiệu ứng thông báo nổi chạy mượt mà từ trên trần màn hình xuống cho từng tin nhắn */
+        @keyframes slideDownNotification {
+          0% {
+            opacity: 0;
+            transform: translate(-50%, -100%) scale(0.92);
+          }
+          65% {
+            opacity: 1;
+            transform: translate(-50%, 6px) scale(1.02);
+          }
+          100% {
+            opacity: 1;
+            transform: translate(-50%, 0) scale(1);
+          }
+        }
+        .animate-floating-notif {
+          animation: slideDownNotification 0.38s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
 
         /* Custom Scrollbar tối màu, mảnh dẻ, không lộ thanh cuộn trắng Windows */
