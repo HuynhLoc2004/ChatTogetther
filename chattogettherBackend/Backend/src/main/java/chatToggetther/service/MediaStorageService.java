@@ -19,8 +19,10 @@ import java.util.UUID;
 public class MediaStorageService {
 
     private final Path storageDirectory;
+    private final CloudflareR2Service cloudflareR2Service;
 
-    public MediaStorageService() {
+    public MediaStorageService(CloudflareR2Service cloudflareR2Service) {
+        this.cloudflareR2Service = cloudflareR2Service;
         Path targetDir = Paths.get("uploads", "voice-samples").toAbsolutePath().normalize();
         Path effectiveDir;
         try {
@@ -57,6 +59,14 @@ public class MediaStorageService {
             extension = originalFilename.substring(dotIndex + 1).toLowerCase();
         }
 
+        // 1. Tải lên Cloudflare R2 siêu tốc nếu đã cấu hình
+        if (this.cloudflareR2Service != null && this.cloudflareR2Service.isConfigured()) {
+            String r2Url = this.cloudflareR2Service.uploadFile(file, "voice-samples");
+            if (r2Url != null) {
+                return r2Url;
+            }
+        }
+
         // Tên file chuẩn mực, ngẫu nhiên hóa để chống ghi đè
         String uniqueFileName = String.format("sample_user_%d_%d_%s.%s",
                 userId != null ? userId : 0,
@@ -86,6 +96,14 @@ public class MediaStorageService {
             extension = originalFilename.substring(dotIndex + 1).toLowerCase();
         }
 
+        // 1. Tải lên Cloudflare R2 siêu tốc nếu đã cấu hình
+        if (this.cloudflareR2Service != null && this.cloudflareR2Service.isConfigured()) {
+            String r2Url = this.cloudflareR2Service.uploadFile(file, "tracks");
+            if (r2Url != null) {
+                return r2Url;
+            }
+        }
+
         String uniqueFileName = String.format("track_%d_%s.%s",
                 System.currentTimeMillis(),
                 UUID.randomUUID().toString().substring(0, 8),
@@ -110,6 +128,14 @@ public class MediaStorageService {
         int dotIndex = originalFilename.lastIndexOf('.');
         if (dotIndex > 0) {
             extension = originalFilename.substring(dotIndex + 1).toLowerCase();
+        }
+
+        // 1. Tải lên Cloudflare R2 siêu tốc nếu đã cấu hình (CDN miễn phí băng thông)
+        if (this.cloudflareR2Service != null && this.cloudflareR2Service.isConfigured()) {
+            String r2Url = this.cloudflareR2Service.uploadFile(file, "chat");
+            if (r2Url != null) {
+                return r2Url;
+            }
         }
 
         String uniqueFileName = String.format("media_%d_%s.%s",
