@@ -69,6 +69,25 @@ const ChatRoom = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { isUserOnline } = usePresence();
+
+  // Điều hướng lùi về đúng vị trí trang trước (N+1 -> N) thay vì luôn nhảy về Sảnh
+  const handleGoBack = () => {
+    const params = new URLSearchParams(location.search);
+    const fromParam = params.get('from');
+    if (fromParam) {
+      try {
+        navigate(decodeURIComponent(fromParam));
+        return;
+      } catch (_) {}
+    }
+    if (window.history.state && window.history.state.idx > 0) {
+      navigate(-1);
+    } else if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate('/');
+    }
+  };
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [roomInfo, setRoomInfo] = useState(() => location.state?.room || null);
@@ -1608,12 +1627,12 @@ const ChatRoom = () => {
            </button>
 
            <button 
-             onClick={() => navigate('/')} 
+             onClick={handleGoBack} 
              className="back-home-footer-btn"
-             title="Tạm thời quay về Trang chủ / Sảnh (Vẫn giữ tư cách thành viên)"
+             title="Quay lại trang trước"
            >
               <ArrowLeft size={16} />
-              <span>Quay về Sảnh</span>
+              <span>Quay lại</span>
            </button>
 
            {isAdminOfThisRoom && (
@@ -1647,12 +1666,12 @@ const ChatRoom = () => {
         <div className="h-16 px-4 sm:px-6 border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-md flex items-center justify-between shrink-0 z-10">
           <div className="flex items-center gap-3 min-w-0">
             <button 
-              onClick={() => navigate('/')} 
+              onClick={handleGoBack} 
               className="h-9 px-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors flex items-center gap-1.5 text-xs font-mono active:scale-[0.98] shrink-0"
-              title="Quay lại Sảnh"
+              title="Quay lại"
             >
               <ArrowLeft size={15} />
-              <span className="hidden sm:inline">Sảnh</span>
+              <span className="hidden sm:inline">Quay lại</span>
             </button>
 
             <GroupCollageAvatar 

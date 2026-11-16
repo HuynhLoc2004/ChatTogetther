@@ -23,7 +23,7 @@ public interface RoomRepository extends JpaRepository<RoomEntity , Long> {
            "WHERE r.id = :id AND r.active = true")
     Optional<RoomEntity> findActiveRoomByIdWithUsers(@Param("id") Long id);
 
-    @Query("SELECT r FROM RoomEntity r WHERE r.active = true AND r.id NOT IN " +
+    @Query("SELECT r FROM RoomEntity r WHERE r.active = true AND (r.password IS NULL OR NOT r.password LIKE 'DM_%') AND r.id NOT IN " +
            "(SELECT ur.roomEntity.id FROM UserRoomEntity ur WHERE ur.active = true)")
     List<RoomEntity> findAllEmptyRooms();
 

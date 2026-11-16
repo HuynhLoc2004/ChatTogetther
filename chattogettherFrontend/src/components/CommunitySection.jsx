@@ -1043,8 +1043,9 @@ export const CommunitySection = ({
 
   const handleDirectChatWithMember = (member) => {
     if (!member) return;
-    if (navigate) navigate(`/messages/${member.userId}`);
-    else window.location.href = `/messages/${member.userId}`;
+    const fromPath = typeof window !== 'undefined' ? (window.location.pathname + window.location.search) : '/communities';
+    if (navigate) navigate(`/messages/${member.userId}?from=${encodeURIComponent(fromPath)}`);
+    else window.location.href = `/messages/${member.userId}?from=${encodeURIComponent(fromPath)}`;
   };
 
   // Lọc bài viết thuộc nhóm
@@ -1581,7 +1582,8 @@ export const CommunitySection = ({
                             className="flex items-center gap-2.5 cursor-pointer min-w-0"
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (navigate) navigate(`/profile/${authorId}`);
+                              const fromPath = typeof window !== 'undefined' ? (window.location.pathname + window.location.search) : '/communities';
+                              if (navigate) navigate(`/profile/${authorId}?from=${encodeURIComponent(fromPath)}`);
                               else if (onSelectUser) onSelectUser(authorId);
                             }}
                           >
@@ -1891,7 +1893,8 @@ export const CommunitySection = ({
                       <div
                         className="flex items-center gap-3 min-w-0 cursor-pointer"
                         onClick={() => {
-                          if (navigate) navigate(`/profile/${member.userId}`);
+                          const fromPath = typeof window !== 'undefined' ? (window.location.pathname + window.location.search) : '/communities';
+                          if (navigate) navigate(`/profile/${member.userId}?from=${encodeURIComponent(fromPath)}`);
                           else if (onSelectUser) onSelectUser(member.userId);
                         }}
                       >

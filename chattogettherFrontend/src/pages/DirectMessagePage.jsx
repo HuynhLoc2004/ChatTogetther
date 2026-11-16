@@ -96,6 +96,24 @@ export const DirectMessagePage = () => {
   const currentUserId = localStorage.getItem('user_id');
   const currentUserName = localStorage.getItem('nickname') || localStorage.getItem('account') || 'Bạn';
 
+  // Điều hướng lùi về đúng vị trí trang trước (N+1 -> N)
+  const handleBack = () => {
+    const fromParam = searchParams.get('from');
+    if (fromParam) {
+      try {
+        navigate(decodeURIComponent(fromParam));
+        return;
+      } catch (_) {}
+    }
+    if (window.history.state && window.history.state.idx > 0) {
+      navigate(-1);
+    } else if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate('/');
+    }
+  };
+
   // Danh sách bạn bè / hội thoại (Nạp tức thì từ cache localStorage nếu có, 0ms chờ)
   const [friends, setFriends] = useState(() => {
     try {
@@ -1037,12 +1055,12 @@ export const DirectMessagePage = () => {
         <div className="flex items-center gap-3">
           <button 
             type="button"
-            onClick={() => navigate('/home')}
+            onClick={handleBack}
             className="p-2 -ml-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors flex items-center gap-1.5 text-xs font-medium"
-            title="Quay lại Trang chủ"
+            title="Quay lại"
           >
             <ArrowLeft size={16} />
-            <span className="hidden sm:inline">Sảnh</span>
+            <span className="hidden sm:inline">Quay lại</span>
           </button>
           
           <div className="h-4 w-[1px] bg-zinc-800" />

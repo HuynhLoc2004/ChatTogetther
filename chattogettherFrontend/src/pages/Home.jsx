@@ -264,6 +264,11 @@ const Home = ({ initialTab }) => {
   });
 
   useEffect(() => {
+    const searchParamTab = new URLSearchParams(location.search).get('tab');
+    if (searchParamTab) {
+      setActiveTab(searchParamTab);
+      return;
+    }
     if (location.pathname.startsWith('/friends')) {
       setActiveTab('friends');
     } else if (location.pathname.startsWith('/communities') || location.pathname.startsWith('/groups')) {
@@ -273,6 +278,8 @@ const Home = ({ initialTab }) => {
         setActiveTab('friends');
       } else if (initialTab === 'groups') {
         setActiveTab('groups');
+      } else {
+        setActiveTab('feed');
       }
     }
     if (location.state?.openFm) {
@@ -291,6 +298,20 @@ const Home = ({ initialTab }) => {
   const [replyTargetMap, setReplyTargetMap] = useState({});
   const [isTopRefreshing, setIsTopRefreshing] = useState(false);
 
+  // Helper điều hướng đến trang cá nhân kèm vị trí hiện tại (N -> N+1)
+  const navigateToProfile = useCallback((uid) => {
+    if (!uid) return;
+    let fromPath = '/';
+    if (activeTab === 'friends' || location.pathname.startsWith('/friends')) {
+      fromPath = '/friends';
+    } else if (activeTab === 'groups' || location.pathname.startsWith('/communities')) {
+      fromPath = '/communities';
+    } else if (activeTab && activeTab !== 'feed') {
+      fromPath = `/?tab=${activeTab}`;
+    }
+    navigate(`/profile/${uid}?from=${encodeURIComponent(fromPath)}`);
+  }, [activeTab, location.pathname, navigate]);
+
   // Chuyển không gian mượt mà kèm hiệu ứng tải nhẹ (Soft transition)
   const handleSwitchTab = (tabId) => {
     if (tabId === activeTab) {
@@ -300,11 +321,13 @@ const Home = ({ initialTab }) => {
     setActiveFilterTag(null);
     setActiveTab(tabId);
     if (tabId === 'friends') {
-      navigate('/friends', { replace: true });
+      navigate('/friends');
     } else if (tabId === 'groups') {
-      navigate('/communities', { replace: true });
+      navigate('/communities');
     } else if (tabId === 'feed') {
-      navigate('/', { replace: true });
+      navigate('/');
+    } else {
+      navigate(`/?tab=${tabId}`);
     }
     setTimeout(() => {
       setIsTabSwitching(false);
@@ -2531,7 +2554,7 @@ const Home = ({ initialTab }) => {
     // Điều hướng trực tiếp sang Profile nếu là thông báo kết bạn
     if (n.type === 'FRIEND_REQUEST' || n.type === 'FRIEND_ACCEPTED' || (n.text && n.text.includes('kết bạn'))) {
       if (n.actorId) {
-        navigate(`/profile/${n.actorId}`);
+        navigateToProfile(n.actorId);
       }
       return;
     }
@@ -3618,7 +3641,7 @@ const Home = ({ initialTab }) => {
                           className="post-avatar-click cursor-pointer"
                           onClick={(e) => {
                             e.stopPropagation();
-                            navigate(`/profile/${post.authorId || post.userId}`);
+                            navigateToProfile(post.authorId || post.userId);
                           }}
                         >
                           <UserAvatar
@@ -3634,7 +3657,7 @@ const Home = ({ initialTab }) => {
                               className="author-display-name cursor-pointer hover:underline"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                navigate(`/profile/${post.authorId || post.userId}`);
+                                navigateToProfile(post.authorId || post.userId);
                               }}
                             >
                               {post.authorNickname || post.authorAccount || "Thành viên"}
@@ -3651,7 +3674,7 @@ const Home = ({ initialTab }) => {
                               className="author-handle font-mono cursor-pointer hover:underline"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                navigate(`/profile/${post.authorId || post.userId}`);
+                                navigateToProfile(post.authorId || post.userId);
                               }}
                             >
                               @{post.authorAccount || "user"}
@@ -3937,7 +3960,7 @@ const Home = ({ initialTab }) => {
                                     <div key={cmt.id} className={isReply ? "cmt-reply-item" : "cmt-row cmt-root-row"}>
                                       <div
                                         className="cursor-pointer flex-shrink-0"
-                                        onClick={() => navigate(`/profile/${cmt.authorId}`)}
+                                        onClick={() => navigateToProfile(cmt.authorId)}
                                         title="Xem hồ sơ cá nhân"
                                       >
                                         <UserAvatar
@@ -3951,7 +3974,7 @@ const Home = ({ initialTab }) => {
                                           <div className="cmt-author-info min-w-0">
                                             <span
                                               className={`cmt-user-name ${isReply ? 'reply-name' : ''} cursor-pointer hover:underline truncate`}
-                                              onClick={() => navigate(`/profile/${cmt.authorId}`)}
+                                              onClick={() => navigateToProfile(cmt.authorId)}
                                             >
                                               {cmt.authorNickname || cmt.authorAccount || 'Thành viên'}
                                             </span>
@@ -4160,7 +4183,7 @@ const Home = ({ initialTab }) => {
                 rooms={safeRooms}
                 friends={safeFriends}
                 navigate={navigate}
-                onSelectUser={(uid) => navigate(`/profile/${uid}`)}
+                onSelectUser={(uid) => navigateToProfile(uid)}
                 onStartPrivateCall={handleStartPrivateCall}
                 onNavigateFeed={() => setActiveTab('feed')}
                 onReactPost={handleReactPost}
@@ -5119,7 +5142,7 @@ const Home = ({ initialTab }) => {
           currentUserId={currentUserId}
           onSelectUser={(uid) => {
             setIsFriendsOpen(false);
-            navigate(`/profile/${uid}`);
+            navigateToProfile(uid);
           }}
           navigate={navigate}
         />
@@ -5474,7 +5497,7 @@ const Home = ({ initialTab }) => {
                                   e.stopPropagation();
                                   if (effectiveActorId) {
                                     setIsNotifOpen(false);
-                                    navigate(`/profile/${effectiveActorId}`);
+                                    navigateToProfile(effectiveActorId);
                                   }
                                 }}
                                 title={`Xem trang cá nhân ${displayName}`}
@@ -5514,7 +5537,7 @@ const Home = ({ initialTab }) => {
                                     e.stopPropagation();
                                     if (n.actorId) {
                                       setIsNotifOpen(false);
-                                      navigate(`/profile/${n.actorId}`);
+                                      navigateToProfile(n.actorId);
                                     }
                                   }}
                                 >
@@ -5697,7 +5720,7 @@ const Home = ({ initialTab }) => {
                   <div className="flex items-center gap-3">
                     <div
                       className="cursor-pointer flex-shrink-0"
-                      onClick={() => navigate(`/profile/${selectedThreadPost.authorId || selectedThreadPost.userId}`)}
+                      onClick={() => navigateToProfile(selectedThreadPost.authorId || selectedThreadPost.userId)}
                     >
                       <UserAvatar
                         avatar={selectedThreadPost.authorAvatar}
@@ -5709,7 +5732,7 @@ const Home = ({ initialTab }) => {
                       <div className="flex items-center gap-1.5">
                         <span
                           className="font-bold text-sm text-[#f1f5f9] hover:underline cursor-pointer"
-                          onClick={() => navigate(`/profile/${selectedThreadPost.authorId || selectedThreadPost.userId}`)}
+                          onClick={() => navigateToProfile(selectedThreadPost.authorId || selectedThreadPost.userId)}
                         >
                           {selectedThreadPost.authorNickname || selectedThreadPost.authorAccount || 'Thành viên'}
                         </span>
@@ -5919,7 +5942,7 @@ const Home = ({ initialTab }) => {
                   <div className="flex items-center gap-3">
                     <div
                       className="cursor-pointer flex-shrink-0"
-                      onClick={() => navigate(`/profile/${selectedThreadPost.authorId || selectedThreadPost.userId}`)}
+                      onClick={() => navigateToProfile(selectedThreadPost.authorId || selectedThreadPost.userId)}
                     >
                       <UserAvatar
                         avatar={selectedThreadPost.authorAvatar}
@@ -5931,7 +5954,7 @@ const Home = ({ initialTab }) => {
                       <div className="flex items-center gap-1.5">
                         <span
                           className="font-bold text-sm text-[#f1f5f9] hover:underline cursor-pointer"
-                          onClick={() => navigate(`/profile/${selectedThreadPost.authorId || selectedThreadPost.userId}`)}
+                          onClick={() => navigateToProfile(selectedThreadPost.authorId || selectedThreadPost.userId)}
                         >
                           {selectedThreadPost.authorNickname || selectedThreadPost.authorAccount || 'Thành viên'}
                         </span>

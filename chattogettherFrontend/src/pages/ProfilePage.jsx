@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Edit3, LogOut, UserPlus, UserCheck, Clock,
   MapPin, Calendar, Mail, Phone, PhoneCall, Lock, Check, X,
@@ -86,8 +86,27 @@ const TIME_FORMATTER = (dateStr) => {
 
 const ProfilePage = () => {
   const { userId } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { currentUser, updateCurrentUser } = useAuth();
+
+  // Điều hướng lùi về đúng vị trí trang trước (N+1 -> N) thay vì luôn nhảy về Sảnh
+  const handleBack = () => {
+    const fromParam = searchParams.get('from');
+    if (fromParam) {
+      try {
+        navigate(decodeURIComponent(fromParam));
+        return;
+      } catch (_) {}
+    }
+    if (window.history.state && window.history.state.idx > 0) {
+      navigate(-1);
+    } else if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate('/');
+    }
+  };
 
   const currentUserId = currentUser?.id || localStorage.getItem('user_id');
   const effectiveUserId = userId || currentUserId;
@@ -650,6 +669,23 @@ const ProfilePage = () => {
     }
   };
 
+  // Mở tin nhắn trực tiếp với người dùng kèm đường dẫn quay lại
+  const handleOpenDirectMessage = (e) => {
+    if (e) e.stopPropagation();
+    if (!effectiveUserId) return;
+    const currentPath = typeof window !== 'undefined' ? (window.location.pathname + window.location.search) : `/profile/${effectiveUserId}`;
+    navigate(`/messages/${effectiveUserId}?from=${encodeURIComponent(currentPath)}`, {
+      state: {
+        targetUser: {
+          id: effectiveUserId,
+          account: profile?.account,
+          nickname: profile?.nickname || profile?.account,
+          avatar: profile?.avatar
+        }
+      }
+    });
+  };
+
   // ==========================================
   // VOICE BIO 10S: RECORD & PLAYBACK
   // ==========================================
@@ -777,12 +813,12 @@ const ProfilePage = () => {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => navigate('/')}
+              onClick={handleBack}
               className="p-2 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-800 transition-all active:scale-95 flex items-center gap-2 text-xs font-medium"
-              title="Quay lại sảnh chính"
+              title="Quay lại"
             >
               <ArrowLeft size={16} />
-              <span className="hidden sm:inline">Quay lại sảnh</span>
+              <span className="hidden sm:inline">Quay lại</span>
             </button>
             <div className="flex items-center gap-2">
               <Radio size={16} className="text-zinc-300" />
@@ -958,19 +994,7 @@ const ProfilePage = () => {
 
                         <button
                           type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/messages/${effectiveUserId}`, {
-                              state: {
-                                targetUser: {
-                                  id: effectiveUserId,
-                                  account: profile?.account,
-                                  nickname: profile?.nickname || profile?.account,
-                                  avatar: profile?.avatar
-                                }
-                              }
-                            });
-                          }}
+                          onClick={handleOpenDirectMessage}
                           className="h-10 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs transition-colors duration-150 active:scale-[0.98] flex items-center justify-center gap-1.5 shadow-sm"
                           title="Gửi tin nhắn trực tiếp"
                         >
@@ -995,19 +1019,7 @@ const ProfilePage = () => {
 
                         <button
                           type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/messages/${effectiveUserId}`, {
-                              state: {
-                                targetUser: {
-                                  id: effectiveUserId,
-                                  account: profile?.account,
-                                  nickname: profile?.nickname || profile?.account,
-                                  avatar: profile?.avatar
-                                }
-                              }
-                            });
-                          }}
+                          onClick={handleOpenDirectMessage}
                           className="h-10 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs transition-colors duration-150 active:scale-[0.98] flex items-center justify-center gap-1.5 shadow-sm"
                           title="Gửi tin nhắn trực tiếp"
                         >
@@ -1053,19 +1065,7 @@ const ProfilePage = () => {
 
                         <button
                           type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/messages/${effectiveUserId}`, {
-                              state: {
-                                targetUser: {
-                                  id: effectiveUserId,
-                                  account: profile?.account,
-                                  nickname: profile?.nickname || profile?.account,
-                                  avatar: profile?.avatar
-                                }
-                              }
-                            });
-                          }}
+                          onClick={handleOpenDirectMessage}
                           className="h-10 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs transition-colors duration-150 active:scale-[0.98] flex items-center justify-center gap-1.5 shadow-sm"
                           title="Gửi tin nhắn trực tiếp"
                         >

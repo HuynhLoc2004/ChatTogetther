@@ -163,7 +163,8 @@ export const FriendsSection = ({
   // Mở Direct Messages 1-1
   const handleOpenDirectChat = (friend) => {
     if (!friend?.id) return;
-    navigate(`/messages?userId=${friend.id}`, {
+    const fromPath = typeof window !== 'undefined' ? (window.location.pathname + window.location.search) : '/friends';
+    navigate(`/messages?userId=${friend.id}&from=${encodeURIComponent(fromPath)}`, {
       state: {
         targetUser: {
           id: friend.id,
@@ -196,7 +197,8 @@ export const FriendsSection = ({
   // Xem trang cá nhân
   const handleViewProfile = (userId) => {
     if (!userId) return;
-    navigate(`/profile/${userId}`);
+    const fromPath = typeof window !== 'undefined' ? (window.location.pathname + window.location.search) : '/friends';
+    navigate(`/profile/${userId}?from=${encodeURIComponent(fromPath)}`);
   };
 
   // Lọc danh sách bạn bè theo từ khóa tìm kiếm
