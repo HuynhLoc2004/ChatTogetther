@@ -1,10 +1,37 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { X, MessageSquare } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { createStompClient } from '../utils/stompClient';
 import UserAvatar from './UserAvatar';
 import { playMessageIncoming } from '../utils/soundEffects';
 import { usePresence } from '../context/PresenceContext';
+
+// Helper chuẩn hóa hiển thị nội dung thông báo
+const formatPreviewText = (text) => {
+  if (!text || typeof text !== 'string') return '';
+  if (text.includes('"type":"shared_post"')) {
+    try {
+      const parsed = JSON.parse(text);
+      return `[Bài viết: ${parsed.content ? (parsed.content.slice(0, 24) + '...') : 'Được chia sẻ'}]`;
+    } catch (_) {
+      return '[Bài viết được chia sẻ]';
+    }
+  }
+  if (text.startsWith('📞') || text.includes('Cuộc gọi thoại')) {
+    return text.includes('nhỡ') ? '[Cuộc gọi thoại nhỡ]' : '[Cuộc gọi thoại]';
+  }
+  if (text.startsWith('📹') || text.includes('Cuộc gọi video')) {
+    return text.includes('nhỡ') ? '[Cuộc gọi video nhỡ]' : '[Cuộc gọi video]';
+  }
+  if (text.includes('[MEDIA:IMAGE') || text === '[Hình ảnh]') {
+    return '[Hình ảnh]';
+  }
+  if (text.includes('[MEDIA:VIDEO') || text === '[Video]') {
+    return '[Video]';
+  }
+  return text;
+};
 
 export const RoomAlertBanner = () => {
   const [currentAlert, setCurrentAlert] = useState(null);
@@ -142,9 +169,10 @@ export const RoomAlertBanner = () => {
               const notifTitle = alert.isDirect 
                 ? (alert.senderDisplayName || alert.senderUsername || 'Tin nhắn mới') 
                 : (alert.roomName || 'Tin nhắn nhóm mới');
+              const cleanPreview = formatPreviewText(alert.contentPreview || 'Đã gửi cho bạn một tin nhắn mới');
               const notifBody = alert.isDirect
-                ? (alert.contentPreview || 'Đã gửi cho bạn một tin nhắn mới')
-                : `${alert.senderDisplayName || alert.senderUsername || 'Thành viên'}: ${alert.contentPreview || ''}`;
+                ? cleanPreview
+                : `${alert.senderDisplayName || alert.senderUsername || 'Thành viên'}: ${cleanPreview}`;
 
               const notif = new Notification(notifTitle, {
                 body: notifBody,
@@ -171,6 +199,37 @@ export const RoomAlertBanner = () => {
           timeoutRef.current = setTimeout(() => {
             setCurrentAlert(null);
           }, 4500);
+
+          // 4. Đồng thời bắn Toast thông báo trực quan trên giao diện (Đảm bảo người dùng luôn thấy ngay cả trên mobile)
+          try {
+            toast.custom((t) => (
+              <div 
+                onClick={() => {
+                  toast.dismiss(t.id);
+                  if (alert.isDirect) {
+                    navigate(`/messages/${alert.senderId}`);
+                  } else if (alert.roomId) {
+                    navigate(`/room/${alert.roomId}`);
+                  }
+                }}
+                className={`max-w-sm w-full bg-zinc-900/95 border border-zinc-700/90 shadow-2xl rounded-2xl p-3 flex items-center gap-3 cursor-pointer pointer-events-auto transition-transform hover:scale-[1.02] active:scale-[0.98] ${t.visible ? 'animate-enter' : 'animate-leave'}`}
+              >
+                <div className="relative shrink-0">
+                  <UserAvatar avatarUrl={alert.senderAvatar} username={alert.senderUsername} name={alert.senderDisplayName} size={40} />
+                  <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-zinc-950" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-zinc-100 truncate">{alert.senderDisplayName || 'Tin nhắn mới'}</h4>
+                    <span className="text-[10px] text-emerald-400 font-mono">Vừa xong</span>
+                  </div>
+                  <p className="text-[11px] text-zinc-300 truncate mt-0.5">
+                    {formatPreviewText(alert.contentPreview || 'Đã gửi tin nhắn')}
+                  </p>
+                </div>
+              </div>
+            ), { duration: 4000, id: `alert-${alert.senderId || alert.roomId}` });
+          } catch (_) {}
         } catch (e) {
           console.error('Lỗi nhận room alert:', e);
         }

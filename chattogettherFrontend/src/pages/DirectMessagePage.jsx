@@ -5,7 +5,7 @@ import {
   Mic, MicOff, Send, Image as ImageIcon, Smile, MoreVertical, User, 
   Clock, CheckCircle2, ChevronDown, Volume2, Shield, Share2, Sparkles,
   PhoneCall, PhoneMissed, Reply, CornerUpLeft, Forward, X, Play, Heart,
-  ThumbsUp, Flame, Check, CheckCheck, Users
+  ThumbsUp, Flame, Check, CheckCheck, Users, ExternalLink
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
@@ -51,6 +51,32 @@ const compressImage = (file, maxWidth = 1280, quality = 0.82) => {
   });
 };
 
+// Helper chuẩn hóa hiển thị đoạn trích tin nhắn cuối cùng (gọn gàng, sạch đẹp, không lộ JSON)
+const formatPreviewText = (text) => {
+  if (!text || typeof text !== 'string') return '';
+  if (text.includes('"type":"shared_post"')) {
+    try {
+      const parsed = JSON.parse(text);
+      return `[Bài viết: ${parsed.content ? (parsed.content.slice(0, 24) + '...') : 'Được chia sẻ'}]`;
+    } catch (_) {
+      return '[Bài viết được chia sẻ]';
+    }
+  }
+  if (text.startsWith('📞') || text.includes('Cuộc gọi thoại')) {
+    return text.includes('nhỡ') ? '[Cuộc gọi thoại nhỡ]' : '[Cuộc gọi thoại]';
+  }
+  if (text.startsWith('📹') || text.includes('Cuộc gọi video')) {
+    return text.includes('nhỡ') ? '[Cuộc gọi video nhỡ]' : '[Cuộc gọi video]';
+  }
+  if (text.includes('[MEDIA:IMAGE') || text === '[Hình ảnh]') {
+    return '[Hình ảnh]';
+  }
+  if (text.includes('[MEDIA:VIDEO') || text === '[Video]') {
+    return '[Video]';
+  }
+  return text;
+};
+
 export const DirectMessagePage = () => {
   const { userId: routeUserId } = useParams();
   const [searchParams] = useSearchParams();
@@ -64,9 +90,24 @@ export const DirectMessagePage = () => {
   const currentUserId = localStorage.getItem('user_id');
   const currentUserName = localStorage.getItem('nickname') || localStorage.getItem('account') || 'Bạn';
 
-  // Danh sách bạn bè / hội thoại
-  const [friends, setFriends] = useState([]);
-  const [loadingFriends, setLoadingFriends] = useState(true);
+  // Danh sách bạn bè / hội thoại (Nạp tức thì từ cache localStorage nếu có, 0ms chờ)
+  const [friends, setFriends] = useState(() => {
+    try {
+      const cached = localStorage.getItem('talovin_dm_friends_cache');
+      return cached ? JSON.parse(cached) : [];
+    } catch (_) {
+      return [];
+    }
+  });
+  const [loadingFriends, setLoadingFriends] = useState(() => {
+    try {
+      const cached = localStorage.getItem('talovin_dm_friends_cache');
+      const parsed = cached ? JSON.parse(cached) : [];
+      return !(parsed && parsed.length > 0);
+    } catch (_) {
+      return true;
+    }
+  });
   const [searchQuery, setSearchQuery] = useState('');
 
   // Quản lý số lượng tin nhắn chưa đọc { [partnerId]: count }
@@ -178,94 +219,80 @@ export const DirectMessagePage = () => {
     }
   }, []);
 
-  // 1. Tải danh sách bạn bè & nạp xem trước tin nhắn gần nhất
+  // 1. Tải danh sách bạn bè & nạp xem trước tin nhắn gần nhất (Siêu tốc & Non-blocking)
   useEffect(() => {
     let isMounted = true;
     const fetchFriendsAndPreviews = async () => {
       try {
-        setLoadingFriends(true);
         const res = await axiosClient.get('/friends/list');
         if (res?.data?.data && Array.isArray(res.data.data)) {
           const rawFriends = res.data.data;
-          
-          const computedUnreadMap = {};
 
-          // Nạp song song dữ liệu tin nhắn cuối cùng cho từng người bạn
-          const enrichedFriends = await Promise.all(rawFriends.map(async (friend) => {
+          // Hợp nhất tức thì với cache để giao diện hiển thị ngay lập tức (0ms chờ)
+          let currentList = [];
+          setFriends(prev => {
+            const cacheMap = new Map(prev.map(f => [String(f.id), f]));
+            currentList = rawFriends.map(rf => {
+              const cached = cacheMap.get(String(rf.id));
+              return cached ? { ...rf, ...cached, ...rf } : rf;
+            });
+            return currentList;
+          });
+          setLoadingFriends(false);
+
+          // Tự động chọn cuộc trò chuyện đầu tiên nếu chưa chọn ai và đang ở màn hình desktop
+          if (!urlTargetUserId && currentList.length > 0 && typeof window !== 'undefined' && window.innerWidth >= 768) {
+            navigate(`/messages/${currentList[0].id}`, { replace: true });
+          }
+
+          // Nạp ngầm xem trước tin nhắn mà không làm gián đoạn hoặc chặn UI
+          for (const friend of rawFriends) {
+            if (!isMounted) break;
             try {
-              let directRoomId = null;
-              try {
-                const roomRes = await axiosClient.get(`/message/direct/${friend.id}`);
+              let directRoomId = friend.directRoomId;
+              if (!directRoomId) {
+                const roomRes = await axiosClient.get(`/message/direct/${friend.id}`).catch(() => null);
                 directRoomId = roomRes?.data?.data?.roomId;
-              } catch (_) {
-                if (friend.account) {
-                  const roomRes2 = await axiosClient.get(`/message/direct/${friend.account}`).catch(() => null);
-                  directRoomId = roomRes2?.data?.data?.roomId;
-                }
               }
 
               if (directRoomId) {
-                const histRes = await axiosClient.get(`/message/${directRoomId}?size=15`).catch(() => null);
+                const histRes = await axiosClient.get(`/message/${directRoomId}?size=1`).catch(() => null);
                 const msgs = histRes?.data?.data || [];
                 if (msgs.length > 0) {
                   const lastMsg = msgs[msgs.length - 1];
-                  const isFromPartner = lastMsg.userId?.toString() === friend.id?.toString();
 
-                  // Tính chính xác số lượng tin nhắn chưa đọc từ người này
-                  let partnerUnread = 0;
-                  for (let i = msgs.length - 1; i >= 0; i--) {
-                    if (msgs[i].userId?.toString() === friend.id?.toString()) {
-                      partnerUnread++;
-                    } else {
-                      break;
-                    }
-                  }
+                  if (!isMounted) break;
+                  setFriends(prev => {
+                    const nextList = prev.map(f => {
+                      if (String(f.id) === String(friend.id)) {
+                        return {
+                          ...f,
+                          directRoomId,
+                          lastMessage: lastMsg.message || (lastMsg.mediaType === 'IMAGE' ? '[Hình ảnh]' : '[Tệp tin]'),
+                          lastMessageTime: lastMsg.timeSend || null,
+                          lastMessageFormattedTime: lastMsg.formattedTime || (lastMsg.timeSend ? new Date(lastMsg.timeSend).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : ''),
+                          lastMessageSenderId: lastMsg.userId
+                        };
+                      }
+                      return f;
+                    });
 
-                  const isViewingFriend = urlTargetUserId && urlTargetUserId.toString() === friend.id?.toString();
-                  if (!isViewingFriend && partnerUnread > 0) {
-                    computedUnreadMap[friend.id] = partnerUnread;
-                  }
+                    // Sắp xếp: người nhắn tin gần nhất nhảy lên đầu
+                    nextList.sort((a, b) => {
+                      const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
+                      const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
+                      return timeB - timeA;
+                    });
 
-                  return {
-                    ...friend,
-                    directRoomId,
-                    lastMessage: lastMsg.message || (lastMsg.mediaType === 'IMAGE' ? '[Hình ảnh]' : '[Tệp tin]'),
-                    lastMessageTime: lastMsg.timeSend || null,
-                    lastMessageFormattedTime: lastMsg.formattedTime || (lastMsg.timeSend ? new Date(lastMsg.timeSend).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : ''),
-                    lastMessageSenderId: lastMsg.userId,
-                    hasUnread: !isViewingFriend && partnerUnread > 0,
-                    unreadCount: isViewingFriend ? 0 : partnerUnread
-                  };
+                    try {
+                      localStorage.setItem('talovin_dm_friends_cache', JSON.stringify(nextList));
+                    } catch (_) {}
+
+                    return nextList;
+                  });
                 }
               }
             } catch (_) {}
-            return friend;
-          }));
-
-          if (!isMounted) return;
-
-          setUnreadMap(prev => {
-            const next = { ...prev, ...computedUnreadMap };
-            try {
-              localStorage.setItem('talovin_dm_unread', JSON.stringify(next));
-              window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: next }));
-            } catch (_) {}
-            return next;
-          });
-
-          // Sắp xếp: người có tin nhắn gần nhất luôn nhảy lên vị trí đầu tiên
-          enrichedFriends.sort((a, b) => {
-            const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
-            const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
-            return timeB - timeA;
-          });
-
-          setFriends(enrichedFriends);
-
-          // Tự động chọn cuộc trò chuyện đầu tiên nếu chưa chọn ai và đang ở màn hình lớn (desktop)
-          if (!urlTargetUserId && enrichedFriends.length > 0 && typeof window !== 'undefined' && window.innerWidth >= 768) {
-            const first = enrichedFriends[0];
-            navigate(`/messages/${first.id}`, { replace: true });
           }
         }
       } catch (e) {
@@ -325,6 +352,26 @@ export const DirectMessagePage = () => {
 
     try {
       setLoadingMessages(true);
+
+      // Nếu đã biết trước directRoomId của người này, nạp ngay lập tức (Zero-wait)
+      let knownRoomId = fallbackPartner?.directRoomId;
+      if (!knownRoomId) {
+        const found = friends.find(f => String(f.id) === String(targetId));
+        if (found?.directRoomId) knownRoomId = found.directRoomId;
+      }
+
+      if (knownRoomId) {
+        setActiveRoomId(knownRoomId);
+        try {
+          const quickRes = await axiosClient.get(`/message/${knownRoomId}`);
+          if (quickRes?.data?.data && Array.isArray(quickRes.data.data)) {
+            setMessages(quickRes.data.data);
+            setLoadingMessages(false);
+            setTimeout(() => scrollToBottom(false), 50);
+          }
+        } catch (_) {}
+      }
+
       let res = null;
 
       // Thử gọi lấy phòng chat 1-1 bằng targetId (ID số)
@@ -985,7 +1032,7 @@ export const DirectMessagePage = () => {
 
                       <div className="flex items-center justify-between gap-1">
                         <p className={`text-[11px] truncate ${isUnread ? 'font-medium text-emerald-400' : 'text-zinc-400'}`}>
-                          {partner.lastMessage || (isPartnerOnline ? 'Đang trực tuyến' : 'Ngoại tuyến')}
+                          {formatPreviewText(partner.lastMessage) || (isPartnerOnline ? 'Đang trực tuyến' : 'Ngoại tuyến')}
                         </p>
 
                         {/* Badge số lượng tin nhắn chưa đọc */}
@@ -1153,6 +1200,17 @@ export const DirectMessagePage = () => {
                     const msgReactions = reactionsMap[msg.id] || {};
                     const reactionEntries = Object.entries(msgReactions).filter(([_, count]) => count > 0);
 
+                    // Phân tích nếu là Tin nhắn Chia sẻ Bài viết JSON
+                    let sharedPostObj = null;
+                    if (typeof displayContent === 'string' && displayContent.includes('"type":"shared_post"')) {
+                      try {
+                        const parsed = JSON.parse(displayContent);
+                        if (parsed && parsed.type === 'shared_post') {
+                          sharedPostObj = parsed;
+                        }
+                      } catch (_) {}
+                    }
+
                     if (isCallLog) {
                       const cleanCallText = rawText
                         .replace(/^[📞📹\uFFFD\?🔹⯁\s]+/g, '')
@@ -1282,10 +1340,61 @@ export const DirectMessagePage = () => {
                             </div>
                           )}
 
-                          {/* Nội dung chữ */}
-                          {displayContent && (
+                          {/* Nội dung tin nhắn: Bài viết chia sẻ hoặc Văn bản thông thường */}
+                          {sharedPostObj ? (
+                            <div 
+                              onClick={() => {
+                                if (sharedPostObj.postId) {
+                                  navigate(`/#post-${sharedPostObj.postId}`);
+                                }
+                              }}
+                              className="rounded-xl overflow-hidden border border-zinc-700/60 bg-zinc-950/80 hover:border-emerald-500/50 transition-all cursor-pointer p-3 space-y-2.5 max-w-sm group text-left"
+                            >
+                              <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-6 h-6 rounded-full overflow-hidden bg-zinc-800 shrink-0">
+                                    {sharedPostObj.authorAvatar ? (
+                                      <img src={sharedPostObj.authorAvatar} alt="" className="w-full h-full object-cover" />
+                                    ) : (
+                                      <span className="w-full h-full flex items-center justify-center text-[10px] font-bold text-zinc-300">
+                                        {(sharedPostObj.author || 'U').charAt(0).toUpperCase()}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-xs font-semibold text-zinc-200">
+                                    {sharedPostObj.author || 'Thành viên'}
+                                  </span>
+                                </div>
+                                <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+                                  <Share2 size={11} /> Bài viết chia sẻ
+                                </span>
+                              </div>
+
+                              {sharedPostObj.imageUrl && (
+                                <div className="rounded-lg overflow-hidden border border-zinc-800/80 max-h-52 bg-black">
+                                  <img 
+                                    src={sharedPostObj.imageUrl} 
+                                    alt="Ảnh bài viết" 
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                  />
+                                </div>
+                              )}
+
+                              {sharedPostObj.content && (
+                                <p className="text-xs text-zinc-300 line-clamp-3 leading-relaxed whitespace-pre-wrap">
+                                  {sharedPostObj.content}
+                                </p>
+                              )}
+
+                              <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between text-[11px] text-zinc-400 group-hover:text-emerald-400 transition-colors">
+                                <span>Xem chi tiết trên Sảnh</span>
+                                <ExternalLink size={12} />
+                              </div>
+                            </div>
+                          ) : displayContent ? (
                             <div className="whitespace-pre-wrap">{displayContent}</div>
-                          )}
+                          ) : null}
 
                           {/* Badge hiển thị cảm xúc đã thả */}
                           {reactionEntries.length > 0 && (

@@ -524,6 +524,7 @@ const Home = ({ initialTab }) => {
   const [isFriendsOpen, setIsFriendsOpen] = useState(false);
   const [friends, setFriends] = useState([]);
   const [sharePost, setSharePost] = useState(null);
+  const [shareTargetTab, setShareTargetTab] = useState('friends');
   const [lightboxMedia, setLightboxMedia] = useState(null); // { url, type, author, title }
 
   // Báo cáo vi phạm bài viết (Report Post - Động từ CSDL)
@@ -1919,9 +1920,47 @@ const Home = ({ initialTab }) => {
     setSharePost(null);
   };
 
+  const handleSharePostToFriend = async (post, friend) => {
+    try {
+      const payload = JSON.stringify({
+        type: 'shared_post',
+        postId: post.id,
+        author: post.authorNickname || post.authorAccount || 'Thành viên',
+        authorAvatar: post.authorAvatar || null,
+        content: post.content,
+        imageUrl: post.imageUrl || null
+      });
+
+      let targetRoomId = null;
+      try {
+        const roomRes = await axiosClient.post(`/rooms/direct/${friend.id}`);
+        targetRoomId = roomRes?.data?.data?.id || roomRes?.data?.data?.roomId || roomRes?.data?.id;
+      } catch (_) {
+        if (friend.account) {
+          const roomRes2 = await axiosClient.post(`/rooms/direct/${friend.account}`).catch(() => null);
+          targetRoomId = roomRes2?.data?.data?.id || roomRes2?.data?.data?.roomId || roomRes2?.data?.id;
+        }
+      }
+
+      if (targetRoomId) {
+        await axiosClient.post('/message/send', {
+          message: payload,
+          timeSend: new Date().toISOString()
+        }, {
+          params: { user_room: targetRoomId }
+        });
+
+        toast.success(`Đã gửi bài viết cho ${friend.nickname || friend.account}!`);
+        setSharePost(null);
+      } else {
+        toast.error("Không tìm thấy cuộc trò chuyện với bạn bè này.");
+      }
+    } catch (err) {
+      toast.error("Không thể chia sẻ bài viết cho bạn bè lúc này!");
+    }
+  };
   const handleSharePostToRoom = async (post, room) => {
     try {
-      // Đảm bảo đã tham gia phòng trước khi gửi tin nhắn bài viết chia sẻ
       if (!isUserInRoom(room) && !room.hasPassword) {
         await axiosClient.post('/rooms/join-room', { roomId: room.id, password: null }, { params: { room_id: room.id, idRoom: room.id } });
       }
@@ -4663,27 +4702,74 @@ const Home = ({ initialTab }) => {
                 <ArrowRight size={13} className="text-zinc-500" />
               </button>
 
-              {/* Danh sách phòng đàm thoại để chia sẻ trực tiếp */}
-              <div className="pt-2 border-t border-zinc-800">
-                <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block mb-2">
-                  Gửi vào phòng đàm thoại:
-                </span>
-                <div className="max-h-48 overflow-y-auto space-y-1.5 no-scrollbar">
-                  {safeRooms.length === 0 ? (
-                    <p className="text-zinc-500 text-xs italic py-2">Chưa có phòng đàm thoại nào đang mở.</p>
+              {/* Lựa chọn đích chia sẻ: Bạn bè hoặc Phòng đàm thoại */}
+              <div className="pt-2 border-t border-zinc-800 space-y-3">
+                <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-xl border border-zinc-800 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setShareTargetTab('friends')}
+                    className={`flex-1 py-1.5 rounded-lg font-medium transition-all ${shareTargetTab === 'friends' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}
+                  >
+                    Bạn bè ({safeFriends.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShareTargetTab('rooms')}
+                    className={`flex-1 py-1.5 rounded-lg font-medium transition-all ${shareTargetTab === 'rooms' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}
+                  >
+                    Phòng đàm thoại ({safeRooms.length})
+                  </button>
+                </div>
+
+                <div className="max-h-52 overflow-y-auto space-y-1.5 no-scrollbar">
+                  {shareTargetTab === 'friends' ? (
+                    safeFriends.length === 0 ? (
+                      <p className="text-zinc-500 text-xs italic py-3 text-center">Chưa có bạn bè nào để gửi tin nhắn.</p>
+                    ) : (
+                      safeFriends.map((friend) => (
+                        <button
+                          key={friend.id}
+                          type="button"
+                          onClick={() => handleSharePostToFriend(sharePost, friend)}
+                          className="w-full py-2 px-3 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between text-xs transition-all border border-zinc-800 group"
+                        >
+                          <div className="flex items-center gap-2.5 truncate">
+                            <div className="w-6 h-6 rounded-full overflow-hidden bg-zinc-800 shrink-0">
+                              {friend.avatar ? (
+                                <img src={friend.avatar} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <span className="w-full h-full flex items-center justify-center text-[10px] font-bold text-zinc-300">
+                                  {(friend.nickname || friend.account || 'U').charAt(0).toUpperCase()}
+                                </span>
+                              )}
+                            </div>
+                            <span className="truncate font-medium text-zinc-200 group-hover:text-white">
+                              {friend.nickname || friend.account}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-zinc-400 group-hover:text-emerald-400 font-mono flex-shrink-0 px-2 py-0.5 rounded bg-zinc-800">
+                            Gửi
+                          </span>
+                        </button>
+                      ))
+                    )
+                  ) : safeRooms.length === 0 ? (
+                    <p className="text-zinc-500 text-xs italic py-3 text-center">Chưa có phòng đàm thoại nào đang mở.</p>
                   ) : (
                     safeRooms.map((room) => (
                       <button
                         key={room.id}
                         type="button"
                         onClick={() => handleSharePostToRoom(sharePost, room)}
-                        className="w-full py-2 px-3 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between text-xs transition-all border border-zinc-800"
+                        className="w-full py-2 px-3 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between text-xs transition-all border border-zinc-800 group"
                       >
                         <div className="flex items-center gap-2 truncate">
                           <MessageCircle size={14} className="text-emerald-400 flex-shrink-0" />
-                          <span className="truncate font-medium">{room.nameroom || `Phòng #${room.id}`}</span>
+                          <span className="truncate font-medium group-hover:text-white">{room.nameroom || `Phòng #${room.id}`}</span>
                         </div>
-                        <span className="text-[10px] text-zinc-400 font-mono flex-shrink-0 px-2 py-0.5 rounded bg-zinc-800">Gửi</span>
+                        <span className="text-[10px] text-zinc-400 group-hover:text-emerald-400 font-mono flex-shrink-0 px-2 py-0.5 rounded bg-zinc-800">
+                          Gửi
+                        </span>
                       </button>
                     ))
                   )}
