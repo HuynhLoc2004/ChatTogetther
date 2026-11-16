@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/match")
+@RequestMapping({"/api/match", "/api/fm-stations"})
 public class FrequencyMatchController {
 
     private final FrequencyMatchService frequencyMatchService;
@@ -42,12 +42,51 @@ public class FrequencyMatchController {
     /**
      * Lấy danh sách các trạm sóng FM trực tuyến kèm totalOnlineCount và activeIntents (Cold-Start Discovery)
      */
-    @GetMapping("/stations")
+    @GetMapping({"", "/stations"})
     public ResponseEntity<ResponseData<chatToggetther.DTO.StationsResponseDTO>> getStations(
             JwtAuthenticationToken token,
             @RequestParam(value = "intentCode", required = false) String intentCode
     ) {
         return ResponseEntity.ok(this.frequencyMatchService.getAllActiveStationsWithDiscovery(token, intentCode));
+    }
+
+    /**
+     * Dò sóng chủ động (GET /api/fm-stations/tune?frequency=90.0&bandCode=CHILL_MUSIC)
+     */
+    @GetMapping("/tune")
+    public ResponseEntity<ResponseData<Map<String, Object>>> tuneStation(
+            JwtAuthenticationToken token,
+            @RequestParam(value = "frequency", required = false) Double frequency,
+            @RequestParam(value = "bandCode", required = false) String bandCode
+    ) {
+        return ResponseEntity.ok(this.frequencyMatchService.tune(token, frequency, bandCode));
+    }
+
+    /**
+     * Đổi tần số trạm phát sóng (PATCH /api/fm-stations/frequency)
+     */
+    @PatchMapping({"/frequency", "/change-frequency"})
+    public ResponseEntity<ResponseData<BroadcastStationDTO>> changeFrequency(
+            JwtAuthenticationToken token,
+            @RequestBody(required = false) Map<String, Object> body,
+            @RequestParam(value = "frequency", required = false) Double paramFreq,
+            @RequestParam(value = "bandCode", required = false) String paramBandCode
+    ) {
+        Double freq = paramFreq;
+        String band = paramBandCode;
+        if (body != null) {
+            if (body.get("frequency") != null) {
+                try {
+                    freq = Double.valueOf(body.get("frequency").toString());
+                } catch (Exception ignored) {}
+            }
+            if (body.get("bandCode") != null) {
+                band = body.get("bandCode").toString();
+            } else if (body.get("intentCode") != null) {
+                band = body.get("intentCode").toString();
+            }
+        }
+        return ResponseEntity.ok(this.frequencyMatchService.changeFrequency(token, freq, band));
     }
 
     /**

@@ -58,6 +58,11 @@ export const ResonanceMatchModal = ({
   const [isPlayingPreview, setIsPlayingPreview] = useState(false);
   const [isSubmittingBroadcast, setIsSubmittingBroadcast] = useState(false);
 
+  // Ghép sóng Realtime (Proximity Auto-Match)
+  const [matchedSignal, setMatchedSignal] = useState(null);
+  const [isPlayingMatchedAudio, setIsPlayingMatchedAudio] = useState(false);
+  const matchedAudioRef = useRef(null);
+
   // Audio References
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -119,6 +124,11 @@ export const ResonanceMatchModal = ({
       return diff <= 0.08;
     });
   }, [filteredStations, frequency]);
+
+  // Danh sách các trạm khác đang phát trong băng tần này (loại trừ chính mình)
+  const activeBandStations = useMemo(() => {
+    return filteredStations.filter(s => String(s.userId) !== String(currentUserId));
+  }, [filteredStations, currentUserId]);
 
   // Trạm hiện tại đang được lắng nghe
   const currentStation = useMemo(() => {
@@ -232,7 +242,7 @@ export const ResonanceMatchModal = ({
     }
   }, [getRandomFreqForIntent]);
 
-  // 2. Kết nối STOMP WebSocket nhận sự kiện Batching (/topic/fm-stations)
+  // 2. Kết nối STOMP WebSocket nhận sự kiện Batching (/topic/fm-stations) & Ghép Sóng Tức Thì (/user/queue/fm-match)
   useEffect(() => {
     if (!isOpen) return;
 
@@ -265,6 +275,23 @@ export const ResonanceMatchModal = ({
             }
           } catch (e) { }
         });
+
+        // Xử lý sự kiện Ghép Sóng Tức Thì (Proximity Auto-Match)
+        const onFmMatch = (frame) => {
+          try {
+            const matchData = JSON.parse(frame.body);
+            if (matchData && (matchData.type === 'FM_MATCH' || matchData.userId)) {
+              setMatchedSignal(matchData);
+              playTuneMatchSound();
+              toast.success(`Đã bắt được sóng của ${matchData.displayName || matchData.username} tại ${Number(matchData.frequency).toFixed(1)} MHz!`);
+            }
+          } catch (e) { }
+        };
+
+        client.subscribe('/user/queue/fm-match', onFmMatch);
+        if (currentUserId) {
+          client.subscribe(`/topic/fm-match/${currentUserId}`, onFmMatch);
+        }
       }, () => { });
     } catch (err) { }
 
@@ -371,6 +398,41 @@ export const ResonanceMatchModal = ({
       try { audioContextRef.current.suspend(); } catch (e) { }
     }
     isAudioReadyRef.current = false;
+  };
+
+  // Hiệu ứng âm thanh Chime khi bắt trúng tần số sóng (Tune Match Sound)
+  const playTuneMatchSound = () => {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = audioContextRef.current || new AudioCtx();
+      if (ctx.state === 'suspended') ctx.resume();
+
+      const now = ctx.currentTime;
+      // Note 1 (523.25 Hz - C5)
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(523.25, now);
+      gain1.gain.setValueAtTime(0.08, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.35);
+
+      // Note 2 (659.25 Hz - E5)
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(659.25, now + 0.15);
+      gain2.gain.setValueAtTime(0.08, now + 0.15);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.15);
+      osc2.stop(now + 0.55);
+    } catch (e) { }
   };
 
   // Tự động ngắt tiếng rè khi bắt được trạm và phát audio 5s
@@ -685,8 +747,11 @@ export const ResonanceMatchModal = ({
         setBroadcastInfo(b);
         setIsBroadcasting(true);
         setUserPersonalFrequency(b.frequency);
-        toast.success(`Đã phát sóng giọng nói lên tần số ${b.frequency} MHz!`);
+        toast.success(`Đã phát sóng giọng nói lên tần số ${Number(b.frequency).toFixed(1)} MHz! Đang chuyển sang Dò sóng...`);
         fetchData();
+        // Tự động chuyển mượt mà về Tab Dò Sóng để bắt đầu ghép đôi
+        setActiveTab('tune');
+        setFrequency(Number(Number(b.frequency).toFixed(1)));
       }
     } catch (err) {
       toast.error(err.response?.data?.message || "Không thể phát sóng lúc này!");
@@ -813,6 +878,110 @@ export const ResonanceMatchModal = ({
           {/* ============================================================ */}
           {activeTab === 'tune' && (
             <div className="space-y-5 animate-fade-in">
+
+              {/* THẺ BẮT ĐƯỢC TÍN HIỆU GHÉP ĐÔI (REALTIME FM-MATCH) */}
+              {matchedSignal && (
+                <div className="p-4 sm:p-5 rounded-2xl bg-zinc-900/95 border border-emerald-500/40 space-y-3.5 shadow-xl animate-fade-in relative overflow-hidden">
+                  <div className="absolute top-0 right-0 left-0 h-1 bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-500" />
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="relative shrink-0">
+                        <UserAvatar
+                          avatar={matchedSignal.avatarUrl}
+                          name={matchedSignal.displayName || matchedSignal.username}
+                          size={48}
+                          className="w-12 h-12 rounded-xl border border-emerald-500/50"
+                        />
+                        <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 border-2 border-zinc-950 flex items-center justify-center">
+                          <Signal size={9} className="text-zinc-950" />
+                        </span>
+                      </div>
+
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider font-sans">
+                            Đã bắt được tín hiệu!
+                          </span>
+                          <span className="text-[10px] font-mono tabular-nums px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-300 border border-zinc-700 shrink-0">
+                            {Number(matchedSignal.frequency).toFixed(1)} MHz
+                          </span>
+                        </div>
+                        <h4 className="font-semibold text-sm text-white truncate mt-0.5 font-sans">
+                          {matchedSignal.displayName || matchedSignal.username}
+                        </h4>
+                        <span className="text-xs text-zinc-400 block truncate font-sans">
+                          @{matchedSignal.username} • {matchedSignal.bandName || 'FM Radio'} • Cách {matchedSignal.distanceMhz ?? 0} MHz
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setMatchedSignal(null)}
+                      className="w-7 h-7 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-white flex items-center justify-center transition-colors shrink-0"
+                      title="Đóng thông báo"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+
+                  {/* Audio lời chào 5s của đối phương nếu có */}
+                  {matchedSignal.audioUrl && (
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-950 border border-zinc-800/80 text-xs font-sans text-zinc-300">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                        <span>Lời chào 5s của trạm</span>
+                      </div>
+
+                      <audio
+                        ref={matchedAudioRef}
+                        src={matchedSignal.audioUrl.startsWith('http') ? matchedSignal.audioUrl : `${BACKEND_URL || ''}${matchedSignal.audioUrl}`}
+                        onEnded={() => setIsPlayingMatchedAudio(false)}
+                        className="hidden"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!matchedAudioRef.current) return;
+                          if (isPlayingMatchedAudio) {
+                            matchedAudioRef.current.pause();
+                            setIsPlayingMatchedAudio(false);
+                          } else {
+                            matchedAudioRef.current.play().then(() => setIsPlayingMatchedAudio(true)).catch(() => {});
+                          }
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 text-[11px] font-sans flex items-center gap-1.5 transition-colors"
+                      >
+                        {isPlayingMatchedAudio ? <Pause size={12} /> : <Play size={12} />}
+                        <span>{isPlayingMatchedAudio ? "Tạm dừng" : "Nghe lời chào"}</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Nút hành động */}
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => handleDirectChat(matchedSignal)}
+                      className="flex-1 h-9 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-medium text-xs flex items-center justify-center gap-1.5 transition-colors active:scale-95 font-sans"
+                    >
+                      <MessageSquareShare size={14} />
+                      <span>Nhắn tin ngay</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleConnectCall(matchedSignal)}
+                      disabled={isLocking}
+                      className="flex-1 h-9 px-3.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs flex items-center justify-center gap-1.5 shadow-md transition-all active:scale-95 font-sans"
+                    >
+                      <PhoneCall size={14} />
+                      <span>{isLocking ? "Đang kết nối..." : "Gọi thoại 1-1"}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Dải chip chọn Băng tần từ Admin với 2 nút điều hướng tròn < > */}
               <div className="flex items-center gap-1.5">
@@ -1045,6 +1214,59 @@ export const ResonanceMatchModal = ({
 
               </div>
 
+              {/* DANH SÁCH TÍN HIỆU ĐANG PHÁT CÙNG BĂNG TẦN */}
+              {activeBandStations.length > 0 && (
+                <div className="space-y-2 pt-1">
+                  <div className="flex items-center justify-between text-xs font-sans px-1">
+                    <span className="flex items-center gap-1.5 font-medium text-zinc-300">
+                      <Radio size={13} className="text-emerald-400" />
+                      Tín hiệu đang phát cùng băng tần ({activeBandStations.length})
+                    </span>
+                    <span className="text-[11px] text-zinc-500">Chạm để bắt sóng</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {activeBandStations.map(s => {
+                      const diff = Math.abs(Number(s.frequency) - frequency).toFixed(1);
+                      const isCurrent = Math.abs(Number(s.frequency) - frequency) <= 0.05;
+                      return (
+                        <div
+                          key={s.userId}
+                          onClick={() => {
+                            stopAutoScan();
+                            setFrequency(Number(Number(s.frequency).toFixed(1)));
+                          }}
+                          className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between gap-2.5 ${
+                            isCurrent
+                              ? 'bg-zinc-800 border-white/60 shadow-sm'
+                              : 'bg-zinc-950/70 border-zinc-800 hover:border-zinc-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <UserAvatar
+                              avatar={s.avatarUrl}
+                              name={s.displayName || s.username}
+                              size={28}
+                              className="w-7 h-7 rounded-lg border border-zinc-700 shrink-0"
+                            />
+                            <div className="min-w-0">
+                              <p className="text-xs font-medium text-white truncate font-sans">
+                                {s.displayName || s.username}
+                              </p>
+                              <p className="text-[11px] text-zinc-400 font-sans truncate">
+                                @{s.username} • Cách {diff} MHz
+                              </p>
+                            </div>
+                          </div>
+                          <span className="text-xs font-mono tabular-nums px-2 py-0.5 rounded-md bg-zinc-900 text-zinc-300 border border-zinc-800 shrink-0">
+                            {Number(s.frequency).toFixed(1)} MHz
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* THẺ TRẠM SÓNG BẮT ĐƯỢC */}
               {currentStation ? (
                 <div className="p-4 sm:p-5 rounded-2xl bg-zinc-950 border border-zinc-800 space-y-3.5 shadow-lg animate-fade-in">
@@ -1064,14 +1286,14 @@ export const ResonanceMatchModal = ({
 
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <h4 className="font-semibold text-sm text-white truncate">
+                          <h4 className="font-semibold text-sm text-white truncate font-sans">
                             {currentStation.displayName || currentStation.username}
                           </h4>
-                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-300 border border-zinc-700 shrink-0">
+                          <span className="text-[10px] font-mono tabular-nums px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-300 border border-zinc-700 shrink-0">
                             {Number(currentStation.frequency).toFixed(1)} MHz
                           </span>
                         </div>
-                        <span className="text-xs text-zinc-400 block truncate mt-0.5">
+                        <span className="text-xs text-zinc-400 block truncate mt-0.5 font-sans">
                           @{currentStation.username || 'user'} • {currentStation.intentTitle || 'Tâm sự'}
                         </span>
                       </div>
@@ -1082,7 +1304,7 @@ export const ResonanceMatchModal = ({
                       <button
                         type="button"
                         onClick={() => handleDirectChat(currentStation)}
-                        className="h-9 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 text-xs font-medium flex items-center gap-1.5 transition-colors active:scale-95"
+                        className="h-9 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 text-xs font-medium flex items-center gap-1.5 transition-colors active:scale-95 font-sans"
                         title="Nhắn tin riêng"
                       >
                         <MessageSquareShare size={14} />
@@ -1093,7 +1315,7 @@ export const ResonanceMatchModal = ({
                         type="button"
                         onClick={() => handleConnectCall(currentStation)}
                         disabled={isLocking}
-                        className="h-9 px-3.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs flex items-center gap-1.5 shadow-md transition-all active:scale-95"
+                        className="h-9 px-3.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs flex items-center gap-1.5 shadow-md transition-all active:scale-95 font-sans"
                         title="Gọi thoại 1-1"
                       >
                         <PhoneCall size={14} />
@@ -1104,7 +1326,7 @@ export const ResonanceMatchModal = ({
 
                   {/* Đa người dùng cùng tần số */}
                   {stationsAtFreq.length > 1 && (
-                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-mono">
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-sans">
                       <div className="flex items-center gap-2 text-zinc-300">
                         <Users size={14} className="text-amber-400 shrink-0" />
                         <span>Tín hiệu <strong>{(stationSubIndex % stationsAtFreq.length) + 1}/{stationsAtFreq.length}</strong> tại {frequency.toFixed(1)} MHz</span>
@@ -1128,7 +1350,7 @@ export const ResonanceMatchModal = ({
                   )}
 
                   {/* Audio 5s đang phát & Nút Quét Tiếp */}
-                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-mono text-zinc-300">
+                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-sans text-zinc-300">
                     <div className="flex items-center gap-2">
                       <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                       <span>Đang phát lời chào 5s của trạm...</span>
@@ -1185,7 +1407,7 @@ export const ResonanceMatchModal = ({
                     </div>
                     <div>
                       <h4 className="text-xs font-semibold text-emerald-300">Trạm phát của bạn đang hoạt động</h4>
-                      <p className="text-[11px] text-zinc-400 font-mono mt-0.5">
+                      <p className="text-[11px] text-zinc-400 font-sans mt-0.5">
                         Tần số: <strong>{broadcastInfo?.frequency || userPersonalFrequency} MHz</strong> • {broadcastInfo?.intentTitle || 'Phát sóng'}
                       </p>
                     </div>
@@ -1237,7 +1459,7 @@ export const ResonanceMatchModal = ({
               {/* Tần số được cấp tự động (Khóa chặt trong khoảng, có nút +/- 0.1 và đổi số ngẫu nhiên) */}
               <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <span className="text-xs text-zinc-400 font-mono block">2. Tần số phát sóng được cấp:</span>
+                  <span className="text-xs text-zinc-400 font-sans block">2. Tần số phát sóng được cấp:</span>
                   <div className="flex items-baseline gap-1.5 mt-0.5">
                     <span className="text-3xl font-extrabold font-mono text-white tabular-nums tracking-tight">
                       {broadcastFreqTarget.toFixed(1)}
@@ -1335,14 +1557,14 @@ export const ResonanceMatchModal = ({
                       </button>
                       <div>
                         <span className="text-xs font-medium text-zinc-200 block">Đoạn ghi âm 5s sẵn sàng</span>
-                        <span className="text-[10px] text-zinc-500 font-mono">Bấm Play để nghe thử trước khi lên sóng</span>
+                        <span className="text-[10px] text-zinc-500 font-sans">Bấm Play để nghe thử trước khi lên sóng</span>
                       </div>
                     </div>
 
                     <button
                       type="button"
                       onClick={startRecording5s}
-                      className="text-xs font-mono text-zinc-400 hover:text-white underline px-2 whitespace-nowrap shrink-0"
+                      className="text-xs font-sans text-zinc-400 hover:text-white underline px-2 whitespace-nowrap shrink-0"
                     >
                       Thu lại
                     </button>
@@ -1362,7 +1584,7 @@ export const ResonanceMatchModal = ({
               </div>
 
               {/* NÚT KÍCH HOẠT PHÁT SÓNG (Chỉ sáng trắng khi đã thu âm 5s) */}
-              <div className="sticky bottom-0 bg-zinc-950/90 pt-2 pb-1 backdrop-blur-sm shrink-0">
+              <div className="pt-3 pb-6 shrink-0">
                 <button
                   type="button"
                   onClick={handlePublishBroadcast}

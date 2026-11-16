@@ -38,8 +38,8 @@ public class FrequencyMatchService {
 
     private static final Logger log = LoggerFactory.getLogger(FrequencyMatchService.class);
 
-    // Thời gian sống tối đa của một trạm phát sóng là 15 phút (900,000 ms)
-    private static final long STATION_TTL_MS = 15 * 60 * 1000L;
+    // Thời gian sống tối đa của một trạm phát sóng là 30 phút (1,800,000 ms) theo Spec
+    private static final long STATION_TTL_MS = 30 * 60 * 1000L;
 
     public static class StationRecord {
         public Long userId;
@@ -266,7 +266,18 @@ public class FrequencyMatchService {
                 "action", "ONLINE",
                 "station", mapToStationDTO(station)
         ));
+        try {
+            this.messagingTemplate.convertAndSend("/topic/fm-stations", Map.of(
+                    "type", "STATION_BATCH",
+                    "events", List.of(Map.of("action", "ONLINE", "station", mapToStationDTO(station))),
+                    "totalLive", ACTIVE_STATIONS.size(),
+                    "timestamp", System.currentTimeMillis()
+            ));
+        } catch (Exception ignored) {}
         log.info(">>> Người dùng #{} đã mở trạm sóng tại tần số {} MHz (Mục đích: {})", currentUserId, allocatedFrequency, intent.getCode());
+
+        // Chạy thuật toán Quét Ghép Đôi Tức Thì (|freqA - freqB| <= 0.3 MHz)
+        checkAndBroadcastMatch(station);
 
         BroadcastStationDTO dto = mapToStationDTO(station);
         return new ResponseData<>(200, "Bắt đầu phát sóng thành công!", dto);
@@ -438,10 +449,182 @@ public class FrequencyMatchService {
                         "userId", currentUserId,
                         "frequency", removed.frequency
                 ));
+                try {
+                    this.messagingTemplate.convertAndSend("/topic/fm-stations", Map.of(
+                            "type", "STATION_BATCH",
+                            "events", List.of(Map.of("action", "OFFLINE", "userId", currentUserId, "frequency", removed.frequency)),
+                            "totalLive", ACTIVE_STATIONS.size(),
+                            "timestamp", System.currentTimeMillis()
+                    ));
+                } catch (Exception ignored) {}
             }
             log.info(">>> Người dùng #{} đã tắt phát sóng FM.", currentUserId);
         }
         return new ResponseData<>(200, "Đã dừng phát sóng", true);
+    }
+
+    /**
+     * Thuật toán Ghép Sóng Tức Thì (Proximity Auto-Match)
+     * Tìm trạm gần nhất (|freqA - freqB| <= 0.35 MHz) và bắn STOMP cho cả hai người
+     */
+    public void checkAndBroadcastMatch(StationRecord currentStation) {
+        if (currentStation == null || currentStation.userId == null) return;
+        long now = System.currentTimeMillis();
+
+        List<StationRecord> nearby = ACTIVE_STATIONS.values().stream()
+                .filter(s -> !s.userId.equals(currentStation.userId))
+                .filter(s -> (now - s.broadcastAt) <= STATION_TTL_MS)
+                .filter(s -> Math.abs(s.frequency - currentStation.frequency) <= 0.35)
+                .sorted(Comparator
+                        .comparingDouble((StationRecord s) -> Math.abs(s.frequency - currentStation.frequency))
+                        .thenComparing(s -> !Objects.equals(s.intentCode, currentStation.intentCode))
+                )
+                .collect(Collectors.toList());
+
+        if (nearby.isEmpty()) {
+            return;
+        }
+
+        StationRecord partnerStation = nearby.get(0);
+        double diff = Math.round(Math.abs(partnerStation.frequency - currentStation.frequency) * 10.0) / 10.0;
+
+        // Payload cho User A (currentStation)
+        Map<String, Object> payloadForCurrent = new HashMap<>();
+        payloadForCurrent.put("type", "FM_MATCH");
+        payloadForCurrent.put("userId", partnerStation.userId);
+        payloadForCurrent.put("username", partnerStation.account);
+        payloadForCurrent.put("displayName", partnerStation.nickname != null && !partnerStation.nickname.isBlank() ? partnerStation.nickname : partnerStation.account);
+        payloadForCurrent.put("avatarUrl", partnerStation.avatar != null ? partnerStation.avatar : "");
+        payloadForCurrent.put("frequency", partnerStation.frequency);
+        payloadForCurrent.put("bandName", partnerStation.intentTitle != null ? partnerStation.intentTitle : "FM Radio");
+        payloadForCurrent.put("intentCode", partnerStation.intentCode);
+        payloadForCurrent.put("audioUrl", partnerStation.audioUrl != null ? partnerStation.audioUrl : "");
+        payloadForCurrent.put("signalStrength", "100%");
+        payloadForCurrent.put("distanceMhz", diff);
+        payloadForCurrent.put("matchedAt", System.currentTimeMillis());
+
+        // Payload cho User B (partnerStation)
+        Map<String, Object> payloadForPartner = new HashMap<>();
+        payloadForPartner.put("type", "FM_MATCH");
+        payloadForPartner.put("userId", currentStation.userId);
+        payloadForPartner.put("username", currentStation.account);
+        payloadForPartner.put("displayName", currentStation.nickname != null && !currentStation.nickname.isBlank() ? currentStation.nickname : currentStation.account);
+        payloadForPartner.put("avatarUrl", currentStation.avatar != null ? currentStation.avatar : "");
+        payloadForPartner.put("frequency", currentStation.frequency);
+        payloadForPartner.put("bandName", currentStation.intentTitle != null ? currentStation.intentTitle : "FM Radio");
+        payloadForPartner.put("intentCode", currentStation.intentCode);
+        payloadForPartner.put("audioUrl", currentStation.audioUrl != null ? currentStation.audioUrl : "");
+        payloadForPartner.put("signalStrength", "100%");
+        payloadForPartner.put("distanceMhz", diff);
+        payloadForPartner.put("matchedAt", System.currentTimeMillis());
+
+        try {
+            // Gửi tới queue cá nhân và topic cá nhân của A
+            messagingTemplate.convertAndSendToUser(String.valueOf(currentStation.userId), "/queue/fm-match", payloadForCurrent);
+            messagingTemplate.convertAndSend("/topic/fm-match/" + currentStation.userId, payloadForCurrent);
+
+            // Gửi tới queue cá nhân và topic cá nhân của B
+            messagingTemplate.convertAndSendToUser(String.valueOf(partnerStation.userId), "/queue/fm-match", payloadForPartner);
+            messagingTemplate.convertAndSend("/topic/fm-match/" + partnerStation.userId, payloadForPartner);
+
+            log.info(">>> FM MATCH THÀNH CÔNG giữa #{} ({} MHz) và #{} ({} MHz)",
+                    currentStation.userId, currentStation.frequency, partnerStation.userId, partnerStation.frequency);
+        } catch (Exception ex) {
+            log.warn("Lỗi gửi STOMP fm-match: {}", ex.getMessage());
+        }
+    }
+
+    /**
+     * API Dò Sóng Chủ Động (GET /api/fm-stations/tune)
+     */
+    public ResponseData<Map<String, Object>> tune(JwtAuthenticationToken token, Double targetFreq, String bandCode) {
+        Long currentUserId = SecurityUtils.extractUserId(token);
+        long now = System.currentTimeMillis();
+        double center = targetFreq != null ? Math.round(targetFreq * 10.0) / 10.0 : 90.0;
+
+        List<StationRecord> activeList = ACTIVE_STATIONS.values().stream()
+                .filter(s -> (now - s.broadcastAt) <= STATION_TTL_MS)
+                .filter(s -> currentUserId == null || !s.userId.equals(currentUserId))
+                .collect(Collectors.toList());
+
+        // 1. exactMatches: ±0.35 MHz (Tín hiệu bắt rõ)
+        List<BroadcastStationDTO> exactMatches = activeList.stream()
+                .filter(s -> Math.abs(s.frequency - center) <= 0.35)
+                .sorted(Comparator.comparingDouble(s -> Math.abs(s.frequency - center)))
+                .map(this::mapToStationDTO)
+                .collect(Collectors.toList());
+
+        // 2. bandMatches: Cùng băng tần (bandCode hoặc intentCode)
+        List<Map<String, Object>> bandMatches = activeList.stream()
+                .filter(s -> bandCode != null && !bandCode.isBlank() && bandCode.equalsIgnoreCase(s.intentCode))
+                .sorted(Comparator.comparingDouble(s -> Math.abs(s.frequency - center)))
+                .map(s -> {
+                    Map<String, Object> map = new HashMap<>();
+                    map.put("station", mapToStationDTO(s));
+                    map.put("distanceMhz", Math.round(Math.abs(s.frequency - center) * 10.0) / 10.0);
+                    return map;
+                })
+                .collect(Collectors.toList());
+
+        // 3. otherLiveStations: Các trạm khác đang phát
+        List<BroadcastStationDTO> otherLiveStations = activeList.stream()
+                .filter(s -> bandCode == null || bandCode.isBlank() || !bandCode.equalsIgnoreCase(s.intentCode))
+                .sorted(Comparator.comparingDouble(s -> Math.abs(s.frequency - center)))
+                .limit(10)
+                .map(this::mapToStationDTO)
+                .collect(Collectors.toList());
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("frequency", center);
+        result.put("bandCode", bandCode);
+        result.put("exactMatches", exactMatches);
+        result.put("bandMatches", bandMatches);
+        result.put("otherLiveStations", otherLiveStations);
+        result.put("totalOnline", ACTIVE_STATIONS.size());
+        result.put("onlineCount", ACTIVE_STATIONS.size());
+
+        return new ResponseData<>(200, "Kết quả dò sóng", result);
+    }
+
+    /**
+     * Đổi tần số trạm phát sóng của người dùng hiện tại
+     */
+    public ResponseData<BroadcastStationDTO> changeFrequency(JwtAuthenticationToken token, Double newFreq, String intentCode) {
+        Long currentUserId = SecurityUtils.extractUserId(token);
+        if (currentUserId == null) {
+            return new ResponseData<>(401, "Bạn chưa đăng nhập!", null);
+        }
+        StationRecord station = ACTIVE_STATIONS.get(currentUserId);
+        if (station == null) {
+            return new ResponseData<>(404, "Bạn chưa có trạm phát sóng nào đang hoạt động!", null);
+        }
+
+        if (newFreq != null && newFreq >= 88.0 && newFreq <= 108.0) {
+            station.frequency = Math.round(newFreq * 10.0) / 10.0;
+        }
+        if (intentCode != null && !intentCode.isBlank()) {
+            station.intentCode = intentCode;
+        }
+        station.broadcastAt = System.currentTimeMillis();
+        ACTIVE_STATIONS.put(currentUserId, station);
+
+        PENDING_BATCH_EVENTS.offer(Map.of(
+                "action", "UPDATE",
+                "station", mapToStationDTO(station)
+        ));
+        try {
+            this.messagingTemplate.convertAndSend("/topic/fm-stations", Map.of(
+                    "type", "STATION_BATCH",
+                    "events", List.of(Map.of("action", "UPDATE", "station", mapToStationDTO(station))),
+                    "totalLive", ACTIVE_STATIONS.size(),
+                    "timestamp", System.currentTimeMillis()
+            ));
+        } catch (Exception ignored) {}
+
+        // Kiểm tra ghép đôi tức thì với tần số mới
+        checkAndBroadcastMatch(station);
+
+        return new ResponseData<>(200, "Đổi tần số thành công!", mapToStationDTO(station));
     }
 
     /**
