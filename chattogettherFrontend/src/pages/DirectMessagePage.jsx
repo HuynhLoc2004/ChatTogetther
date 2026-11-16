@@ -56,7 +56,7 @@ export const DirectMessagePage = () => {
   const [searchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const { isUserOnline } = usePresence();
+  const { isUserOnline, getUserStatusText, markUserActive } = usePresence();
 
   const urlTargetUserId = routeUserId || searchParams.get('userId') || searchParams.get('user_id');
   const passedTargetUser = location.state?.targetUser || location.state?.partner;
@@ -82,6 +82,17 @@ export const DirectMessagePage = () => {
   // Hội thoại đang chọn
   const [activePartner, setActivePartner] = useState(null);
   const [activeRoomId, setActiveRoomId] = useState(null);
+
+  // Refs giữ state mới nhất để tránh stale closures trong WebSocket callbacks
+  const activePartnerRef = useRef(activePartner);
+  useEffect(() => {
+    activePartnerRef.current = activePartner;
+  }, [activePartner]);
+
+  const activeRoomIdRef = useRef(activeRoomId);
+  useEffect(() => {
+    activeRoomIdRef.current = activeRoomId;
+  }, [activeRoomId]);
   const [partnerNotFound, setPartnerNotFound] = useState(false);
   const [messages, setMessages] = useState([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -412,6 +423,8 @@ export const DirectMessagePage = () => {
     if (!currentUserId) return;
 
     let client = null;
+    let roomSub = null;
+
     try {
       client = createStompClient();
       stompClient.current = client;
@@ -419,6 +432,90 @@ export const DirectMessagePage = () => {
 
       const connectHeaders = { userId: String(currentUserId) };
       if (token) connectHeaders['Authorization'] = `Bearer ${token}`;
+
+      // Xử lý thống nhất mọi tin nhắn 1-1 realtime
+      const handleIncomingDirectMsg = (rawPayload) => {
+        try {
+          const newMsg = typeof rawPayload === 'string' ? JSON.parse(rawPayload) : rawPayload;
+          if (!newMsg) return;
+
+          const senderId = newMsg.senderId || newMsg.userId;
+          const isFromMe = String(senderId) === String(currentUserId);
+          const currentActivePartnerId = activePartnerRef.current?.id?.toString();
+          const isCurrentChat = !isFromMe && currentActivePartnerId && (String(currentActivePartnerId) === String(senderId));
+
+          // Ghi nhận sender đang online tức thì
+          if (senderId && markUserActive) {
+            markUserActive(senderId);
+          }
+
+          // 1. Nếu đang mở đúng hội thoại này hoặc là tin nhắn do chính mình gửi
+          if (isCurrentChat || isFromMe) {
+            setMessages(prev => {
+              if (prev.some(m => m.id === newMsg.id)) return prev;
+              const hasPending = prev.some(m => m.pending && m.message === newMsg.message);
+              if (hasPending) {
+                return prev.map(m => (m.pending && m.message === newMsg.message) ? newMsg : m);
+              }
+              return [...prev, newMsg];
+            });
+
+            if (!isFromMe) {
+              playMessageIncoming();
+            }
+
+            setTimeout(() => scrollToBottom(true), 60);
+          }
+
+          // 2. Nếu là tin nhắn từ bạn bè khác (hoặc tab đang ẩn)
+          if (!isFromMe && !isCurrentChat && senderId) {
+            playMessageIncoming();
+
+            setUnreadMap(prev => {
+              const sid = String(senderId);
+              const next = { ...prev, [sid]: (Number(prev[sid]) || 0) + 1 };
+              try {
+                localStorage.setItem('talovin_dm_unread', JSON.stringify(next));
+                window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: next }));
+              } catch (_) {}
+              return next;
+            });
+
+            if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted' && (document.hidden || !isCurrentChat)) {
+              try {
+                new Notification(newMsg.nickname || newMsg.senderUsername || 'Tin nhắn mới', {
+                  body: newMsg.message || (newMsg.mediaType === 'IMAGE' ? '[Hình ảnh]' : '[Tệp tin]'),
+                  icon: newMsg.senderAvatar || newMsg.avatar || '/favicon.ico',
+                  tag: `dm-${senderId}`
+                });
+              } catch (_) {}
+            }
+          }
+
+          // 3. Cập nhật preview tin nhắn cuối cùng & đưa bạn bè này lên ĐẦU DANH SÁCH tức thì
+          const targetFriendIdStr = (isFromMe ? (activePartnerRef.current?.id || newMsg.partnerId) : senderId)?.toString();
+          if (targetFriendIdStr) {
+            const nowTime = newMsg.timeSend || new Date().toISOString();
+            const nowFmt = newMsg.formattedTime || new Date(nowTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+
+            setFriends(prev => {
+              const targetFriend = prev.find(f => f.id?.toString() === targetFriendIdStr);
+              const updatedFriend = targetFriend ? {
+                ...targetFriend,
+                lastMessage: newMsg.message || (newMsg.mediaType === 'IMAGE' ? '[Hình ảnh]' : '[Video]'),
+                lastMessageTime: nowTime,
+                lastMessageFormattedTime: nowFmt,
+                hasUnread: !isFromMe && !isCurrentChat
+              } : null;
+
+              const rest = prev.filter(f => f.id?.toString() !== targetFriendIdStr);
+              return updatedFriend ? [updatedFriend, ...rest] : prev;
+            });
+          }
+        } catch (e) {
+          console.error('Lỗi nhận tin nhắn 1-1 realtime:', e);
+        }
+      };
 
       client.connect(connectHeaders, () => {
         // Lắng nghe tín hiệu cuộc gọi đến WebRTC
@@ -433,148 +530,42 @@ export const DirectMessagePage = () => {
           } catch (e) {}
         });
 
-        // Nhận cảnh báo tin nhắn thời gian thực (Room Alert)
+        // 1. Nhận tin nhắn 1-1 trực tiếp qua /topic/messages/{currentUserId}
+        client.subscribe(`/topic/messages/${currentUserId}`, (frame) => {
+          handleIncomingDirectMsg(frame.body);
+        });
+
+        // 2. Nhận alert tin nhắn /topic/room-alerts/{currentUserId}
         client.subscribe(`/topic/room-alerts/${currentUserId}`, (frame) => {
           try {
             const alert = JSON.parse(frame.body);
             if (alert.isDirect && alert.senderId) {
-              const isCurrentChat = activePartner?.id?.toString() === alert.senderId?.toString();
-              
-              if (!isCurrentChat) {
-                playMessageIncoming();
-                setUnreadMap(prev => ({
-                  ...prev,
-                  [alert.senderId]: (prev[alert.senderId] || 0) + 1
-                }));
-
-                // Đưa người gửi lên đầu danh sách và highlight
-                setFriends(prev => {
-                  const targetIdStr = alert.senderId.toString();
-                  const targetFriend = prev.find(f => f.id?.toString() === targetIdStr);
-                  const updatedFriend = targetFriend ? {
-                    ...targetFriend,
-                    lastMessage: alert.contentPreview || 'Tin nhắn mới',
-                    lastMessageTime: new Date().toISOString(),
-                    lastMessageFormattedTime: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-                    hasUnread: true
-                  } : null;
-
-                  const rest = prev.filter(f => f.id?.toString() !== targetIdStr);
-                  return updatedFriend ? [updatedFriend, ...rest] : prev;
-                });
-              }
+              handleIncomingDirectMsg({
+                id: alert.messageId || Date.now(),
+                message: alert.contentPreview,
+                senderId: alert.senderId,
+                userId: alert.senderId,
+                nickname: alert.senderDisplayName || alert.senderUsername,
+                senderUsername: alert.senderUsername,
+                senderAvatar: alert.senderAvatar,
+                timeSend: alert.createdAt || new Date().toISOString()
+              });
             }
           } catch (_) {}
         });
 
-        // Nhận tin nhắn riêng tư toàn cục
-        if (currentUserId) {
-          client.subscribe(`/user/queue/direct-messages`, (message) => {
-            try {
-              const newMsg = JSON.parse(message.body);
-              const isFromMe = newMsg.userId?.toString() === currentUserId?.toString();
-              const isCurrentChat = activePartner?.id?.toString() === newMsg.userId?.toString() ||
-                                    activePartner?.id?.toString() === newMsg.senderId?.toString();
+        // 3. Nhận tin nhắn riêng tư toàn cục fallback
+        client.subscribe(`/user/queue/direct-messages`, (message) => {
+          handleIncomingDirectMsg(message.body);
+        });
 
-              setMessages(prev => {
-                if (prev.some(m => m.id === newMsg.id)) return prev;
-                const hasPending = prev.some(m => m.pending && m.message === newMsg.message);
-                if (hasPending) {
-                  return prev.map(m => (m.pending && m.message === newMsg.message) ? newMsg : m);
-                }
-
-                // Phát âm thanh & thông báo khi có tin nhắn từ đối phương
-                if (!isFromMe) {
-                  playMessageIncoming();
-
-                  if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted' && (document.hidden || !isCurrentChat)) {
-                    try {
-                      new Notification(newMsg.nickname || newMsg.senderUsername || 'Tin nhắn mới', {
-                        body: newMsg.message || (newMsg.mediaType === 'IMAGE' ? '[Hình ảnh]' : '[Tệp tin]'),
-                        icon: newMsg.senderAvatar || newMsg.avatar || '/favicon.ico',
-                        tag: `dm-${newMsg.userId}`
-                      });
-                    } catch (_) {}
-                  }
-                }
-
-                return [...prev, newMsg];
-              });
-
-              // Cập nhật số lượng chưa đọc nếu không mở đúng phòng chat của họ
-              if (!isFromMe && !isCurrentChat && newMsg.userId) {
-                setUnreadMap(prev => ({
-                  ...prev,
-                  [newMsg.userId]: (prev[newMsg.userId] || 0) + 1
-                }));
-              }
-
-              // Cập nhật preview tin nhắn cuối cùng và đưa bạn bè này lên đầu danh sách
-              if (newMsg.userId) {
-                const nowTime = newMsg.timeSend || new Date().toISOString();
-                const nowFmt = newMsg.formattedTime || new Date(nowTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-                
-                setFriends(prev => {
-                  const targetIdStr = newMsg.userId.toString();
-                  const targetFriend = prev.find(f => f.id?.toString() === targetIdStr);
-                  const updatedFriend = targetFriend ? {
-                    ...targetFriend,
-                    lastMessage: newMsg.message || (newMsg.mediaType === 'IMAGE' ? '[Hình ảnh]' : '[Video]'),
-                    lastMessageTime: nowTime,
-                    lastMessageFormattedTime: nowFmt,
-                    hasUnread: !isFromMe && !isCurrentChat
-                  } : null;
-
-                  const rest = prev.filter(f => f.id?.toString() !== targetIdStr);
-                  return updatedFriend ? [updatedFriend, ...rest] : prev;
-                });
-              }
-
-              setTimeout(() => scrollToBottom(true), 60);
-            } catch (e) {}
-          });
-        }
-
-        // Nhận tin nhắn trong phòng DM đang chọn
-        if (activeRoomId) {
-          client.subscribe(`/topic/room/${activeRoomId}`, (message) => {
-            try {
-              const newMsg = JSON.parse(message.body);
-              const isFromMe = newMsg.userId?.toString() === currentUserId?.toString();
-
-              setMessages(prev => {
-                if (prev.some(m => m.id === newMsg.id)) return prev;
-                const hasPending = prev.some(m => m.pending && m.message === newMsg.message);
-                if (hasPending) {
-                  return prev.map(m => (m.pending && m.message === newMsg.message) ? newMsg : m);
-                }
-
-                if (!isFromMe) {
-                  playMessageIncoming();
-                }
-
-                return [...prev, newMsg];
-              });
-
-              // Đưa cuộc trò chuyện này lên đầu danh sách tức thì
-              setFriends(prev => {
-                const targetIdStr = activePartner?.id?.toString();
-                const targetFriend = prev.find(f => f.id?.toString() === targetIdStr);
-                const updatedFriend = targetFriend ? {
-                  ...targetFriend,
-                  lastMessage: newMsg.message || (newMsg.mediaType === 'IMAGE' ? '[Hình ảnh]' : '[Video]'),
-                  lastMessageTime: newMsg.timeSend || new Date().toISOString(),
-                  lastMessageFormattedTime: newMsg.formattedTime || new Date(newMsg.timeSend || Date.now()).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-                  hasUnread: false
-                } : null;
-
-                const rest = prev.filter(f => f.id?.toString() !== targetIdStr);
-                return updatedFriend ? [updatedFriend, ...rest] : prev;
-              });
-
-              setTimeout(() => scrollToBottom(true), 60);
-            } catch (e) {}
-          });
+        // 4. Đăng ký phòng DM đang mở nếu có
+        if (activeRoomIdRef.current) {
+          try {
+            roomSub = client.subscribe(`/topic/room/${activeRoomIdRef.current}`, (message) => {
+              handleIncomingDirectMsg(message.body);
+            });
+          } catch (_) {}
         }
       });
     } catch (e) {
@@ -582,11 +573,46 @@ export const DirectMessagePage = () => {
     }
 
     return () => {
+      if (roomSub) {
+        try { roomSub.unsubscribe(); } catch (_) {}
+      }
       if (client && client.connected) {
         client.disconnect();
       }
     };
-  }, [currentUserId, activeRoomId, activePartner, scrollToBottom]);
+  }, [currentUserId, scrollToBottom, markUserActive]);
+
+  // Đăng ký lại topic room khi chuyển sang phòng khác
+  useEffect(() => {
+    if (!activeRoomId || !stompClient.current || !stompClient.current.connected) return;
+    let sub = null;
+    try {
+      sub = stompClient.current.subscribe(`/topic/room/${activeRoomId}`, (message) => {
+        try {
+          const newMsg = JSON.parse(message.body);
+          const isFromMe = newMsg.userId?.toString() === currentUserId?.toString();
+          setMessages(prev => {
+            if (prev.some(m => m.id === newMsg.id)) return prev;
+            const hasPending = prev.some(m => m.pending && m.message === newMsg.message);
+            if (hasPending) {
+              return prev.map(m => (m.pending && m.message === newMsg.message) ? newMsg : m);
+            }
+            return [...prev, newMsg];
+          });
+          if (!isFromMe) {
+            playMessageIncoming();
+          }
+          setTimeout(() => scrollToBottom(true), 60);
+        } catch (_) {}
+      });
+    } catch (_) {}
+
+    return () => {
+      if (sub) {
+        try { sub.unsubscribe(); } catch (_) {}
+      }
+    };
+  }, [activeRoomId, currentUserId, scrollToBottom]);
 
   // 4. Chọn file hình ảnh / video
   const handleSelectMedia = (e) => {
@@ -921,8 +947,8 @@ export const DirectMessagePage = () => {
                 const unreadCount = unreadMap[partner.id] || unreadMap[partnerIdStr] || (partner.hasUnread && !isSelected ? 1 : 0);
                 const isUnread = unreadCount > 0;
                 
-                // Trạng thái online: Nhanh nhạy & rõ ràng
-                const isPartnerOnline = true; // Mặc định hiển thị trực tuyến rõ ràng & nhanh nhạy theo yêu cầu
+                // Trạng thái online: Nhanh nhạy & chuẩn xác theo thời gian thực
+                const isPartnerOnline = isUserOnline(partner.id);
 
                 return (
                   <div
@@ -941,7 +967,9 @@ export const DirectMessagePage = () => {
                   >
                     <div className="relative shrink-0">
                       <UserAvatar avatarUrl={partner.avatar} username={partner.account} name={partner.nickname || partner.account} size={42} />
-                      <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-zinc-950 bg-emerald-500 ring-2 ring-emerald-500/20" />
+                      <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-zinc-950 ${
+                        isPartnerOnline ? 'bg-emerald-500 ring-2 ring-emerald-500/20' : 'bg-zinc-600'
+                      }`} />
                     </div>
 
                     <div className="min-w-0 flex-1">
@@ -957,12 +985,12 @@ export const DirectMessagePage = () => {
 
                       <div className="flex items-center justify-between gap-1">
                         <p className={`text-[11px] truncate ${isUnread ? 'font-medium text-emerald-400' : 'text-zinc-400'}`}>
-                          {partner.lastMessage || 'Bắt đầu cuộc trò chuyện...'}
+                          {partner.lastMessage || (isPartnerOnline ? 'Đang trực tuyến' : 'Ngoại tuyến')}
                         </p>
 
                         {/* Badge số lượng tin nhắn chưa đọc */}
                         {isUnread && (
-                          <span className="shrink-0 px-1.5 py-0.5 bg-emerald-500 text-zinc-950 font-bold text-[10px] rounded-full min-w-[18px] text-center leading-none shadow-sm animate-pulse">
+                          <span className="shrink-0 px-1.5 py-0.5 bg-rose-500 text-white font-bold text-[10px] rounded-full min-w-[18px] text-center leading-none shadow-sm animate-pulse">
                             {unreadCount > 99 ? '99+' : unreadCount}
                           </span>
                         )}
@@ -1011,17 +1039,26 @@ export const DirectMessagePage = () => {
 
                   <div className="relative shrink-0">
                     <UserAvatar avatarUrl={activePartner.avatar} username={activePartner.account} name={activePartner.nickname || activePartner.account} size={36} />
-                    <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-zinc-950 bg-emerald-500 ring-2 ring-emerald-500/20" />
+                    <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-zinc-950 ${
+                      isUserOnline(activePartner.id) ? 'bg-emerald-500 ring-2 ring-emerald-500/20' : 'bg-zinc-600'
+                    }`} />
                   </div>
 
                   <div className="min-w-0">
                     <h3 className="text-xs font-bold text-white truncate">
                       {activePartner.nickname || activePartner.account}
                     </h3>
-                    <span className="text-[10px] font-mono flex items-center gap-1.5 text-emerald-400 font-medium">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                      Trực tuyến • Xem hồ sơ
-                    </span>
+                    {isUserOnline(activePartner.id) ? (
+                      <span className="text-[10px] font-mono flex items-center gap-1.5 text-emerald-400 font-medium">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        Trực tuyến • Xem hồ sơ
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-mono flex items-center gap-1.5 text-zinc-400 font-medium">
+                        <span className="w-2 h-2 rounded-full bg-zinc-600"></span>
+                        {getUserStatusText(activePartner.id)} • Xem hồ sơ
+                      </span>
+                    )}
                   </div>
                 </div>
 

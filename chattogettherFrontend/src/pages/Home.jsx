@@ -703,7 +703,7 @@ const Home = ({ initialTab }) => {
               const rRes = await axiosClient.get(`/message/direct/${friend.id}`).catch(() => null);
               const roomId = rRes?.data?.data?.roomId;
               if (roomId) {
-                const hRes = await axiosClient.get(`/message/${roomId}?size=10`).catch(() => null);
+                const hRes = await axiosClient.get(`/message/${roomId}?size=50`).catch(() => null);
                 const msgs = hRes?.data?.data || [];
                 let friendUnread = 0;
                 for (let i = msgs.length - 1; i >= 0; i--) {
@@ -722,6 +722,7 @@ const Home = ({ initialTab }) => {
           }));
           setUnreadDmCount(count);
           localStorage.setItem('talovin_dm_unread', JSON.stringify(unreadMap));
+          window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: unreadMap }));
         }
       } catch (_) {}
     };

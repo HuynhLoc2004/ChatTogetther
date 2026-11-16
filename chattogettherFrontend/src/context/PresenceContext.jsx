@@ -6,12 +6,14 @@ const PresenceContext = createContext({
   onlineUserIds: new Set(),
   isUserOnline: () => false,
   getUserStatusText: () => 'Ngoại tuyến',
+  markUserActive: () => {},
   refreshPresence: () => {}
 });
 
 export const PresenceProvider = ({ children }) => {
   const [onlineUserIds, setOnlineUserIds] = useState(new Set());
   const stompClientRef = useRef(null);
+  const lastSeenMapRef = useRef(new Map());
 
   // Helper lấy userId hiện tại an toàn
   const getCurrentUserId = useCallback(() => {
@@ -31,99 +33,180 @@ export const PresenceProvider = ({ children }) => {
     return id ? String(id) : null;
   }, []);
 
-  // 1. Nạp danh sách trực tuyến ban đầu từ server
+  // Đánh dấu một user đang hoạt động (vừa gửi tin nhắn hoặc tương tác)
+  const markUserActive = useCallback((userId) => {
+    if (!userId) return;
+    const uid = String(userId);
+    lastSeenMapRef.current.set(uid, Date.now());
+    setOnlineUserIds(prev => {
+      if (prev.has(uid)) return prev;
+      const next = new Set(prev);
+      next.add(uid);
+      return next;
+    });
+  }, []);
+
+  // 1. Nạp danh sách trực tuyến từ server REST API
   const fetchOnlineUsers = useCallback(async () => {
     try {
       const res = await axiosClient.get('/users/online-ids');
       if (res.data?.data && Array.isArray(res.data.data)) {
-        setOnlineUserIds(new Set(res.data.data.map(String)));
+        const serverIds = res.data.data.map(String);
+        serverIds.forEach(id => lastSeenMapRef.current.set(id, Date.now()));
+        setOnlineUserIds(prev => {
+          const next = new Set(prev);
+          serverIds.forEach(id => next.add(id));
+          return next;
+        });
       }
     } catch (_) {
       try {
         const fallbackRes = await axiosClient.get('/public/online-users');
         if (fallbackRes.data?.data && Array.isArray(fallbackRes.data.data)) {
-          setOnlineUserIds(new Set(fallbackRes.data.data.map(String)));
+          const serverIds = fallbackRes.data.data.map(String);
+          serverIds.forEach(id => lastSeenMapRef.current.set(id, Date.now()));
+          setOnlineUserIds(prev => {
+            const next = new Set(prev);
+            serverIds.forEach(id => next.add(id));
+            return next;
+          });
         }
       } catch (_) {}
     }
   }, []);
 
-  // 2. Định kỳ gửi heartbeat mỗi 25s khi tab đang mở (Mobile & Desktop)
+  // 2. Gửi heartbeat và kết nối WebSocket STOMP
   useEffect(() => {
     const currentUserId = getCurrentUserId();
     if (!currentUserId) return;
-
-    const sendHeartbeat = () => {
-      // 1. Gửi qua REST với body userId
-      axiosClient.post('/presence/heartbeat', { userId: Number(currentUserId) }).catch(() => {});
-      // 2. Gửi qua WebSocket nếu đang connected
-      if (stompClientRef.current && stompClientRef.current.connected) {
-        try {
-          stompClientRef.current.send('/app/presence/heartbeat', {}, JSON.stringify({ userId: Number(currentUserId) }));
-        } catch (_) {}
-      }
-    };
-
-    sendHeartbeat();
-    const interval = setInterval(sendHeartbeat, 20000);
-    return () => clearInterval(interval);
-  }, [getCurrentUserId]);
-
-  // 3. Lắng nghe sự kiện /topic/presence qua STOMP WebSocket & định kỳ đồng bộ
-  useEffect(() => {
-    fetchOnlineUsers();
-    const syncInterval = setInterval(fetchOnlineUsers, 30000);
 
     let isMounted = true;
     const client = createStompClient();
     stompClientRef.current = client;
 
-    const currentUserId = getCurrentUserId();
     const token = localStorage.getItem('accesstoken');
-    const connectHeaders = {};
-    if (currentUserId) connectHeaders['userId'] = String(currentUserId);
+    const connectHeaders = { userId: String(currentUserId) };
     if (token) connectHeaders['Authorization'] = `Bearer ${token}`;
+
+    const broadcastMyPresence = (isOnline = true) => {
+      if (client && client.connected) {
+        try {
+          const payload = JSON.stringify({
+            userId: Number(currentUserId),
+            isOnline,
+            timestamp: Date.now()
+          });
+          // Gửi vào topic presence để toàn bộ các tab / thiết bị khác nhận được tức thì
+          client.send('/topic/presence', {}, payload);
+          // Gửi tới server message broker để ghi nhận session
+          client.send('/app/presence/heartbeat', {}, payload);
+        } catch (_) {}
+      }
+      // Heartbeat qua REST API
+      if (isOnline) {
+        axiosClient.post('/presence/heartbeat', { userId: Number(currentUserId) }).catch(() => {});
+      }
+    };
 
     client.connect(connectHeaders, () => {
       if (!isMounted) return;
 
+      // Mình luôn luôn trực tuyến trên thiết bị của mình
+      markUserActive(currentUserId);
+
+      // Đăng ký nhận tín hiệu presence toàn cục
       client.subscribe('/topic/presence', (frame) => {
         try {
           const data = JSON.parse(frame.body);
           if (data && data.userId) {
             const uid = String(data.userId);
-            setOnlineUserIds(prev => {
-              const next = new Set(prev);
-              if (data.isOnline) {
+            if (data.isOnline) {
+              lastSeenMapRef.current.set(uid, data.timestamp || Date.now());
+              setOnlineUserIds(prev => {
+                if (prev.has(uid)) return prev;
+                const next = new Set(prev);
                 next.add(uid);
-              } else {
+                return next;
+              });
+            } else {
+              lastSeenMapRef.current.delete(uid);
+              setOnlineUserIds(prev => {
+                if (!prev.has(uid)) return prev;
+                const next = new Set(prev);
                 next.delete(uid);
-              }
-              return next;
-            });
+                return next;
+              });
+            }
           }
-        } catch (e) {
-          console.warn("Lỗi nhận dữ liệu presence:", e);
+        } catch (e) {}
+      });
+
+      // Phát tín hiệu ngay khi kết nối thành công
+      broadcastMyPresence(true);
+    }, () => {});
+
+    // Định kỳ gửi nhịp tim mỗi 15 giây (rất nhẹ, cực chuẩn)
+    const heartbeatInterval = setInterval(() => {
+      broadcastMyPresence(true);
+    }, 15000);
+
+    // Quét loại bỏ người dùng hết hạn tín hiệu (> 45s) mỗi 10 giây
+    const pruneInterval = setInterval(() => {
+      const now = Date.now();
+      const expired = [];
+      lastSeenMapRef.current.forEach((ts, uid) => {
+        if (uid !== String(currentUserId) && now - ts > 45000) {
+          expired.push(uid);
         }
       });
-    }, () => {});
+      if (expired.length > 0) {
+        expired.forEach(uid => lastSeenMapRef.current.delete(uid));
+        setOnlineUserIds(prev => {
+          const next = new Set(prev);
+          expired.forEach(uid => next.delete(uid));
+          return next;
+        });
+      }
+    }, 10000);
+
+    // Nạp danh sách ban đầu từ server
+    fetchOnlineUsers();
+
+    // Bắt sự kiện tắt tab / rời trang để thông báo ngoại tuyến
+    const handleBeforeUnload = () => {
+      broadcastMyPresence(false);
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
 
     return () => {
       isMounted = false;
-      clearInterval(syncInterval);
+      clearInterval(heartbeatInterval);
+      clearInterval(pruneInterval);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      broadcastMyPresence(false);
       if (stompClientRef.current) {
         try {
           stompClientRef.current.disconnect();
         } catch (_) {}
       }
     };
-  }, [fetchOnlineUsers]);
+  }, [getCurrentUserId, fetchOnlineUsers, markUserActive]);
 
   // Helper kiểm tra một user có online không
   const isUserOnline = useCallback((userId) => {
     if (!userId) return false;
-    return onlineUserIds.has(String(userId));
-  }, [onlineUserIds]);
+    const uid = String(userId);
+    const myId = getCurrentUserId();
+    if (myId && uid === String(myId)) return true; // Chính mình luôn trực tuyến
+
+    // Kiểm tra timestamp gần nhất từ peer broadcast
+    const lastSeen = lastSeenMapRef.current.get(uid);
+    if (lastSeen && (Date.now() - lastSeen < 45000)) {
+      return true;
+    }
+
+    return onlineUserIds.has(uid);
+  }, [onlineUserIds, getCurrentUserId]);
 
   // Helper định dạng chữ trạng thái hoạt động
   const getUserStatusText = useCallback((userId, lastActiveAt) => {
@@ -153,6 +236,7 @@ export const PresenceProvider = ({ children }) => {
       onlineUserIds,
       isUserOnline,
       getUserStatusText,
+      markUserActive,
       refreshPresence: fetchOnlineUsers
     }}>
       {children}

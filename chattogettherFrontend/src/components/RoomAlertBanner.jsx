@@ -4,6 +4,7 @@ import { X, MessageSquare } from 'lucide-react';
 import { createStompClient } from '../utils/stompClient';
 import UserAvatar from './UserAvatar';
 import { playMessageIncoming } from '../utils/soundEffects';
+import { usePresence } from '../context/PresenceContext';
 
 export const RoomAlertBanner = () => {
   const [currentAlert, setCurrentAlert] = useState(null);
@@ -11,6 +12,21 @@ export const RoomAlertBanner = () => {
   const navigate = useNavigate();
   const timeoutRef = useRef(null);
   const stompClientRef = useRef(null);
+  const { markUserActive } = usePresence();
+
+  // Yêu cầu quyền Notification trình duyệt (Laptop & Phone) khi người dùng tương tác
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      const askPermission = () => {
+        try {
+          Notification.requestPermission();
+        } catch (_) {}
+        window.removeEventListener('click', askPermission);
+      };
+      window.addEventListener('click', askPermission, { once: true });
+      return () => window.removeEventListener('click', askPermission);
+    }
+  }, []);
 
   // Lấy currentUserId an toàn
   const getCurrentUserId = () => {
@@ -36,43 +52,88 @@ export const RoomAlertBanner = () => {
     const client = createStompClient();
     stompClientRef.current = client;
 
-    client.connect({ Authorization: `Bearer ${token}` }, () => {
+    const connectHeaders = { 
+      userId: String(userId),
+      Authorization: `Bearer ${token}` 
+    };
+
+    client.connect(connectHeaders, () => {
       if (!isMounted) return;
 
       const handleAlert = (body) => {
         try {
-          const alert = typeof body === 'string' ? JSON.parse(body) : body;
-          if (!alert || !alert.roomId) return;
+          const raw = typeof body === 'string' ? JSON.parse(body) : body;
+          if (!raw) return;
 
-          // Kiểm tra: nếu user đang mở đúng phòng chat này và tab đang focus thì không làm phiền
+          // Chuẩn hóa dữ liệu nhận được từ cả 2 dạng: RoomAlertDTO hoặc SendMessageDTO (/topic/messages/{userId})
+          let alert = null;
+          if (raw.isDirect || raw.roomId) {
+            alert = {
+              roomId: raw.roomId,
+              roomName: raw.roomName,
+              isDirect: Boolean(raw.isDirect),
+              senderId: raw.senderId || raw.userId,
+              senderUsername: raw.senderUsername || raw.account,
+              senderDisplayName: raw.senderDisplayName || raw.nickname || raw.senderUsername || 'Người dùng',
+              senderAvatar: raw.senderAvatar || raw.avatar,
+              contentPreview: raw.contentPreview || raw.message || 'Đã gửi tin nhắn'
+            };
+          } else if (raw.message && (raw.userId || raw.senderId)) {
+            const senderId = raw.senderId || raw.userId;
+            if (String(senderId) === String(userId)) {
+              // Bỏ qua tin nhắn do chính mình gửi từ thiết bị khác
+              return;
+            }
+            alert = {
+              roomId: raw.roomId || null,
+              roomName: raw.nickname || raw.senderUsername || 'Tin nhắn mới',
+              isDirect: true,
+              senderId: senderId,
+              senderUsername: raw.senderUsername || raw.account,
+              senderDisplayName: raw.nickname || raw.senderUsername || 'Người dùng',
+              senderAvatar: raw.senderAvatar || raw.avatar,
+              contentPreview: raw.message
+            };
+          }
+
+          if (!alert || !alert.senderId) return;
+
+          // Đánh dấu người gửi đang online tức thì
+          if (markUserActive && alert.senderId) {
+            markUserActive(alert.senderId);
+          }
+
+          // Kiểm tra: nếu user đang mở đúng phòng chat này và tab đang focus thì không hiển thị banner
           const currentPath = window.location.pathname;
           const searchParams = new URLSearchParams(window.location.search);
           const currentUserIdParam = searchParams.get('userId') || searchParams.get('user_id');
 
           let isViewingThisChat = false;
           if (alert.isDirect) {
-            isViewingThisChat = currentPath === `/messages/${alert.senderId}` || 
+            isViewingThisChat = (currentPath === `/messages/${alert.senderId}` || 
                                 currentPath === `/messages/${alert.senderUsername}` ||
-                                (currentPath.startsWith('/messages') && String(currentUserIdParam) === String(alert.senderId));
-          } else {
-            isViewingThisChat = currentPath === `/room/${alert.roomId}` || currentPath === `/room/${alert.roomId}/`;
+                                (currentPath.startsWith('/messages') && String(currentUserIdParam) === String(alert.senderId))) &&
+                               !document.hidden;
+          } else if (alert.roomId) {
+            isViewingThisChat = (currentPath === `/room/${alert.roomId}` || currentPath === `/room/${alert.roomId}/`) && !document.hidden;
           }
 
-          if (isViewingThisChat && !document.hidden) {
+          if (isViewingThisChat) {
             return;
           }
 
-          // Cập nhật số lượng tin nhắn chưa đọc toàn cục
+          // Cập nhật số lượng tin nhắn chưa đọc toàn cục (sẽ đẩy số lượng 4 -> 5, 6, 7... ngay tức thì)
           if (alert.isDirect && alert.senderId) {
             try {
               const currentUnread = JSON.parse(localStorage.getItem('talovin_dm_unread') || '{}');
-              currentUnread[alert.senderId] = (currentUnread[alert.senderId] || 0) + 1;
+              const sid = String(alert.senderId);
+              currentUnread[sid] = (Number(currentUnread[sid]) || 0) + 1;
               localStorage.setItem('talovin_dm_unread', JSON.stringify(currentUnread));
               window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: currentUnread }));
             } catch (_) {}
           }
 
-          // 1. Phát âm thanh nốt ding-dong nhẹ nhàng 660Hz -> 990Hz
+          // 1. Phát âm thanh nốt ding-dong rõ ràng & nhẹ nhàng
           playMessageIncoming();
 
           // 2. Kích hoạt System / OS Notification trên Điện thoại hoặc Laptop (nếu user cấp quyền)
@@ -88,13 +149,13 @@ export const RoomAlertBanner = () => {
               const notif = new Notification(notifTitle, {
                 body: notifBody,
                 icon: alert.senderAvatar || '/favicon.ico',
-                tag: alert.isDirect ? `dm-${alert.senderId}` : `room-${alert.roomId}`
+                tag: alert.isDirect ? `dm-${alert.senderId}` : `room-${alert.roomId || 'alert'}`
               });
               notif.onclick = () => {
                 window.focus();
                 if (alert.isDirect) {
                   navigate(`/messages/${alert.senderId}`);
-                } else {
+                } else if (alert.roomId) {
                   navigate(`/room/${alert.roomId}`);
                 }
                 notif.close();
@@ -102,24 +163,24 @@ export const RoomAlertBanner = () => {
             } catch (_) {}
           }
 
-          // 3. Hiển thị In-App Floating Banner nếu đang ở tab web hoặc tab khác
-          if (!isViewingThisChat) {
-            if (timeoutRef.current) clearTimeout(timeoutRef.current);
-            setCurrentAlert(alert);
+          // 3. Hiển thị In-App Floating Banner nếu đang ở tab web hoặc trang khác
+          if (timeoutRef.current) clearTimeout(timeoutRef.current);
+          setCurrentAlert(alert);
 
-            // Tự động biến mất sau 4.5 giây
-            timeoutRef.current = setTimeout(() => {
-              setCurrentAlert(null);
-            }, 4500);
-          }
+          // Tự động biến mất sau 4.5 giây
+          timeoutRef.current = setTimeout(() => {
+            setCurrentAlert(null);
+          }, 4500);
         } catch (e) {
           console.error('Lỗi nhận room alert:', e);
         }
       };
 
-      // Đăng ký cả /user/queue/room-alerts và /topic/room-alerts/{userId}
-      client.subscribe('/user/queue/room-alerts', (msg) => handleAlert(msg.body));
+      // Đăng ký toàn bộ các kênh nhận tin nhắn và thông báo thời gian thực
+      client.subscribe(`/topic/messages/${userId}`, (msg) => handleAlert(msg.body));
       client.subscribe(`/topic/room-alerts/${userId}`, (msg) => handleAlert(msg.body));
+      client.subscribe('/user/queue/room-alerts', (msg) => handleAlert(msg.body));
+      client.subscribe('/user/queue/direct-messages', (msg) => handleAlert(msg.body));
     });
 
     return () => {
@@ -129,7 +190,7 @@ export const RoomAlertBanner = () => {
         client.disconnect();
       }
     };
-  }, [navigate]);
+  }, [navigate, markUserActive]);
 
   if (!currentAlert) return null;
 
