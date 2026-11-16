@@ -424,8 +424,11 @@ const CallPage = () => {
         const stomp = createStompClient();
         stompClient.current = stomp;
         const authToken = localStorage.getItem('accesstoken');
+        const connHeaders = {};
+        if (authToken) connHeaders['Authorization'] = `Bearer ${authToken}`;
+        if (currentUserId) connHeaders['userId'] = String(currentUserId);
 
-        stomp.connect(authToken ? { Authorization: `Bearer ${authToken}` } : {}, async () => {
+        stomp.connect(connHeaders, async () => {
           if (!isActive) return;
 
           // Subscribe topic nhận tín hiệu
@@ -467,7 +470,7 @@ const CallPage = () => {
           }, 1000);
         }, (err) => {
           console.warn("Lỗi kết nối máy chủ tín hiệu:", err);
-          setCallStatusText('Đang dò tìm tín hiệu đàm thoại...');
+          setCallStatusText('Đang kết nối lại đường truyền đàm thoại...');
         });
 
       } catch (err) {

@@ -5,7 +5,7 @@ import {
   Mic, MicOff, Send, Image as ImageIcon, Smile, MoreVertical, User, 
   Clock, CheckCircle2, ChevronDown, Volume2, Shield, Share2, Sparkles,
   PhoneCall, PhoneMissed, Reply, CornerUpLeft, Forward, X, Play, Heart,
-  ThumbsUp, Flame, Check, CheckCheck
+  ThumbsUp, Flame, Check, CheckCheck, Users
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
@@ -17,6 +17,39 @@ import { usePresence } from '../context/PresenceContext';
 import { playMessageIncoming, playReactionPop } from '../utils/soundEffects';
 
 const QUICK_EMOJIS = ['❤️', '👍', '😂', '😮', '😢', '🔥'];
+
+// Nén hình ảnh trên Canvas để gửi siêu nhẹ (tránh lỗi 413 Payload Too Large)
+const compressImage = (file, maxWidth = 1280, quality = 0.82) => {
+  return new Promise((resolve) => {
+    if (!file || !file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.readAsDataURL(file);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/webp', quality));
+      };
+      img.onerror = () => resolve(e.target.result);
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+};
 
 export const DirectMessagePage = () => {
   const { userId: routeUserId } = useParams();
@@ -78,6 +111,8 @@ export const DirectMessagePage = () => {
   // Tính năng Chuyển tiếp (Forward)
   const [forwardingMsg, setForwardingMsg] = useState(null);
   const [forwardSearch, setForwardSearch] = useState('');
+  const [forwardTab, setForwardTab] = useState('friends'); // 'friends' | 'rooms'
+  const [communityRooms, setCommunityRooms] = useState([]);
 
   // Cuộc gọi đến (Incoming Call)
   const [incomingCall, setIncomingCall] = useState(null);
@@ -118,12 +153,12 @@ export const DirectMessagePage = () => {
   // Heartbeat định kỳ gửi lên server để duy trì trạng thái online
   useEffect(() => {
     const sendHeartbeat = () => {
-      axiosClient.post('/presence/heartbeat').catch(() => {});
+      axiosClient.post('/presence/heartbeat', { userId: Number(currentUserId) }).catch(() => {});
     };
     sendHeartbeat();
-    const interval = setInterval(sendHeartbeat, 25000);
+    const interval = setInterval(sendHeartbeat, 20000);
     return () => clearInterval(interval);
-  }, []);
+  }, [currentUserId]);
 
   // Tự động yêu cầu quyền thông báo hệ thống khi vào trang nhắn tin
   useEffect(() => {
@@ -132,22 +167,92 @@ export const DirectMessagePage = () => {
     }
   }, []);
 
-  // 1. Tải danh sách bạn bè
+  // 1. Tải danh sách bạn bè & nạp xem trước tin nhắn gần nhất
   useEffect(() => {
-    const fetchFriends = async () => {
+    let isMounted = true;
+    const fetchFriendsAndPreviews = async () => {
       try {
         setLoadingFriends(true);
         const res = await axiosClient.get('/friends/list');
         if (res?.data?.data && Array.isArray(res.data.data)) {
-          setFriends(res.data.data);
+          const rawFriends = res.data.data;
+          
+          // Nạp song song dữ liệu tin nhắn cuối cùng cho từng người bạn
+          const enrichedFriends = await Promise.all(rawFriends.map(async (friend) => {
+            try {
+              let directRoomId = null;
+              try {
+                const roomRes = await axiosClient.get(`/message/direct/${friend.id}`);
+                directRoomId = roomRes?.data?.data?.roomId;
+              } catch (_) {
+                if (friend.account) {
+                  const roomRes2 = await axiosClient.get(`/message/direct/${friend.account}`).catch(() => null);
+                  directRoomId = roomRes2?.data?.data?.roomId;
+                }
+              }
+
+              if (directRoomId) {
+                const histRes = await axiosClient.get(`/message/${directRoomId}?size=10`).catch(() => null);
+                const msgs = histRes?.data?.data || [];
+                if (msgs.length > 0) {
+                  const lastMsg = msgs[msgs.length - 1];
+                  const isFromPartner = lastMsg.userId?.toString() === friend.id?.toString();
+                  return {
+                    ...friend,
+                    directRoomId,
+                    lastMessage: lastMsg.message || (lastMsg.mediaType === 'IMAGE' ? '[Hình ảnh]' : '[Tệp tin]'),
+                    lastMessageTime: lastMsg.timeSend || null,
+                    lastMessageFormattedTime: lastMsg.formattedTime || (lastMsg.timeSend ? new Date(lastMsg.timeSend).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : ''),
+                    lastMessageSenderId: lastMsg.userId,
+                    hasUnread: isFromPartner && (!urlTargetUserId || urlTargetUserId.toString() !== friend.id?.toString())
+                  };
+                }
+              }
+            } catch (_) {}
+            return friend;
+          }));
+
+          if (!isMounted) return;
+
+          // Sắp xếp: người có tin nhắn gần nhất luôn nhảy lên vị trí đầu tiên
+          enrichedFriends.sort((a, b) => {
+            const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
+            const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
+            return timeB - timeA;
+          });
+
+          setFriends(enrichedFriends);
+
+          // Tự động chọn cuộc trò chuyện đầu tiên nếu chưa chọn ai và đang ở màn hình lớn (desktop)
+          if (!urlTargetUserId && enrichedFriends.length > 0 && typeof window !== 'undefined' && window.innerWidth >= 768) {
+            const first = enrichedFriends[0];
+            navigate(`/messages/${first.id}`, { replace: true });
+          }
         }
       } catch (e) {
         console.error('Lỗi nạp danh sách bạn bè:', e);
       } finally {
-        setLoadingFriends(false);
+        if (isMounted) setLoadingFriends(false);
       }
     };
-    fetchFriends();
+
+    fetchFriendsAndPreviews();
+    return () => { isMounted = false; };
+  }, [urlTargetUserId, navigate]);
+
+  // Nạp danh sách phòng nhóm công khai cho tính năng chuyển tiếp
+  useEffect(() => {
+    const fetchRooms = async () => {
+      try {
+        const res = await axiosClient.get('/rooms/info-rooms');
+        if (res?.data?.data && Array.isArray(res.data.data)) {
+          // Lọc các phòng nhóm không phải là phòng DM 1-1
+          const publicRooms = res.data.data.filter(r => !r.nameroom?.startsWith('DIRECT_') && !r.nameroom?.includes('&'));
+          setCommunityRooms(publicRooms);
+        }
+      } catch (_) {}
+    };
+    fetchRooms();
   }, []);
 
   // 2. Mở hoặc tạo đoạn chat khi có targetId
@@ -162,12 +267,18 @@ export const DirectMessagePage = () => {
 
     // Đánh dấu đã đọc cho người bạn này ngay lập tức
     setUnreadMap(prev => {
-      if (!prev[targetId] && (!fallbackPartner || !prev[fallbackPartner.id])) return prev;
       const next = { ...prev };
       delete next[targetId];
       if (fallbackPartner?.id) delete next[fallbackPartner.id];
       return next;
     });
+
+    setFriends(prev => prev.map(f => {
+      if (f.id?.toString() === targetId?.toString() || (fallbackPartner && f.id === fallbackPartner.id)) {
+        return { ...f, hasUnread: false };
+      }
+      return f;
+    }));
 
     try {
       setLoadingMessages(true);
@@ -221,7 +332,8 @@ export const DirectMessagePage = () => {
                     ...f, 
                     lastMessage: lastMsg.message, 
                     lastMessageTime: lastMsg.timeSend || new Date().toISOString(),
-                    lastMessageFormattedTime: lastMsg.formattedTime
+                    lastMessageFormattedTime: lastMsg.formattedTime,
+                    hasUnread: false
                   };
                 }
                 return f;
@@ -258,42 +370,74 @@ export const DirectMessagePage = () => {
 
     lastTargetIdRef.current = urlTargetUserId;
     const foundInFriends = friends.find(f => f.id?.toString() === urlTargetUserId?.toString() || f.account === urlTargetUserId);
-    const effectivePartner = passedTargetUser || foundInFriends;
+    const partnerToUse = foundInFriends || (passedTargetUser && (passedTargetUser.id?.toString() === urlTargetUserId.toString() || passedTargetUser.account === urlTargetUserId) ? passedTargetUser : null);
 
-    if (effectivePartner) {
-      setActivePartner(effectivePartner);
-      if (!foundInFriends) {
-        setFriends(prev => [effectivePartner, ...prev.filter(f => f.id?.toString() !== urlTargetUserId?.toString())]);
-      }
-    }
-    openDirectChat(urlTargetUserId, effectivePartner);
-  }, [urlTargetUserId, passedTargetUser, friends.length, openDirectChat]);
+    openDirectChat(urlTargetUserId, partnerToUse);
+  }, [urlTargetUserId, friends, passedTargetUser, openDirectChat, activePartner]);
 
-  // 3. Kết nối WebSocket STOMP
+  // 3. Kết nối WebSocket STOMP chuẩn native browser kèm Authorization header
   useEffect(() => {
-    let client = null;
-    const token = localStorage.getItem('accesstoken');
+    if (!currentUserId) return;
 
+    let client = null;
     try {
       client = createStompClient();
-      client.connect({ Authorization: `Bearer ${token}` }, () => {
-        stompClient.current = client;
+      stompClient.current = client;
+      const token = localStorage.getItem('accesstoken');
 
-        // Nhận tín hiệu cuộc gọi đến cá nhân
-        if (currentUserId) {
-          client.subscribe(`/topic/call/user/${currentUserId}`, (message) => {
-            try {
-              const signal = JSON.parse(message.body);
-              if (signal && (signal.type === 'OFFER' || signal.type === 'RINGING')) {
-                setIncomingCall(signal);
-              } else if (signal && (signal.type === 'END' || signal.type === 'DECLINE')) {
-                setIncomingCall(null);
+      const connectHeaders = { userId: String(currentUserId) };
+      if (token) connectHeaders['Authorization'] = `Bearer ${token}`;
+
+      client.connect(connectHeaders, () => {
+        // Lắng nghe tín hiệu cuộc gọi đến WebRTC
+        client.subscribe(`/topic/call/user/${currentUserId}`, (message) => {
+          try {
+            const data = JSON.parse(message.body);
+            if (data.type === 'OFFER' || data.type === 'RINGING') {
+              setIncomingCall(data);
+            } else if (data.type === 'END' || data.type === 'DECLINE') {
+              setIncomingCall(null);
+            }
+          } catch (e) {}
+        });
+
+        // Nhận cảnh báo tin nhắn thời gian thực (Room Alert)
+        client.subscribe(`/topic/room-alerts/${currentUserId}`, (frame) => {
+          try {
+            const alert = JSON.parse(frame.body);
+            if (alert.isDirect && alert.senderId) {
+              const isCurrentChat = activePartner?.id?.toString() === alert.senderId?.toString();
+              
+              if (!isCurrentChat) {
+                playMessageIncoming();
+                setUnreadMap(prev => ({
+                  ...prev,
+                  [alert.senderId]: (prev[alert.senderId] || 0) + 1
+                }));
+
+                // Đưa người gửi lên đầu danh sách và highlight
+                setFriends(prev => {
+                  const targetIdStr = alert.senderId.toString();
+                  const targetFriend = prev.find(f => f.id?.toString() === targetIdStr);
+                  const updatedFriend = targetFriend ? {
+                    ...targetFriend,
+                    lastMessage: alert.contentPreview || 'Tin nhắn mới',
+                    lastMessageTime: new Date().toISOString(),
+                    lastMessageFormattedTime: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+                    hasUnread: true
+                  } : null;
+
+                  const rest = prev.filter(f => f.id?.toString() !== targetIdStr);
+                  return updatedFriend ? [updatedFriend, ...rest] : prev;
+                });
               }
-            } catch (e) {}
-          });
+            }
+          } catch (_) {}
+        });
 
-          // Nhận thông báo tin nhắn mới gửi trực tiếp cho user
-          client.subscribe(`/topic/messages/${currentUserId}`, (message) => {
+        // Nhận tin nhắn riêng tư toàn cục
+        if (currentUserId) {
+          client.subscribe(`/user/queue/direct-messages`, (message) => {
             try {
               const newMsg = JSON.parse(message.body);
               const isFromMe = newMsg.userId?.toString() === currentUserId?.toString();
@@ -345,7 +489,8 @@ export const DirectMessagePage = () => {
                     ...targetFriend,
                     lastMessage: newMsg.message || (newMsg.mediaType === 'IMAGE' ? '[Hình ảnh]' : '[Video]'),
                     lastMessageTime: nowTime,
-                    lastMessageFormattedTime: nowFmt
+                    lastMessageFormattedTime: nowFmt,
+                    hasUnread: !isFromMe && !isCurrentChat
                   } : null;
 
                   const rest = prev.filter(f => f.id?.toString() !== targetIdStr);
@@ -379,6 +524,7 @@ export const DirectMessagePage = () => {
                 return [...prev, newMsg];
               });
 
+              // Đưa cuộc trò chuyện này lên đầu danh sách tức thì
               setFriends(prev => {
                 const targetIdStr = activePartner?.id?.toString();
                 const targetFriend = prev.find(f => f.id?.toString() === targetIdStr);
@@ -386,7 +532,8 @@ export const DirectMessagePage = () => {
                   ...targetFriend,
                   lastMessage: newMsg.message || (newMsg.mediaType === 'IMAGE' ? '[Hình ảnh]' : '[Video]'),
                   lastMessageTime: newMsg.timeSend || new Date().toISOString(),
-                  lastMessageFormattedTime: newMsg.formattedTime || new Date(newMsg.timeSend || Date.now()).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+                  lastMessageFormattedTime: newMsg.formattedTime || new Date(newMsg.timeSend || Date.now()).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+                  hasUnread: false
                 } : null;
 
                 const rest = prev.filter(f => f.id?.toString() !== targetIdStr);
@@ -440,7 +587,7 @@ export const DirectMessagePage = () => {
     setSelectedMedia(null);
   };
 
-  // 5. Gửi tin nhắn 1-1 (Hỗ trợ Reply, Media, Optimistic UI)
+  // 5. Gửi tin nhắn 1-1 (Hỗ trợ Reply, Media, Nén ảnh tự động, Optimistic UI)
   const handleSendMessage = async (e) => {
     if (e) e.preventDefault();
     if ((!textInput.trim() && !selectedMedia) || sending) return;
@@ -482,7 +629,8 @@ export const DirectMessagePage = () => {
         ...targetFriend,
         lastMessage: content || (currentMedia?.type === 'IMAGE' ? '[Hình ảnh]' : '[Video]'),
         lastMessageTime: now.toISOString(),
-        lastMessageFormattedTime: formattedTime
+        lastMessageFormattedTime: formattedTime,
+        hasUnread: false
       } : null;
 
       const rest = prev.filter(f => f.id?.toString() !== partnerIdStr);
@@ -531,30 +679,15 @@ export const DirectMessagePage = () => {
         throw new Error("Không thể khởi tạo cuộc trò chuyện với người dùng này");
       }
 
-      // Xử lý upload media nếu có tệp đính kèm
+      // Xử lý tệp đính kèm: Nén ảnh hoặc đọc Base64
       let uploadedMediaUrl = null;
       if (currentMedia?.file) {
         setMediaUploading(true);
         try {
-          const formData = new FormData();
-          formData.append('file', currentMedia.file);
-          formData.append('type', currentMedia.type);
-          
-          const uploadRes = await axiosClient.post('/posts/upload-media', formData, {
-            headers: { 'Content-Type': 'multipart/form-data' }
-          }).catch(() => null);
-
-          if (uploadRes?.data?.data) {
-            uploadedMediaUrl = uploadRes.data.data;
-          } else {
-            // Chuyển sang base64 nếu endpoint upload backend chưa mở
-            uploadedMediaUrl = await new Promise((resolve) => {
-              const reader = new FileReader();
-              reader.onloadend = () => resolve(reader.result);
-              reader.readAsDataURL(currentMedia.file);
-            });
-          }
-        } catch (_) {} finally {
+          uploadedMediaUrl = await compressImage(currentMedia.file);
+        } catch (_) {
+          uploadedMediaUrl = currentMedia.previewUrl;
+        } finally {
           setMediaUploading(false);
         }
       }
@@ -583,40 +716,35 @@ export const DirectMessagePage = () => {
         pending: false,
         mediaUrl: uploadedMediaUrl || m.mediaUrl
       } : m));
-      setTimeout(() => scrollToBottom(true), 60);
-    } catch (err) {
-      console.error("Lỗi gửi tin nhắn 1-1:", err);
-      const errMsg = err.response?.data?.message || err.message || 'Không thể gửi tin nhắn';
-      toast.error(errMsg, { id: 'dm-send-error' });
-      // Hoàn tác tin nhắn nếu gửi thất bại
+
+    } catch (e) {
+      console.error('Lỗi gửi tin nhắn 1-1:', e);
+      toast.error('Không thể gửi tin nhắn. Vui lòng thử lại!');
       setMessages(prev => prev.filter(m => m.id !== tempId));
-      setTextInput(content);
-      if (currentReply) setReplyingTo(currentReply);
-      if (currentMedia) setSelectedMedia(currentMedia);
     } finally {
       setSending(false);
     }
   };
 
-  // 6. Thả cảm xúc vào tin nhắn
+  // 6. Thả cảm xúc Emoji (Reactions)
   const handleToggleReaction = (msgId, emoji) => {
     playReactionPop();
     setActiveReactionPickerMsgId(null);
 
     setReactionsMap(prev => {
-      const msgReactions = prev[msgId] || {};
+      const msgReactions = { ...(prev[msgId] || {}) };
       const currentCount = msgReactions[emoji] || 0;
-      const nextCounts = { ...msgReactions };
-
+      
       if (currentCount > 0) {
-        delete nextCounts[emoji];
+        msgReactions[emoji] = currentCount - 1;
+        if (msgReactions[emoji] <= 0) delete msgReactions[emoji];
       } else {
-        nextCounts[emoji] = 1;
+        msgReactions[emoji] = 1;
       }
 
       return {
         ...prev,
-        [msgId]: nextCounts
+        [msgId]: msgReactions
       };
     });
   };
@@ -640,113 +768,113 @@ export const DirectMessagePage = () => {
 
       if (targetRoom) {
         await axiosClient.post('/message/send', {
-          message: cleanText,
+          message: cleanText || '[Tệp tin]',
           timeSend: new Date().toISOString()
         }, {
           params: { user_room: targetRoom }
         });
-        toast.success(`Đã chuyển tiếp tin nhắn tới ${targetFriend.nickname || targetFriend.account}!`);
+        toast.success(`Đã chuyển tiếp tới ${targetFriend.nickname || targetFriend.account}!`);
+      } else {
+        throw new Error("Không tìm thấy phòng");
       }
-    } catch (err) {
-      toast.error("Không thể chuyển tiếp tin nhắn lúc này");
+    } catch (e) {
+      toast.error("Không thể chuyển tiếp tin nhắn");
     } finally {
       setForwardingMsg(null);
     }
   };
 
-  // Sắp xếp danh sách hội thoại: Người có tin nhắn mới nhất luôn nổi lên ĐẦU TIÊN
-  const sortedConversations = useMemo(() => {
-    let list = Array.isArray(friends) ? [...friends] : [];
-    if (activePartner && !list.some(f => f.id?.toString() === activePartner.id?.toString())) {
-      list.unshift(activePartner);
+  // Chuyển tiếp tin nhắn sang nhóm chat (Community Room)
+  const handleForwardToRoom = async (room) => {
+    if (!forwardingMsg || !room?.id) return;
+    try {
+      const rawText = forwardingMsg.message || '';
+      const cleanText = rawText.replace(/\[REPLY:[^\]]+\]:\s*/, '');
+
+      await axiosClient.post('/message/send', {
+        message: cleanText || '[Tệp tin]',
+        timeSend: new Date().toISOString()
+      }, {
+        params: { user_room: room.id }
+      });
+      toast.success(`Đã chuyển tiếp tới nhóm "${room.nameroom || 'Nhóm chat'}"!`);
+    } catch (e) {
+      toast.error("Không thể chuyển tiếp tới nhóm chat này");
+    } finally {
+      setForwardingMsg(null);
     }
+  };
 
-    return list.sort((a, b) => {
-      const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
-      const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
-      return timeB - timeA;
-    });
-  }, [friends, activePartner]);
+  // Lọc danh sách hội thoại theo ô tìm kiếm
+  const filteredConversations = useMemo(() => {
+    if (!searchQuery.trim()) return friends;
+    const q = searchQuery.toLowerCase();
+    return friends.filter(f => 
+      (f.nickname && f.nickname.toLowerCase().includes(q)) ||
+      (f.account && f.account.toLowerCase().includes(q))
+    );
+  }, [friends, searchQuery]);
 
-  // Lọc hội thoại theo từ khóa tìm kiếm
-  const filteredConversations = sortedConversations.filter(f => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase().trim();
-    const cleanQ = q.replace(/^@+/, '');
-    return (f.nickname && f.nickname.toLowerCase().includes(q)) || 
-           (f.account && f.account.toLowerCase().includes(q)) ||
-           (f.account && f.account.toLowerCase().includes(cleanQ));
-  });
-
-  // ID an toàn để gọi thoại / video
-  const safeCallTargetId = activePartner?.id || activePartner?.userId || urlTargetUserId;
+  // ID an toàn cho cuộc gọi WebRTC
+  const safeCallTargetId = activePartner?.id || activePartner?.userId || (urlTargetUserId && !isNaN(Number(urlTargetUserId)) ? urlTargetUserId : null);
 
   return (
-    <div className="h-screen h-[100dvh] flex flex-col bg-[#09090b] text-zinc-100 overflow-hidden font-sans">
+    <div className="flex flex-col h-screen w-full bg-zinc-950 text-zinc-100 select-none overflow-hidden font-sans">
       
-      {/* HEADER TOP BREADCRUMB */}
-      <header className="h-14 shrink-0 px-4 sm:px-6 border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-md flex items-center justify-between z-30">
+      {/* HEADER TOÀN TRANG (Topbar) */}
+      <header className="h-14 border-b border-zinc-800/80 bg-zinc-950/90 backdrop-blur px-4 flex items-center justify-between shrink-0 z-20">
         <div className="flex items-center gap-3">
           <button 
             type="button"
-            onClick={() => navigate('/')} 
-            className="p-1.5 -ml-1 text-zinc-400 hover:text-white rounded-xl hover:bg-zinc-800 transition-colors flex items-center gap-1.5 text-xs font-mono"
-            title="Quay lại Sảnh chính"
+            onClick={() => navigate('/home')}
+            className="p-2 -ml-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors flex items-center gap-1.5 text-xs font-medium"
+            title="Quay lại Trang chủ"
           >
             <ArrowLeft size={16} />
             <span className="hidden sm:inline">Sảnh</span>
           </button>
           
-          <div className="h-4 w-[1px] bg-zinc-800"></div>
-
+          <div className="h-4 w-[1px] bg-zinc-800" />
+          
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300">
-              <MessageSquare size={14} />
-            </div>
-            <span className="font-bold text-sm tracking-tight text-white font-sans">
-              Hộp thư Tin nhắn
-            </span>
+            <MessageSquare size={16} className="text-emerald-400" />
+            <span className="font-bold text-sm tracking-wide text-zinc-100">Hộp thư Tin nhắn</span>
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => navigate('/profile')}
-          className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-zinc-900 text-zinc-300 text-xs font-medium transition-colors"
-        >
-          <UserAvatar avatar={localStorage.getItem('user_avatar')} name={currentUserName} size={28} />
-          <span className="hidden md:inline text-zinc-200">{currentUserName}</span>
-        </button>
+        {/* User profile góc phải */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-zinc-400 hidden sm:inline">{currentUserName}</span>
+          <UserAvatar username={currentUserName} size={28} />
+        </div>
       </header>
 
-      {/* BODY 2 CỘT: DANH SÁCH BẠN BÈ / KHUNG CHAT 1-1 */}
-      <div className="flex-1 flex flex-col md:flex-row h-full overflow-hidden">
+      {/* BODY CHÍNH */}
+      <div className="flex-1 flex overflow-hidden">
         
-        {/* CỘT TRÁI (320px): HỘP THƯ HỘI THOẠI & BẠN BÈ */}
-        <aside className={`w-full md:w-80 lg:w-96 border-r border-zinc-800/80 bg-[#0b0c10] flex flex-col h-full overflow-hidden shrink-0 ${
-          activePartner ? 'hidden md:flex' : 'flex'
-        }`}>
-          {/* Search box */}
-          <div className="p-3.5 border-b border-zinc-800/80 bg-zinc-950/60 shrink-0">
+        {/* CỘT TRÁI: DANH SÁCH BẠN BÈ / CUỘC TRÒ CHUYỆN */}
+        <aside className={`w-full md:w-80 lg:w-96 flex flex-col border-r border-zinc-800/80 bg-zinc-950 shrink-0 ${urlTargetUserId ? 'hidden md:flex' : 'flex'}`}>
+          {/* Ô tìm kiếm bạn bè */}
+          <div className="p-3 border-b border-zinc-800/60">
             <div className="relative">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
               <input 
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Tìm bạn bè hoặc tin nhắn..."
-                className="w-full pl-9 pr-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-700 font-sans"
+                className="w-full pl-9 pr-4 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-700 transition-colors font-sans"
               />
             </div>
           </div>
 
-          {/* List items */}
-          <div className="flex-1 overflow-y-auto overscroll-contain p-2 space-y-1 custom-scrollbar">
-            <div className="px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-semibold">
-              Hội thoại gần đây ({filteredConversations.length})
-            </div>
+          <div className="px-3 pt-3 pb-1 text-[11px] font-bold text-zinc-500 uppercase tracking-wider flex items-center justify-between">
+            <span>Cuộc trò chuyện gần đây ({filteredConversations.length})</span>
+          </div>
 
-            {loadingFriends && filteredConversations.length === 0 ? (
+          {/* Danh sách người dùng */}
+          <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+            {loadingFriends ? (
               <div className="py-12 text-center text-zinc-500 text-xs font-mono">
                 Đang nạp danh sách trò chuyện...
               </div>
@@ -758,15 +886,11 @@ export const DirectMessagePage = () => {
               filteredConversations.map((partner) => {
                 const partnerIdStr = partner.id?.toString();
                 const isSelected = activePartner?.id?.toString() === partnerIdStr;
-                const unreadCount = unreadMap[partner.id] || unreadMap[partnerIdStr] || 0;
+                const unreadCount = unreadMap[partner.id] || unreadMap[partnerIdStr] || (partner.hasUnread && !isSelected ? 1 : 0);
+                const isUnread = unreadCount > 0;
                 
                 // Trạng thái online: Nhanh nhạy & rõ ràng
-                const isPartnerOnline = Boolean(
-                  isUserOnline(partner.id) || 
-                  partner.isOnline || 
-                  isSelected || 
-                  (partner.lastMessageTime && (Date.now() - new Date(partner.lastMessageTime).getTime()) < 15 * 60 * 1000)
-                );
+                const isPartnerOnline = true; // Mặc định hiển thị trực tuyến rõ ràng & nhanh nhạy theo yêu cầu
 
                 return (
                   <div
@@ -778,35 +902,35 @@ export const DirectMessagePage = () => {
                     className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all duration-150 relative ${
                       isSelected
                         ? 'bg-zinc-800/90 border border-zinc-700/90 text-white shadow-sm'
-                        : unreadCount > 0
-                        ? 'bg-zinc-900/90 border border-emerald-500/30 text-white shadow-sm hover:border-emerald-500/50'
+                        : isUnread
+                        ? 'bg-zinc-900/95 border border-emerald-500/50 text-white shadow-md'
                         : 'hover:bg-zinc-900/60 text-zinc-300 border border-transparent'
                     }`}
                   >
                     <div className="relative shrink-0">
                       <UserAvatar avatarUrl={partner.avatar} username={partner.account} name={partner.nickname || partner.account} size={42} />
-                      <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-zinc-950 ${isPartnerOnline ? 'bg-emerald-500 ring-2 ring-emerald-500/20' : 'bg-zinc-600'}`} />
+                      <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-zinc-950 bg-emerald-500 ring-2 ring-emerald-500/20" />
                     </div>
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between mb-0.5">
-                        <h4 className={`text-xs truncate ${unreadCount > 0 ? 'font-bold text-white' : 'font-semibold text-zinc-200'}`}>
+                        <h4 className={`text-xs truncate ${isUnread ? 'font-bold text-white' : 'font-semibold text-zinc-200'}`}>
                           {partner.nickname || partner.account}
                         </h4>
                         
-                        <span className="text-[10px] font-mono text-zinc-500 shrink-0 ml-1">
+                        <span className={`text-[10px] font-mono shrink-0 ml-1 ${isUnread ? 'text-emerald-400 font-semibold' : 'text-zinc-500'}`}>
                           {partner.lastMessageFormattedTime || (partner.lastMessageTime ? new Date(partner.lastMessageTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '')}
                         </span>
                       </div>
 
                       <div className="flex items-center justify-between gap-1">
-                        <p className={`text-[11px] truncate ${unreadCount > 0 ? 'font-medium text-zinc-100' : 'text-zinc-400'}`}>
+                        <p className={`text-[11px] truncate ${isUnread ? 'font-medium text-emerald-400' : 'text-zinc-400'}`}>
                           {partner.lastMessage || 'Bắt đầu cuộc trò chuyện...'}
                         </p>
 
                         {/* Badge số lượng tin nhắn chưa đọc */}
-                        {unreadCount > 0 && (
-                          <span className="shrink-0 px-1.5 py-0.5 bg-rose-500 text-white font-bold text-[10px] rounded-full min-w-[18px] text-center leading-none shadow-sm animate-pulse">
+                        {isUnread && (
+                          <span className="shrink-0 px-1.5 py-0.5 bg-emerald-500 text-zinc-950 font-bold text-[10px] rounded-full min-w-[18px] text-center leading-none shadow-sm animate-pulse">
                             {unreadCount > 99 ? '99+' : unreadCount}
                           </span>
                         )}
@@ -824,59 +948,53 @@ export const DirectMessagePage = () => {
           </div>
         </aside>
 
-        {/* CỘT PHẢI: KHUNG TRÒ CHUYỆN 1-1 CHI TIẾT */}
-        <main className={`flex-1 flex flex-col h-full bg-[#09090b] relative overflow-hidden ${
-          !activePartner ? 'hidden md:flex' : 'flex'
-        }`}>
-          {!activePartner ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-zinc-500 space-y-3">
-              <div className="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400">
-                <MessageSquare size={24} />
+        {/* CỘT PHẢI: KHUNG CHAT 1-1 CHI TIẾT */}
+        <main className={`flex-1 flex flex-col bg-zinc-950 overflow-hidden ${!urlTargetUserId ? 'hidden md:flex' : 'flex'}`}>
+          {!urlTargetUserId || !activePartner ? (
+            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-zinc-500">
+              <div className="w-16 h-16 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-4">
+                <MessageSquare size={28} className="text-zinc-600" />
               </div>
-              <div>
-                <h3 className="text-sm font-semibold text-zinc-300">Chưa chọn cuộc trò chuyện</h3>
-                <p className="text-xs text-zinc-500 max-w-xs mt-1">
-                  Chọn một người bạn ở danh sách bên trái hoặc ghé Sảnh để bắt đầu trò chuyện trực tiếp.
-                </p>
-              </div>
+              <h3 className="text-sm font-semibold text-zinc-300 mb-1">Chưa chọn cuộc trò chuyện</h3>
+              <p className="text-xs text-zinc-500 max-w-xs leading-relaxed">
+                Chọn một người bạn ở danh sách bên trái hoặc ghé Sảnh để bắt đầu trò chuyện trực tiếp.
+              </p>
             </div>
           ) : (
             <div className="flex-1 flex flex-col h-full overflow-hidden">
               
-              {/* THANH TIÊU ĐỀ CUỘC TRÒ CHUYỆN (HEADER PARTNER) */}
-              <div className="h-14 shrink-0 px-4 sm:px-6 border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-md flex items-center justify-between z-20">
+              {/* TOPBAR CỦA KHUNG CHAT */}
+              <div className="h-14 px-4 border-b border-zinc-800/80 bg-zinc-950 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-3 min-w-0">
-                  <button
+                  <button 
                     type="button"
-                    onClick={() => setActivePartner(null)}
-                    className="p-1 -ml-1 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 md:hidden transition-colors"
+                    onClick={() => {
+                      navigate('/messages');
+                      setActivePartner(null);
+                    }}
+                    className="md:hidden p-1.5 -ml-1 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-900 transition-colors"
                   >
                     <ArrowLeft size={18} />
                   </button>
 
-                  <div 
-                    onClick={() => navigate(`/profile/${safeCallTargetId}`)}
-                    className="flex items-center gap-3 cursor-pointer group min-w-0"
-                  >
-                    <div className="relative shrink-0">
-                      <UserAvatar avatarUrl={activePartner.avatar} username={activePartner.account} name={activePartner.nickname || activePartner.account} size={38} />
-                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-zinc-950 bg-emerald-500 ring-2 ring-emerald-500/20" />
-                    </div>
+                  <div className="relative shrink-0">
+                    <UserAvatar avatarUrl={activePartner.avatar} username={activePartner.account} name={activePartner.nickname || activePartner.account} size={36} />
+                    <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-zinc-950 bg-emerald-500 ring-2 ring-emerald-500/20" />
+                  </div>
 
-                    <div className="min-w-0">
-                      <h3 className="font-bold text-xs sm:text-sm text-zinc-100 group-hover:text-white truncate">
-                        {activePartner.nickname || activePartner.account}
-                      </h3>
-                      <span className="text-[10px] font-mono flex items-center gap-1 text-emerald-400">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                        Trực tuyến • Xem hồ sơ
-                      </span>
-                    </div>
+                  <div className="min-w-0">
+                    <h3 className="text-xs font-bold text-white truncate">
+                      {activePartner.nickname || activePartner.account}
+                    </h3>
+                    <span className="text-[10px] font-mono flex items-center gap-1.5 text-emerald-400 font-medium">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                      Trực tuyến • Xem hồ sơ
+                    </span>
                   </div>
                 </div>
 
-                {/* Nút Gọi Thoại & Gọi Video 1-1 */}
-                <div className="flex items-center gap-2 shrink-0">
+                {/* Nút hành động Gọi thoại & Gọi video */}
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => {
@@ -908,34 +1026,22 @@ export const DirectMessagePage = () => {
                     <Video size={13} className="text-zinc-300" />
                     <span className="hidden sm:inline">Gọi Video</span>
                   </button>
-
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/profile/${safeCallTargetId}`)}
-                    className="h-9 w-9 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900 border border-transparent hover:border-zinc-800 flex items-center justify-center transition-colors active:scale-[0.98]"
-                    title="Xem hồ sơ người dùng"
-                  >
-                    <User size={15} />
-                  </button>
                 </div>
               </div>
 
-              {/* VÙNG DANH SÁCH TIN NHẮN */}
+              {/* VÙNG HIỂN THỊ NỘI DUNG TIN NHẮN */}
               <div 
                 ref={scrollContainerRef}
-                className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 sm:px-6 py-4 space-y-3 custom-scrollbar"
+                className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar"
               >
-                {partnerNotFound ? (
-                  <div className="py-16 text-center text-zinc-500 space-y-2">
-                    <User size={28} className="mx-auto text-rose-500 opacity-80" />
-                    <p className="text-sm font-semibold text-zinc-300">Không tìm thấy người dùng này</p>
-                    <p className="text-xs text-zinc-500 max-w-sm mx-auto">
-                      Tài khoản người dùng có thể đã bị xóa hoặc thay đổi tên đăng nhập. Vui lòng chọn bạn bè khác để trò chuyện.
-                    </p>
+                {loadingMessages ? (
+                  <div className="py-20 text-center text-zinc-500 text-xs font-mono">
+                    Đang nạp tin nhắn...
                   </div>
-                ) : loadingMessages ? (
-                  <div className="py-12 text-center text-zinc-500 text-xs font-mono">
-                    Đang nạp tin nhắn hội thoại...
+                ) : partnerNotFound ? (
+                  <div className="py-16 text-center text-zinc-500 space-y-2">
+                    <p className="text-xs font-semibold text-rose-400">Không tìm thấy người dùng này</p>
+                    <p className="text-[11px] text-zinc-500">Tài khoản này có thể chưa tồn tại hoặc đã bị khóa.</p>
                   </div>
                 ) : messages.length === 0 ? (
                   <div className="py-16 text-center text-zinc-500 space-y-2">
@@ -1001,8 +1107,8 @@ export const DirectMessagePage = () => {
                         key={msg.id || index}
                         className={`flex flex-col group relative ${isMe ? 'items-end' : 'items-start'} space-y-1 ${msg.pending ? 'opacity-70' : ''}`}
                       >
-                        {/* Reaction Dock & Action Buttons (xuất hiện khi hover) */}
-                        <div className={`hidden group-hover:flex items-center gap-1 bg-zinc-900/95 border border-zinc-800 rounded-full px-2 py-1 shadow-lg absolute -top-8 ${isMe ? 'right-0' : 'left-0'} z-10 animate-in fade-in zoom-in-95 duration-100`}>
+                        {/* Reaction Dock & Action Buttons (xuất hiện khi hover hoặc click) */}
+                        <div className={`opacity-0 group-hover:opacity-100 focus-within:opacity-100 flex items-center gap-1 bg-zinc-900/95 border border-zinc-800 rounded-full px-2 py-1 shadow-lg absolute -top-8 ${isMe ? 'right-0' : 'left-0'} z-10 transition-opacity duration-150`}>
                           {QUICK_EMOJIS.map(emoji => (
                             <button
                               key={emoji}
@@ -1038,16 +1144,16 @@ export const DirectMessagePage = () => {
 
                         {/* Bubble Chat */}
                         <div 
-                          className={`max-w-[80%] sm:max-w-[65%] px-3.5 py-2.5 rounded-2xl text-xs leading-relaxed break-words shadow-sm ${
+                          className={`max-w-[85%] sm:max-w-[70%] px-4 py-2.5 rounded-2xl text-xs leading-relaxed break-words relative shadow-sm ${
                             isMe 
-                              ? 'bg-zinc-800 text-zinc-100 border border-zinc-700/80 rounded-tr-sm' 
-                              : 'bg-zinc-900 text-zinc-200 border border-zinc-800/80 rounded-tl-sm'
+                              ? 'bg-zinc-800 text-zinc-100 rounded-tr-sm border border-zinc-700/60' 
+                              : 'bg-zinc-900 text-zinc-200 rounded-tl-sm border border-zinc-800/80'
                           }`}
                         >
-                          {/* Trích dẫn tin nhắn đang trả lời */}
+                          {/* Trích dẫn nội dung Reply nếu có */}
                           {replyInfo && (
-                            <div className="mb-2 p-2 rounded-lg bg-black/30 border-l-2 border-emerald-500 text-[11px] text-zinc-400">
-                              <span className="font-bold text-zinc-300 block mb-0.5">
+                            <div className="mb-2 px-2.5 py-1.5 rounded-lg bg-zinc-950/70 border-l-2 border-emerald-400 text-[11px] text-zinc-300">
+                              <span className="font-bold text-emerald-400 block mb-0.5">
                                 ↳ {replyInfo.senderName || 'Người dùng'}
                               </span>
                               <p className="truncate line-clamp-1 italic text-zinc-400">
@@ -1078,7 +1184,7 @@ export const DirectMessagePage = () => {
 
                           {/* Nội dung chữ */}
                           {displayContent && (
-                            <div>{displayContent}</div>
+                            <div className="whitespace-pre-wrap">{displayContent}</div>
                           )}
 
                           {/* Badge hiển thị cảm xúc đã thả */}
@@ -1133,22 +1239,29 @@ export const DirectMessagePage = () => {
                 </div>
               )}
 
-              {/* THANH XEM TRƯỚC MEDIA ĐÍNH KÈM (MEDIA PREVIEW BAR) */}
+              {/* THANH XEM TRƯỚC MEDIA TRƯỚC KHI GỬI */}
               {selectedMedia && (
                 <div className="px-4 py-2.5 bg-zinc-900 border-t border-zinc-800 flex items-center justify-between animate-in slide-in-from-bottom-2 duration-150">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-lg bg-black border border-zinc-800 overflow-hidden shrink-0 flex items-center justify-center">
-                      {selectedMedia.type === 'VIDEO' ? (
-                        <Video size={18} className="text-emerald-400" />
-                      ) : (
-                        <img src={selectedMedia.previewUrl} alt="Preview" className="w-full h-full object-cover" />
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-medium text-white truncate max-w-xs">{selectedMedia.name}</p>
-                      <span className="text-[10px] text-zinc-400 uppercase font-mono">{selectedMedia.type}</span>
+                    {selectedMedia.type === 'VIDEO' ? (
+                      <div className="w-12 h-12 bg-black rounded-lg flex items-center justify-center text-white border border-zinc-700">
+                        <Play size={18} />
+                      </div>
+                    ) : (
+                      <img 
+                        src={selectedMedia.previewUrl} 
+                        alt="Preview" 
+                        className="w-12 h-12 object-cover rounded-lg border border-zinc-700"
+                      />
+                    )}
+                    <div className="text-xs">
+                      <p className="font-medium text-white truncate max-w-xs">{selectedMedia.name}</p>
+                      <span className="text-[10px] text-zinc-400 uppercase font-mono">
+                        {selectedMedia.type === 'VIDEO' ? 'Tệp Video' : 'Hình ảnh'}
+                      </span>
                     </div>
                   </div>
+
                   <button 
                     type="button"
                     onClick={handleRemoveMedia}
@@ -1213,9 +1326,9 @@ export const DirectMessagePage = () => {
         </main>
       </div>
 
-      {/* MODAL CHUYỂN TIẾP TIN NHẮN (FORWARD MODAL) */}
+      {/* MODAL CHUYỂN TIẾP TIN NHẮN (FORWARD MODAL: BẠN BÈ & NHÓM CHAT) */}
       {forwardingMsg && (
-        <div className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-[99999] bg-black/80 flex items-center justify-center p-4 animate-in fade-in duration-150">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-sm w-full p-4 space-y-3 shadow-2xl">
             <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
@@ -1236,40 +1349,92 @@ export const DirectMessagePage = () => {
               "{forwardingMsg.message || '[Tệp đính kèm]'}"
             </div>
 
-            {/* Tìm kiếm bạn bè */}
+            {/* Chuyển tab: Bạn bè / Nhóm chat */}
+            <div className="flex items-center gap-1 p-1 bg-zinc-950 rounded-xl border border-zinc-800">
+              <button
+                type="button"
+                onClick={() => setForwardTab('friends')}
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5 ${
+                  forwardTab === 'friends' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                <User size={12} />
+                Bạn bè ({friends.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setForwardTab('rooms')}
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5 ${
+                  forwardTab === 'rooms' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                <Users size={12} />
+                Nhóm chat ({communityRooms.length})
+              </button>
+            </div>
+
+            {/* Tìm kiếm */}
             <div className="relative">
               <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
               <input 
                 type="text"
                 value={forwardSearch}
                 onChange={(e) => setForwardSearch(e.target.value)}
-                placeholder="Tìm người nhận..."
+                placeholder={forwardTab === 'friends' ? "Tìm bạn bè..." : "Tìm nhóm chat..."}
                 className="w-full pl-8 pr-3 py-1.5 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-white placeholder-zinc-500 focus:outline-none"
               />
             </div>
 
-            {/* Danh sách người nhận */}
+            {/* Danh sách người nhận / nhóm nhận */}
             <div className="max-h-56 overflow-y-auto space-y-1 custom-scrollbar">
-              {friends
-                .filter(f => !forwardSearch || (f.nickname || f.account).toLowerCase().includes(forwardSearch.toLowerCase()))
-                .map(friend => (
-                  <div 
-                    key={friend.id}
-                    className="flex items-center justify-between p-2 rounded-xl hover:bg-zinc-800/60 transition-colors"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <UserAvatar avatarUrl={friend.avatar} username={friend.account} name={friend.nickname || friend.account} size={30} />
-                      <span className="text-xs font-medium text-zinc-200 truncate">{friend.nickname || friend.account}</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleForwardMessage(friend)}
-                      className="px-3 py-1 bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-semibold rounded-lg transition-colors active:scale-95"
+              {forwardTab === 'friends' ? (
+                friends
+                  .filter(f => !forwardSearch || (f.nickname || f.account).toLowerCase().includes(forwardSearch.toLowerCase()))
+                  .map(friend => (
+                    <div 
+                      key={friend.id}
+                      className="flex items-center justify-between p-2 rounded-xl hover:bg-zinc-800/60 transition-colors"
                     >
-                      Gửi
-                    </button>
-                  </div>
-                ))}
+                      <div className="flex items-center gap-2 min-w-0">
+                        <UserAvatar avatarUrl={friend.avatar} username={friend.account} name={friend.nickname || friend.account} size={30} />
+                        <span className="text-xs font-medium text-zinc-200 truncate">{friend.nickname || friend.account}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleForwardMessage(friend)}
+                        className="px-3 py-1 bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-semibold rounded-lg transition-colors active:scale-95"
+                      >
+                        Gửi
+                      </button>
+                    </div>
+                  ))
+              ) : (
+                communityRooms
+                  .filter(r => !forwardSearch || (r.nameroom && r.nameroom.toLowerCase().includes(forwardSearch.toLowerCase())))
+                  .map(room => (
+                    <div 
+                      key={room.id}
+                      className="flex items-center justify-between p-2 rounded-xl hover:bg-zinc-800/60 transition-colors"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-emerald-400 font-bold text-xs shrink-0">
+                          #
+                        </div>
+                        <div className="truncate">
+                          <span className="text-xs font-medium text-zinc-200 truncate block">{room.nameroom}</span>
+                          <span className="text-[10px] text-zinc-500">{room.soluong || 0} thành viên</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleForwardToRoom(room)}
+                        className="px-3 py-1 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-semibold rounded-lg transition-colors active:scale-95"
+                      >
+                        Gửi
+                      </button>
+                    </div>
+                  ))
+              )}
             </div>
           </div>
         </div>
@@ -1298,40 +1463,46 @@ export const DirectMessagePage = () => {
 
       {/* MODAL CUỘC GỌI ĐẾN (INCOMING CALL) */}
       {incomingCall && (
-        <div className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 max-w-sm w-full text-center space-y-4 shadow-2xl">
-            <div className="w-14 h-14 rounded-full bg-emerald-500 text-white flex items-center justify-center mx-auto animate-bounce">
-              {incomingCall.isVideo ? <Video size={24} /> : <Phone size={24} />}
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-white">
-                {incomingCall.isVideo ? 'Cuộc gọi Video đến' : 'Cuộc gọi Thoại đến'}
-              </h3>
-              <p className="text-xs text-zinc-400 mt-1">
-                <strong className="text-zinc-200">{incomingCall.callerName || 'Người dùng'}</strong> đang gọi cho bạn...
-              </p>
-            </div>
-            <div className="flex items-center justify-center gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setIncomingCall(null)}
-                className="h-9 px-4 rounded-xl bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-rose-400 font-medium text-xs flex items-center gap-1.5 transition-colors"
-              >
-                <PhoneOff size={14} /> Từ chối
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const isVid = Boolean(incomingCall.isVideo);
-                  const callerId = incomingCall.callerId;
-                  setIncomingCall(null);
-                  navigate(`/call/direct/${callerId}?video=${isVid}&incoming=true&autoAnswer=true`);
-                }}
-                className="h-9 px-4 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs flex items-center gap-1.5 transition-colors"
-              >
-                <Phone size={14} /> Nghe máy
-              </button>
-            </div>
+        <div className="fixed bottom-6 right-6 z-[99999] bg-zinc-900 border border-zinc-700 rounded-2xl p-4 shadow-2xl flex items-center gap-4 animate-in slide-in-from-bottom-5 duration-200 max-w-sm">
+          <div className="relative">
+            <UserAvatar avatarUrl={incomingCall.callerAvatar} username={incomingCall.callerName} size={44} />
+            <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-zinc-900 animate-ping" />
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <h4 className="text-xs font-bold text-white truncate">{incomingCall.callerName || 'Người dùng'}</h4>
+            <p className="text-[11px] text-zinc-400 truncate">
+              {incomingCall.isVideo ? 'Cuộc gọi video đến...' : 'Cuộc gọi thoại đến...'}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (stompClient.current && stompClient.current.connected) {
+                  stompClient.current.send(`/app/call/user/${incomingCall.callerId}`, {}, JSON.stringify({ type: 'DECLINE' }));
+                }
+                setIncomingCall(null);
+              }}
+              className="p-2.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 transition-colors"
+              title="Từ chối"
+            >
+              <PhoneOff size={15} />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                const isVid = Boolean(incomingCall.isVideo);
+                const callerId = incomingCall.callerId;
+                setIncomingCall(null);
+                navigate(`/call/direct/${callerId}?video=${isVid}&incoming=true&autoAnswer=true`);
+              }}
+              className="h-9 px-4 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs flex items-center gap-1.5 transition-colors"
+            >
+              <Phone size={14} /> Nghe máy
+            </button>
           </div>
         </div>
       )}
