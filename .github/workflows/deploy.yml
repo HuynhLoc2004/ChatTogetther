@@ -123,7 +123,7 @@ jobs:
                 -v /etc/letsencrypt:/etc/letsencrypt \
                 -v /var/www/certbot:/var/www/certbot \
                 certbot/certbot renew --webroot -w /var/www/certbot --quiet || true
-              docker compose exec -T nginx nginx -s reload || true
+              docker compose restart nginx || docker compose exec -T nginx nginx -s reload || true
             fi
 
             echo ">>> [5/5] Setting up auto-renew cron and verifying status..."
