@@ -40,15 +40,8 @@ export const FriendsSection = ({
       return [];
     }
   });
-  const [loading, setLoading] = useState(() => {
-    try {
-      const cached = localStorage.getItem('talovin_dm_friends_cache');
-      const parsed = cached ? JSON.parse(cached) : [];
-      return !(parsed && parsed.length > 0);
-    } catch (_) {
-      return true;
-    }
-  });
+  // Khởi tạo loading = true để hiển thị Skeleton mượt mà trong khi chờ dữ liệu mới nhất từ server
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [actionInProgress, setActionInProgress] = useState({});
   const [confirmUnfriendId, setConfirmUnfriendId] = useState(null);
@@ -337,9 +330,26 @@ export const FriendsSection = ({
 
       {/* 3. Khung Nội Dung Chính Theo Từng Tab */}
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-20 text-zinc-500 gap-3">
-          <Loader2 size={24} className="animate-spin text-zinc-400" />
-          <span className="text-xs">Đang tải danh sách kết nối...</span>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-pulse">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div
+              key={i}
+              className="p-3.5 rounded-2xl bg-zinc-900/50 border border-zinc-800/60 flex items-center justify-between gap-3 shadow-sm"
+            >
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="w-11 h-11 rounded-full bg-zinc-800/80 shrink-0" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="h-3.5 w-28 bg-zinc-800/80 rounded" />
+                  <div className="h-2.5 w-20 bg-zinc-800/50 rounded" />
+                  <div className="h-2 w-14 bg-zinc-800/30 rounded" />
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="w-8 h-8 rounded-xl bg-zinc-800/60" />
+                <div className="w-8 h-8 rounded-xl bg-zinc-800/60" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : (
         <>
@@ -586,9 +596,22 @@ export const FriendsSection = ({
                   </p>
                 </div>
               ) : isSearchingGlobal ? (
-                <div className="flex items-center justify-center py-16 text-zinc-500 gap-2">
-                  <Loader2 size={18} className="animate-spin text-zinc-400" />
-                  <span className="text-xs">Đang tìm kiếm...</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-pulse">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div
+                      key={i}
+                      className="p-3.5 rounded-2xl bg-zinc-900/50 border border-zinc-800/60 flex items-center justify-between gap-3 shadow-sm"
+                    >
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className="w-11 h-11 rounded-full bg-zinc-800/80 shrink-0" />
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div className="h-3.5 w-28 bg-zinc-800/80 rounded" />
+                          <div className="h-2.5 w-20 bg-zinc-800/50 rounded" />
+                        </div>
+                      </div>
+                      <div className="w-20 h-8 rounded-xl bg-zinc-800/60 shrink-0" />
+                    </div>
+                  ))}
                 </div>
               ) : globalSearchResults.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 px-4 bg-zinc-900/30 rounded-3xl border border-zinc-800/60 text-center">

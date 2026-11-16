@@ -1098,7 +1098,21 @@ export const CommunitySection = ({
       {/* ============================================================== */}
       {/* 1. MÀN HÌNH CHI TIẾT CỘNG ĐỒNG (/communities/:id)              */}
       {/* ============================================================== */}
-      {selectedGroup ? (
+      {loadingDetail && !selectedGroup ? (
+        <div className="space-y-4 animate-pulse">
+          <div className="h-9 w-44 bg-zinc-900/80 rounded-xl" />
+          <div className="rounded-2xl bg-zinc-900/60 border border-zinc-800/80 p-5 space-y-4">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-2xl bg-zinc-800/80" />
+              <div className="space-y-2 flex-1">
+                <div className="h-5 w-48 bg-zinc-800/80 rounded" />
+                <div className="h-3 w-32 bg-zinc-800/50 rounded" />
+              </div>
+            </div>
+            <div className="h-3 w-full bg-zinc-800/40 rounded" />
+          </div>
+        </div>
+      ) : selectedGroup ? (
         <div className="space-y-4 animate-fade-in">
 
           {/* Thanh breadcrumb quay lại */}
@@ -2337,9 +2351,27 @@ export const CommunitySection = ({
           {/* LƯỚI THẺ CỘNG ĐỒNG HIỆN ĐẠI (KHÔNG CÒN BANNER ĐEN TRỐNG TRÃI)  */}
           {/* ============================================================== */}
           {loading ? (
-            <div className="py-20 text-center text-zinc-500 text-xs font-mono">
-              <div className="w-6 h-6 border-2 border-zinc-700 border-t-zinc-300 rounded-full animate-spin mx-auto mb-2"></div>
-              <span>Đang tải các không gian cộng đồng...</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 animate-pulse">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div
+                  key={i}
+                  className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 flex items-center justify-between gap-3.5 shadow-sm"
+                >
+                  <div className="w-14 h-14 rounded-2xl bg-zinc-800/80 shrink-0" />
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <div className="h-4 w-32 bg-zinc-800/80 rounded" />
+                      <div className="h-3 w-16 bg-zinc-800/50 rounded" />
+                    </div>
+                    <div className="h-3 w-4/5 bg-zinc-800/50 rounded" />
+                    <div className="flex items-center gap-3">
+                      <div className="h-2.5 w-16 bg-zinc-800/40 rounded" />
+                      <div className="h-2.5 w-16 bg-zinc-800/40 rounded" />
+                    </div>
+                  </div>
+                  <div className="w-20 h-8 rounded-xl bg-zinc-800/60 shrink-0" />
+                </div>
+              ))}
             </div>
           ) : (!Array.isArray(groups) || groups.length === 0) ? (
             <div className="py-16 px-4 text-center rounded-2xl bg-zinc-900/40 border border-zinc-800/80">

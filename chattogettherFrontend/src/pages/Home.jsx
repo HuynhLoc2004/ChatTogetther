@@ -3618,9 +3618,38 @@ const Home = ({ initialTab }) => {
                   <p className="text-[11px] text-zinc-600 mt-1">Áp dụng thuật toán đối soát ngữ nghĩa & xếp hạng tương tác</p>
                 </div>
               ) : loadingPosts ? (
-                <div className="feed-status-box font-mono">
-                  <div className="feed-spinner"></div>
-                  <p>Đang tải bài viết...</p>
+                <div className="space-y-4 animate-pulse">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-4">
+                      {/* Author Header */}
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-zinc-800/80 shrink-0" />
+                        <div className="space-y-1.5 flex-1">
+                          <div className="h-3.5 w-32 bg-zinc-800/80 rounded" />
+                          <div className="h-2.5 w-20 bg-zinc-800/50 rounded" />
+                        </div>
+                      </div>
+                      {/* Body Content */}
+                      <div className="space-y-2 pt-1">
+                        <div className="h-3 w-full bg-zinc-800/60 rounded" />
+                        <div className="h-3 w-4/5 bg-zinc-800/50 rounded" />
+                        <div className="h-3 w-2/3 bg-zinc-800/40 rounded" />
+                      </div>
+                      {/* Media Placeholder on alternate cards */}
+                      {i === 2 && (
+                        <div className="h-44 w-full bg-zinc-800/40 rounded-xl" />
+                      )}
+                      {/* Post Actions Footer */}
+                      <div className="pt-2 flex items-center justify-between border-t border-zinc-800/40">
+                        <div className="flex items-center gap-4">
+                          <div className="h-4 w-12 bg-zinc-800/50 rounded" />
+                          <div className="h-4 w-12 bg-zinc-800/50 rounded" />
+                          <div className="h-4 w-12 bg-zinc-800/50 rounded" />
+                        </div>
+                        <div className="h-4 w-6 bg-zinc-800/40 rounded" />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : displayedPosts.length === 0 ? (
                 <div className="feed-status-box">
@@ -4375,7 +4404,21 @@ const Home = ({ initialTab }) => {
                 </div>
 
                 {loadingRooms ? (
-                  <div className="py-16 text-center text-zinc-500 text-xs font-mono">Đang nạp danh sách phòng đàm thoại...</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 animate-pulse">
+                    {[1, 2, 3, 4].map((i) => (
+                      <div key={i} className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-zinc-800/80 shrink-0" />
+                          <div className="space-y-1.5 flex-1 min-w-0">
+                            <div className="h-3.5 w-32 bg-zinc-800/80 rounded" />
+                            <div className="h-2.5 w-20 bg-zinc-800/50 rounded" />
+                          </div>
+                          <div className="h-6 w-16 bg-zinc-800/60 rounded-full" />
+                        </div>
+                        <div className="h-3 w-4/5 bg-zinc-800/40 rounded" />
+                      </div>
+                    ))}
+                  </div>
                 ) : safeRooms.length === 0 ? (
                   <div className="py-16 px-4 text-center rounded-2xl bg-[#141414] border border-[#1e1e1e]">
                     <Radio size={32} className="mx-auto mb-3 text-zinc-600 opacity-60" />

@@ -1781,6 +1781,37 @@ const ChatRoom = () => {
               </div>
             )}
 
+            {messages.length === 0 && loading && (
+              <div className="py-6 space-y-5 animate-pulse max-w-2xl mx-auto w-full px-4">
+                <div className="flex items-start gap-2.5">
+                  <div className="w-8 h-8 rounded-full bg-zinc-800/80 shrink-0" />
+                  <div className="space-y-1.5 max-w-[65%]">
+                    <div className="h-10 w-52 bg-zinc-800/80 rounded-2xl rounded-tl-sm border border-zinc-700/20" />
+                    <div className="h-2 w-12 bg-zinc-800/40 rounded" />
+                  </div>
+                </div>
+                <div className="flex items-start justify-end gap-2.5">
+                  <div className="space-y-1.5 max-w-[65%] flex flex-col items-end">
+                    <div className="h-11 w-60 bg-zinc-800/70 rounded-2xl rounded-tr-sm border border-zinc-700/30" />
+                    <div className="h-2 w-12 bg-zinc-800/40 rounded" />
+                  </div>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <div className="w-8 h-8 rounded-full bg-zinc-800/80 shrink-0" />
+                  <div className="space-y-1.5 max-w-[65%]">
+                    <div className="h-12 w-48 bg-zinc-800/80 rounded-2xl rounded-tl-sm border border-zinc-700/20" />
+                    <div className="h-2 w-12 bg-zinc-800/40 rounded" />
+                  </div>
+                </div>
+                <div className="flex items-start justify-end gap-2.5">
+                  <div className="space-y-1.5 max-w-[65%] flex flex-col items-end">
+                    <div className="h-9 w-40 bg-zinc-800/70 rounded-2xl rounded-tr-sm border border-zinc-700/30" />
+                    <div className="h-2 w-12 bg-zinc-800/40 rounded" />
+                  </div>
+                </div>
+              </div>
+            )}
+
             {messages.length === 0 && !loading && (
               <div className="welcome-banner">
                 <div className="welcome-icon">

@@ -1244,9 +1244,22 @@ const ProfilePage = () => {
             {activeTab === 'posts' && (
               <div className="space-y-4">
                 {loadingPosts ? (
-                  <div className="py-20 text-center text-zinc-500 flex flex-col items-center gap-3">
-                    <Loader2 size={24} className="animate-spin text-zinc-400" />
-                    <span className="text-xs">Đang đồng bộ khoảnh khắc từ tần số...</span>
+                  <div className="space-y-4 animate-pulse">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-zinc-800/80 shrink-0" />
+                          <div className="space-y-1.5 flex-1">
+                            <div className="h-3.5 w-32 bg-zinc-800/80 rounded" />
+                            <div className="h-2.5 w-20 bg-zinc-800/50 rounded" />
+                          </div>
+                        </div>
+                        <div className="space-y-2 pt-1">
+                          <div className="h-3 w-full bg-zinc-800/60 rounded" />
+                          <div className="h-3 w-4/5 bg-zinc-800/50 rounded" />
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ) : userPosts.length === 0 ? (
                   /* Empty State chuẩn phong cách Trạm Tần Số */
@@ -1419,9 +1432,22 @@ const ProfilePage = () => {
             {activeTab === 'friends' && (
               <div>
                 {loadingFriends ? (
-                  <div className="py-20 text-center text-zinc-500 flex flex-col items-center gap-3">
-                    <Loader2 size={24} className="animate-spin text-zinc-400" />
-                    <span className="text-xs">Đang tải danh sách kết nối...</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-pulse">
+                    {[1, 2, 3, 4, 5, 6].map((i) => (
+                      <div
+                        key={i}
+                        className="p-3.5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 flex items-center justify-between gap-3"
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <div className="w-11 h-11 rounded-full bg-zinc-800/80 shrink-0" />
+                          <div className="min-w-0 flex-1 space-y-2">
+                            <div className="h-3.5 w-28 bg-zinc-800/80 rounded" />
+                            <div className="h-2.5 w-20 bg-zinc-800/50 rounded" />
+                          </div>
+                        </div>
+                        <div className="w-16 h-8 rounded-xl bg-zinc-800/60 shrink-0" />
+                      </div>
+                    ))}
                   </div>
                 ) : userFriends.length === 0 ? (
                   <div className="py-20 px-4 text-center rounded-2xl border border-dashed border-zinc-800/80 bg-zinc-900/20 space-y-2">
