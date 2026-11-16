@@ -59,6 +59,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      - uploads_data:/app/uploads
     networks:
       - talovin-net
 
@@ -83,6 +85,7 @@ services:
 volumes:
   pgdata:
   redisdata:
+  uploads_data:
 
 networks:
   talovin-net:
