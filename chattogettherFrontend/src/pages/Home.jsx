@@ -9,7 +9,7 @@ import {
   Shuffle, Image as ImageIcon, CheckCircle2, Zap, Dices, Maximize2, Download,
   Edit3, Trash2, MoreVertical, Tag, Filter, Check, Disc,
   Mic, Headphones, Moon, Gamepad2, Film, Square,
-  Flag, AlertTriangle, UserCheck, UserPlus,
+  Flag, AlertTriangle, UserCheck, UserPlus, Phone, PhoneCall,
   ChevronDown, Menu, Globe, Layers, SlidersHorizontal, Repeat, Sun, Smile,
   ArrowLeft, RefreshCw, Clock, Loader2, SkipBack, SkipForward, ChevronLeft
 } from 'lucide-react';
@@ -2563,10 +2563,12 @@ const Home = ({ initialTab }) => {
                 // Phát âm thanh tin nhắn và hiện thanh thông báo nổi (floating banner)
                 playMessageIncoming();
                 const content = alert.contentPreview || alert.message || 'Đã gửi một tin nhắn';
+                const isCall = content.toLowerCase().includes('cuộc gọi');
                 const floatingMsg = {
                   id: alert.roomId ? `msg_${alert.roomId}_${Date.now()}` : Date.now(),
                   notifKey: `msg_${senderId}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-                  type: 'MESSAGE',
+                  type: isCall ? 'CALL_LOG' : 'MESSAGE',
+                  title: alert.senderDisplayName || alert.senderUsername || (isCall ? 'Cuộc gọi thoại' : 'Tin nhắn mới'),
                   senderId: senderId,
                   actorId: senderId,
                   actorDisplayName: alert.senderDisplayName || alert.senderUsername || 'Người dùng',
@@ -2753,10 +2755,10 @@ const Home = ({ initialTab }) => {
 
     const partnerId = n.actorId || n.senderId || n.userId;
 
-    // 1. Điều hướng thẳng vào đoạn chat 1-1 nếu là thông báo tin nhắn
-    const isMsgNotif = n.type === 'MESSAGE' || n.type === 'CHAT' || n.type === 'DM' ||
-      (n.title && n.title.toLowerCase().includes('tin nhắn')) ||
-      (n.text && n.text.toLowerCase().includes('tin nhắn'));
+    // 1. Điều hướng thẳng vào đoạn chat 1-1 nếu là thông báo tin nhắn hoặc cuộc gọi nhỡ
+    const isMsgNotif = n.type === 'MESSAGE' || n.type === 'CHAT' || n.type === 'DM' || n.type === 'CALL_LOG' ||
+      (n.title && (n.title.toLowerCase().includes('tin nhắn') || n.title.toLowerCase().includes('cuộc gọi'))) ||
+      (n.text && (n.text.toLowerCase().includes('tin nhắn') || n.text.toLowerCase().includes('cuộc gọi')));
     if (isMsgNotif && partnerId) {
       // Đánh dấu đã đọc ngay lập tức và xóa badge unread
       axiosClient.post('/message/read', { targetUserId: partnerId }).catch(() => {});
@@ -5441,143 +5443,184 @@ const Home = ({ initialTab }) => {
 
       {/* MODAL CUỘC GỌI ĐẾN ĐÃ ĐƯỢC QUẢN LÝ TOÀN CỤC BỞI GlobalCallBanner TRONG App.jsx */}
 
-      {/* THANH THÔNG BÁO NỔI HỆ THỐNG THỜI GIAN THỰC (REALTIME FLOATING PILL) */}
+      {/* THANH THÔNG BÁO NỔI HỆ THỐNG THỜI GIAN THỰC (REALTIME FLOATING PILL - ĐẶT CHÍNH GIỮA TRÊN CÙNG) */}
       {floatingNotif && (
-        <div
-          key={floatingNotif.notifKey || floatingNotif.id || Date.now()}
-          className="fixed top-4 right-4 z-50 max-w-sm w-[92vw] sm:w-[360px] bg-zinc-900 border border-zinc-800 rounded-2xl p-3 shadow-2xl backdrop-blur-xl flex flex-col gap-2 animate-floating-notif"
-          style={{ boxShadow: '0 12px 30px -6px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.06)' }}
-        >
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[9999] pointer-events-none w-[94vw] sm:w-[400px] max-w-md flex flex-col items-center">
           <div
-            className="flex items-start gap-3 cursor-pointer"
-            onClick={() => {
-              handleOpenNotification(floatingNotif);
-              setFloatingNotif(null);
-            }}
+            key={floatingNotif.notifKey || floatingNotif.id || Date.now()}
+            className="pointer-events-auto w-full bg-zinc-900/95 border border-zinc-700/80 rounded-2xl p-3.5 shadow-2xl backdrop-blur-xl flex flex-col gap-2.5 animate-floating-notif"
+            style={{ boxShadow: '0 16px 36px -6px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.08)' }}
           >
-            <div className="flex-shrink-0">
-              {(() => {
-                const fActorId = floatingNotif.actorId || floatingNotif.actor_id || floatingNotif.senderId || floatingNotif.userId;
-                let fUsername = floatingNotif.actorUsername || floatingNotif.actor_username || floatingNotif.actorName || floatingNotif.senderUsername || floatingNotif.username || floatingNotif.account;
-                const fAvatar = floatingNotif.actorAvatar || floatingNotif.actor_avatar || floatingNotif.senderAvatar || floatingNotif.avatar || floatingNotif.userAvatar;
-                let fDisplayName = floatingNotif.actorDisplayName || floatingNotif.actorName || floatingNotif.senderDisplayName || fUsername;
-                if (!fUsername && floatingNotif.text) {
-                  const match = floatingNotif.text.match(/^([^ ]+)\s+(đã\s+)/i);
-                  if (match) fUsername = match[1];
-                }
-                const fIsUser = Boolean(fActorId || fUsername || fAvatar || (floatingNotif.type && floatingNotif.type !== 'SYSTEM' && floatingNotif.type !== 'ANNOUNCEMENT' && floatingNotif.type !== 'POST_TAKEDOWN'));
-
-                return fIsUser ? (
-                  <div className="relative w-9 h-9 shrink-0">
-                    <UserAvatar
-                      avatarUrl={fAvatar}
-                      username={fUsername}
-                      account={fUsername}
-                      name={fDisplayName}
-                      userId={fActorId}
-                      size={36}
-                      className="w-9 h-9 rounded-full"
-                    />
-                    <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-zinc-900 border border-zinc-700/80 flex items-center justify-center text-zinc-300 shadow-sm pointer-events-none">
-                      {(floatingNotif.type === 'POST_REACT' || floatingNotif.type === 'REACTION' || floatingNotif.type === 'COMMENT_LIKE' || floatingNotif.text?.includes('cảm xúc') || floatingNotif.text?.includes('thích') || floatingNotif.text?.includes('tim')) ? (
-                        <Heart size={8} className="text-rose-400 fill-rose-400" />
-                      ) : (floatingNotif.type === 'POST_COMMENT' || floatingNotif.type === 'COMMENT' || floatingNotif.type === 'COMMENT_REPLY' || floatingNotif.text?.includes('bình luận') || floatingNotif.text?.includes('phản hồi')) ? (
-                        <MessageSquare size={8} className="text-emerald-400 fill-emerald-400" />
-                      ) : (floatingNotif.type === 'POST_SHARE' || floatingNotif.type === 'REPOST' || floatingNotif.text?.includes('chia sẻ') || floatingNotif.text?.includes('đăng lại')) ? (
-                        <Share2 size={8} className="text-sky-400" />
-                      ) : (
-                        <UserPlus size={8} className="text-amber-400" />
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden bg-zinc-800 border border-zinc-700 text-zinc-300">
-                    {floatingNotif.type === 'POST_TAKEDOWN' ? (
-                      <AlertTriangle size={16} />
-                    ) : (
-                      <Bell size={16} />
-                    )}
-                  </div>
-                );
-              })()}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-xs font-bold text-zinc-100 flex items-center justify-between">
-                <span>{floatingNotif.title}</span>
-                <span className="text-[10px] text-zinc-500 font-mono">{floatingNotif.time}</span>
-              </div>
-              <p className="text-xs text-zinc-300 mt-0.5 leading-relaxed break-words font-sans">
-                {floatingNotif.text}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
+            <div
+              className="flex items-start gap-3 cursor-pointer"
+              onClick={() => {
+                handleOpenNotification(floatingNotif);
                 setFloatingNotif(null);
               }}
-              className="text-zinc-500 hover:text-zinc-300 p-1 rounded-lg hover:bg-zinc-800 transition-colors flex-shrink-0"
-              title="Đóng thông báo"
             >
-              <X size={14} />
-            </button>
-          </div>
+              <div className="flex-shrink-0">
+                {(() => {
+                  const fActorId = floatingNotif.actorId || floatingNotif.actor_id || floatingNotif.senderId || floatingNotif.userId;
+                  let fUsername = floatingNotif.actorUsername || floatingNotif.actor_username || floatingNotif.actorName || floatingNotif.senderUsername || floatingNotif.username || floatingNotif.account;
+                  const fAvatar = floatingNotif.actorAvatar || floatingNotif.actor_avatar || floatingNotif.senderAvatar || floatingNotif.avatar || floatingNotif.userAvatar;
+                  let fDisplayName = floatingNotif.actorDisplayName || floatingNotif.actorName || floatingNotif.senderDisplayName || fUsername;
+                  if (!fUsername && floatingNotif.text) {
+                    const match = floatingNotif.text.match(/^([^ ]+)\s+(đã\s+)/i);
+                    if (match) fUsername = match[1];
+                  }
+                  const fIsCall = floatingNotif.type === 'CALL_LOG' || floatingNotif.text?.includes('Cuộc gọi') || floatingNotif.text?.includes('cuộc gọi');
+                  const fIsUser = Boolean(fActorId || fUsername || fAvatar || (floatingNotif.type && floatingNotif.type !== 'SYSTEM' && floatingNotif.type !== 'ANNOUNCEMENT' && floatingNotif.type !== 'POST_TAKEDOWN'));
 
-          {/* Nút Đồng ý / Từ chối nếu là FRIEND_REQUEST */}
-          {floatingNotif.type === 'FRIEND_REQUEST' && floatingNotif.status === 'PENDING' && floatingNotif.actorId && (
-            <div className="grid grid-cols-2 gap-2 pt-1.5 border-t border-zinc-800/80">
+                  return fIsUser ? (
+                    <div className="relative w-9 h-9 shrink-0">
+                      <UserAvatar
+                        avatarUrl={fAvatar}
+                        username={fUsername}
+                        account={fUsername}
+                        name={fDisplayName}
+                        userId={fActorId}
+                        size={36}
+                        className="w-9 h-9 rounded-full"
+                      />
+                      <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-zinc-900 border border-zinc-700/80 flex items-center justify-center text-zinc-300 shadow-sm pointer-events-none">
+                        {fIsCall ? (
+                          <PhoneCall size={9} className="text-emerald-400" />
+                        ) : (floatingNotif.type === 'POST_REACT' || floatingNotif.type === 'REACTION' || floatingNotif.type === 'COMMENT_LIKE' || floatingNotif.text?.includes('cảm xúc') || floatingNotif.text?.includes('thích') || floatingNotif.text?.includes('tim')) ? (
+                          <Heart size={8} className="text-rose-400 fill-rose-400" />
+                        ) : (floatingNotif.type === 'POST_COMMENT' || floatingNotif.type === 'COMMENT' || floatingNotif.type === 'COMMENT_REPLY' || floatingNotif.text?.includes('bình luận') || floatingNotif.text?.includes('phản hồi')) ? (
+                          <MessageSquare size={8} className="text-emerald-400 fill-emerald-400" />
+                        ) : (floatingNotif.type === 'POST_SHARE' || floatingNotif.type === 'REPOST' || floatingNotif.text?.includes('chia sẻ') || floatingNotif.text?.includes('đăng lại')) ? (
+                          <Share2 size={8} className="text-sky-400" />
+                        ) : (
+                          <UserPlus size={8} className="text-amber-400" />
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden bg-zinc-800 border border-zinc-700 text-zinc-300">
+                      {floatingNotif.type === 'POST_TAKEDOWN' ? (
+                        <AlertTriangle size={16} />
+                      ) : (
+                        <Bell size={16} />
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-bold text-zinc-100 flex items-center justify-between">
+                  <span className="truncate pr-2">{floatingNotif.title || floatingNotif.actorDisplayName || 'Thông báo mới'}</span>
+                  <span className="text-[10px] text-zinc-500 font-mono shrink-0">{floatingNotif.time || 'Vừa xong'}</span>
+                </div>
+                <p className="text-xs text-zinc-300 mt-0.5 leading-relaxed break-words font-sans">
+                  {floatingNotif.text}
+                </p>
+              </div>
               <button
                 type="button"
-                onClick={() => handleAcceptFriendRequest(floatingNotif.actorId, floatingNotif.id)}
-                className="h-8 rounded-lg bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs transition-all shadow-sm active:scale-95 flex items-center justify-center"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setFloatingNotif(null);
+                }}
+                className="text-zinc-500 hover:text-zinc-300 p-1 rounded-lg hover:bg-zinc-800 transition-colors flex-shrink-0"
+                title="Đóng thông báo"
               >
-                Đồng ý
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDeclineFriendRequest(floatingNotif.actorId, floatingNotif.id)}
-                className="h-8 rounded-lg bg-zinc-900 text-zinc-300 border border-zinc-800 hover:bg-zinc-800 font-semibold text-xs transition-all active:scale-95 flex items-center justify-center"
-              >
-                Từ chối
+                <X size={14} />
               </button>
             </div>
-          )}
 
-          {/* Form trả lời nhanh tin nhắn ngay trên thanh thông báo nổi (Quick Reply) */}
-          {(floatingNotif.type === 'MESSAGE' || floatingNotif.type === 'CHAT' || floatingNotif.type === 'DM' || (floatingNotif.title && floatingNotif.title.toLowerCase().includes('tin nhắn'))) && (
-            <form
-              onSubmit={handleQuickReplySubmit}
-              onClick={(e) => e.stopPropagation()}
-              className="flex items-center gap-2 pt-2 border-t border-zinc-800/80"
-            >
-              <input
-                type="text"
-                value={quickReplyText}
-                onChange={(e) => setQuickReplyText(e.target.value)}
-                onFocus={() => setIsTypingQuickReply(true)}
-                onBlur={() => {
-                  if (!quickReplyText.trim()) setIsTypingQuickReply(false);
-                }}
-                placeholder="Trả lời nhanh tin nhắn này..."
-                className="flex-1 bg-zinc-900/90 border border-zinc-700/70 focus:border-emerald-500/80 focus:ring-1 focus:ring-emerald-500/40 rounded-xl px-3 py-1.5 text-xs text-white placeholder-zinc-500 outline-none transition-all"
-              />
-              <button
-                type="submit"
-                disabled={!quickReplyText.trim() || isSendingQuickReply}
-                className="h-7.5 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:hover:bg-emerald-500 text-zinc-950 font-semibold text-xs transition-all active:scale-95 flex items-center gap-1.5 shadow-sm shrink-0 cursor-pointer"
-                title="Gửi câu trả lời"
+            {/* Nút Đồng ý / Từ chối nếu là FRIEND_REQUEST */}
+            {floatingNotif.type === 'FRIEND_REQUEST' && floatingNotif.status === 'PENDING' && floatingNotif.actorId && (
+              <div className="grid grid-cols-2 gap-2 pt-1.5 border-t border-zinc-800/80">
+                <button
+                  type="button"
+                  onClick={() => handleAcceptFriendRequest(floatingNotif.actorId, floatingNotif.id)}
+                  className="h-8 rounded-lg bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs transition-all shadow-sm active:scale-95 flex items-center justify-center"
+                >
+                  Đồng ý
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeclineFriendRequest(floatingNotif.actorId, floatingNotif.id)}
+                  className="h-8 rounded-lg bg-zinc-900 text-zinc-300 border border-zinc-800 hover:bg-zinc-800 font-semibold text-xs transition-all active:scale-95 flex items-center justify-center"
+                >
+                  Từ chối
+                </button>
+              </div>
+            )}
+
+            {/* Nút Gọi lại / Nhắn tin nếu là thông báo Cuộc gọi nhỡ */}
+            {(floatingNotif.type === 'CALL_LOG' || floatingNotif.text?.includes('Cuộc gọi') || floatingNotif.text?.includes('cuộc gọi')) && (
+              <div className="grid grid-cols-2 gap-2 pt-1.5 border-t border-zinc-800/80" onClick={(e) => e.stopPropagation()}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const partnerId = floatingNotif.actorId || floatingNotif.senderId || floatingNotif.userId;
+                    setFloatingNotif(null);
+                    if (partnerId) {
+                      const from = encodeURIComponent(location.pathname + (location.search || ''));
+                      navigate(`/call/direct/${partnerId}?type=audio&from=${from}`);
+                    }
+                  }}
+                  className="h-8 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold text-xs transition-all shadow-sm active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <PhoneCall size={13} />
+                  <span>Gọi lại</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const partnerId = floatingNotif.actorId || floatingNotif.senderId || floatingNotif.userId;
+                    setFloatingNotif(null);
+                    if (partnerId) {
+                      navigate(`/messages/${partnerId}`);
+                    }
+                  }}
+                  className="h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/70 font-semibold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <MessageSquare size={13} />
+                  <span>Nhắn tin</span>
+                </button>
+              </div>
+            )}
+
+            {/* Form trả lời nhanh tin nhắn ngay trên thanh thông báo nổi (Quick Reply) - Chỉ hiện khi là tin nhắn văn bản thông thường */}
+            {!(floatingNotif.type === 'CALL_LOG' || floatingNotif.text?.includes('Cuộc gọi') || floatingNotif.text?.includes('cuộc gọi')) &&
+             (floatingNotif.type === 'MESSAGE' || floatingNotif.type === 'CHAT' || floatingNotif.type === 'DM' || (floatingNotif.title && floatingNotif.title.toLowerCase().includes('tin nhắn'))) && (
+              <form
+                onSubmit={handleQuickReplySubmit}
+                onClick={(e) => e.stopPropagation()}
+                className="flex items-center gap-2 pt-2 border-t border-zinc-800/80"
               >
-                {isSendingQuickReply ? (
-                  <Loader2 size={12} className="animate-spin" />
-                ) : (
-                  <>
-                    <Send size={11} />
-                    <span>Gửi</span>
-                  </>
-                )}
-              </button>
-            </form>
-          )}
+                <input
+                  type="text"
+                  value={quickReplyText}
+                  onChange={(e) => setQuickReplyText(e.target.value)}
+                  onFocus={() => setIsTypingQuickReply(true)}
+                  onBlur={() => {
+                    if (!quickReplyText.trim()) setIsTypingQuickReply(false);
+                  }}
+                  placeholder="Trả lời nhanh tin nhắn này..."
+                  className="flex-1 bg-zinc-900/90 border border-zinc-700/70 focus:border-emerald-500/80 focus:ring-1 focus:ring-emerald-500/40 rounded-xl px-3 py-1.5 text-xs text-white placeholder-zinc-500 outline-none transition-all"
+                />
+                <button
+                  type="submit"
+                  disabled={!quickReplyText.trim() || isSendingQuickReply}
+                  className="h-7.5 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:hover:bg-emerald-500 text-zinc-950 font-semibold text-xs transition-all active:scale-95 flex items-center gap-1.5 shadow-sm shrink-0 cursor-pointer"
+                  title="Gửi câu trả lời"
+                >
+                  {isSendingQuickReply ? (
+                    <Loader2 size={12} className="animate-spin" />
+                  ) : (
+                    <>
+                      <Send size={11} />
+                      <span>Gửi</span>
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
+          </div>
         </div>
       )}
 
