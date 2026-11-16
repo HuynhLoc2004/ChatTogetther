@@ -10,7 +10,6 @@ import ProfilePage from './pages/ProfilePage';
 import DirectMessagePage from './pages/DirectMessagePage';
 import CallPage from './pages/CallPage';
 import GlobalCallBanner from './components/GlobalCallBanner';
-import RoomAlertBanner from './components/RoomAlertBanner';
 import { AuthProvider } from './context/AuthContext';
 import { PresenceProvider } from './context/PresenceContext';
 import './App.css';
@@ -234,7 +233,6 @@ function App() {
             }}
           />
           <GlobalCallBanner />
-          <RoomAlertBanner />
           <Routes>
             <Route 
               path="/login" 

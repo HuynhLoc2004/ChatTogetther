@@ -18,8 +18,6 @@ const GlobalCallBanner = () => {
   const autoDismissTimer = useRef(null);
 
   const [effectiveUserId, setEffectiveUserId] = useState(() => localStorage.getItem('user_id'));
-  const [incomingMessageNotice, setIncomingMessageNotice] = useState(null);
-  const msgDismissTimer = useRef(null);
 
   // Đồng bộ reactive user_id khi đăng nhập hoặc thay đổi tài khoản
   useEffect(() => {
@@ -157,27 +155,12 @@ const GlobalCallBanner = () => {
         } catch (e) {}
       });
 
-      // Lắng nghe thông báo tin nhắn đến để trượt thanh thông báo
-      client.subscribe(`/topic/user/${effectiveUserId}/notifications`, (frame) => {
-        try {
-          const notif = JSON.parse(frame.body);
-          if (!notif || window.location.pathname.startsWith('/messages') || window.location.pathname.startsWith('/call')) return;
-          if (notif.type === 'MESSAGE' || notif.title?.includes('tin nhắn')) {
-            setIncomingMessageNotice(notif);
-            if (msgDismissTimer.current) clearTimeout(msgDismissTimer.current);
-            msgDismissTimer.current = setTimeout(() => {
-              setIncomingMessageNotice(null);
-            }, 6000);
-          }
-        } catch (_) {}
-      });
     }, () => {});
 
     return () => {
       isMounted = false;
       stopRingingSound();
       clearDismissTimer();
-      if (msgDismissTimer.current) clearTimeout(msgDismissTimer.current);
       if (client && client.connected) {
         client.disconnect();
       }
@@ -190,9 +173,6 @@ const GlobalCallBanner = () => {
       setIncomingCall(null);
       stopRingingSound();
       clearDismissTimer();
-    }
-    if (location.pathname.startsWith('/messages')) {
-      setIncomingMessageNotice(null);
     }
   }, [location.pathname, stopRingingSound, clearDismissTimer]);
 
@@ -316,44 +296,6 @@ const GlobalCallBanner = () => {
             </button>
           </div>
         </div>
-      </div>
-    );
-  }
-
-  // Nếu có tin nhắn mới đến, render thanh thông báo trượt xuống
-  if (incomingMessageNotice) {
-    return (
-      <div 
-        onClick={() => {
-          const senderId = incomingMessageNotice.senderId || incomingMessageNotice.targetId;
-          setIncomingMessageNotice(null);
-          if (senderId) {
-            navigate(`/messages/${senderId}`);
-          } else {
-            navigate('/messages');
-          }
-        }}
-        className="fixed top-3 sm:top-5 left-1/2 -translate-x-1/2 z-[999999] w-[92vw] max-w-md bg-zinc-900/95 border border-zinc-700/80 rounded-2xl p-3 shadow-2xl backdrop-blur-xl animate-in slide-in-from-top-6 duration-300 cursor-pointer hover:bg-zinc-800/90 transition-all flex items-center justify-between gap-3"
-      >
-        <div className="flex items-center gap-3 min-w-0 flex-1">
-          <UserAvatar 
-            avatar={incomingMessageNotice.senderAvatar} 
-            name={incomingMessageNotice.senderName || incomingMessageNotice.title || 'Tin nhắn mới'} 
-            size={36} 
-            className="w-9 h-9 rounded-full ring-1 ring-zinc-700 shrink-0"
-          />
-          <div className="min-w-0 flex-1">
-            <h5 className="font-semibold text-xs text-zinc-200 truncate">
-              {incomingMessageNotice.senderName || incomingMessageNotice.title || 'Tin nhắn riêng mới'}
-            </h5>
-            <p className="text-[11px] text-zinc-400 truncate mt-0.5">
-              {incomingMessageNotice.content || 'Đã gửi một tin nhắn cho bạn. Bấm để xem.'}
-            </p>
-          </div>
-        </div>
-        <span className="text-[10px] font-medium text-zinc-400 bg-zinc-800 px-2 py-1 rounded-lg border border-zinc-700/60 shrink-0">
-          Xem ngay
-        </span>
       </div>
     );
   }
