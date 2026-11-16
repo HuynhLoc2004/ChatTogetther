@@ -68,6 +68,9 @@ public class UserEntity {
     @Column(name = "show_active_status")
     private Boolean showActiveStatus = true;
 
+    @Column(name = "hidden_chat_pin", columnDefinition = "TEXT")
+    private String hiddenChatPin;
+
     @Column(name = "last_active_at")
     private LocalDateTime lastActiveAt;
 

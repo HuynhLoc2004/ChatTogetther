@@ -5,7 +5,8 @@ import {
   Mic, MicOff, Send, Image as ImageIcon, Smile, MoreVertical, User,
   Clock, CheckCircle2, ChevronDown, Volume2, Shield, Share2, Sparkles,
   PhoneCall, PhoneMissed, Reply, CornerUpLeft, Forward, X, Play, Heart,
-  ThumbsUp, Flame, Check, CheckCheck, Users, ExternalLink, Eye
+  ThumbsUp, Flame, Check, CheckCheck, Users, ExternalLink, Eye, EyeOff,
+  Lock, Unlock, KeyRound, ShieldCheck, ShieldAlert
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
@@ -203,6 +204,28 @@ export const DirectMessagePage = () => {
   const [forwardSearch, setForwardSearch] = useState('');
   const [forwardTab, setForwardTab] = useState('friends'); // 'friends' | 'rooms'
   const [communityRooms, setCommunityRooms] = useState([]);
+
+  // Quản lý Đoạn Chat Ẩn (Hidden Chat) bảo mật bằng mã PIN 6 số (Server Hashed BCrypt)
+  const [hiddenPartnerIds, setHiddenPartnerIds] = useState(() => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem('talovin_hidden_partner_ids') || '[]').map(String));
+    } catch (_) {
+      return new Set();
+    }
+  });
+  const [hasServerPin, setHasServerPin] = useState(false);
+  const [isUnlocked, setIsUnlocked] = useState(false); // Mở khóa xem các đoạn chat bị ẩn
+  const [activeMenuPartnerId, setActiveMenuPartnerId] = useState(null); // Menu 3 chấm trên thẻ hội thoại
+  const [pinModal, setPinModal] = useState({
+    open: false,
+    mode: 'verify', // 'setup' | 'verify' | 'hide' | 'unhide'
+    targetPartner: null
+  });
+  const [pinStep, setPinStep] = useState(1); // 1: nhập PIN mới, 2: xác nhận lại PIN (dành cho setup)
+  const [pinInput, setPinInput] = useState('');
+  const [pinConfirmInput, setPinConfirmInput] = useState('');
+  const [pinError, setPinError] = useState('');
+  const [pinLoading, setPinLoading] = useState(false);
 
   // Refs
   const stompClient = useRef(null);
@@ -1118,9 +1141,201 @@ export const DirectMessagePage = () => {
     }
   };
 
+  // Lấy trạng thái PIN từ server khi khởi tạo
+  useEffect(() => {
+    axiosClient.get('/message/hidden/status').then(res => {
+      if (res?.data?.data) {
+        setHasServerPin(Boolean(res.data.data.hasPin));
+        if (Array.isArray(res.data.data.hiddenPartnerIds)) {
+          const ids = new Set(res.data.data.hiddenPartnerIds.map(String));
+          setHiddenPartnerIds(ids);
+          try {
+            localStorage.setItem('talovin_hidden_partner_ids', JSON.stringify(Array.from(ids)));
+          } catch (_) {}
+        }
+      }
+    }).catch(() => {});
+  }, []);
+
+  // Đóng menu tùy chọn cuộc trò chuyện khi click ra ngoài
+  useEffect(() => {
+    const handleDocClick = () => setActiveMenuPartnerId(null);
+    document.addEventListener('click', handleDocClick);
+    return () => document.removeEventListener('click', handleDocClick);
+  }, []);
+
+  // Tự động kiểm tra mã PIN 6 số khi người dùng nhập vào ô tìm kiếm (chuẩn Zalo)
+  useEffect(() => {
+    const trimmed = searchQuery.trim();
+    if (/^\d{6}$/.test(trimmed)) {
+      axiosClient.post('/message/hidden/verify-pin', { pin: trimmed })
+        .then(res => {
+          if (res?.data?.data?.verified) {
+            setIsUnlocked(true);
+            setSearchQuery('');
+            if (Array.isArray(res.data.data.hiddenPartnerIds)) {
+              const ids = new Set(res.data.data.hiddenPartnerIds.map(String));
+              setHiddenPartnerIds(ids);
+              try {
+                localStorage.setItem('talovin_hidden_partner_ids', JSON.stringify(Array.from(ids)));
+              } catch (_) {}
+            }
+            toast.success("🔓 Đã mở khóa các cuộc trò chuyện ẩn!");
+          }
+        })
+        .catch(() => {});
+    }
+  }, [searchQuery]);
+
+  const handleInitiateHide = (partner) => {
+    setActiveMenuPartnerId(null);
+    setPinError('');
+    setPinInput('');
+    setPinConfirmInput('');
+    if (!hasServerPin) {
+      setPinStep(1);
+      setPinModal({ open: true, mode: 'setup', targetPartner: partner });
+    } else {
+      setPinModal({ open: true, mode: 'hide', targetPartner: partner });
+    }
+  };
+
+  const handleInitiateUnhide = (partner) => {
+    setActiveMenuPartnerId(null);
+    setPinError('');
+    setPinInput('');
+    setPinModal({ open: true, mode: 'unhide', targetPartner: partner });
+  };
+
+  const handleOpenUnlockModal = () => {
+    setPinError('');
+    setPinInput('');
+    setPinConfirmInput('');
+    if (!hasServerPin) {
+      setPinStep(1);
+      setPinModal({ open: true, mode: 'setup', targetPartner: null });
+    } else {
+      setPinModal({ open: true, mode: 'verify', targetPartner: null });
+    }
+  };
+
+  const handlePinSubmit = async (e) => {
+    if (e) e.preventDefault();
+    setPinError('');
+
+    if (pinModal.mode === 'setup') {
+      if (pinStep === 1) {
+        if (!/^\d{6}$/.test(pinInput)) {
+          setPinError('Mã PIN phải bao gồm đúng 6 chữ số (0-9)');
+          return;
+        }
+        setPinStep(2);
+        return;
+      } else {
+        if (pinConfirmInput !== pinInput) {
+          setPinError('Mã PIN xác thực không khớp! Vui lòng nhập lại.');
+          return;
+        }
+        setPinLoading(true);
+        try {
+          await axiosClient.post('/message/hidden/setup-pin', { pin: pinInput });
+          setHasServerPin(true);
+          if (pinModal.targetPartner) {
+            await axiosClient.post('/message/hidden/hide', { partnerId: pinModal.targetPartner.id, pin: pinInput });
+            const newHidden = new Set(hiddenPartnerIds);
+            newHidden.add(String(pinModal.targetPartner.id));
+            setHiddenPartnerIds(newHidden);
+            setFriends(prev => prev.map(f => f.id === pinModal.targetPartner.id ? { ...f, isHidden: true } : f));
+            localStorage.setItem('talovin_hidden_partner_ids', JSON.stringify(Array.from(newHidden)));
+            toast.success(`🛡️ Đã cài PIN và ẩn cuộc trò chuyện với ${pinModal.targetPartner.nickname || pinModal.targetPartner.account}!`);
+            if (activePartner?.id === pinModal.targetPartner.id && !isUnlocked) {
+              navigate('/messages', { replace: true });
+              setActivePartner(null);
+            }
+          } else {
+            toast.success('🛡️ Đã thiết lập mã PIN 6 số bảo mật thành công!');
+          }
+          setPinModal({ open: false, mode: 'verify', targetPartner: null });
+        } catch (err) {
+          setPinError(err?.response?.data?.message || 'Có lỗi xảy ra khi cài đặt mã PIN');
+        } finally {
+          setPinLoading(false);
+        }
+      }
+    } else if (pinModal.mode === 'hide') {
+      if (!/^\d{6}$/.test(pinInput)) {
+        setPinError('Vui lòng nhập đúng 6 chữ số mã PIN');
+        return;
+      }
+      setPinLoading(true);
+      try {
+        await axiosClient.post('/message/hidden/hide', { partnerId: pinModal.targetPartner?.id, pin: pinInput });
+        const newHidden = new Set(hiddenPartnerIds);
+        newHidden.add(String(pinModal.targetPartner?.id));
+        setHiddenPartnerIds(newHidden);
+        setFriends(prev => prev.map(f => f.id === pinModal.targetPartner?.id ? { ...f, isHidden: true } : f));
+        localStorage.setItem('talovin_hidden_partner_ids', JSON.stringify(Array.from(newHidden)));
+        toast.success(`🔒 Đã ẩn cuộc trò chuyện thành công!`);
+        if (activePartner?.id === pinModal.targetPartner?.id && !isUnlocked) {
+          navigate('/messages', { replace: true });
+          setActivePartner(null);
+        }
+        setPinModal({ open: false, mode: 'verify', targetPartner: null });
+      } catch (err) {
+        setPinError(err?.response?.data?.message || 'Mã PIN không chính xác!');
+      } finally {
+        setPinLoading(false);
+      }
+    } else if (pinModal.mode === 'verify') {
+      if (!/^\d{6}$/.test(pinInput)) {
+        setPinError('Vui lòng nhập đúng 6 chữ số mã PIN');
+        return;
+      }
+      setPinLoading(true);
+      try {
+        const res = await axiosClient.post('/message/hidden/verify-pin', { pin: pinInput });
+        if (res?.data?.data?.verified) {
+          setIsUnlocked(true);
+          if (Array.isArray(res.data.data.hiddenPartnerIds)) {
+            const ids = new Set(res.data.data.hiddenPartnerIds.map(String));
+            setHiddenPartnerIds(ids);
+            localStorage.setItem('talovin_hidden_partner_ids', JSON.stringify(Array.from(ids)));
+          }
+          toast.success('🔓 Đã mở khóa các cuộc trò chuyện ẩn!');
+          setPinModal({ open: false, mode: 'verify', targetPartner: null });
+        }
+      } catch (err) {
+        setPinError(err?.response?.data?.message || 'Mã PIN không chính xác! Vui lòng thử lại.');
+      } finally {
+        setPinLoading(false);
+      }
+    } else if (pinModal.mode === 'unhide') {
+      setPinLoading(true);
+      try {
+        await axiosClient.post('/message/hidden/unhide', { partnerId: pinModal.targetPartner?.id, pin: pinInput });
+        const newHidden = new Set(hiddenPartnerIds);
+        newHidden.delete(String(pinModal.targetPartner?.id));
+        setHiddenPartnerIds(newHidden);
+        setFriends(prev => prev.map(f => f.id === pinModal.targetPartner?.id ? { ...f, isHidden: false } : f));
+        localStorage.setItem('talovin_hidden_partner_ids', JSON.stringify(Array.from(newHidden)));
+        toast.success(`Đã bỏ ẩn cuộc trò chuyện!`);
+        setPinModal({ open: false, mode: 'verify', targetPartner: null });
+      } catch (err) {
+        setPinError(err?.response?.data?.message || 'Có lỗi xảy ra khi bỏ ẩn cuộc trò chuyện');
+      } finally {
+        setPinLoading(false);
+      }
+    }
+  };
+
   // Lọc danh sách hội thoại theo ô tìm kiếm và sắp xếp chuẩn
   const filteredConversations = useMemo(() => {
     let list = [...friends];
+    // Nếu chưa mở khóa: Loại bỏ hoàn toàn các cuộc trò chuyện bị ẩn khỏi danh sách
+    if (!isUnlocked) {
+      list = list.filter(f => !hiddenPartnerIds.has(String(f.id)) && !f.isHidden);
+    }
+
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       list = list.filter(f =>
@@ -1142,7 +1357,7 @@ export const DirectMessagePage = () => {
     });
 
     return list;
-  }, [friends, searchQuery]);
+  }, [friends, searchQuery, isUnlocked, hiddenPartnerIds]);
 
   // ID an toàn cho cuộc gọi WebRTC
   const safeCallTargetId = activePartner?.id || activePartner?.userId || (urlTargetUserId && !isNaN(Number(urlTargetUserId)) ? urlTargetUserId : null);
@@ -1195,22 +1410,57 @@ export const DirectMessagePage = () => {
 
         {/* CỘT TRÁI: DANH SÁCH BẠN BÈ / CUỘC TRÒ CHUYỆN */}
         <aside className={`w-full md:w-80 lg:w-96 flex flex-col border-r border-zinc-800/80 bg-zinc-950 shrink-0 ${urlTargetUserId ? 'hidden md:flex' : 'flex animate-in fade-in duration-150'}`}>
-          {/* Ô tìm kiếm bạn bè */}
-          <div className="p-3 border-b border-zinc-800/60">
-            <div className="relative">
+          {/* Ô tìm kiếm bạn bè & Nút mở khóa đoạn chat ẩn */}
+          <div className="p-3 border-b border-zinc-800/60 flex items-center gap-2">
+            <div className="relative flex-1">
               <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Tìm bạn bè hoặc tin nhắn..."
+                placeholder="Tìm kiếm hoặc gõ PIN 6 số..."
                 className="w-full pl-9 pr-4 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-700 transition-colors font-sans"
               />
             </div>
+
+            {/* Nút Khóa / Mở khóa đoạn chat ẩn */}
+            {!isUnlocked ? (
+              <button
+                type="button"
+                onClick={handleOpenUnlockModal}
+                className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-400 hover:text-amber-400 hover:border-amber-500/40 transition-all flex items-center gap-1 shrink-0"
+                title={hasServerPin ? "Mở khóa đoạn chat ẩn (Mã PIN 6 số)" : "Cài đặt mã PIN 6 số cho đoạn chat ẩn"}
+              >
+                <Lock size={15} />
+                {hiddenPartnerIds.size > 0 && (
+                  <span className="text-[10px] font-mono px-1 rounded-full bg-zinc-800 text-amber-400 font-bold">
+                    {hiddenPartnerIds.size}
+                  </span>
+                )}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsUnlocked(false);
+                  toast("🔒 Đã khóa lại các cuộc trò chuyện ẩn");
+                }}
+                className="p-2 rounded-xl bg-emerald-950/80 border border-emerald-500/50 text-emerald-400 hover:bg-emerald-900/80 transition-all flex items-center gap-1 shrink-0"
+                title="Đang hiện cuộc trò chuyện ẩn - Bấm để khóa lại"
+              >
+                <Unlock size={15} />
+                <span className="text-[10px] font-semibold hidden sm:inline">Khóa</span>
+              </button>
+            )}
           </div>
 
           <div className="px-3 pt-3 pb-1 text-[11px] font-bold text-zinc-500 uppercase tracking-wider flex items-center justify-between">
             <span>Cuộc trò chuyện gần đây ({filteredConversations.length})</span>
+            {isUnlocked && (
+              <span className="text-[10px] text-emerald-400 font-mono font-medium lowercase">
+                chế độ đã mở khóa
+              </span>
+            )}
           </div>
 
           {/* Danh sách người dùng */}
@@ -1229,6 +1479,7 @@ export const DirectMessagePage = () => {
                 const isSelected = activePartner?.id?.toString() === partnerIdStr;
                 const unreadCount = Number(unreadMap[partner.id]) || Number(unreadMap[partnerIdStr]) || (Number(partner.unreadCount) && !isSelected ? Number(partner.unreadCount) : 0);
                 const isUnread = !isSelected && unreadCount > 0;
+                const isThisHidden = hiddenPartnerIds.has(String(partner.id)) || partner.isHidden;
 
                 // Trạng thái online: Nhanh nhạy & chuẩn xác theo thời gian thực
                 const isPartnerOnline = isUserOnline(partner.id);
@@ -1240,7 +1491,7 @@ export const DirectMessagePage = () => {
                       navigate(`/messages/${partner.id}${location.search}`, { replace: true, state: location.state });
                       openDirectChat(partner.id, partner);
                     }}
-                    className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all duration-150 relative ${isSelected
+                    className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all duration-150 relative group ${isSelected
                       ? 'bg-zinc-800/90 border border-zinc-700/90 text-white shadow-sm'
                       : isUnread
                         ? 'bg-zinc-900/95 border border-emerald-500/50 text-white shadow-md'
@@ -1255,13 +1506,61 @@ export const DirectMessagePage = () => {
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between mb-0.5">
-                        <h4 className={`text-xs truncate ${isUnread ? 'font-bold text-white' : 'font-semibold text-zinc-200'}`}>
-                          {partner.nickname || partner.account}
-                        </h4>
+                        <div className="flex items-center gap-1 min-w-0">
+                          <h4 className={`text-xs truncate ${isUnread ? 'font-bold text-white' : 'font-semibold text-zinc-200'}`}>
+                            {partner.nickname || partner.account}
+                          </h4>
+                          {isThisHidden && (
+                            <span className="shrink-0 text-amber-400" title="Đoạn chat đã ẩn">
+                              <Lock size={11} />
+                            </span>
+                          )}
+                        </div>
 
-                        <span className={`text-[10px] font-mono shrink-0 ml-1 ${isUnread ? 'text-emerald-400 font-semibold' : 'text-zinc-500'}`}>
-                          {partner.lastMessageFormattedTime || (partner.lastMessageTime ? new Date(partner.lastMessageTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '')}
-                        </span>
+                        <div className="flex items-center gap-1 shrink-0 ml-1">
+                          <span className={`text-[10px] font-mono ${isUnread ? 'text-emerald-400 font-semibold' : 'text-zinc-500'}`}>
+                            {partner.lastMessageFormattedTime || (partner.lastMessageTime ? new Date(partner.lastMessageTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '')}
+                          </span>
+
+                          {/* Menu 3 chấm trên từng cuộc trò chuyện */}
+                          <div className="relative" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMenuPartnerId(activeMenuPartnerId === partner.id ? null : partner.id);
+                              }}
+                              className="p-1 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-colors opacity-70 group-hover:opacity-100"
+                              title="Tùy chọn cuộc trò chuyện"
+                            >
+                              <MoreVertical size={13} />
+                            </button>
+
+                            {activeMenuPartnerId === partner.id && (
+                              <div className="absolute right-0 top-6 w-44 bg-zinc-900 border border-zinc-700/80 rounded-xl shadow-2xl py-1 z-30 animate-in fade-in zoom-in-95 duration-100">
+                                {!isThisHidden ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleInitiateHide(partner)}
+                                    className="w-full px-3 py-2 text-left text-xs text-zinc-300 hover:text-rose-400 hover:bg-zinc-800/80 flex items-center gap-2 transition-colors"
+                                  >
+                                    <EyeOff size={13} className="text-zinc-400" />
+                                    <span>Ẩn cuộc trò chuyện</span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleInitiateUnhide(partner)}
+                                    className="w-full px-3 py-2 text-left text-xs text-zinc-300 hover:text-emerald-400 hover:bg-zinc-800/80 flex items-center gap-2 transition-colors"
+                                  >
+                                    <Eye size={13} className="text-zinc-400" />
+                                    <span>Bỏ ẩn cuộc trò chuyện</span>
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
 
                       <div className="flex items-center justify-between gap-1">
@@ -1388,6 +1687,48 @@ export const DirectMessagePage = () => {
                     <Video size={13} className="text-zinc-300" />
                     <span className="hidden sm:inline">Gọi Video</span>
                   </button>
+
+                  {/* Menu tùy chọn trong Header đoạn chat */}
+                  <div className="relative" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={() => setActiveMenuPartnerId(activeMenuPartnerId === 'header' ? null : 'header')}
+                      className="h-8.5 sm:h-9 w-8.5 sm:w-9 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 flex items-center justify-center transition-all cursor-pointer"
+                      title="Tùy chọn cuộc trò chuyện"
+                    >
+                      <MoreVertical size={14} />
+                    </button>
+
+                    {activeMenuPartnerId === 'header' && (
+                      <div className="absolute right-0 top-10 w-48 bg-zinc-900 border border-zinc-700/80 rounded-xl shadow-2xl py-1 z-30 animate-in fade-in zoom-in-95 duration-100">
+                        {!(hiddenPartnerIds.has(String(activePartner?.id)) || activePartner?.isHidden) ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveMenuPartnerId(null);
+                              handleInitiateHide(activePartner);
+                            }}
+                            className="w-full px-3 py-2 text-left text-xs text-zinc-300 hover:text-rose-400 hover:bg-zinc-800/80 flex items-center gap-2 transition-colors"
+                          >
+                            <EyeOff size={13} className="text-zinc-400" />
+                            <span>Ẩn cuộc trò chuyện</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveMenuPartnerId(null);
+                              handleInitiateUnhide(activePartner);
+                            }}
+                            className="w-full px-3 py-2 text-left text-xs text-zinc-300 hover:text-emerald-400 hover:bg-zinc-800/80 flex items-center gap-2 transition-colors"
+                          >
+                            <Eye size={13} className="text-zinc-400" />
+                            <span>Bỏ ẩn cuộc trò chuyện</span>
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -2014,6 +2355,115 @@ export const DirectMessagePage = () => {
             alt="Phóng to"
             className="max-w-[95vw] max-h-[90vh] object-contain rounded-xl shadow-2xl"
           />
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MODAL MÃ PIN 6 SỐ BẢO MẬT CUỘC TRÒ CHUYỆN ẨN (SERVER BCRYPT) */}
+      {/* ============================================================== */}
+      {pinModal.open && (
+        <div className="fixed inset-0 z-[999999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-[#12151d] border border-zinc-800 rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl relative animate-in zoom-in-95 duration-150">
+            <button
+              type="button"
+              onClick={() => setPinModal({ open: false, mode: 'verify', targetPartner: null })}
+              className="absolute top-4 right-4 p-1.5 rounded-full text-zinc-400 hover:text-white hover:bg-zinc-800/80 transition-colors"
+            >
+              <X size={16} />
+            </button>
+
+            <div className="text-center space-y-2">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto shadow-inner">
+                {pinModal.mode === 'setup' ? <KeyRound size={22} /> : <Lock size={22} />}
+              </div>
+
+              <h3 className="text-sm font-bold text-white tracking-tight">
+                {pinModal.mode === 'setup'
+                  ? (pinStep === 1 ? 'Cài đặt mã PIN 6 số' : 'Xác thực lại mã PIN')
+                  : pinModal.mode === 'hide'
+                    ? 'Ẩn cuộc trò chuyện'
+                    : pinModal.mode === 'unhide'
+                      ? 'Bỏ ẩn cuộc trò chuyện'
+                      : 'Mở khóa cuộc trò chuyện ẩn'}
+              </h3>
+
+              <p className="text-xs text-zinc-400 leading-relaxed">
+                {pinModal.mode === 'setup'
+                  ? (pinStep === 1
+                    ? 'Nhập mã PIN 6 số bí mật để bảo vệ các cuộc trò chuyện riêng tư của bạn (Mã hoá bảo mật phía server).'
+                    : 'Vui lòng nhập lại chính xác 6 số bạn vừa đặt để hoàn tất xác thực.')
+                  : pinModal.mode === 'hide'
+                    ? `Nhập mã PIN 6 số để ẩn cuộc trò chuyện với ${pinModal.targetPartner?.nickname || pinModal.targetPartner?.account}.`
+                    : pinModal.mode === 'unhide'
+                      ? 'Nhập mã PIN 6 số để hiển thị lại cuộc trò chuyện này trong hộp thư.'
+                      : 'Nhập mã PIN 6 số của bạn để xem và nhắn tin trong các cuộc trò chuyện đã ẩn.'}
+              </p>
+            </div>
+
+            <form onSubmit={handlePinSubmit} className="space-y-4 pt-1">
+              <div>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  value={pinModal.mode === 'setup' && pinStep === 2 ? pinConfirmInput : pinInput}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, '').slice(0, 6);
+                    if (pinModal.mode === 'setup' && pinStep === 2) {
+                      setPinConfirmInput(val);
+                    } else {
+                      setPinInput(val);
+                    }
+                    if (pinError) setPinError('');
+                  }}
+                  placeholder="••••••"
+                  autoFocus
+                  className="w-full text-center text-2xl tracking-[0.6em] font-mono py-3 px-4 rounded-2xl bg-zinc-900 border border-zinc-700/80 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-400 transition-colors"
+                />
+              </div>
+
+              {pinError && (
+                <div className="p-2 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs text-center font-medium">
+                  {pinError}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (pinModal.mode === 'setup' && pinStep === 2) {
+                      setPinStep(1);
+                      setPinConfirmInput('');
+                      setPinError('');
+                    } else {
+                      setPinModal({ open: false, mode: 'verify', targetPartner: null });
+                    }
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition-colors"
+                >
+                  {pinModal.mode === 'setup' && pinStep === 2 ? 'Quay lại' : 'Hủy'}
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={pinLoading || ((pinModal.mode === 'setup' && pinStep === 2 ? pinConfirmInput : pinInput).length !== 6)}
+                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 text-xs font-bold transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
+                >
+                  {pinLoading
+                    ? 'Đang xử lý...'
+                    : pinModal.mode === 'setup' && pinStep === 1
+                      ? 'Tiếp tục'
+                      : pinModal.mode === 'hide'
+                        ? 'Ẩn ngay'
+                        : pinModal.mode === 'unhide'
+                          ? 'Bỏ ẩn'
+                          : 'Xác nhận'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

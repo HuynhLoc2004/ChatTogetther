@@ -170,4 +170,57 @@ public class ChatController {
                 .body(resource);
     }
 
+    @GetMapping("/hidden/status")
+    public ResponseEntity<ResponseData<Map<String, Object>>> getHiddenChatStatus(JwtAuthenticationToken token) {
+        return ResponseEntity.ok(this.chatService.getHiddenChatStatus(token));
+    }
+
+    @PostMapping("/hidden/setup-pin")
+    public ResponseEntity<ResponseData<Boolean>> setupHiddenChatPin(
+            JwtAuthenticationToken token,
+            @RequestBody Map<String, String> body
+    ) {
+        String pin = body != null ? body.get("pin") : null;
+        return ResponseEntity.ok(this.chatService.setupHiddenChatPin(token, pin));
+    }
+
+    @PostMapping("/hidden/verify-pin")
+    public ResponseEntity<ResponseData<Map<String, Object>>> verifyHiddenChatPin(
+            JwtAuthenticationToken token,
+            @RequestBody Map<String, String> body
+    ) {
+        String pin = body != null ? body.get("pin") : null;
+        return ResponseEntity.ok(this.chatService.verifyHiddenChatPin(token, pin));
+    }
+
+    @PostMapping("/hidden/hide")
+    public ResponseEntity<ResponseData<Boolean>> hideChat(
+            JwtAuthenticationToken token,
+            @RequestBody Map<String, Object> body
+    ) {
+        Long partnerId = null;
+        if (body != null && body.get("partnerId") != null) {
+            try {
+                partnerId = Long.valueOf(body.get("partnerId").toString());
+            } catch (Exception ignored) {}
+        }
+        String pin = body != null ? (String) body.get("pin") : null;
+        return ResponseEntity.ok(this.chatService.hideChat(token, partnerId, pin));
+    }
+
+    @PostMapping("/hidden/unhide")
+    public ResponseEntity<ResponseData<Boolean>> unhideChat(
+            JwtAuthenticationToken token,
+            @RequestBody Map<String, Object> body
+    ) {
+        Long partnerId = null;
+        if (body != null && body.get("partnerId") != null) {
+            try {
+                partnerId = Long.valueOf(body.get("partnerId").toString());
+            } catch (Exception ignored) {}
+        }
+        String pin = body != null ? (String) body.get("pin") : null;
+        return ResponseEntity.ok(this.chatService.unhideChat(token, partnerId, pin));
+    }
+
 }

@@ -7,11 +7,13 @@ import chatToggetther.DTO.SendMessageDTO;
 import chatToggetther.DataRequest.MessageRequest;
 import chatToggetther.ENUMS.ErrorCode;
 import chatToggetther.modelEntity.FriendshipEntity;
+import chatToggetther.modelEntity.HiddenChatEntity;
 import chatToggetther.modelEntity.MessageEntity;
 import chatToggetther.modelEntity.RoomEntity;
 import chatToggetther.modelEntity.UserEntity;
 import chatToggetther.modelEntity.UserRoomEntity;
 import chatToggetther.repository.FriendshipRepository;
+import chatToggetther.repository.HiddenChatRepository;
 import chatToggetther.repository.MessageRepository;
 import chatToggetther.repository.RoomRepository;
 import chatToggetther.repository.UserRepository;
@@ -19,6 +21,8 @@ import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -31,6 +35,7 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -40,14 +45,17 @@ public class ChatService {
     private final UserRepository userRepository;
     private final MessageRepository messageRepository;
     private final FriendshipRepository friendshipRepository;
+    private final HiddenChatRepository hiddenChatRepository;
     private final SimpMessagingTemplate simpMessagingTemplate;
     private final ObjectMapper objectMapper;
+    private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(10);
 
-    public ChatService(RoomRepository roomRepository, UserRepository userRepository, MessageRepository messageRepository, FriendshipRepository friendshipRepository, SimpMessagingTemplate simpMessagingTemplate, ObjectMapper objectMapper) {
+    public ChatService(RoomRepository roomRepository, UserRepository userRepository, MessageRepository messageRepository, FriendshipRepository friendshipRepository, HiddenChatRepository hiddenChatRepository, SimpMessagingTemplate simpMessagingTemplate, ObjectMapper objectMapper) {
         this.roomRepository = roomRepository;
         this.userRepository = userRepository;
         this.messageRepository = messageRepository;
         this.friendshipRepository = friendshipRepository;
+        this.hiddenChatRepository = hiddenChatRepository;
         this.simpMessagingTemplate = simpMessagingTemplate;
         this.objectMapper = objectMapper;
     }
@@ -149,47 +157,32 @@ public class ChatService {
                 this.simpMessagingTemplate.convertAndSend("/topic/messages/" + partnerId, sendMessageDTO);
             }
 
-            // Bắn sự kiện thông báo realtime (Floating Alert & Âm thanh & OS Notification) cho tin nhắn 1-1
+            // Bắn sự kiện thông báo realtime (Floating Alert & Âm thanh) cho tin nhắn 1-1
             if (isDm && partnerId != null) {
-                String contentPreview = messageEntity.getMessage();
-                if (contentPreview != null && contentPreview.length() > 100) {
-                    contentPreview = contentPreview.substring(0, 97) + "...";
+                // Kiểm tra xem người nhận có đang ẩn cuộc trò chuyện với người gửi hay không
+                boolean isHiddenByRecipient = hiddenChatRepository.existsByUserIdAndPartnerId(partnerId, userId);
+                if (!isHiddenByRecipient) {
+                    String contentPreview = messageEntity.getMessage();
+                    if (contentPreview != null && contentPreview.length() > 100) {
+                        contentPreview = contentPreview.substring(0, 97) + "...";
+                    }
+                    java.util.Map<String, Object> dmAlertPayload = new java.util.HashMap<>();
+                    dmAlertPayload.put("type", "MESSAGE");
+                    dmAlertPayload.put("roomId", roomEntity.getId());
+                    dmAlertPayload.put("roomName", senderNickname);
+                    dmAlertPayload.put("isDirect", true);
+                    dmAlertPayload.put("partnerId", userId);
+                    dmAlertPayload.put("senderId", userId);
+                    dmAlertPayload.put("senderUsername", senderUsername);
+                    dmAlertPayload.put("senderDisplayName", senderNickname);
+                    dmAlertPayload.put("senderAvatar", senderAvatar);
+                    dmAlertPayload.put("contentPreview", contentPreview);
+                    dmAlertPayload.put("message", contentPreview);
+                    dmAlertPayload.put("createdAt", now.toString());
+
+                    this.simpMessagingTemplate.convertAndSendToUser(partnerId.toString(), "/queue/room-alerts", dmAlertPayload);
+                    this.simpMessagingTemplate.convertAndSend("/topic/room-alerts/" + partnerId, dmAlertPayload);
                 }
-                java.util.Map<String, Object> dmAlertPayload = new java.util.HashMap<>();
-                dmAlertPayload.put("roomId", roomEntity.getId());
-                dmAlertPayload.put("roomName", senderNickname);
-                dmAlertPayload.put("isDirect", true);
-                dmAlertPayload.put("partnerId", userId);
-                dmAlertPayload.put("senderId", userId);
-                dmAlertPayload.put("senderUsername", senderUsername);
-                dmAlertPayload.put("senderDisplayName", senderNickname);
-                dmAlertPayload.put("senderAvatar", senderAvatar);
-                dmAlertPayload.put("contentPreview", contentPreview);
-                dmAlertPayload.put("message", contentPreview);
-                dmAlertPayload.put("createdAt", now.toString());
-
-                this.simpMessagingTemplate.convertAndSendToUser(partnerId.toString(), "/queue/room-alerts", dmAlertPayload);
-                this.simpMessagingTemplate.convertAndSend("/topic/room-alerts/" + partnerId, dmAlertPayload);
-
-                // Đồng thời gửi vào kênh thông báo cá nhân của người nhận (/topic/user/{partnerId}/notifications)
-                java.util.Map<String, Object> notifPayload = new java.util.HashMap<>();
-                notifPayload.put("id", messageEntity.getId());
-                notifPayload.put("type", "MESSAGE");
-                notifPayload.put("title", "Tin nhắn từ " + senderNickname);
-                notifPayload.put("content", contentPreview);
-                notifPayload.put("message", contentPreview);
-                notifPayload.put("actorId", userId);
-                notifPayload.put("senderId", userId);
-                notifPayload.put("actorDisplayName", senderNickname);
-                notifPayload.put("actorUsername", senderUsername);
-                notifPayload.put("actorAvatar", senderAvatar);
-                notifPayload.put("senderAvatar", senderAvatar);
-                notifPayload.put("referenceId", roomEntity.getId());
-                notifPayload.put("roomId", roomEntity.getId());
-                notifPayload.put("timestamp", now.toString());
-                notifPayload.put("time", "Vừa xong");
-                notifPayload.put("unread", true);
-                this.simpMessagingTemplate.convertAndSend("/topic/user/" + partnerId + "/notifications", notifPayload);
             }
 
             // Bắn sự kiện tin nhắn nhóm qua kênh riêng (tuyệt đối không tạo bản ghi Notification ở Chuông Sảnh)
@@ -455,6 +448,11 @@ public class ChatService {
         List<Map<String, Object>> result = new ArrayList<>();
         DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
 
+        List<HiddenChatEntity> hiddenChats = hiddenChatRepository.findByUserId(myId);
+        Set<Long> hiddenPartnerIds = hiddenChats.stream()
+                .map(HiddenChatEntity::getPartnerId)
+                .collect(Collectors.toSet());
+
         for (Map.Entry<Long, UserEntity> entry : partnersMap.entrySet()) {
             Long partnerId = entry.getKey();
             UserEntity partner = entry.getValue();
@@ -477,6 +475,7 @@ public class ChatService {
             conv.put("isOnline", isOnline);
             conv.put("status", isOnline ? "ONLINE" : "OFFLINE");
             conv.put("directRoomId", room != null ? room.getId() : null);
+            conv.put("isHidden", hiddenPartnerIds.contains(partnerId));
 
             long unreadCount = 0;
             if (room != null) {
@@ -577,6 +576,128 @@ public class ChatService {
         }
 
         return new ResponseData<>(200, "Đánh dấu đã đọc thành công", true);
+    }
+
+    public ResponseData<Map<String, Object>> getHiddenChatStatus(JwtAuthenticationToken token) {
+        Long myId = SecurityUtils.extractUserId(token);
+        if (myId == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
+        }
+        UserEntity user = userRepository.findById(myId)
+                .orElseThrow(() -> new AppException(404, "Không tìm thấy người dùng", 404));
+
+        List<HiddenChatEntity> hiddenChats = hiddenChatRepository.findByUserId(myId);
+        List<Long> hiddenPartnerIds = hiddenChats.stream().map(HiddenChatEntity::getPartnerId).collect(Collectors.toList());
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("hasPin", user.getHiddenChatPin() != null && !user.getHiddenChatPin().trim().isEmpty());
+        res.put("hiddenCount", hiddenPartnerIds.size());
+        res.put("hiddenPartnerIds", hiddenPartnerIds);
+        return new ResponseData<>(200, "Lấy trạng thái cuộc trò chuyện ẩn thành công", res);
+    }
+
+    @Transactional
+    public ResponseData<Boolean> setupHiddenChatPin(JwtAuthenticationToken token, String pin) {
+        Long myId = SecurityUtils.extractUserId(token);
+        if (myId == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
+        }
+        if (pin == null || !pin.matches("^\\d{6}$")) {
+            throw new AppException(400, "Mã PIN phải bao gồm đúng 6 chữ số (0-9)", 400);
+        }
+        UserEntity user = userRepository.findById(myId)
+                .orElseThrow(() -> new AppException(404, "Không tìm thấy người dùng", 404));
+
+        user.setHiddenChatPin(passwordEncoder.encode(pin));
+        userRepository.save(user);
+
+        return new ResponseData<>(200, "Cài đặt mã PIN 6 số bảo mật thành công", true);
+    }
+
+    public ResponseData<Map<String, Object>> verifyHiddenChatPin(JwtAuthenticationToken token, String pin) {
+        Long myId = SecurityUtils.extractUserId(token);
+        if (myId == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
+        }
+        if (pin == null || !pin.matches("^\\d{6}$")) {
+            throw new AppException(400, "Mã PIN phải bao gồm đúng 6 chữ số", 400);
+        }
+        UserEntity user = userRepository.findById(myId)
+                .orElseThrow(() -> new AppException(404, "Không tìm thấy người dùng", 404));
+
+        if (user.getHiddenChatPin() == null || user.getHiddenChatPin().trim().isEmpty()) {
+            throw new AppException(400, "Bạn chưa thiết lập mã PIN cho đoạn chat ẩn", 400);
+        }
+
+        if (!passwordEncoder.matches(pin, user.getHiddenChatPin())) {
+            throw new AppException(400, "Mã PIN không chính xác! Vui lòng thử lại.", 400);
+        }
+
+        List<HiddenChatEntity> hiddenChats = hiddenChatRepository.findByUserId(myId);
+        List<Long> hiddenPartnerIds = hiddenChats.stream().map(HiddenChatEntity::getPartnerId).collect(Collectors.toList());
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("verified", true);
+        res.put("hiddenPartnerIds", hiddenPartnerIds);
+        return new ResponseData<>(200, "Xác thực mã PIN thành công", res);
+    }
+
+    @Transactional
+    public ResponseData<Boolean> hideChat(JwtAuthenticationToken token, Long partnerId, String pin) {
+        Long myId = SecurityUtils.extractUserId(token);
+        if (myId == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
+        }
+        if (partnerId == null || partnerId.equals(myId)) {
+            throw new AppException(400, "Đối tượng cuộc trò chuyện không hợp lệ", 400);
+        }
+        UserEntity user = userRepository.findById(myId)
+                .orElseThrow(() -> new AppException(404, "Không tìm thấy người dùng", 404));
+
+        // Nếu người dùng đã có PIN thì bắt buộc kiểm tra PIN
+        if (user.getHiddenChatPin() != null && !user.getHiddenChatPin().trim().isEmpty()) {
+            if (pin == null || !passwordEncoder.matches(pin, user.getHiddenChatPin())) {
+                throw new AppException(400, "Mã PIN không chính xác!", 400);
+            }
+        } else {
+            // Chưa có PIN thì yêu cầu setup PIN trước
+            if (pin != null && pin.matches("^\\d{6}$")) {
+                user.setHiddenChatPin(passwordEncoder.encode(pin));
+                userRepository.save(user);
+            } else {
+                throw new AppException(400, "Vui lòng thiết lập mã PIN 6 số trước khi ẩn cuộc trò chuyện", 400);
+            }
+        }
+
+        if (!hiddenChatRepository.existsByUserIdAndPartnerId(myId, partnerId)) {
+            HiddenChatEntity hidden = HiddenChatEntity.builder()
+                    .userId(myId)
+                    .partnerId(partnerId)
+                    .createdAt(LocalDateTime.now())
+                    .build();
+            hiddenChatRepository.save(hidden);
+        }
+
+        return new ResponseData<>(200, "Đã ẩn cuộc trò chuyện thành công", true);
+    }
+
+    @Transactional
+    public ResponseData<Boolean> unhideChat(JwtAuthenticationToken token, Long partnerId, String pin) {
+        Long myId = SecurityUtils.extractUserId(token);
+        if (myId == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
+        }
+        UserEntity user = userRepository.findById(myId)
+                .orElseThrow(() -> new AppException(404, "Không tìm thấy người dùng", 404));
+
+        if (user.getHiddenChatPin() != null && !user.getHiddenChatPin().trim().isEmpty()) {
+            if (pin != null && !pin.trim().isEmpty() && !passwordEncoder.matches(pin, user.getHiddenChatPin())) {
+                throw new AppException(400, "Mã PIN không chính xác!", 400);
+            }
+        }
+
+        hiddenChatRepository.deleteByUserIdAndPartnerId(myId, partnerId);
+        return new ResponseData<>(200, "Đã bỏ ẩn cuộc trò chuyện thành công", true);
     }
 
 }

@@ -711,29 +711,40 @@ const Home = ({ initialTab }) => {
   const [unreadDmCount, setUnreadDmCount] = useState(() => {
     try {
       const saved = localStorage.getItem('talovin_dm_unread');
+      const hiddenIds = new Set(JSON.parse(localStorage.getItem('talovin_hidden_partner_ids') || '[]').map(String));
       if (saved) {
         const parsed = JSON.parse(saved);
-        return Object.values(parsed).reduce((a, b) => a + (Number(b) || 0), 0);
+        return Object.entries(parsed).reduce((acc, [pid, cnt]) => {
+          if (hiddenIds.has(String(pid))) return acc;
+          return acc + (Number(cnt) || 0);
+        }, 0);
       }
     } catch (_) {}
     return 0;
   });
 
-  // Lắng nghe sự kiện cập nhật unread tin nhắn từ WebSocket hoặc tab khác
+  // Lắng nghe sự kiện cập nhật unread tin nhắn từ WebSocket hoặc tab khác (không tính đoạn chat ẩn)
   useEffect(() => {
+    const calcUnread = (data) => {
+      if (!data || typeof data !== 'object') return 0;
+      let hiddenIds = new Set();
+      try {
+        hiddenIds = new Set(JSON.parse(localStorage.getItem('talovin_hidden_partner_ids') || '[]').map(String));
+      } catch (_) {}
+      return Object.entries(data).reduce((acc, [pid, cnt]) => {
+        if (hiddenIds.has(String(pid))) return acc;
+        return acc + (Number(cnt) || 0);
+      }, 0);
+    };
+
     const handleUnreadChange = (e) => {
-      const data = e.detail;
-      if (data && typeof data === 'object') {
-        const total = Object.values(data).reduce((a, b) => a + (Number(b) || 0), 0);
-        setUnreadDmCount(total);
-      }
+      setUnreadDmCount(calcUnread(e.detail));
     };
     const handleStorage = (e) => {
       if (e.key === 'talovin_dm_unread') {
         try {
           const parsed = JSON.parse(e.newValue || '{}');
-          const total = Object.values(parsed).reduce((a, b) => a + (Number(b) || 0), 0);
-          setUnreadDmCount(total);
+          setUnreadDmCount(calcUnread(parsed));
         } catch (_) {}
       }
     };
@@ -745,7 +756,7 @@ const Home = ({ initialTab }) => {
     };
   }, []);
 
-  // Nạp và kiểm tra số tin nhắn chưa đọc chuẩn xác từ Backend (1 API duy nhất, không đếm sai)
+  // Nạp và kiểm tra số tin nhắn chưa đọc chuẩn xác từ Backend (1 API duy nhất, loại trừ đoạn chat ẩn)
   useEffect(() => {
     if (!currentUserId) return;
     const syncDmUnread = async () => {
@@ -754,14 +765,21 @@ const Home = ({ initialTab }) => {
         if (res?.data?.data && Array.isArray(res.data.data)) {
           let count = 0;
           const unreadMap = {};
+          const hiddenIds = [];
           res.data.data.forEach(c => {
             const uCount = Number(c.unreadCount) || 0;
+            if (c.isHidden) {
+              hiddenIds.push(String(c.id));
+            }
             if (uCount > 0) {
-              count += uCount;
               unreadMap[c.id] = uCount;
+              if (!c.isHidden) {
+                count += uCount;
+              }
             }
           });
           setUnreadDmCount(count);
+          localStorage.setItem('talovin_hidden_partner_ids', JSON.stringify(hiddenIds));
           localStorage.setItem('talovin_dm_unread', JSON.stringify(unreadMap));
           window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: unreadMap }));
         }
@@ -770,18 +788,21 @@ const Home = ({ initialTab }) => {
     syncDmUnread();
   }, [currentUserId]);
 
+  // Tổng số tin nhắn chưa đọc (tuyệt đối không cộng gộp vào chuông sảnh và không tính chat ẩn)
   const unreadMessagesCount = useMemo(() => {
-    const notifCount = notifications.filter(n => n.unread && (n.type === 'MESSAGE' || n.type === 'CHAT' || n.type === 'DM')).length;
-    return notifCount + unreadDmCount;
-  }, [notifications, unreadDmCount]);
+    return unreadDmCount;
+  }, [unreadDmCount]);
 
-  // Đồng bộ nạp thông báo từ server khi currentUserId sẵn sàng
+  // Đồng bộ nạp thông báo từ server khi currentUserId sẵn sàng (chỉ lấy thông báo xã hội/hệ thống, loại trừ tin nhắn)
   const fetchNotifications = useCallback(async () => {
     if (!currentUserId) return;
     try {
       const res = await axiosClient.get('/notifications');
       if (res.data?.data?.notifications) {
-        setNotifications(res.data.data.notifications);
+        const socialNotifs = res.data.data.notifications.filter(n =>
+          n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM'
+        );
+        setNotifications(socialNotifs);
       }
     } catch (_) {
       // Bỏ qua lỗi êm đềm khi server khởi động hoặc chưa có thông báo
@@ -2323,22 +2344,12 @@ const Home = ({ initialTab }) => {
                 reason: notif.reason,
                 adminNote: notif.adminNote || notif.note
               };
-              setNotifications(prev => [normalizedNotif, ...prev.filter(n => n.id !== normalizedNotif.id)]);
-              setFloatingNotif(normalizedNotif);
 
-              // Xử lý thông báo tin nhắn mới
-              if (notif.type === 'MESSAGE' || notif.type === 'CHAT' || notif.type === 'DM') {
-                playMessageIncoming();
-                setUnreadDmCount(prev => prev + 1);
-                try {
-                  const unreadMap = JSON.parse(localStorage.getItem('talovin_dm_unread') || '{}');
-                  const sid = String(notif.senderId || notif.actorId);
-                  if (sid) {
-                    unreadMap[sid] = (Number(unreadMap[sid]) || 0) + 1;
-                    localStorage.setItem('talovin_dm_unread', JSON.stringify(unreadMap));
-                    window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: unreadMap }));
-                  }
-                } catch (_) {}
+              const isChatMsg = notif.type === 'MESSAGE' || notif.type === 'CHAT' || notif.type === 'DM';
+              // TUYỆT ĐỐI không đưa tin nhắn chat vào danh sách Chuông thông báo (Bell icon)
+              if (!isChatMsg) {
+                setNotifications(prev => [normalizedNotif, ...prev.filter(n => n.id !== normalizedNotif.id)]);
+                setFloatingNotif(normalizedNotif);
               }
 
               if (notif.type === 'FRIEND_REQUEST' || notif.type === 'FRIEND_ACCEPTED') {
@@ -2347,11 +2358,10 @@ const Home = ({ initialTab }) => {
               }
 
               // Thông báo đẩy ra trình duyệt / điện thoại nếu được cấp quyền
-              if (typeof window !== 'undefined' && "Notification" in window && Notification.permission === "granted") {
+              if (!isChatMsg && typeof window !== 'undefined' && "Notification" in window && Notification.permission === "granted") {
                 try {
                   const pushTitle = normalizedNotif.type === 'FRIEND_REQUEST' ? 'Talovin - Lời mời kết bạn' :
-                    normalizedNotif.type === 'FRIEND_ACCEPTED' ? 'Talovin - Kết nối mới' : 
-                    (normalizedNotif.type === 'MESSAGE' ? (normalizedNotif.title || 'Talovin - Tin nhắn mới') : 'Talovin');
+                    normalizedNotif.type === 'FRIEND_ACCEPTED' ? 'Talovin - Kết nối mới' : 'Talovin';
                   new Notification(pushTitle, {
                     body: normalizedNotif.text,
                     icon: normalizedNotif.actorAvatar || "/logo.png"
@@ -2375,13 +2385,40 @@ const Home = ({ initialTab }) => {
             }
           });
 
-          // Lắng nghe tin nhắn cá nhân 1-1 trực tiếp qua /topic/messages/{currentUserId}
-          stompClient.subscribe(`/topic/messages/${currentUserId}`, (message) => {
+          // Lắng nghe alert tin nhắn qua /topic/room-alerts/{currentUserId}
+          stompClient.subscribe(`/topic/room-alerts/${currentUserId}`, (message) => {
             try {
-              const msg = JSON.parse(message.body);
-              const senderId = msg.senderId || msg.userId;
+              const alert = JSON.parse(message.body);
+              const senderId = alert.senderId || alert.userId;
               if (senderId && senderId.toString() !== currentUserId?.toString()) {
-                setUnreadDmCount(prev => prev + 1);
+                // Kiểm tra xem người gửi có bị người dùng ẩn cuộc trò chuyện hay không
+                let hiddenSet = new Set();
+                try {
+                  hiddenSet = new Set(JSON.parse(localStorage.getItem('talovin_hidden_partner_ids') || '[]').map(String));
+                } catch (_) {}
+
+                if (hiddenSet.has(String(senderId))) {
+                  // Cuộc trò chuyện bị ẩn: TUYỆT ĐỐI không hiện banner, không âm thanh, không tăng badge
+                  return;
+                }
+
+                // Phát âm thanh tin nhắn và hiện thanh thông báo nổi (floating banner)
+                playMessageIncoming();
+                const content = alert.contentPreview || alert.message || 'Đã gửi một tin nhắn';
+                const floatingMsg = {
+                  id: alert.roomId ? `msg_${alert.roomId}_${Date.now()}` : Date.now(),
+                  type: 'MESSAGE',
+                  senderId: senderId,
+                  actorId: senderId,
+                  actorDisplayName: alert.senderDisplayName || alert.senderUsername || 'Người dùng',
+                  actorAvatar: alert.senderAvatar || '',
+                  text: content,
+                  content: content,
+                  time: 'Vừa xong'
+                };
+                setFloatingNotif(floatingMsg);
+
+                // Cập nhật số tin nhắn chưa đọc
                 try {
                   const unreadMap = JSON.parse(localStorage.getItem('talovin_dm_unread') || '{}');
                   const sid = String(senderId);
@@ -2389,19 +2426,6 @@ const Home = ({ initialTab }) => {
                   localStorage.setItem('talovin_dm_unread', JSON.stringify(unreadMap));
                   window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: unreadMap }));
                 } catch (_) {}
-              }
-            } catch (err) {
-              console.warn("Lỗi nhận tin nhắn trực tiếp:", err);
-            }
-          });
-
-          // Lắng nghe alert tin nhắn qua /topic/room-alerts/{currentUserId}
-          stompClient.subscribe(`/topic/room-alerts/${currentUserId}`, (message) => {
-            try {
-              const alert = JSON.parse(message.body);
-              const senderId = alert.senderId || alert.userId;
-              if (senderId && senderId.toString() !== currentUserId?.toString()) {
-                setUnreadDmCount(prev => prev + 1);
               }
             } catch (_) {}
           });
@@ -2983,7 +3007,7 @@ const Home = ({ initialTab }) => {
                 </div>
                 {unreadMessagesCount > 0 && (
                   <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-full bg-rose-500 text-white font-bold animate-pulse shadow-sm">
-                    {unreadMessagesCount > 9 ? '9+' : unreadMessagesCount}
+                    {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
                   </span>
                 )}
               </button>
@@ -3085,9 +3109,9 @@ const Home = ({ initialTab }) => {
                 title="Thông báo sảnh"
               >
                 <Bell size={16} strokeWidth={1.6} />
-                {notifications.filter(n => n.unread).length > 0 && (
+                {notifications.filter(n => n.unread && n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM').length > 0 && (
                   <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-mono font-bold flex items-center justify-center border-2 border-zinc-950 shadow-sm animate-pulse">
-                    {notifications.filter(n => n.unread).length > 9 ? '9+' : notifications.filter(n => n.unread).length}
+                    {notifications.filter(n => n.unread && n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM').length > 99 ? '99+' : notifications.filter(n => n.unread && n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM').length}
                   </span>
                 )}
               </button>
@@ -3102,7 +3126,7 @@ const Home = ({ initialTab }) => {
                 <MessageCircle size={16} strokeWidth={1.6} />
                 {unreadMessagesCount > 0 && (
                   <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-mono font-bold flex items-center justify-center border-2 border-zinc-950 shadow-sm animate-pulse">
-                    {unreadMessagesCount > 9 ? '9+' : unreadMessagesCount}
+                    {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
                   </span>
                 )}
               </button>
@@ -3223,7 +3247,7 @@ const Home = ({ initialTab }) => {
                 <MessageSquare size={15} strokeWidth={1.5} />
                 {unreadMessagesCount > 0 && (
                   <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-mono font-bold flex items-center justify-center border-2 border-zinc-950 shadow-sm animate-pulse">
-                    {unreadMessagesCount > 9 ? '9+' : unreadMessagesCount}
+                    {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
                   </span>
                 )}
               </button>
@@ -3242,9 +3266,9 @@ const Home = ({ initialTab }) => {
                 title="Thông báo sảnh (Mở ngăn kéo)"
               >
                 <Bell size={15} strokeWidth={1.5} />
-                {notifications.filter(n => n.unread).length > 0 && (
+                {notifications.filter(n => n.unread && n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM').length > 0 && (
                   <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-mono font-bold flex items-center justify-center border-2 border-zinc-950 shadow-sm animate-pulse">
-                    {notifications.filter(n => n.unread).length > 9 ? '9+' : notifications.filter(n => n.unread).length}
+                    {notifications.filter(n => n.unread && n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM').length > 99 ? '99+' : notifications.filter(n => n.unread && n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM').length}
                   </span>
                 )}
               </button>
@@ -5472,9 +5496,9 @@ const Home = ({ initialTab }) => {
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-bold text-white tracking-tight">Thông báo sảnh</span>
-                      {notifications.filter(n => n.unread).length > 0 && (
+                      {notifications.filter(n => n.unread && n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM').length > 0 && (
                         <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-200 border border-zinc-700">
-                          {notifications.filter(n => n.unread).length} mới
+                          {notifications.filter(n => n.unread && n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM').length > 99 ? '99+' : notifications.filter(n => n.unread && n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM').length} mới
                         </span>
                       )}
                     </div>
@@ -5483,7 +5507,7 @@ const Home = ({ initialTab }) => {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {notifications.some(n => n.unread) && (
+                  {notifications.some(n => n.unread && n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM') && (
                     <button
                       type="button"
                       onClick={handleMarkAllNotificationsRead}
@@ -5503,9 +5527,9 @@ const Home = ({ initialTab }) => {
                 </div>
               </div>
 
-              {/* Body: Danh sách thông báo (Mới nhất ở trên xuống dưới) */}
+              {/* Body: Danh sách thông báo (Mới nhất ở trên xuống dưới - loại trừ tin nhắn chat) */}
               <div className="flex-1 overflow-y-auto p-3 space-y-2.5 custom-dark-scrollbar">
-                {notifications.length === 0 ? (
+                {notifications.filter(n => n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM').length === 0 ? (
                   <div className="py-24 text-center px-4 text-zinc-400">
                     <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mx-auto mb-3 text-zinc-500">
                       <Bell size={22} className="opacity-60" />
@@ -5516,7 +5540,9 @@ const Home = ({ initialTab }) => {
                     </p>
                   </div>
                 ) : (
-                  notifications.map(n => {
+                  notifications
+                    .filter(n => n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM')
+                    .map(n => {
                     const isFriendReq = n.type === 'FRIEND_REQUEST';
                     const isFriendAccepted = n.type === 'FRIEND_ACCEPTED';
                     const targetPostId = n.targetPostId || n.postId || n.referenceId;
