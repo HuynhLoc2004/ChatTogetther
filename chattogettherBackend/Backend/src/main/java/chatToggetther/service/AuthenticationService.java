@@ -89,7 +89,7 @@ public class AuthenticationService {
                 .expiration(Date.from(Instant.now().plus(expAcctoken , ChronoUnit.MINUTES)))
                 .claim("scope" , scope)
                 .claim("user_id" , userEntity.getId())
-                .signWith(key)
+                .signWith(key, Jwts.SIG.HS256)
                 .compact();
     }
 
@@ -108,7 +108,7 @@ public class AuthenticationService {
                 .expiration(Date.from(Instant.now().plus(expRefresh , ChronoUnit.MINUTES)))
                 .claim("scope" , scope)
                 .claim("user_id" , userEntity.getId())
-                .signWith(key)
+                .signWith(key, Jwts.SIG.HS256)
                 .compact();
                 
         // Dùng ResponseCookie với SameSite=None và Secure=true để hoạt động mượt mà khi deploy cross-domain (Vercel + Render)
