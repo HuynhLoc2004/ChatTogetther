@@ -89,8 +89,8 @@ export const PresenceProvider = ({ children }) => {
     if (token) connectHeaders['Authorization'] = `Bearer ${token}`;
 
     const broadcastMyPresence = (isOnline = true) => {
-      if (client && client.connected) {
-        try {
+      try {
+        if (client && client.connected && client.ws && client.ws.readyState === WebSocket.OPEN) {
           const payload = JSON.stringify({
             userId: Number(currentUserId),
             isOnline,
@@ -100,8 +100,8 @@ export const PresenceProvider = ({ children }) => {
           client.send('/topic/presence', {}, payload);
           // Gửi tới server message broker để ghi nhận session
           client.send('/app/presence/heartbeat', {}, payload);
-        } catch (_) {}
-      }
+        }
+      } catch (_) {}
       // Heartbeat qua REST API
       if (isOnline) {
         axiosClient.post('/presence/heartbeat', { userId: Number(currentUserId) }).catch(() => {});
@@ -186,11 +186,11 @@ export const PresenceProvider = ({ children }) => {
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // Bắt sự kiện tắt tab / rời trang để thông báo ngoại tuyến
-    const handleBeforeUnload = () => {
+    // Bắt sự kiện tắt tab / rời trang để cập nhật ngoại tuyến (dùng pagehide thay vì beforeunload để tránh Permission Violation)
+    const handlePageHide = () => {
       broadcastMyPresence(false);
     };
-    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('pagehide', handlePageHide);
 
     return () => {
       isMounted = false;
@@ -198,7 +198,7 @@ export const PresenceProvider = ({ children }) => {
       clearInterval(pruneInterval);
       clearInterval(pollInterval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('pagehide', handlePageHide);
       broadcastMyPresence(false);
       if (stompClientRef.current) {
         try {

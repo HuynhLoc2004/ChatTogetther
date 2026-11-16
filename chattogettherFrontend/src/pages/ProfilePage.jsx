@@ -554,13 +554,22 @@ const ProfilePage = () => {
     setProcessingFriend(true);
     setFriendStatus('PENDING_SENT');
     try {
-      await axiosClient.post(`/friends/request/${effectiveUserId}`, null, {
-        params: { receiver_id: effectiveUserId }
+      const res = await axiosClient.post(`/friends/request/${effectiveUserId}`, null, {
+        params: { receiver_id: effectiveUserId, user_id: effectiveUserId }
       });
-      toast.success("Đã gửi lời mời kết bạn!");
+      toast.success(res.data?.message || "Đã gửi lời mời kết bạn!");
     } catch (err) {
-      setFriendStatus('NONE');
-      toast.error(err.response?.data?.message || "Không thể gửi yêu cầu kết bạn!");
+      const msg = err.response?.data?.message || '';
+      if (msg.includes('đã gửi') || msg.includes('đợi phản hồi')) {
+        setFriendStatus('PENDING_SENT');
+        toast(msg);
+      } else if (msg.includes('đã là bạn bè')) {
+        setFriendStatus('ACCEPTED');
+        toast(msg);
+      } else {
+        setFriendStatus('NONE');
+        toast.error(msg || "Không thể gửi yêu cầu kết bạn!");
+      }
     } finally {
       setProcessingFriend(false);
     }

@@ -14,8 +14,13 @@ import java.util.Optional;
 public interface FriendshipRepository extends JpaRepository<FriendshipEntity, Long> {
 
     @Query("SELECT f FROM FriendshipEntity f WHERE " +
-           "(f.user = :u1 AND f.friend = :u2) OR (f.user = :u2 AND f.friend = :u1)")
-    Optional<FriendshipEntity> findFriendshipBetween(@Param("u1") UserEntity u1, @Param("u2") UserEntity u2);
+           "(f.user = :u1 AND f.friend = :u2) OR (f.user = :u2 AND f.friend = :u1) ORDER BY f.id DESC")
+    List<FriendshipEntity> findFriendshipsBetween(@Param("u1") UserEntity u1, @Param("u2") UserEntity u2);
+
+    default Optional<FriendshipEntity> findFriendshipBetween(UserEntity u1, UserEntity u2) {
+        List<FriendshipEntity> list = findFriendshipsBetween(u1, u2);
+        return list.isEmpty() ? Optional.empty() : Optional.of(list.get(0));
+    }
 
     @Query("SELECT f FROM FriendshipEntity f " +
            "JOIN FETCH f.user u " +

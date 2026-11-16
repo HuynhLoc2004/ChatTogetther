@@ -94,11 +94,11 @@ public class FriendService {
         if (existing.isPresent()) {
             FriendshipEntity f = existing.get();
             if ("ACCEPTED".equalsIgnoreCase(f.getStatus())) {
-                throw new AppException(400, "Hai bạn đã là bạn bè từ trước", 400);
+                return new ResponseData<>(200, "Hai bạn đã là bạn bè từ trước", true);
             }
             if ("PENDING".equalsIgnoreCase(f.getStatus())) {
                 if (f.getUser().getId().equals(senderId)) {
-                    throw new AppException(400, "Bạn đã gửi lời mời kết bạn rồi, vui lòng đợi phản hồi", 400);
+                    return new ResponseData<>(200, "Bạn đã gửi lời mời kết bạn rồi, vui lòng đợi phản hồi", true);
                 } else {
                     // Nếu đối phương đã gửi cho mình trước đó -> Tự động chấp nhận luôn!
                     f.setStatus("ACCEPTED");
@@ -203,9 +203,9 @@ public class FriendService {
             new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "User không tồn tại", 404)
         );
 
-        Optional<FriendshipEntity> existing = friendshipRepository.findFriendshipBetween(u1, u2);
-        if (existing.isPresent()) {
-            friendshipRepository.delete(existing.get());
+        List<FriendshipEntity> existingList = friendshipRepository.findFriendshipsBetween(u1, u2);
+        if (!existingList.isEmpty()) {
+            friendshipRepository.deleteAll(existingList);
             try {
                 notificationService.updateFriendRequestStatus(currentUserId, targetId, "REJECTED");
                 messagingTemplate.convertAndSend("/topic/user/" + targetId, "FRIEND_REMOVED");

@@ -2421,8 +2421,16 @@ const Home = ({ initialTab }) => {
     }
     setIsNotifOpen(false);
 
-    const targetPostId = n.targetPostId || n.postId || n.referenceId;
-    const isPostNotif = ['POST_REACT', 'POST_COMMENT', 'COMMENT_REPLY', 'COMMENT_LIKE', 'POST_SHARE', 'REACTION', 'COMMENT', 'REPOST'].includes(n.type) || !!targetPostId;
+    // Điều hướng trực tiếp sang Profile nếu là thông báo kết bạn
+    if (n.type === 'FRIEND_REQUEST' || n.type === 'FRIEND_ACCEPTED' || (n.text && n.text.includes('kết bạn'))) {
+      if (n.actorId) {
+        navigate(`/profile/${n.actorId}`);
+      }
+      return;
+    }
+
+    const isPostNotif = ['POST_REACT', 'POST_COMMENT', 'COMMENT_REPLY', 'COMMENT_LIKE', 'POST_SHARE', 'REACTION', 'COMMENT', 'REPOST'].includes(n.type);
+    const targetPostId = isPostNotif ? (n.targetPostId || n.postId || n.referenceId) : null;
 
     if (isPostNotif && targetPostId) {
       const existing = safePosts.find(p => p.id === Number(targetPostId));

@@ -50,6 +50,10 @@ public class NotificationService {
         Long refId = entity.getReferenceId();
         String uName = entity.getActorUsername() != null && !entity.getActorUsername().isEmpty()
                 ? entity.getActorUsername() : entity.getActorName();
+        String type = entity.getType();
+        boolean isPostRelated = type != null && (type.contains("POST") || type.contains("COMMENT") || type.contains("REACT") || type.equals("LIKE") || type.equals("SHARE"));
+        Long targetPostId = isPostRelated ? refId : null;
+
         return NotificationDTO.builder()
                 .id(entity.getId())
                 .recipientId(entity.getRecipientId())
@@ -60,8 +64,8 @@ public class NotificationService {
                 .actorAvatar(entity.getActorAvatar())
                 .type(entity.getType())
                 .referenceId(refId)
-                .targetPostId(refId)
-                .postId(refId)
+                .targetPostId(targetPostId)
+                .postId(targetPostId)
                 .content(entity.getContent())
                 .text(entity.getContent())
                 .message(entity.getContent())
