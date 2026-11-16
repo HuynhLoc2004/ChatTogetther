@@ -19,6 +19,11 @@ public class SendMessageDTO {
     private LocalDateTime time_retrieve;
     private String formattedTime; // Giờ chuẩn Việt Nam HH:mm để hiển thị trên UI chính xác 100%
 
+    // Trạng thái đã xem / đã đọc thông minh
+    private Boolean isRead;
+    private LocalDateTime timeRead;
+    private String formattedTimeRead;
+
     // Đồng bộ chuẩn 100% Avatar & Người gửi
     private Long senderId;
     private String senderUsername;

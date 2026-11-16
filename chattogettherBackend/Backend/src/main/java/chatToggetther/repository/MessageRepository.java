@@ -27,4 +27,23 @@ public interface MessageRepository extends JpaRepository<MessageEntity , Long> {
            "LEFT JOIN FETCH m.userEntity u " +
            "WHERE m.id IN (SELECT MAX(m2.id) FROM MessageEntity m2 WHERE m2.roomEntity.id IN :roomIds GROUP BY m2.roomEntity.id)")
     List<MessageEntity> findLatestMessagesForRooms(@Param("roomIds") java.util.Collection<Long> roomIds);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE MessageEntity m SET m.isRead = true, m.timeRead = :now " +
+           "WHERE m.roomEntity.id = :roomId AND m.userEntity.id = :senderId " +
+           "AND (:upToId IS NULL OR m.id <= :upToId) AND (m.isRead = false OR m.isRead IS NULL)")
+    int markMessagesAsRead(
+            @Param("roomId") Long roomId,
+            @Param("senderId") Long senderId,
+            @Param("upToId") Long upToId,
+            @Param("now") java.time.LocalDateTime now
+    );
+
+    @Query("SELECT COUNT(m) FROM MessageEntity m " +
+           "WHERE m.roomEntity.id = :roomId AND m.userEntity.id = :senderId " +
+           "AND (m.isRead = false OR m.isRead IS NULL)")
+    long countUnreadMessages(
+            @Param("roomId") Long roomId,
+            @Param("senderId") Long senderId
+    );
 }

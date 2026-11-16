@@ -745,37 +745,22 @@ const Home = ({ initialTab }) => {
     };
   }, []);
 
-  // Nạp và kiểm tra số tin nhắn chưa đọc từ các bạn bè khi vào Sảnh
+  // Nạp và kiểm tra số tin nhắn chưa đọc chuẩn xác từ Backend (1 API duy nhất, không đếm sai)
   useEffect(() => {
     if (!currentUserId) return;
     const syncDmUnread = async () => {
       try {
-        const res = await axiosClient.get('/friends/list');
+        const res = await axiosClient.get('/message/conversations').catch(() => null);
         if (res?.data?.data && Array.isArray(res.data.data)) {
           let count = 0;
           const unreadMap = {};
-          await Promise.all(res.data.data.map(async (friend) => {
-            try {
-              const rRes = await axiosClient.get(`/message/direct/${friend.id}`).catch(() => null);
-              const roomId = rRes?.data?.data?.roomId;
-              if (roomId) {
-                const hRes = await axiosClient.get(`/message/${roomId}?size=50`).catch(() => null);
-                const msgs = hRes?.data?.data || [];
-                let friendUnread = 0;
-                for (let i = msgs.length - 1; i >= 0; i--) {
-                  if (msgs[i].userId?.toString() === friend.id?.toString()) {
-                    friendUnread++;
-                  } else {
-                    break;
-                  }
-                }
-                if (friendUnread > 0) {
-                  count += friendUnread;
-                  unreadMap[friend.id] = friendUnread;
-                }
-              }
-            } catch (_) {}
-          }));
+          res.data.data.forEach(c => {
+            const uCount = Number(c.unreadCount) || 0;
+            if (uCount > 0) {
+              count += uCount;
+              unreadMap[c.id] = uCount;
+            }
+          });
           setUnreadDmCount(count);
           localStorage.setItem('talovin_dm_unread', JSON.stringify(unreadMap));
           window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: unreadMap }));
@@ -948,6 +933,18 @@ const Home = ({ initialTab }) => {
         axiosClient.put(`/notifications/${floatingNotif.id}/read`).catch(() => {});
         setNotifications(prev => prev.map(item => item.id === floatingNotif.id ? { ...item, unread: false, isRead: true } : item));
       }
+
+      // Đánh dấu đã đọc toàn bộ tin nhắn từ người này đổ về trước
+      axiosClient.post('/message/read', { targetUserId: partnerId }).catch(() => {});
+      try {
+        const curMap = JSON.parse(localStorage.getItem('talovin_dm_unread') || '{}');
+        const countToClear = Number(curMap[partnerId]) || Number(curMap[String(partnerId)]) || 0;
+        delete curMap[partnerId];
+        delete curMap[String(partnerId)];
+        localStorage.setItem('talovin_dm_unread', JSON.stringify(curMap));
+        setUnreadDmCount(prev => Math.max(0, prev - countToClear));
+        window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: curMap }));
+      } catch (_) {}
 
       toast.success('Đã gửi phản hồi tin nhắn!', { id: 'quick-reply' });
       setQuickReplyText('');
@@ -2576,6 +2573,18 @@ const Home = ({ initialTab }) => {
       (n.title && n.title.toLowerCase().includes('tin nhắn')) ||
       (n.text && n.text.toLowerCase().includes('tin nhắn'));
     if (isMsgNotif && partnerId) {
+      // Đánh dấu đã đọc ngay lập tức và xóa badge unread
+      axiosClient.post('/message/read', { targetUserId: partnerId }).catch(() => {});
+      try {
+        const curMap = JSON.parse(localStorage.getItem('talovin_dm_unread') || '{}');
+        const countToClear = Number(curMap[partnerId]) || Number(curMap[String(partnerId)]) || 0;
+        delete curMap[partnerId];
+        delete curMap[String(partnerId)];
+        localStorage.setItem('talovin_dm_unread', JSON.stringify(curMap));
+        setUnreadDmCount(prev => Math.max(0, prev - countToClear));
+        window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: curMap }));
+      } catch (_) {}
+
       navigate(`/messages/${partnerId}`, {
         state: { from: location.pathname + location.search }
       });

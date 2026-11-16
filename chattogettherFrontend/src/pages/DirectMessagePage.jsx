@@ -5,7 +5,7 @@ import {
   Mic, MicOff, Send, Image as ImageIcon, Smile, MoreVertical, User,
   Clock, CheckCircle2, ChevronDown, Volume2, Shield, Share2, Sparkles,
   PhoneCall, PhoneMissed, Reply, CornerUpLeft, Forward, X, Play, Heart,
-  ThumbsUp, Flame, Check, CheckCheck, Users, ExternalLink
+  ThumbsUp, Flame, Check, CheckCheck, Users, ExternalLink, Eye
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
@@ -365,11 +365,20 @@ export const DirectMessagePage = () => {
       setPartnerNotFound(false);
     }
 
-    // Đánh dấu đã đọc cho người bạn này ngay lập tức
+    // Đánh dấu đã đọc cho người bạn này ngay lập tức (cả phía server và bộ nhớ cục bộ)
+    axiosClient.post('/message/read', {
+      targetUserId: targetId,
+      roomId: fallbackPartner?.directRoomId || undefined
+    }).catch(() => {});
+
     setUnreadMap(prev => {
       const next = { ...prev };
       delete next[targetId];
-      if (fallbackPartner?.id) delete next[fallbackPartner.id];
+      delete next[String(targetId)];
+      if (fallbackPartner?.id) {
+        delete next[fallbackPartner.id];
+        delete next[String(fallbackPartner.id)];
+      }
       try {
         localStorage.setItem('talovin_dm_unread', JSON.stringify(next));
         window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: next }));
@@ -601,6 +610,24 @@ export const DirectMessagePage = () => {
           const newMsg = typeof rawPayload === 'string' ? JSON.parse(rawPayload) : rawPayload;
           if (!newMsg) return;
 
+          // Xử lý tín hiệu đối phương đã đọc tin nhắn realtime (Cyber Read Receipt)
+          if (newMsg.type === 'MESSAGES_READ' || newMsg.type === 'READ_RECEIPT') {
+            const upToId = newMsg.upToMessageId;
+            setMessages(prev => prev.map(m => {
+              const isMyMsg = String(m.senderId || m.userId) === String(currentUserId);
+              if (isMyMsg && (!upToId || m.id <= upToId)) {
+                return {
+                  ...m,
+                  isRead: true,
+                  timeRead: newMsg.timeRead || new Date().toISOString(),
+                  formattedTimeRead: newMsg.formattedTimeRead || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+                };
+              }
+              return m;
+            }));
+            return;
+          }
+
           const senderId = newMsg.senderId || newMsg.userId;
           const isFromMe = String(senderId) === String(currentUserId);
           const currentActivePartnerId = activePartnerRef.current?.id?.toString();
@@ -609,6 +636,15 @@ export const DirectMessagePage = () => {
           // Ghi nhận sender đang online tức thì
           if (senderId && markUserActive) {
             markUserActive(senderId);
+          }
+
+          // Nếu đang mở cuộc trò chuyện này và đối phương nhắn tới -> Tự động báo đã đọc ngay
+          if (isCurrentChat && !isFromMe) {
+            axiosClient.post('/message/read', {
+              roomId: activeRoomIdRef.current || undefined,
+              targetUserId: senderId,
+              upToMessageId: newMsg.id
+            }).catch(() => {});
           }
 
           // 1. Nếu đang mở đúng hội thoại này hoặc là tin nhắn do chính mình gửi
@@ -1073,6 +1109,18 @@ export const DirectMessagePage = () => {
 
   // ID an toàn cho cuộc gọi WebRTC
   const safeCallTargetId = activePartner?.id || activePartner?.userId || (urlTargetUserId && !isNaN(Number(urlTargetUserId)) ? urlTargetUserId : null);
+
+  // Tìm ID tin nhắn cuối cùng do mình gửi mà đối phương đã xem
+  const lastReadMyMsgId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      const isMyMsg = String(m.senderId || m.userId) === String(currentUserId);
+      if (isMyMsg && (m.isRead || m.timeRead)) {
+        return m.id;
+      }
+    }
+    return null;
+  }, [messages, currentUserId]);
 
   return (
     <div className="flex flex-col h-screen w-full bg-zinc-950 text-zinc-100 select-none overflow-hidden font-sans">
@@ -1636,17 +1684,57 @@ export const DirectMessagePage = () => {
                           )}
                         </div>
 
-                        {/* Thời gian gửi */}
-                        <span className="text-[10px] font-mono text-zinc-500 px-1 flex items-center gap-1">
-                          {msg.pending ? (
-                            <span className="italic text-zinc-400">Đang gửi...</span>
-                          ) : (
-                            <>
-                              {msg.formattedTime || (msg.timeSend ? new Date(msg.timeSend).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '')}
-                              {isMe && <Check size={11} className="text-zinc-500" />}
-                            </>
+                        {/* Trạng thái gửi & Đã đọc công nghệ cao (Cyber Seen Radar) */}
+                        <div className={`flex items-center gap-1.5 px-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                          <span className="text-[10px] font-mono text-zinc-500">
+                            {msg.formattedTime || (msg.timeSend ? new Date(msg.timeSend).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '')}
+                          </span>
+
+                          {isMe && (
+                            msg.pending ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] text-amber-400 font-mono animate-pulse">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
+                                <span>Đang gửi...</span>
+                              </span>
+                            ) : (msg.isRead || msg.timeRead) ? (
+                              <div
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-950/70 border border-emerald-500/40 text-emerald-400 text-[10px] font-mono shadow-[0_0_8px_rgba(16,185,129,0.25)] select-none transition-all hover:scale-105"
+                                title={`Đã đọc lúc ${msg.formattedTimeRead || msg.formattedTime || ''}`}
+                              >
+                                <span className="relative flex h-1.5 w-1.5">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400"></span>
+                                </span>
+                                <span>Đã xem</span>
+                                {msg.formattedTimeRead && <span className="opacity-80">• {msg.formattedTimeRead}</span>}
+                              </div>
+                            ) : (
+                              <span className="inline-flex items-center gap-0.5 text-[10px] text-zinc-400 font-mono" title="Đã chuyển đến máy chủ">
+                                <CheckCheck size={12} className="text-zinc-400" />
+                                <span>Đã gửi</span>
+                              </span>
+                            )
                           )}
-                        </span>
+                        </div>
+
+                        {/* Cyber Seen Stamp cho tin nhắn đọc sau cùng */}
+                        {isMe && msg.id === lastReadMyMsgId && (
+                          <div className="flex items-center gap-1.5 pt-1 text-[10px] text-emerald-400 select-none animate-in fade-in zoom-in-95 duration-200">
+                            <div className="relative flex items-center justify-center">
+                              <UserAvatar
+                                avatarUrl={activePartner?.avatar}
+                                username={activePartner?.account}
+                                name={activePartner?.nickname || activePartner?.account}
+                                size={16}
+                                className="ring-1 ring-emerald-400/60"
+                              />
+                              <span className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-400 ring-1 ring-zinc-950 animate-pulse" />
+                            </div>
+                            <span className="font-mono text-[10px] text-emerald-400/90 font-medium">
+                              {activePartner?.nickname || activePartner?.account || 'Đối phương'} đã xem {msg.formattedTimeRead ? `lúc ${msg.formattedTimeRead}` : ''}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     );
                   })

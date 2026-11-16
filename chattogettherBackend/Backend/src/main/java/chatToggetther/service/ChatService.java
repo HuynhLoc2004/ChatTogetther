@@ -94,10 +94,31 @@ public class ChatService {
             }
 
             LocalDateTime now = LocalDateTime.now();
+
+            // Nếu là phòng DM và người dùng đang gửi phản hồi: Tự động đánh dấu TẤT CẢ tin nhắn đối phương gửi trước đó là ĐÃ ĐỌC
+            if (isDm && partnerId != null) {
+                try {
+                    this.messageRepository.markMessagesAsRead(user_room, partnerId, null, now);
+
+                    Map<String, Object> readEvent = new HashMap<>();
+                    readEvent.put("type", "MESSAGES_READ");
+                    readEvent.put("roomId", user_room);
+                    readEvent.put("readerId", userId);
+                    readEvent.put("senderId", partnerId);
+                    readEvent.put("timeRead", now.toString());
+                    readEvent.put("formattedTimeRead", now.format(DateTimeFormatter.ofPattern("HH:mm")));
+                    this.simpMessagingTemplate.convertAndSend("/topic/room/" + user_room, readEvent);
+                    this.simpMessagingTemplate.convertAndSend("/topic/messages/" + partnerId, readEvent);
+                } catch (Exception ex) {
+                    log.warn("Không thể tự động đánh dấu đã đọc khi gửi tin: {}", ex.getMessage());
+                }
+            }
+
             MessageEntity messageEntity = new MessageEntity();
             messageEntity.setMessage(messageRequest.getMessage().trim());
             messageEntity.setTimeSend(now);
             messageEntity.setTimeRetrieve(now);
+            messageEntity.setIsRead(false);
             messageEntity.setUserEntity(userEntity);
             messageEntity.setRoomEntity(roomEntity);
             this.messageRepository.save(messageEntity);
@@ -229,6 +250,11 @@ public class ChatService {
             }
             dto.setTimeSend(displayTime); 
             dto.setFormattedTime(displayTime.format(formatter));
+            dto.setIsRead(Boolean.TRUE.equals(m.getIsRead()));
+            dto.setTimeRead(m.getTimeRead());
+            if (m.getTimeRead() != null) {
+                dto.setFormattedTimeRead(m.getTimeRead().format(formatter));
+            }
             
             if (m.getUserEntity() != null) {
                 UserEntity u = m.getUserEntity();
@@ -449,6 +475,12 @@ public class ChatService {
             conv.put("status", isOnline ? "ONLINE" : "OFFLINE");
             conv.put("directRoomId", room != null ? room.getId() : null);
 
+            long unreadCount = 0;
+            if (room != null) {
+                unreadCount = messageRepository.countUnreadMessages(room.getId(), partnerId);
+            }
+            conv.put("unreadCount", unreadCount);
+
             if (lastMsg != null) {
                 conv.put("lastMessage", lastMsg.getMessage());
                 conv.put("lastMessageTime", lastMsg.getTimeSend() != null ? lastMsg.getTimeSend().toString() : null);
@@ -479,6 +511,69 @@ public class ChatService {
         });
 
         return new ResponseData<>(200, "Lấy danh sách cuộc trò chuyện thành công", result);
+    }
+
+    @Transactional
+    public ResponseData<Boolean> markMessagesAsRead(JwtAuthenticationToken token, Long roomId, String targetUserId, Long upToMessageId) {
+        Long myId = SecurityUtils.extractUserId(token);
+        if (myId == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
+        }
+
+        Long effectiveRoomId = roomId;
+        Long partnerId = null;
+
+        if (targetUserId != null && !targetUserId.trim().isEmpty()) {
+            try {
+                partnerId = Long.parseLong(targetUserId.trim());
+            } catch (NumberFormatException ignored) {}
+        }
+
+        if (effectiveRoomId == null && partnerId != null) {
+            try {
+                ResponseData<Map<String, Object>> dmRes = getOrCreateDirectRoom(token, partnerId);
+                if (dmRes.getData() != null && dmRes.getData().get("roomId") != null) {
+                    effectiveRoomId = Long.valueOf(dmRes.getData().get("roomId").toString());
+                }
+            } catch (Exception ignored) {}
+        }
+
+        if (effectiveRoomId == null) {
+            return new ResponseData<>(200, "Không tìm thấy phòng tương ứng", false);
+        }
+
+        if (partnerId == null) {
+            RoomEntity room = roomRepository.findById(effectiveRoomId).orElse(null);
+            if (room != null && room.getPassword() != null && room.getPassword().startsWith("DM_")) {
+                String[] parts = room.getPassword().split("_");
+                if (parts.length >= 3) {
+                    try {
+                        Long u1 = Long.parseLong(parts[1]);
+                        Long u2 = Long.parseLong(parts[2]);
+                        partnerId = myId.equals(u1) ? u2 : u1;
+                    } catch (NumberFormatException ignored) {}
+                }
+            }
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        if (partnerId != null) {
+            messageRepository.markMessagesAsRead(effectiveRoomId, partnerId, upToMessageId, now);
+
+            // Bắn tín hiệu socket realtime cho người gửi biết tin nhắn của họ đã được đọc
+            Map<String, Object> readEvent = new HashMap<>();
+            readEvent.put("type", "MESSAGES_READ");
+            readEvent.put("roomId", effectiveRoomId);
+            readEvent.put("readerId", myId);
+            readEvent.put("senderId", partnerId);
+            readEvent.put("upToMessageId", upToMessageId);
+            readEvent.put("timeRead", now.toString());
+            readEvent.put("formattedTimeRead", now.format(DateTimeFormatter.ofPattern("HH:mm")));
+            this.simpMessagingTemplate.convertAndSend("/topic/room/" + effectiveRoomId, readEvent);
+            this.simpMessagingTemplate.convertAndSend("/topic/messages/" + partnerId, readEvent);
+        }
+
+        return new ResponseData<>(200, "Đánh dấu đã đọc thành công", true);
     }
 
 }

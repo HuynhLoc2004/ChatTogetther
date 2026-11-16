@@ -115,4 +115,29 @@ public class ChatController {
         return ResponseEntity.ok(this.chatService.getRecentConversations(token));
     }
 
+    @PostMapping("/read")
+    public ResponseEntity<ResponseData<Boolean>> markAsRead(
+            JwtAuthenticationToken token,
+            @RequestBody(required = false) Map<String, Object> body,
+            @RequestParam(value = "roomId", required = false) Long roomIdParam,
+            @RequestParam(value = "targetUserId", required = false) String targetUserIdParam,
+            @RequestParam(value = "upToMessageId", required = false) Long upToMessageIdParam
+    ) {
+        Long roomId = roomIdParam;
+        String targetUserId = targetUserIdParam;
+        Long upToMessageId = upToMessageIdParam;
+        if (body != null) {
+            if (roomId == null && body.get("roomId") != null) {
+                try { roomId = Long.valueOf(body.get("roomId").toString()); } catch (Exception ignored) {}
+            }
+            if (targetUserId == null && body.get("targetUserId") != null) {
+                targetUserId = body.get("targetUserId").toString();
+            }
+            if (upToMessageId == null && body.get("upToMessageId") != null) {
+                try { upToMessageId = Long.valueOf(body.get("upToMessageId").toString()); } catch (Exception ignored) {}
+            }
+        }
+        return ResponseEntity.ok(this.chatService.markMessagesAsRead(token, roomId, targetUserId, upToMessageId));
+    }
+
 }

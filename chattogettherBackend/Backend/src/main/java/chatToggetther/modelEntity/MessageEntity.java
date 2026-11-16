@@ -28,6 +28,12 @@ public class MessageEntity {
     
     @Column(name = "time_retrieve")
     private LocalDateTime timeRetrieve;
+
+    @Column(name = "is_read")
+    private Boolean isRead = false;
+
+    @Column(name = "time_read")
+    private LocalDateTime timeRead;
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
