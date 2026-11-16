@@ -5,6 +5,12 @@ import chatToggetther.Customize.AppException;
 import chatToggetther.DTO.SendMessageDTO;
 import chatToggetther.DataRequest.MessageRequest;
 import chatToggetther.service.ChatService;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.ResourceRegion;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpRange;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
@@ -154,20 +160,55 @@ public class ChatController {
     }
 
     @GetMapping("/files/{fileName:.+}")
-    public ResponseEntity<org.springframework.core.io.Resource> getChatMediaFile(
-            @PathVariable("fileName") String fileName
+    public ResponseEntity<?> getChatMediaFile(
+            @PathVariable("fileName") String fileName,
+            @RequestHeader HttpHeaders headers
     ) {
-        org.springframework.core.io.Resource resource = this.mediaStorageService.loadChatMediaAsResource(fileName);
-        String contentType = "application/octet-stream";
         try {
-            contentType = java.nio.file.Files.probeContentType(java.nio.file.Paths.get(resource.getFile().getAbsolutePath()));
-        } catch (Exception ignored) {}
-        if (contentType == null) contentType = "application/octet-stream";
+            Resource resource = this.mediaStorageService.loadChatMediaAsResource(fileName);
+            String contentType = determineMediaContentType(fileName);
+            MediaType mediaType = MediaType.parseMediaType(contentType);
 
-        return ResponseEntity.ok()
-                .contentType(org.springframework.http.MediaType.parseMediaType(contentType))
-                .header(org.springframework.http.HttpHeaders.CACHE_CONTROL, "max-age=31536000, public")
-                .body(resource);
+            long contentLength = resource.contentLength();
+            List<HttpRange> ranges = headers.getRange();
+
+            if (!ranges.isEmpty()) {
+                HttpRange range = ranges.get(0);
+                long start = range.getRangeStart(contentLength);
+                long end = range.getRangeEnd(contentLength);
+                long rangeLength = Math.min(2 * 1024 * 1024, end - start + 1); // 2MB streaming chunks
+                ResourceRegion region = new ResourceRegion(resource, start, rangeLength);
+                return ResponseEntity.status(HttpStatus.PARTIAL_CONTENT)
+                        .contentType(mediaType)
+                        .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+                        .header(HttpHeaders.CACHE_CONTROL, "max-age=31536000, public")
+                        .body(region);
+            }
+
+            return ResponseEntity.ok()
+                    .contentType(mediaType)
+                    .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+                    .header(HttpHeaders.CACHE_CONTROL, "max-age=31536000, public")
+                    .body(resource);
+        } catch (Exception e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    private String determineMediaContentType(String fileName) {
+        if (fileName == null) return "application/octet-stream";
+        String lower = fileName.toLowerCase();
+        if (lower.endsWith(".mp4")) return "video/mp4";
+        if (lower.endsWith(".webm")) return "video/webm";
+        if (lower.endsWith(".mov")) return "video/quicktime";
+        if (lower.endsWith(".ogg") || lower.endsWith(".ogv")) return "video/ogg";
+        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+        if (lower.endsWith(".png")) return "image/png";
+        if (lower.endsWith(".webp")) return "image/webp";
+        if (lower.endsWith(".gif")) return "image/gif";
+        if (lower.endsWith(".mp3")) return "audio/mpeg";
+        if (lower.endsWith(".wav")) return "audio/wav";
+        return "application/octet-stream";
     }
 
     @GetMapping("/hidden/status")

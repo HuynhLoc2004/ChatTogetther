@@ -8,7 +8,7 @@ import {
   ThumbsUp, Flame, Check, CheckCheck, Users, ExternalLink, Eye, EyeOff,
   Lock, Unlock, KeyRound, ShieldCheck, ShieldAlert
 } from 'lucide-react';
-import axiosClient from '../api/axiosClient';
+import axiosClient, { BACKEND_URL } from '../api/axiosClient';
 import toast from 'react-hot-toast';
 import { createStompClient } from '../utils/stompClient';
 import { UserAvatar } from './Home';
@@ -18,6 +18,16 @@ import { usePresence } from '../context/PresenceContext';
 import { playMessageIncoming, playReactionPop } from '../utils/soundEffects';
 
 const QUICK_EMOJIS = ['❤️', '👍', '😂', '😮', '😢', '🔥'];
+
+// Chuẩn hóa URL tệp đa phương tiện (Ảnh / Video) với BACKEND_URL để tương thích Vercel & Production
+export const resolveMediaUrl = (url) => {
+  if (!url || typeof url !== 'string') return '';
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:') || url.startsWith('blob:')) {
+    return url;
+  }
+  const cleanPath = url.startsWith('/') ? url : `/${url}`;
+  return `${BACKEND_URL || ''}${cleanPath}`;
+};
 
 // Nén hình ảnh trên Canvas để gửi siêu nhẹ (tránh lỗi 413 Payload Too Large)
 const compressImage = (file, maxWidth = 1280, quality = 0.82) => {
@@ -508,6 +518,7 @@ export const DirectMessagePage = () => {
 
     try {
       let roomId = knownRoomId;
+      let fetchedMsgs = null;
 
       if (!roomId) {
         let res = null;
@@ -538,6 +549,9 @@ export const DirectMessagePage = () => {
             setActivePartner(res.data.data.targetUser);
             effectivePartner = res.data.data.targetUser;
             setPartnerNotFound(false);
+          }
+          if (Array.isArray(res.data.data.messages) && res.data.data.messages.length > 0) {
+            fetchedMsgs = res.data.data.messages;
           }
         }
 
@@ -578,10 +592,15 @@ export const DirectMessagePage = () => {
         setActiveRoomId(roomId);
         setPartnerNotFound(false);
 
-        // Nạp lịch sử tin nhắn của phòng DM này
-        const histRes = await axiosClient.get(`/message/${roomId}`).catch(() => null);
-        if (histRes?.data?.data && Array.isArray(histRes.data.data)) {
-          const fetchedMsgs = histRes.data.data;
+        // Nếu chưa có tin nhắn từ request direct: Nạp lịch sử tin nhắn của phòng
+        if (!fetchedMsgs) {
+          const histRes = await axiosClient.get(`/message/${roomId}`).catch(() => null);
+          if (histRes?.data?.data && Array.isArray(histRes.data.data)) {
+            fetchedMsgs = histRes.data.data;
+          }
+        }
+
+        if (fetchedMsgs && Array.isArray(fetchedMsgs)) {
           setMessages(fetchedMsgs);
           messagesCacheRef.current.set(String(targetId), fetchedMsgs);
           messagesCacheRef.current.set(String(roomId), fetchedMsgs);
@@ -589,7 +608,7 @@ export const DirectMessagePage = () => {
             localStorage.setItem(`talovin_dm_msgs_${targetId}`, JSON.stringify(fetchedMsgs.slice(-50)));
             if (roomId) localStorage.setItem(`talovin_dm_msgs_${roomId}`, JSON.stringify(fetchedMsgs.slice(-50)));
           } catch (_) { }
-          setTimeout(() => scrollToBottom(false), 50);
+          setTimeout(() => scrollToBottom(false), 30);
 
           // Cập nhật preview tin nhắn cuối cùng và đánh dấu hoạt động nếu tin nhắn mới
           if (fetchedMsgs.length > 0) {
@@ -761,6 +780,10 @@ export const DirectMessagePage = () => {
 
               if (activeRoomIdRef.current) messagesCacheRef.current.set(String(activeRoomIdRef.current), nextList);
               if (activePartnerRef.current?.id) messagesCacheRef.current.set(String(activePartnerRef.current.id), nextList);
+              try {
+                if (activePartnerRef.current?.id) localStorage.setItem(`talovin_dm_msgs_${activePartnerRef.current.id}`, JSON.stringify(nextList.slice(-50)));
+                if (activeRoomIdRef.current) localStorage.setItem(`talovin_dm_msgs_${activeRoomIdRef.current}`, JSON.stringify(nextList.slice(-50)));
+              } catch (_) { }
               return nextList;
             });
 
@@ -1011,15 +1034,24 @@ export const DirectMessagePage = () => {
             const formData = new FormData();
             formData.append('file', currentMedia.file);
             const uploadRes = await axiosClient.post('/message/upload', formData, {
-              headers: { 'Content-Type': 'multipart/form-data' }
+              headers: { 'Content-Type': 'multipart/form-data' },
+              timeout: 120000 // Chờ đến 120 giây cho video tải lên ổn định
             });
             uploadedMediaUrl = uploadRes.data?.data?.url || uploadRes.data?.url;
-          } catch (_) {
-            try {
-              uploadedMediaUrl = await compressImage(currentMedia.file);
-            } catch (_) {
-              uploadedMediaUrl = currentMedia.previewUrl;
+          } catch (uploadErr) {
+            console.warn("Lỗi tải tệp lên server:", uploadErr);
+            if (currentMedia.type === 'IMAGE') {
+              try {
+                uploadedMediaUrl = await compressImage(currentMedia.file);
+              } catch (_) {}
             }
+          }
+
+          // TUYỆT ĐỐI không gửi blob: URL sang người khác vì thiết bị khác không thể mở được blob của máy này
+          if (!uploadedMediaUrl) {
+            toast.error("Không thể tải video/hình ảnh lên máy chủ. Vui lòng kiểm tra dung lượng hoặc kết nối mạng!");
+            setMessages(prev => prev.map(m => m.id === tempId ? { ...m, failed: true, pending: false } : m));
+            return;
           }
         }
 
@@ -1047,12 +1079,27 @@ export const DirectMessagePage = () => {
           }
         });
 
-        // Đánh dấu tin nhắn gửi thành công
-        setMessages(prev => prev.map(m => m.id === tempId ? {
-          ...m,
-          pending: false,
-          mediaUrl: uploadedMediaUrl || m.mediaUrl
-        } : m));
+        // Đánh dấu tin nhắn gửi thành công và lưu ngay vào cache localStorage
+        setMessages(prev => {
+          const nextList = prev.map(m => m.id === tempId ? {
+            ...m,
+            pending: false,
+            mediaUrl: uploadedMediaUrl || m.mediaUrl
+          } : m);
+          if (targetIdentifier) {
+            messagesCacheRef.current.set(String(targetIdentifier), nextList);
+            try {
+              localStorage.setItem(`talovin_dm_msgs_${targetIdentifier}`, JSON.stringify(nextList.slice(-50)));
+            } catch (_) {}
+          }
+          if (targetRoom) {
+            messagesCacheRef.current.set(String(targetRoom), nextList);
+            try {
+              localStorage.setItem(`talovin_dm_msgs_${targetRoom}`, JSON.stringify(nextList.slice(-50)));
+            } catch (_) {}
+          }
+          return nextList;
+        });
 
       } catch (e) {
         console.error('Lỗi gửi tin nhắn 1-1:', e);
@@ -1975,15 +2022,18 @@ export const DirectMessagePage = () => {
                             <div className="mb-2 rounded-xl overflow-hidden border border-zinc-800/80 max-w-sm">
                               {mediaObj.type === 'VIDEO' ? (
                                 <video
-                                  src={mediaObj.url}
+                                  src={resolveMediaUrl(mediaObj.url)}
                                   controls
+                                  preload="metadata"
+                                  playsInline
                                   className="w-full max-h-64 object-cover rounded-lg bg-black"
                                 />
                               ) : (
                                 <img
-                                  src={mediaObj.url}
+                                  src={resolveMediaUrl(mediaObj.url)}
                                   alt="Đính kèm"
-                                  onClick={() => setLightboxMedia(mediaObj.url)}
+                                  loading="lazy"
+                                  onClick={() => setLightboxMedia(resolveMediaUrl(mediaObj.url))}
                                   className="w-full max-h-64 object-cover cursor-pointer hover:opacity-95 transition-opacity rounded-lg"
                                 />
                               )}

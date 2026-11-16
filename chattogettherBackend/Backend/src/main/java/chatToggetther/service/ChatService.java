@@ -380,6 +380,14 @@ public class ChatService {
         res.put("roomName", dmRoom.getRoomName());
         res.put("targetUser", targetData);
 
+        // Nạp sẵn 50 tin nhắn mới nhất để phía Frontend hiển thị tức thì chỉ trong 1 request duy nhất (Zero-lag khi reload)
+        try {
+            ResponseData<List<SendMessageDTO>> historyRes = getMessageHistory(token, dmRoom.getId(), null, 50);
+            res.put("messages", historyRes.getData() != null ? historyRes.getData() : Collections.emptyList());
+        } catch (Exception ignored) {
+            res.put("messages", Collections.emptyList());
+        }
+
         return new ResponseData<>(200, "Lấy phòng chat 1-1 thành công", res);
     }
 
