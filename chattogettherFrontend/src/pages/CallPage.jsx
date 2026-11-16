@@ -37,6 +37,7 @@ const CallPage = () => {
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoEnabled, setIsVideoEnabled] = useState(isVideoParam);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [isRemoteScreenSharing, setIsRemoteScreenSharing] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
   const [callStatusText, setCallStatusText] = useState(isIncoming ? 'Đang kết nối cuộc gọi...' : 'Đang đổ chuông...');
   const [isConnected, setIsConnected] = useState(false);
@@ -66,6 +67,26 @@ const CallPage = () => {
   useEffect(() => {
     durationRef.current = callDuration;
   }, [callDuration]);
+
+  // Luôn đảm bảo localVideoRef nhận srcObject ngay lập tức khi bật camera (tránh lỗi tối đen)
+  useEffect(() => {
+    if (localVideoRef.current) {
+      if (isScreenSharing && screenStreamRef.current) {
+        localVideoRef.current.srcObject = screenStreamRef.current;
+        localVideoRef.current.play().catch(() => {});
+      } else if (isVideoEnabled && localStreamRef.current) {
+        const videoTrack = localStreamRef.current.getVideoTracks()[0];
+        if (videoTrack && videoTrack.enabled) {
+          localVideoRef.current.srcObject = new MediaStream([videoTrack]);
+          localVideoRef.current.play().catch(() => {});
+        } else {
+          localVideoRef.current.srcObject = null;
+        }
+      } else {
+        localVideoRef.current.srcObject = null;
+      }
+    }
+  }, [isVideoEnabled, isVideoCall, isScreenSharing]);
 
   // 1. Fetch metadata (Partner or Room) & pre-fetch direct room ID
   useEffect(() => {
@@ -253,8 +274,9 @@ const CallPage = () => {
     const wasConnectedWs = stompClient.current && stompClient.current.connected;
     cleanupCall();
 
-    // Fallback lưu lịch sử cuộc gọi qua HTTP nếu WebSocket bị mất kết nối (tránh trùng lặp)
-    if (!isIncoming && !wasConnectedWs) {
+    // Tự động lưu lịch sử cuộc gọi ngầm (chỉ người gọi gửi để 100% được ghi nhận vào phòng chat)
+    if (!isIncoming) {
+      const isVideo = Boolean(isVideoParam || isVideoCall);
       const durationStr = formatTime(durationSecs);
       let callMsg = '';
 
@@ -269,8 +291,8 @@ const CallPage = () => {
           try {
             let targetRoom = dmRoomIdRef.current;
             if (!targetRoom) {
-              const directRoomRes = await axiosClient.get(`/message/direct/${userId}`);
-              targetRoom = directRoomRes?.data?.data?.roomId;
+              const directRoomRes = await axiosClient.post(`/rooms/direct/${userId}`).catch(() => null);
+              targetRoom = directRoomRes?.data?.data?.id || directRoomRes?.data?.data?.roomId || directRoomRes?.data?.id;
             }
             if (targetRoom) {
               await axiosClient.post('/message/send', {
@@ -282,9 +304,9 @@ const CallPage = () => {
         })();
       } else if (isRoomCall && roomId) {
         if (durationSecs > 0) {
-          callMsg = isVideo ? `📹 Cuộc gọi video nhóm đã kết thúc (${durationStr})` : `📞 Cuộc gọi thoại nhóm đã kết thúc (${durationStr})`;
+          callMsg = isVideo ? `📹 Cuộc gọi video nhóm (${durationStr})` : `📞 Cuộc gọi thoại nhóm (${durationStr})`;
         } else {
-          callMsg = isVideo ? `📹 Cuộc gọi video nhóm đã kết thúc` : `📞 Cuộc gọi thoại nhóm đã kết thúc`;
+          callMsg = isVideo ? `📹 Cuộc gọi video nhóm bị nhỡ` : `📞 Cuộc gọi thoại nhóm bị nhỡ`;
         }
         axiosClient.post('/message/send', {
           message: callMsg,
@@ -316,11 +338,12 @@ const CallPage = () => {
       try {
         stopRingAudio();
         setCallStatusText('Đang thiết lập kết nối...');
+        if (msg.isVideo) setIsVideoCall(true);
         if (!peerConnectionRef.current) return;
         await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(msg.offer));
         const answer = await peerConnectionRef.current.createAnswer();
         await peerConnectionRef.current.setLocalDescription(answer);
-        sendCallSignal({ type: 'ANSWER', answer });
+        sendCallSignal({ type: 'ANSWER', answer, isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled) });
       } catch (e) {
         console.error("Lỗi xử lý OFFER:", e);
       }
@@ -332,7 +355,7 @@ const CallPage = () => {
         if (peerConnectionRef.current) {
           const offer = await peerConnectionRef.current.createOffer();
           await peerConnectionRef.current.setLocalDescription(offer);
-          sendCallSignal({ type: 'OFFER', offer, isVideo: isVideoParam });
+          sendCallSignal({ type: 'OFFER', offer, isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled) });
         }
       } catch (e) {
         console.error("Lỗi gửi OFFER sau ACCEPT:", e);
@@ -342,11 +365,18 @@ const CallPage = () => {
         stopRingAudio();
         setCallStatusText('Đang đàm thoại');
         setIsConnected(true);
+        if (msg.isVideo) setIsVideoCall(true);
         if (peerConnectionRef.current && peerConnectionRef.current.signalingState !== 'stable') {
           await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(msg.answer));
         }
       } catch (e) {
         console.error("Lỗi xử lý ANSWER:", e);
+      }
+    } else if (msg.type === 'SCREEN_SHARE') {
+      const isSharing = Boolean(msg.isSharing);
+      setIsRemoteScreenSharing(isSharing);
+      if (isSharing) {
+        setIsVideoCall(true);
       }
     } else if (msg.type === 'CANDIDATE') {
       if (peerConnectionRef.current && msg.candidate) {
@@ -428,9 +458,14 @@ const CallPage = () => {
           const [remoteStream] = event.streams;
           if (remoteVideoRef.current) {
             remoteVideoRef.current.srcObject = remoteStream;
+            remoteVideoRef.current.play().catch(() => {});
           }
           if (remoteAudioRef.current) {
             remoteAudioRef.current.srcObject = remoteStream;
+            remoteAudioRef.current.play().catch(() => {});
+          }
+          if (event.track?.kind === 'video' || remoteStream.getVideoTracks().length > 0) {
+            setIsVideoCall(true);
           }
           stopRingAudio();
           setIsConnected(true);
@@ -526,37 +561,60 @@ const CallPage = () => {
     }
   };
 
-  // Toggle Video
+  // Toggle Video - Mở camera tức thì, mượt mà và không bị đen màn hình
   const toggleVideo = async () => {
-    if (localStreamRef.current) {
-      const videoTrack = localStreamRef.current.getVideoTracks()[0];
-      if (videoTrack) {
-        videoTrack.enabled = !videoTrack.enabled;
-        setIsVideoEnabled(videoTrack.enabled);
-      } else {
-        try {
-          const videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
-          const newTrack = videoStream.getVideoTracks()[0];
-          localStreamRef.current.addTrack(newTrack);
-          if (peerConnectionRef.current) {
-            peerConnectionRef.current.addTrack(newTrack, localStreamRef.current);
-            const offer = await peerConnectionRef.current.createOffer();
-            await peerConnectionRef.current.setLocalDescription(offer);
-            sendCallSignal({ type: 'OFFER', offer, isVideo: true });
-          }
-          if (localVideoRef.current) {
-            localVideoRef.current.srcObject = localStreamRef.current;
-          }
-          setIsVideoCall(true);
-          setIsVideoEnabled(true);
-        } catch (err) {
-          toast.error("Không thể kích hoạt Camera!");
-        }
+    if (!localStreamRef.current) return;
+
+    const existingTrack = localStreamRef.current.getVideoTracks()[0];
+    if (existingTrack) {
+      existingTrack.enabled = !existingTrack.enabled;
+      setIsVideoEnabled(existingTrack.enabled);
+      setIsVideoCall(true);
+
+      if (existingTrack.enabled && localVideoRef.current) {
+        localVideoRef.current.srcObject = new MediaStream([existingTrack]);
+        localVideoRef.current.play().catch(() => {});
       }
+      return;
+    }
+
+    try {
+      setCallStatusText('Đang mở camera...');
+      const videoStream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }
+      });
+      const newTrack = videoStream.getVideoTracks()[0];
+      localStreamRef.current.addTrack(newTrack);
+
+      if (peerConnectionRef.current) {
+        const senders = peerConnectionRef.current.getSenders();
+        const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+        if (videoSender) {
+          videoSender.replaceTrack(newTrack);
+        } else {
+          peerConnectionRef.current.addTrack(newTrack, localStreamRef.current);
+        }
+        const offer = await peerConnectionRef.current.createOffer();
+        await peerConnectionRef.current.setLocalDescription(offer);
+        sendCallSignal({ type: 'OFFER', offer, isVideo: true });
+      }
+
+      setIsVideoCall(true);
+      setIsVideoEnabled(true);
+
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = new MediaStream([newTrack]);
+        localVideoRef.current.play().catch(() => {});
+      }
+      setCallStatusText('Đang đàm thoại');
+    } catch (err) {
+      console.error("Lỗi kích hoạt camera:", err);
+      toast.error("Không thể kích hoạt Camera! Vui lòng kiểm tra quyền thiết bị.");
+      setCallStatusText('Đang đàm thoại');
     }
   };
 
-  // Toggle Screen Share
+  // Toggle Screen Share - Mượt mà, sắc nét, full màn hình
   const toggleScreenShare = async () => {
     if (isScreenSharing) {
       if (screenStreamRef.current) {
@@ -564,20 +622,42 @@ const CallPage = () => {
         screenStreamRef.current = null;
       }
       setIsScreenSharing(false);
-      if (localStreamRef.current && localVideoRef.current) {
-        localVideoRef.current.srcObject = localStreamRef.current;
+      sendCallSignal({ type: 'SCREEN_SHARE', isSharing: false });
+
+      if (peerConnectionRef.current && localStreamRef.current) {
+        const videoTrack = localStreamRef.current.getVideoTracks()[0];
+        const senders = peerConnectionRef.current.getSenders();
+        const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+        if (videoSender && videoTrack) {
+          videoSender.replaceTrack(videoTrack);
+        }
+      }
+
+      if (localStreamRef.current && localVideoRef.current && isVideoEnabled) {
+        const vTrack = localStreamRef.current.getVideoTracks()[0];
+        if (vTrack) {
+          localVideoRef.current.srcObject = new MediaStream([vTrack]);
+          localVideoRef.current.play().catch(() => {});
+        }
       }
     } else {
       try {
-        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+          video: {
+            cursor: 'always',
+            displaySurface: 'monitor',
+            frameRate: { ideal: 30, max: 60 },
+            width: { ideal: 1920, max: 2560 },
+            height: { ideal: 1080, max: 1440 }
+          },
+          audio: false
+        });
         screenStreamRef.current = stream;
         const screenTrack = stream.getVideoTracks()[0];
+        screenTrack.contentHint = 'detail';
 
         screenTrack.onended = () => {
-          setIsScreenSharing(false);
-          if (localStreamRef.current && localVideoRef.current) {
-            localVideoRef.current.srcObject = localStreamRef.current;
-          }
+          toggleScreenShare();
         };
 
         if (peerConnectionRef.current) {
@@ -588,13 +668,19 @@ const CallPage = () => {
           } else {
             peerConnectionRef.current.addTrack(screenTrack, stream);
           }
-        }
-
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = stream;
+          const offer = await peerConnectionRef.current.createOffer();
+          await peerConnectionRef.current.setLocalDescription(offer);
+          sendCallSignal({ type: 'OFFER', offer, isVideo: true });
         }
 
         setIsScreenSharing(true);
+        setIsVideoCall(true);
+        sendCallSignal({ type: 'SCREEN_SHARE', isSharing: true });
+
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = stream;
+          localVideoRef.current.play().catch(() => {});
+        }
       } catch (err) {
         console.error("Lỗi chia sẻ màn hình:", err);
       }
@@ -657,14 +743,15 @@ const CallPage = () => {
           
           {/* Card Remote (Đối phương / Các thành viên) */}
           <div className="w-full h-full bg-zinc-900/60 border border-zinc-800 rounded-3xl overflow-hidden relative shadow-2xl backdrop-blur-sm">
-            {isVideoCall ? (
-              <video 
-                ref={remoteVideoRef} 
-                autoPlay 
-                playsInline 
-                className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${isConnected ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
-              />
-            ) : null}
+            {/* Video Remote: Luôn nằm trong DOM, dùng object-contain khi chia sẻ màn hình để không bao giờ bị cắt hình */}
+            <video 
+              ref={remoteVideoRef} 
+              autoPlay 
+              playsInline 
+              className={`absolute inset-0 w-full h-full ${
+                (isScreenSharing || isRemoteScreenSharing) ? 'object-contain bg-black' : 'object-cover'
+              } transition-opacity duration-300 ${isConnected && isVideoCall ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
+            />
 
             {/* Trạng thái nếu không có video hoặc đang đàm thoại Audio */}
             {(!isVideoCall || !isConnected) && (
@@ -705,15 +792,16 @@ const CallPage = () => {
 
             {/* Khung Local Video nhỏ ở góc (Picture in Picture) */}
             <div className="absolute bottom-4 right-4 w-28 h-36 sm:w-36 sm:h-48 rounded-2xl overflow-hidden border border-zinc-700/80 bg-zinc-950/95 shadow-2xl z-20 backdrop-blur-md transition-all">
-              {isVideoCall && isVideoEnabled ? (
-                <video 
-                  ref={localVideoRef} 
-                  autoPlay 
-                  playsInline 
-                  muted 
-                  className="w-full h-full object-cover -scale-x-100"
-                />
-              ) : (
+              {/* Local video luôn hiện diện trong DOM để không bao giờ bị đen hình */}
+              <video 
+                ref={localVideoRef} 
+                autoPlay 
+                playsInline 
+                muted 
+                className={`w-full h-full ${isScreenSharing ? 'object-contain' : 'object-cover -scale-x-100'} ${!(isVideoCall && isVideoEnabled) && !isScreenSharing ? 'hidden' : 'block'}`}
+              />
+
+              {(!(isVideoCall && isVideoEnabled) && !isScreenSharing) && (
                 <div className="w-full h-full flex flex-col items-center justify-center gap-2 p-2 bg-zinc-900/90 text-center">
                   <UserAvatar 
                     avatar={currentUserAvatar} 

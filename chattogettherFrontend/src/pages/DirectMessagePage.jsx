@@ -54,9 +54,15 @@ const compressImage = (file, maxWidth = 1280, quality = 0.82) => {
 // Helper chuẩn hóa hiển thị đoạn trích tin nhắn cuối cùng (gọn gàng, sạch đẹp, không lộ JSON)
 const formatPreviewText = (text) => {
   if (!text || typeof text !== 'string') return '';
-  if (text.includes('"type":"shared_post"')) {
+  if (text.includes('shared_post') || text.includes('"type":"shared_post"')) {
     try {
-      const parsed = JSON.parse(text);
+      let unescaped = text.trim();
+      if (unescaped.startsWith('"') && unescaped.endsWith('"')) {
+        try { unescaped = JSON.parse(unescaped); } catch (_) {}
+      }
+      const jsonMatch = typeof unescaped === 'string' ? unescaped.match(/\{[\s\S]*"type"\s*:\s*"shared_post"[\s\S]*\}/) : null;
+      const targetStr = jsonMatch ? jsonMatch[0] : unescaped;
+      const parsed = typeof targetStr === 'string' ? JSON.parse(targetStr) : targetStr;
       return `[Bài viết: ${parsed.content ? (parsed.content.slice(0, 24) + '...') : 'Được chia sẻ'}]`;
     } catch (_) {
       return '[Bài viết được chia sẻ]';
@@ -350,11 +356,33 @@ export const DirectMessagePage = () => {
       return f;
     }));
 
+    // Kiểm tra thông tin partner dự phòng từ props, friends state hoặc cache localStorage
+    let effectivePartner = fallbackPartner;
+    if (!effectivePartner) {
+      const foundInState = friends.find(f => String(f.id) === String(targetId) || f.account === targetId);
+      if (foundInState) effectivePartner = foundInState;
+    }
+    if (!effectivePartner) {
+      try {
+        const cached = JSON.parse(localStorage.getItem('talovin_dm_friends_cache') || '[]');
+        const foundInCache = cached.find(f => String(f.id) === String(targetId) || f.account === targetId);
+        if (foundInCache) effectivePartner = foundInCache;
+      } catch (_) {}
+    }
+    if (!effectivePartner && activePartnerRef.current && (String(activePartnerRef.current.id) === String(targetId) || activePartnerRef.current.account === targetId)) {
+      effectivePartner = activePartnerRef.current;
+    }
+
+    if (effectivePartner) {
+      setActivePartner(effectivePartner);
+      setPartnerNotFound(false);
+    }
+
     try {
       setLoadingMessages(true);
 
       // Nếu đã biết trước directRoomId của người này, nạp ngay lập tức (Zero-wait)
-      let knownRoomId = fallbackPartner?.directRoomId;
+      let knownRoomId = effectivePartner?.directRoomId;
       if (!knownRoomId) {
         const found = friends.find(f => String(f.id) === String(targetId));
         if (found?.directRoomId) knownRoomId = found.directRoomId;
@@ -379,9 +407,9 @@ export const DirectMessagePage = () => {
         res = await axiosClient.get(`/message/direct/${targetId}`);
       } catch (err1) {
         // Nếu thất bại và có username của đối phương, thử bằng username
-        if (fallbackPartner?.account && fallbackPartner.account.toString() !== targetId.toString()) {
+        if (effectivePartner?.account && effectivePartner.account.toString() !== targetId.toString()) {
           try {
-            res = await axiosClient.get(`/message/direct/${fallbackPartner.account}`);
+            res = await axiosClient.get(`/message/direct/${effectivePartner.account}`);
           } catch (_) {}
         }
         // Fallback sang endpoint phòng
@@ -389,9 +417,9 @@ export const DirectMessagePage = () => {
           try {
             res = await axiosClient.post(`/rooms/direct/${targetId}`);
           } catch (_) {
-            if (fallbackPartner?.account) {
+            if (effectivePartner?.account) {
               try {
-                res = await axiosClient.post(`/rooms/direct/${fallbackPartner.account}`);
+                res = await axiosClient.post(`/rooms/direct/${effectivePartner.account}`);
               } catch (_) {}
             }
           }
@@ -435,14 +463,14 @@ export const DirectMessagePage = () => {
         } catch (_) {
           setMessages([]);
         }
-      } else if (!fallbackPartner) {
+      } else if (!effectivePartner) {
         setPartnerNotFound(true);
         setActiveRoomId(null);
         setMessages([]);
       }
     } catch (e) {
       console.error('Lỗi mở chat 1-1:', e);
-      if (!fallbackPartner && e.response?.status === 404) {
+      if (!effectivePartner && e.response?.status === 404) {
         setPartnerNotFound(true);
         setActiveRoomId(null);
         setMessages([]);
@@ -450,20 +478,30 @@ export const DirectMessagePage = () => {
     } finally {
       setLoadingMessages(false);
     }
-  }, [currentUserId, scrollToBottom]);
+  }, [currentUserId, scrollToBottom, friends]);
 
-  // Kích hoạt khi URL param hoặc targetUser thay đổi (Chống vòng lặp vô tận)
+  // Kích hoạt khi URL param thay đổi (Chống vòng lặp vô tận)
   const lastTargetIdRef = useRef(null);
   useEffect(() => {
     if (!urlTargetUserId) return;
-    if (urlTargetUserId === lastTargetIdRef.current && activePartner) return;
+    if (urlTargetUserId === lastTargetIdRef.current && activePartnerRef.current) return;
 
     lastTargetIdRef.current = urlTargetUserId;
-    const foundInFriends = friends.find(f => f.id?.toString() === urlTargetUserId?.toString() || f.account === urlTargetUserId);
-    const partnerToUse = foundInFriends || (passedTargetUser && (passedTargetUser.id?.toString() === urlTargetUserId.toString() || passedTargetUser.account === urlTargetUserId) ? passedTargetUser : null);
+    
+    // Tìm kiếm bạn bè từ cache hoặc state
+    let partnerToUse = friends.find(f => f.id?.toString() === urlTargetUserId?.toString() || f.account === urlTargetUserId);
+    if (!partnerToUse && passedTargetUser && (passedTargetUser.id?.toString() === urlTargetUserId.toString() || passedTargetUser.account === urlTargetUserId)) {
+      partnerToUse = passedTargetUser;
+    }
+    if (!partnerToUse) {
+      try {
+        const cached = JSON.parse(localStorage.getItem('talovin_dm_friends_cache') || '[]');
+        partnerToUse = cached.find(f => f.id?.toString() === urlTargetUserId?.toString() || f.account === urlTargetUserId);
+      } catch (_) {}
+    }
 
     openDirectChat(urlTargetUserId, partnerToUse);
-  }, [urlTargetUserId, friends, passedTargetUser, openDirectChat, activePartner]);
+  }, [urlTargetUserId, openDirectChat]);
 
   // 3. Kết nối WebSocket STOMP chuẩn native browser kèm Authorization header
   useEffect(() => {
@@ -1202,10 +1240,19 @@ export const DirectMessagePage = () => {
 
                     // Phân tích nếu là Tin nhắn Chia sẻ Bài viết JSON
                     let sharedPostObj = null;
-                    if (typeof displayContent === 'string' && displayContent.includes('"type":"shared_post"')) {
+                    if (typeof displayContent === 'string' && (displayContent.includes('shared_post') || displayContent.includes('"type":"shared_post"'))) {
                       try {
-                        const parsed = JSON.parse(displayContent);
-                        if (parsed && parsed.type === 'shared_post') {
+                        let unescaped = displayContent.trim();
+                        if (unescaped.startsWith('"') && unescaped.endsWith('"')) {
+                          try { unescaped = JSON.parse(unescaped); } catch (_) {}
+                        }
+                        if (typeof unescaped === 'string' && unescaped.includes('&quot;')) {
+                          unescaped = unescaped.replace(/&quot;/g, '"');
+                        }
+                        const jsonMatch = typeof unescaped === 'string' ? unescaped.match(/\{[\s\S]*"type"\s*:\s*"shared_post"[\s\S]*\}/) : null;
+                        const targetStr = jsonMatch ? jsonMatch[0] : unescaped;
+                        const parsed = typeof targetStr === 'string' ? JSON.parse(targetStr) : targetStr;
+                        if (parsed && (parsed.type === 'shared_post' || parsed.postId)) {
                           sharedPostObj = parsed;
                         }
                       } catch (_) {}
@@ -1215,46 +1262,87 @@ export const DirectMessagePage = () => {
                       const cleanCallText = rawText
                         .replace(/^[📞📹\uFFFD\?🔹⯁\s]+/g, '')
                         .trim() || (isVideo ? 'Cuộc gọi video' : 'Cuộc gọi thoại');
+                      const durationMatch = rawText.match(/\((\d{2}:\d{2}(?::\d{2})?)\)/);
+                      const durationStr = durationMatch ? durationMatch[1] : (isMissed ? '00:00' : null);
                       const timeStr = msg.formattedTime || (msg.timeSend ? new Date(msg.timeSend).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '');
 
                       return (
                         <div 
                           key={msg.id || index} 
-                          className={`w-full flex ${isMe ? 'justify-end' : 'justify-start'} my-2`}
+                          className={`w-full flex ${isMe ? 'justify-end' : 'justify-start'} my-2.5`}
                         >
                           <div 
-                            className={`flex items-center gap-3 px-4 py-2.5 rounded-2xl shadow-sm text-xs transition-all ${
+                            className={`w-64 sm:w-72 rounded-2xl p-3.5 shadow-md border transition-all ${
                               isMe 
-                                ? 'bg-zinc-800 text-zinc-100 rounded-tr-sm border border-zinc-700/60' 
-                                : 'bg-zinc-900 text-zinc-200 rounded-tl-sm border border-zinc-800/80'
+                                ? 'bg-zinc-800/90 text-zinc-100 rounded-tr-sm border-zinc-700/70' 
+                                : 'bg-zinc-900/90 text-zinc-200 rounded-tl-sm border-zinc-800'
                             }`}
                           >
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                              isMissed ? 'bg-rose-500/15 text-rose-400' : 'bg-zinc-700/50 text-emerald-400'
-                            }`}>
-                              {isMissed ? (
-                                <PhoneMissed size={14} />
-                              ) : isVideo ? (
-                                <Video size={14} />
-                              ) : (
-                                <PhoneCall size={14} />
+                            {/* Tiêu đề & Icon loại cuộc gọi */}
+                            <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-zinc-700/50">
+                              <div className="flex items-center gap-2.5">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                                  isMissed 
+                                    ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30' 
+                                    : isVideo 
+                                      ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30' 
+                                      : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                                }`}>
+                                  {isMissed ? (
+                                    <PhoneMissed size={16} />
+                                  ) : isVideo ? (
+                                    <Video size={16} />
+                                  ) : (
+                                    <PhoneCall size={16} />
+                                  )}
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="font-semibold text-xs text-zinc-100">
+                                    {isVideo ? 'Cuộc gọi video' : 'Cuộc gọi thoại'}
+                                  </span>
+                                  <span className={`text-[10px] font-medium ${isMissed ? 'text-rose-400' : 'text-zinc-400'}`}>
+                                    {isMissed 
+                                      ? (isMe ? 'Đối phương nhỡ' : 'Cuộc gọi nhỡ') 
+                                      : (isMe ? 'Cuộc gọi đi' : 'Cuộc gọi đến')}
+                                  </span>
+                                </div>
+                              </div>
+                              {timeStr && (
+                                <span className="text-[10px] font-mono text-zinc-400 shrink-0">
+                                  {timeStr}
+                                </span>
                               )}
                             </div>
-                            <div className="flex flex-col min-w-[120px]">
-                              <span className="font-semibold text-xs tracking-tight text-zinc-100">
-                                {cleanCallText}
-                              </span>
-                              <span className="text-[10px] text-zinc-400 font-normal">
-                                {isMissed 
-                                  ? (isMe ? 'Đối phương nhỡ cuộc gọi' : 'Cuộc gọi nhỡ') 
-                                  : (isMe ? 'Cuộc gọi đi' : 'Cuộc gọi đến')}
-                              </span>
+
+                            {/* Thời lượng đàm thoại & Nút gọi lại */}
+                            <div className="flex items-center justify-between pt-0.5">
+                              <div className="flex items-center gap-1.5 text-xs text-zinc-300">
+                                <Clock size={12} className="text-zinc-400" />
+                                <span className="text-[11px] text-zinc-400">Thời lượng:</span>
+                                <span className="font-mono font-medium text-[11px] text-zinc-200">
+                                  {durationStr || (isMissed ? '00:00' : 'Đã kết thúc')}
+                                </span>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const safeTargetId = activePartner?.id || urlTargetUserId;
+                                  if (safeTargetId) {
+                                    const currentFrom = encodeURIComponent(location.pathname + (location.search || ''));
+                                    navigate(`/call/direct/${safeTargetId}?type=${isVideo ? 'video' : 'audio'}&from=${currentFrom}`);
+                                  }
+                                }}
+                                className={`px-2.5 py-1 rounded-lg text-[11px] font-medium flex items-center gap-1 transition-colors ${
+                                  isMissed 
+                                    ? 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30' 
+                                    : 'bg-zinc-700/60 hover:bg-zinc-700 text-zinc-200 border border-zinc-600/50'
+                                }`}
+                              >
+                                {isVideo ? <Video size={11} /> : <PhoneCall size={11} />}
+                                <span>Gọi lại</span>
+                              </button>
                             </div>
-                            {timeStr && (
-                              <span className="text-[10px] font-mono text-zinc-400 ml-2 self-end shrink-0">
-                                {timeStr}
-                              </span>
-                            )}
                           </div>
                         </div>
                       );

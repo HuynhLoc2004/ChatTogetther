@@ -1931,14 +1931,22 @@ const Home = ({ initialTab }) => {
         imageUrl: post.imageUrl || null
       });
 
-      let targetRoomId = null;
-      try {
-        const roomRes = await axiosClient.post(`/rooms/direct/${friend.id}`);
-        targetRoomId = roomRes?.data?.data?.id || roomRes?.data?.data?.roomId || roomRes?.data?.id;
-      } catch (_) {
-        if (friend.account) {
-          const roomRes2 = await axiosClient.post(`/rooms/direct/${friend.account}`).catch(() => null);
-          targetRoomId = roomRes2?.data?.data?.id || roomRes2?.data?.data?.roomId || roomRes2?.data?.id;
+      let targetRoomId = friend.directRoomId;
+      if (!targetRoomId) {
+        try {
+          const rRes = await axiosClient.get(`/message/direct/${friend.id}`);
+          targetRoomId = rRes?.data?.data?.roomId;
+        } catch (_) {}
+      }
+      if (!targetRoomId) {
+        try {
+          const roomRes = await axiosClient.post(`/rooms/direct/${friend.id}`);
+          targetRoomId = roomRes?.data?.data?.id || roomRes?.data?.data?.roomId || roomRes?.data?.id;
+        } catch (_) {
+          if (friend.account) {
+            const roomRes2 = await axiosClient.post(`/rooms/direct/${friend.account}`).catch(() => null);
+            targetRoomId = roomRes2?.data?.data?.id || roomRes2?.data?.data?.roomId || roomRes2?.data?.id;
+          }
         }
       }
 
