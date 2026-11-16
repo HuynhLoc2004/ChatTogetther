@@ -188,10 +188,11 @@ const GlobalCallBanner = () => {
     setIncomingCall(null);
 
     const currentFrom = encodeURIComponent((location.pathname + (location.search || '')) || '/');
+    const callIdParam = incomingCall.callId ? `&callId=${incomingCall.callId}` : '';
     if (roomId) {
-      navigate(`/call/room/${roomId}?type=${isVid ? 'video' : 'audio'}&autoAnswer=true&from=${currentFrom}`);
+      navigate(`/call/room/${roomId}?type=${isVid ? 'video' : 'audio'}&autoAnswer=true${callIdParam}&from=${currentFrom}`);
     } else if (callerId) {
-      navigate(`/call/direct/${callerId}?type=${isVid ? 'video' : 'audio'}&autoAnswer=true&from=${currentFrom}`);
+      navigate(`/call/direct/${callerId}?type=${isVid ? 'video' : 'audio'}&autoAnswer=true${callIdParam}&from=${currentFrom}`);
     }
   };
 

@@ -34,13 +34,23 @@ public class ChatController {
     public ResponseEntity<ResponseData<Boolean>> sendMessage(
             JwtAuthenticationToken jwtAuthenticationToken,
             @RequestParam(value = "user_room", required = false) Long user_room,
+            @RequestParam(value = "roomId", required = false) Long roomId,
             @RequestParam(value = "targetUserId", required = false) String targetUserId,
             @RequestBody MessageRequest messageRequest
     ) {
-        Long effectiveRoomId = user_room;
-        if (effectiveRoomId == null && targetUserId != null && !targetUserId.trim().isEmpty()) {
+        Long effectiveRoomId = user_room != null ? user_room : roomId;
+        if (effectiveRoomId == null && messageRequest != null) {
+            effectiveRoomId = messageRequest.getUser_room() != null ? messageRequest.getUser_room() : messageRequest.getRoomId();
+        }
+
+        String effectiveTargetUserId = targetUserId;
+        if ((effectiveTargetUserId == null || effectiveTargetUserId.trim().isEmpty()) && messageRequest != null) {
+            effectiveTargetUserId = messageRequest.getTargetUserId();
+        }
+
+        if (effectiveRoomId == null && effectiveTargetUserId != null && !effectiveTargetUserId.trim().isEmpty()) {
             try {
-                ResponseData<Map<String, Object>> dmRes = this.chatService.getOrCreateDirectRoom(jwtAuthenticationToken, targetUserId.trim());
+                ResponseData<Map<String, Object>> dmRes = this.chatService.getOrCreateDirectRoom(jwtAuthenticationToken, effectiveTargetUserId.trim());
                 if (dmRes.getData() != null && dmRes.getData().get("roomId") != null) {
                     effectiveRoomId = Long.valueOf(dmRes.getData().get("roomId").toString());
                 }

@@ -674,15 +674,17 @@ const ProfilePage = () => {
     if (e) e.stopPropagation();
     if (!effectiveUserId) return;
     const currentPath = typeof window !== 'undefined' ? (window.location.pathname + window.location.search) : `/profile/${effectiveUserId}`;
+    
+    // Chỉ truyền partnerState khi có thông tin thực tế, tuyệt đối không truyền undefined
+    const partnerState = (profile && (profile.account || profile.nickname)) ? {
+      id: Number(effectiveUserId),
+      account: profile.account,
+      nickname: profile.nickname || profile.account,
+      avatar: profile.avatar || ''
+    } : null;
+
     navigate(`/messages/${effectiveUserId}?from=${encodeURIComponent(currentPath)}`, {
-      state: {
-        targetUser: {
-          id: effectiveUserId,
-          account: profile?.account,
-          nickname: profile?.nickname || profile?.account,
-          avatar: profile?.avatar
-        }
-      }
+      state: partnerState ? { targetUser: partnerState, partner: partnerState } : undefined
     });
   };
 

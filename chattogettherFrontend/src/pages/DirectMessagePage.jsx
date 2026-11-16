@@ -486,7 +486,7 @@ export const DirectMessagePage = () => {
 
     fetchFriendsAndPreviews();
     return () => { isMounted = false; };
-  }, [urlTargetUserId, navigate]);
+  }, []);
 
   // Nạp danh sách phòng nhóm công khai cho tính năng chuyển tiếp
   useEffect(() => {
@@ -558,25 +558,40 @@ export const DirectMessagePage = () => {
     });
 
     // Kiểm tra thông tin partner dự phòng từ props, friends state hoặc cache localStorage
-    let effectivePartner = fallbackPartner;
+    let effectivePartner = (fallbackPartner && (fallbackPartner.nickname || fallbackPartner.account)) ? fallbackPartner : null;
     if (!effectivePartner) {
-      const foundInState = friends.find(f => String(f.id) === String(targetId) || f.account === targetId);
+      const foundInState = friends.find(f => (String(f.id) === String(targetId) || f.account === targetId) && (f.nickname || f.account));
       if (foundInState) effectivePartner = foundInState;
     }
     if (!effectivePartner) {
       try {
         const cached = JSON.parse(localStorage.getItem(`talovin_dm_friends_cache_${userPrefix}`) || localStorage.getItem('talovin_dm_friends_cache') || '[]');
-        const foundInCache = cached.find(f => String(f.id) === String(targetId) || f.account === targetId);
+        const foundInCache = cached.find(f => (String(f.id) === String(targetId) || f.account === targetId) && (f.nickname || f.account));
         if (foundInCache) effectivePartner = foundInCache;
       } catch (_) { }
     }
-    if (!effectivePartner && activePartnerRef.current && (String(activePartnerRef.current.id) === String(targetId) || activePartnerRef.current.account === targetId)) {
+    if (!effectivePartner && activePartnerRef.current && (String(activePartnerRef.current.id) === String(targetId) || activePartnerRef.current.account === targetId) && (activePartnerRef.current.nickname || activePartnerRef.current.account)) {
       effectivePartner = activePartnerRef.current;
     }
 
     if (effectivePartner) {
       setActivePartner(effectivePartner);
       setPartnerNotFound(false);
+    } else if (targetId) {
+      // Tải tức thì thông tin user từ profile để không bao giờ bị hiện "undefined"
+      axiosClient.get('/users/profile', { params: { user_id: targetId } }).then(uRes => {
+        if (uRes.data?.data) {
+          const u = uRes.data.data;
+          const freshPartner = {
+            id: u.id,
+            account: u.account,
+            nickname: u.nickname || u.account,
+            avatar: u.avatar || ''
+          };
+          setActivePartner(freshPartner);
+          setPartnerNotFound(false);
+        }
+      }).catch(() => {});
     }
 
     let knownRoomId = effectivePartner?.directRoomId;
@@ -771,15 +786,15 @@ export const DirectMessagePage = () => {
 
     lastTargetIdRef.current = urlTargetUserId;
 
-    // Tìm kiếm bạn bè từ cache hoặc state
-    let partnerToUse = friends.find(f => f.id?.toString() === urlTargetUserId?.toString() || f.account === urlTargetUserId);
-    if (!partnerToUse && passedTargetUser && (passedTargetUser.id?.toString() === urlTargetUserId.toString() || passedTargetUser.account === urlTargetUserId)) {
+    // Tìm kiếm bạn bè từ cache hoặc state (phải có nickname hoặc account hợp lệ)
+    let partnerToUse = friends.find(f => (f.id?.toString() === urlTargetUserId?.toString() || f.account === urlTargetUserId) && (f.nickname || f.account));
+    if (!partnerToUse && passedTargetUser && (passedTargetUser.id?.toString() === urlTargetUserId.toString() || passedTargetUser.account === urlTargetUserId) && (passedTargetUser.nickname || passedTargetUser.account)) {
       partnerToUse = passedTargetUser;
     }
     if (!partnerToUse) {
       try {
         const cached = JSON.parse(localStorage.getItem('talovin_dm_friends_cache') || '[]');
-        partnerToUse = cached.find(f => f.id?.toString() === urlTargetUserId?.toString() || f.account === urlTargetUserId);
+        partnerToUse = cached.find(f => (f.id?.toString() === urlTargetUserId?.toString() || f.account === urlTargetUserId) && (f.nickname || f.account));
       } catch (_) { }
     }
 
@@ -1672,7 +1687,7 @@ export const DirectMessagePage = () => {
                       }`}
                   >
                     <div className="relative shrink-0">
-                      <UserAvatar avatarUrl={partner.avatar} username={partner.account} name={partner.nickname || partner.account} size={42} />
+                      <UserAvatar avatarUrl={partner.avatar} username={partner.account} name={partner.nickname || partner.account || 'Người dùng'} size={42} />
                       <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-zinc-950 ${isPartnerOnline ? 'bg-emerald-500 ring-2 ring-emerald-500/20' : 'bg-zinc-600'
                         }`} />
                     </div>
@@ -1681,7 +1696,7 @@ export const DirectMessagePage = () => {
                       <div className="flex items-center justify-between mb-0.5">
                         <div className="flex items-center gap-1 min-w-0">
                           <h4 className={`text-xs truncate ${isUnread ? 'font-bold text-white' : 'font-semibold text-zinc-200'}`}>
-                            {partner.nickname || partner.account}
+                            {partner.nickname || partner.account || 'Người dùng'}
                           </h4>
                           {isThisHidden && (
                             <span className="shrink-0 text-amber-400" title="Đoạn chat đã ẩn">
@@ -1801,14 +1816,14 @@ export const DirectMessagePage = () => {
                     title="Xem trang cá nhân"
                   >
                     <div className="relative shrink-0">
-                      <UserAvatar avatarUrl={activePartner.avatar} username={activePartner.account} name={activePartner.nickname || activePartner.account} size={36} />
-                      <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-zinc-950 ${isUserOnline(activePartner.id) ? 'bg-emerald-500 ring-2 ring-emerald-500/20' : 'bg-zinc-600'
+                      <UserAvatar avatarUrl={activePartner?.avatar} username={activePartner?.account} name={activePartner?.nickname || activePartner?.account || 'Người dùng'} size={36} />
+                      <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-zinc-950 ${isUserOnline(activePartner?.id) ? 'bg-emerald-500 ring-2 ring-emerald-500/20' : 'bg-zinc-600'
                         }`} />
                     </div>
 
                     <div className="min-w-0">
                       <h3 className="text-xs sm:text-sm font-bold text-white truncate">
-                        {activePartner.nickname || activePartner.account}
+                        {activePartner?.nickname || activePartner?.account || 'Người dùng'}
                       </h3>
                       {isUserOnline(activePartner.id) ? (
                         <span className="font-sans text-xs text-zinc-400 flex items-center gap-1.5 font-normal">
@@ -2377,7 +2392,7 @@ export const DirectMessagePage = () => {
                       handleSendMessage(e);
                     }
                   }}
-                  placeholder={partnerNotFound ? "Không thể nhắn tin cho người dùng này..." : `Nhắn tin cho ${activePartner.nickname || activePartner.account}...`}
+                  placeholder={partnerNotFound ? "Không thể nhắn tin cho người dùng này..." : `Nhắn tin cho ${activePartner?.nickname || activePartner?.account || 'đối phương'}...`}
                   className="flex-1 px-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-700 font-sans disabled:opacity-50"
                 />
 

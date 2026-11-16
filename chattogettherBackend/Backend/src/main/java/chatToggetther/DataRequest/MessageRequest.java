@@ -19,4 +19,7 @@ public class MessageRequest {
     private String message;
     private LocalDateTime timeSend;
     private String clientTempId;
+    private Long roomId;
+    private Long user_room;
+    private String targetUserId;
 }
