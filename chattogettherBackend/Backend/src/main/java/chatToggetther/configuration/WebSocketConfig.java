@@ -13,10 +13,12 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
-        // Topic để client subscribe nhận tin nhắn
-        config.enableSimpleBroker("/topic");
+        // Topic & Queue để client subscribe nhận tin nhắn và thông báo
+        config.enableSimpleBroker("/topic", "/queue");
         // Prefix cho các tin nhắn từ client gửi lên server (nếu có)
         config.setApplicationDestinationPrefixes("/app");
+        // Prefix cho các kênh riêng từng user (/user/queue/...)
+        config.setUserDestinationPrefix("/user");
     }
 
     @Override

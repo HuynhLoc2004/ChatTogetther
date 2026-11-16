@@ -28,7 +28,7 @@ import ChallengeDeckModal from '../components/ChallengeDeckModal';
 import UserAvatar from '../components/UserAvatar';
 import MobileBottomNav from '../components/MobileBottomNav';
 import PostReactionDock, { REACTION_DEFINITIONS } from '../components/PostReactionDock';
-import { playReactionPop, playCommentSend, playRemoveTick, updateSoundConfig } from '../utils/soundEffects';
+import { playReactionPop, playCommentSend, playRemoveTick, updateSoundConfig, playMessageIncoming } from '../utils/soundEffects';
 import { createStompClient } from '../utils/stompClient';
 import { formatCompactCount } from '../utils/numberFormat';
 import { useAuth } from '../context/AuthContext';
@@ -2249,6 +2249,21 @@ const Home = ({ initialTab }) => {
               setNotifications(prev => [normalizedNotif, ...prev.filter(n => n.id !== normalizedNotif.id)]);
               setFloatingNotif(normalizedNotif);
 
+              // Xử lý thông báo tin nhắn mới
+              if (notif.type === 'MESSAGE' || notif.type === 'CHAT' || notif.type === 'DM') {
+                playMessageIncoming();
+                setUnreadDmCount(prev => prev + 1);
+                try {
+                  const unreadMap = JSON.parse(localStorage.getItem('talovin_dm_unread') || '{}');
+                  const sid = String(notif.senderId || notif.actorId);
+                  if (sid) {
+                    unreadMap[sid] = (Number(unreadMap[sid]) || 0) + 1;
+                    localStorage.setItem('talovin_dm_unread', JSON.stringify(unreadMap));
+                    window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: unreadMap }));
+                  }
+                } catch (_) {}
+              }
+
               if (notif.type === 'FRIEND_REQUEST' || notif.type === 'FRIEND_ACCEPTED') {
                 fetchPendingFriendsCount();
                 fetchFriends();
@@ -2258,7 +2273,8 @@ const Home = ({ initialTab }) => {
               if (typeof window !== 'undefined' && "Notification" in window && Notification.permission === "granted") {
                 try {
                   const pushTitle = normalizedNotif.type === 'FRIEND_REQUEST' ? 'Talovin - Lời mời kết bạn' :
-                    normalizedNotif.type === 'FRIEND_ACCEPTED' ? 'Talovin - Kết nối mới' : 'Talovin';
+                    normalizedNotif.type === 'FRIEND_ACCEPTED' ? 'Talovin - Kết nối mới' : 
+                    (normalizedNotif.type === 'MESSAGE' ? (normalizedNotif.title || 'Talovin - Tin nhắn mới') : 'Talovin');
                   new Notification(pushTitle, {
                     body: normalizedNotif.text,
                     icon: normalizedNotif.actorAvatar || "/logo.png"
@@ -2280,6 +2296,76 @@ const Home = ({ initialTab }) => {
               fetchFriends();
               fetchPendingFriendsCount();
             }
+          });
+
+          // Lắng nghe tin nhắn cá nhân 1-1 trực tiếp qua /topic/messages/{currentUserId}
+          stompClient.subscribe(`/topic/messages/${currentUserId}`, (message) => {
+            try {
+              const msg = JSON.parse(message.body);
+              const senderId = msg.senderId || msg.userId;
+              if (senderId && senderId.toString() !== currentUserId?.toString()) {
+                const senderName = msg.nickname || msg.senderUsername || 'Người dùng';
+                const senderAvatar = msg.senderAvatar || msg.avatar;
+                const text = msg.message || 'Đã gửi tin nhắn';
+
+                playMessageIncoming();
+                setUnreadDmCount(prev => prev + 1);
+                try {
+                  const unreadMap = JSON.parse(localStorage.getItem('talovin_dm_unread') || '{}');
+                  const sid = String(senderId);
+                  unreadMap[sid] = (Number(unreadMap[sid]) || 0) + 1;
+                  localStorage.setItem('talovin_dm_unread', JSON.stringify(unreadMap));
+                  window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: unreadMap }));
+                } catch (_) {}
+
+                // Tạo toast thông báo tin nhắn tức thì có thể bấm vào để chat
+                toast.custom((t) => (
+                  <div
+                    onClick={() => {
+                      toast.dismiss(t.id);
+                      navigate(`/messages/${senderId}`);
+                    }}
+                    className="max-w-sm w-full bg-zinc-900/95 border border-zinc-700 shadow-2xl rounded-2xl p-3 flex items-center gap-3 cursor-pointer pointer-events-auto transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                  >
+                    <div className="relative shrink-0">
+                      <UserAvatar avatar={senderAvatar} name={senderName} size={40} />
+                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-zinc-950" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-bold text-zinc-100 truncate">{senderName}</h4>
+                        <span className="text-[10px] text-emerald-400 font-mono">Vừa xong</span>
+                      </div>
+                      <p className="text-[11px] text-zinc-300 truncate mt-0.5">{text}</p>
+                    </div>
+                  </div>
+                ), { duration: 5000, id: `msg-${Date.now()}` });
+
+                // Browser Notification
+                if (typeof window !== 'undefined' && "Notification" in window && Notification.permission === "granted") {
+                  try {
+                    new Notification(senderName, {
+                      body: text,
+                      icon: senderAvatar || "/logo.png"
+                    });
+                  } catch (_) {}
+                }
+              }
+            } catch (err) {
+              console.warn("Lỗi nhận tin nhắn trực tiếp:", err);
+            }
+          });
+
+          // Lắng nghe alert tin nhắn qua /topic/room-alerts/{currentUserId}
+          stompClient.subscribe(`/topic/room-alerts/${currentUserId}`, (message) => {
+            try {
+              const alert = JSON.parse(message.body);
+              const senderId = alert.senderId || alert.userId;
+              if (senderId && senderId.toString() !== currentUserId?.toString()) {
+                playMessageIncoming();
+                setUnreadDmCount(prev => prev + 1);
+              }
+            } catch (_) {}
           });
 
           // Lắng nghe cuộc gọi trực tiếp gửi đến người dùng
@@ -2824,25 +2910,32 @@ const Home = ({ initialTab }) => {
 
               <button
                 type="button"
-                className="nav-item"
+                className="nav-item flex items-center justify-between"
                 onClick={() => navigate('/messages')}
                 title="Hộp thư tin nhắn"
               >
-                <MessageSquare size={15} strokeWidth={1.5} />
-                <span>Tin nhắn</span>
+                <div className="flex items-center gap-2.5">
+                  <MessageSquare size={15} strokeWidth={1.5} />
+                  <span>Tin nhắn</span>
+                </div>
+                {unreadMessagesCount > 0 && (
+                  <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-full bg-rose-500 text-white font-bold animate-pulse shadow-sm">
+                    {unreadMessagesCount > 9 ? '9+' : unreadMessagesCount}
+                  </span>
+                )}
               </button>
 
               {dynamicMenu.friends?.visible !== false && (
                 <button
                   className="nav-item flex items-center justify-between"
-                  onClick={() => setIsFriendsOpen(true)}
+                  onClick={() => handleSwitchTab('friends')}
                 >
                   <div className="flex items-center gap-2.5">
                     <Users size={15} strokeWidth={1.5} />
                     <span>{dynamicMenu.friends?.label || "Bạn bè"}</span>
                   </div>
                   {pendingFriendsCount > 0 && (
-                    <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                    <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                       {pendingFriendsCount}
                     </span>
                   )}
@@ -3056,27 +3149,43 @@ const Home = ({ initialTab }) => {
               </button>
             </div>
 
-            {/* NÚT CHUÔNG THÔNG BÁO SẢNH (Chỉ hiện trên PC, ẩn hoàn toàn trên Mobile để không trùng với chuông ở thanh trên cùng) */}
-            <button
-              type="button"
-              onClick={() => {
-                const next = !isNotifOpen;
-                setIsNotifOpen(next);
-                if (next) {
-                  handleMarkAllNotificationsRead();
-                }
-                requestNotificationPermission();
-              }}
-              className="btn-header-notif !hidden md:!flex relative ml-2"
-              title="Thông báo sảnh (Mở ngăn kéo)"
-            >
-              <Bell size={15} strokeWidth={1.5} />
-              {notifications.filter(n => n.unread).length > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-mono font-bold flex items-center justify-center border-2 border-zinc-950 shadow-sm animate-pulse">
-                  {notifications.filter(n => n.unread).length > 9 ? '9+' : notifications.filter(n => n.unread).length}
-                </span>
-              )}
-            </button>
+            {/* NÚT THAO TÁC SẢNH: TIN NHẮN & CHUÔNG THÔNG BÁO (Chỉ hiện trên PC, ẩn trên Mobile để không trùng với thanh trên cùng) */}
+            <div className="!hidden md:!flex items-center gap-1.5 ml-2">
+              <button
+                type="button"
+                onClick={() => navigate('/messages')}
+                className="btn-header-notif relative"
+                title="Hộp thư tin nhắn"
+              >
+                <MessageSquare size={15} strokeWidth={1.5} />
+                {unreadMessagesCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-mono font-bold flex items-center justify-center border-2 border-zinc-950 shadow-sm animate-pulse">
+                    {unreadMessagesCount > 9 ? '9+' : unreadMessagesCount}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !isNotifOpen;
+                  setIsNotifOpen(next);
+                  if (next) {
+                    handleMarkAllNotificationsRead();
+                  }
+                  requestNotificationPermission();
+                }}
+                className="btn-header-notif relative"
+                title="Thông báo sảnh (Mở ngăn kéo)"
+              >
+                <Bell size={15} strokeWidth={1.5} />
+                {notifications.filter(n => n.unread).length > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-mono font-bold flex items-center justify-center border-2 border-zinc-950 shadow-sm animate-pulse">
+                    {notifications.filter(n => n.unread).length > 9 ? '9+' : notifications.filter(n => n.unread).length}
+                  </span>
+                )}
+              </button>
+            </div>
           </div>
 
           {/* THANH BÁO HIỆU SOFT TRANSITION KHI CHUYỂN TAB */}

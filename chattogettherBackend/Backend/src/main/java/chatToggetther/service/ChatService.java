@@ -137,10 +137,31 @@ public class ChatService {
                 dmAlertPayload.put("senderDisplayName", senderNickname);
                 dmAlertPayload.put("senderAvatar", senderAvatar);
                 dmAlertPayload.put("contentPreview", contentPreview);
+                dmAlertPayload.put("message", contentPreview);
                 dmAlertPayload.put("createdAt", now.toString());
 
                 this.simpMessagingTemplate.convertAndSendToUser(partnerId.toString(), "/queue/room-alerts", dmAlertPayload);
                 this.simpMessagingTemplate.convertAndSend("/topic/room-alerts/" + partnerId, dmAlertPayload);
+
+                // Đồng thời gửi vào kênh thông báo cá nhân của người nhận (/topic/user/{partnerId}/notifications)
+                java.util.Map<String, Object> notifPayload = new java.util.HashMap<>();
+                notifPayload.put("id", messageEntity.getId());
+                notifPayload.put("type", "MESSAGE");
+                notifPayload.put("title", "Tin nhắn từ " + senderNickname);
+                notifPayload.put("content", contentPreview);
+                notifPayload.put("message", contentPreview);
+                notifPayload.put("actorId", userId);
+                notifPayload.put("senderId", userId);
+                notifPayload.put("actorDisplayName", senderNickname);
+                notifPayload.put("actorUsername", senderUsername);
+                notifPayload.put("actorAvatar", senderAvatar);
+                notifPayload.put("senderAvatar", senderAvatar);
+                notifPayload.put("referenceId", roomEntity.getId());
+                notifPayload.put("roomId", roomEntity.getId());
+                notifPayload.put("timestamp", now.toString());
+                notifPayload.put("time", "Vừa xong");
+                notifPayload.put("unread", true);
+                this.simpMessagingTemplate.convertAndSend("/topic/user/" + partnerId + "/notifications", notifPayload);
             }
 
             // Bắn sự kiện tin nhắn nhóm qua kênh riêng (tuyệt đối không tạo bản ghi Notification ở Chuông Sảnh)
