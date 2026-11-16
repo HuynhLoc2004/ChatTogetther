@@ -260,6 +260,20 @@ export const DirectMessagePage = () => {
     } catch (_) { }
   }, [reactionsMap]);
 
+  // Cuộn xuống tin nhắn mới nhất (khai báo sớm để các useEffect bên dưới gọi an toàn)
+  const scrollToBottom = useCallback((smooth = true) => {
+    if (scrollContainerRef.current) {
+      if (smooth) {
+        scrollContainerRef.current.scrollTo({
+          top: scrollContainerRef.current.scrollHeight,
+          behavior: 'smooth'
+        });
+      } else {
+        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+      }
+    }
+  }, []);
+
   // Lắng nghe sự kiện tin nhắn/call log mới tức thì từ các trang khác (ví dụ: CallPage, GlobalCallBanner)
   useEffect(() => {
     const handleLocalNewMessage = (e) => {
@@ -288,20 +302,6 @@ export const DirectMessagePage = () => {
     window.addEventListener('talovin_new_message', handleLocalNewMessage);
     return () => window.removeEventListener('talovin_new_message', handleLocalNewMessage);
   }, [urlTargetUserId, currentUserId, scrollToBottom]);
-
-  // Cuộn xuống tin nhắn mới nhất
-  const scrollToBottom = useCallback((smooth = true) => {
-    if (scrollContainerRef.current) {
-      if (smooth) {
-        scrollContainerRef.current.scrollTo({
-          top: scrollContainerRef.current.scrollHeight,
-          behavior: 'smooth'
-        });
-      } else {
-        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
-      }
-    }
-  }, []);
 
   // Heartbeat định kỳ gửi lên server để duy trì trạng thái online
   useEffect(() => {
