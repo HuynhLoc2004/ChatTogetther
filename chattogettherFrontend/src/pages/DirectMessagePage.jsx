@@ -166,7 +166,8 @@ export const DirectMessagePage = () => {
         let lastFmt = rf.lastMessageFormattedTime;
 
         try {
-          const localRaw = localStorage.getItem(`talovin_dm_msgs_${rf.id}`);
+          const localRaw = localStorage.getItem(`talovin_dm_msgs_${rf.id}`) ||
+                           (rf.directRoomId ? localStorage.getItem(`talovin_dm_msgs_${rf.directRoomId}`) : null);
           if (localRaw) {
             const parsed = JSON.parse(localRaw);
             if (Array.isArray(parsed) && parsed.length > 0) {
@@ -388,13 +389,15 @@ export const DirectMessagePage = () => {
           const hiddenIds = [];
 
           currentList = convList.map(rf => {
-            let lastMsg = rf.lastMessage;
-            let lastTime = rf.lastMessageTime;
-            let lastFmt = rf.lastMessageFormattedTime;
+            const prevFriend = friends.find(f => String(f.id) === String(rf.id));
+            let lastMsg = rf.lastMessage || prevFriend?.lastMessage;
+            let lastTime = rf.lastMessageTime || prevFriend?.lastMessageTime;
+            let lastFmt = rf.lastMessageFormattedTime || prevFriend?.lastMessageFormattedTime;
 
-            // Nạp thêm từ bộ nhớ tin nhắn cục bộ nếu có tin nhắn mới hơn
+            // Nạp thêm từ bộ nhớ tin nhắn cục bộ nếu có tin nhắn mới hơn (kiểm tra cả id người nhận và id phòng)
             try {
-              const localRaw = localStorage.getItem(`talovin_dm_msgs_${rf.id}`);
+              const localRaw = localStorage.getItem(`talovin_dm_msgs_${rf.id}`) ||
+                               (rf.directRoomId ? localStorage.getItem(`talovin_dm_msgs_${rf.directRoomId}`) : null);
               if (localRaw) {
                 const parsed = JSON.parse(localRaw);
                 if (Array.isArray(parsed) && parsed.length > 0) {
@@ -1587,7 +1590,7 @@ export const DirectMessagePage = () => {
 
           {/* Danh sách người dùng */}
           <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
-            {loadingFriends ? (
+            {loadingFriends && friends.length === 0 ? (
               <div className="p-1 space-y-2 animate-pulse">
                 {[1, 2, 3, 4, 5].map((i) => (
                   <div key={i} className="flex items-center gap-3 p-3 rounded-2xl bg-zinc-900/40 border border-zinc-850/50">
@@ -1870,7 +1873,7 @@ export const DirectMessagePage = () => {
                 ref={scrollContainerRef}
                 className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar"
               >
-                {loadingMessages ? (
+                {loadingMessages && messages.length === 0 ? (
                   <div className="py-6 space-y-5 animate-pulse max-w-2xl mx-auto">
                     <div className="flex items-start gap-2.5">
                       <div className="w-8 h-8 rounded-full bg-zinc-800/80 shrink-0" />
