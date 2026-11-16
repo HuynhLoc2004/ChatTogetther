@@ -177,6 +177,8 @@ export const DirectMessagePage = () => {
         if (res?.data?.data && Array.isArray(res.data.data)) {
           const rawFriends = res.data.data;
           
+          const computedUnreadMap = {};
+
           // Nạp song song dữ liệu tin nhắn cuối cùng cho từng người bạn
           const enrichedFriends = await Promise.all(rawFriends.map(async (friend) => {
             try {
@@ -192,11 +194,27 @@ export const DirectMessagePage = () => {
               }
 
               if (directRoomId) {
-                const histRes = await axiosClient.get(`/message/${directRoomId}?size=10`).catch(() => null);
+                const histRes = await axiosClient.get(`/message/${directRoomId}?size=15`).catch(() => null);
                 const msgs = histRes?.data?.data || [];
                 if (msgs.length > 0) {
                   const lastMsg = msgs[msgs.length - 1];
                   const isFromPartner = lastMsg.userId?.toString() === friend.id?.toString();
+
+                  // Tính chính xác số lượng tin nhắn chưa đọc từ người này
+                  let partnerUnread = 0;
+                  for (let i = msgs.length - 1; i >= 0; i--) {
+                    if (msgs[i].userId?.toString() === friend.id?.toString()) {
+                      partnerUnread++;
+                    } else {
+                      break;
+                    }
+                  }
+
+                  const isViewingFriend = urlTargetUserId && urlTargetUserId.toString() === friend.id?.toString();
+                  if (!isViewingFriend && partnerUnread > 0) {
+                    computedUnreadMap[friend.id] = partnerUnread;
+                  }
+
                   return {
                     ...friend,
                     directRoomId,
@@ -204,7 +222,8 @@ export const DirectMessagePage = () => {
                     lastMessageTime: lastMsg.timeSend || null,
                     lastMessageFormattedTime: lastMsg.formattedTime || (lastMsg.timeSend ? new Date(lastMsg.timeSend).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : ''),
                     lastMessageSenderId: lastMsg.userId,
-                    hasUnread: isFromPartner && (!urlTargetUserId || urlTargetUserId.toString() !== friend.id?.toString())
+                    hasUnread: !isViewingFriend && partnerUnread > 0,
+                    unreadCount: isViewingFriend ? 0 : partnerUnread
                   };
                 }
               }
@@ -213,6 +232,15 @@ export const DirectMessagePage = () => {
           }));
 
           if (!isMounted) return;
+
+          setUnreadMap(prev => {
+            const next = { ...prev, ...computedUnreadMap };
+            try {
+              localStorage.setItem('talovin_dm_unread', JSON.stringify(next));
+              window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: next }));
+            } catch (_) {}
+            return next;
+          });
 
           // Sắp xếp: người có tin nhắn gần nhất luôn nhảy lên vị trí đầu tiên
           enrichedFriends.sort((a, b) => {
@@ -270,12 +298,16 @@ export const DirectMessagePage = () => {
       const next = { ...prev };
       delete next[targetId];
       if (fallbackPartner?.id) delete next[fallbackPartner.id];
+      try {
+        localStorage.setItem('talovin_dm_unread', JSON.stringify(next));
+        window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: next }));
+      } catch (_) {}
       return next;
     });
 
     setFriends(prev => prev.map(f => {
       if (f.id?.toString() === targetId?.toString() || (fallbackPartner && f.id === fallbackPartner.id)) {
-        return { ...f, hasUnread: false };
+        return { ...f, hasUnread: false, unreadCount: 0 };
       }
       return f;
     }));

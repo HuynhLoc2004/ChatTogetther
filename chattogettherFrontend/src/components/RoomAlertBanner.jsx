@@ -62,6 +62,16 @@ export const RoomAlertBanner = () => {
             return;
           }
 
+          // Cập nhật số lượng tin nhắn chưa đọc toàn cục
+          if (alert.isDirect && alert.senderId) {
+            try {
+              const currentUnread = JSON.parse(localStorage.getItem('talovin_dm_unread') || '{}');
+              currentUnread[alert.senderId] = (currentUnread[alert.senderId] || 0) + 1;
+              localStorage.setItem('talovin_dm_unread', JSON.stringify(currentUnread));
+              window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: currentUnread }));
+            } catch (_) {}
+          }
+
           // 1. Phát âm thanh nốt ding-dong nhẹ nhàng 660Hz -> 990Hz
           playMessageIncoming();
 

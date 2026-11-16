@@ -651,9 +651,87 @@ const Home = ({ initialTab }) => {
     }
   });
 
+  // Đếm tin nhắn riêng tư chưa đọc từ localStorage và đồng bộ Realtime
+  const [unreadDmCount, setUnreadDmCount] = useState(() => {
+    try {
+      const saved = localStorage.getItem('talovin_dm_unread');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return Object.values(parsed).reduce((a, b) => a + (Number(b) || 0), 0);
+      }
+    } catch (_) {}
+    return 0;
+  });
+
+  // Lắng nghe sự kiện cập nhật unread tin nhắn từ WebSocket hoặc tab khác
+  useEffect(() => {
+    const handleUnreadChange = (e) => {
+      const data = e.detail;
+      if (data && typeof data === 'object') {
+        const total = Object.values(data).reduce((a, b) => a + (Number(b) || 0), 0);
+        setUnreadDmCount(total);
+      }
+    };
+    const handleStorage = (e) => {
+      if (e.key === 'talovin_dm_unread') {
+        try {
+          const parsed = JSON.parse(e.newValue || '{}');
+          const total = Object.values(parsed).reduce((a, b) => a + (Number(b) || 0), 0);
+          setUnreadDmCount(total);
+        } catch (_) {}
+      }
+    };
+    window.addEventListener('talovin_unread_change', handleUnreadChange);
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      window.removeEventListener('talovin_unread_change', handleUnreadChange);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, []);
+
+  // Nạp và kiểm tra số tin nhắn chưa đọc từ các bạn bè khi vào Sảnh
+  useEffect(() => {
+    if (!currentUserId) return;
+    const syncDmUnread = async () => {
+      try {
+        const res = await axiosClient.get('/friends/list');
+        if (res?.data?.data && Array.isArray(res.data.data)) {
+          let count = 0;
+          const unreadMap = {};
+          await Promise.all(res.data.data.map(async (friend) => {
+            try {
+              const rRes = await axiosClient.get(`/message/direct/${friend.id}`).catch(() => null);
+              const roomId = rRes?.data?.data?.roomId;
+              if (roomId) {
+                const hRes = await axiosClient.get(`/message/${roomId}?size=10`).catch(() => null);
+                const msgs = hRes?.data?.data || [];
+                let friendUnread = 0;
+                for (let i = msgs.length - 1; i >= 0; i--) {
+                  if (msgs[i].userId?.toString() === friend.id?.toString()) {
+                    friendUnread++;
+                  } else {
+                    break;
+                  }
+                }
+                if (friendUnread > 0) {
+                  count += friendUnread;
+                  unreadMap[friend.id] = friendUnread;
+                }
+              }
+            } catch (_) {}
+          }));
+          setUnreadDmCount(count);
+          localStorage.setItem('talovin_dm_unread', JSON.stringify(unreadMap));
+        }
+      } catch (_) {}
+    };
+    syncDmUnread();
+  }, [currentUserId]);
+
   const unreadMessagesCount = useMemo(() => {
-    return notifications.filter(n => n.unread && (n.type === 'MESSAGE' || n.type === 'CHAT' || n.type === 'DM')).length;
-  }, [notifications]);
+    const notifCount = notifications.filter(n => n.unread && (n.type === 'MESSAGE' || n.type === 'CHAT' || n.type === 'DM')).length;
+    return notifCount + unreadDmCount;
+  }, [notifications, unreadDmCount]);
 
   // Đồng bộ nạp thông báo từ server khi currentUserId sẵn sàng
   const fetchNotifications = useCallback(async () => {
@@ -2751,7 +2829,7 @@ const Home = ({ initialTab }) => {
               >
                 <MessageCircle size={16} strokeWidth={1.6} />
                 {unreadMessagesCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] px-1 rounded-full bg-sky-500 text-white text-[9px] font-mono font-bold flex items-center justify-center border-2 border-zinc-950 shadow-sm animate-pulse">
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-mono font-bold flex items-center justify-center border-2 border-zinc-950 shadow-sm animate-pulse">
                     {unreadMessagesCount > 9 ? '9+' : unreadMessagesCount}
                   </span>
                 )}

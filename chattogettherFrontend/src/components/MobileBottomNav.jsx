@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Compass, Users, Radio, MessageSquare, User } from 'lucide-react';
 
@@ -10,6 +10,30 @@ export const MobileBottomNav = ({
   onSwitchTab = null
 }) => {
   const navigate = useNavigate();
+
+  const [localUnreadCount, setLocalUnreadCount] = useState(() => {
+    try {
+      const saved = localStorage.getItem('talovin_dm_unread');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return Object.values(parsed).reduce((a, b) => a + (Number(b) || 0), 0);
+      }
+    } catch (_) {}
+    return 0;
+  });
+
+  useEffect(() => {
+    const handleUnread = (e) => {
+      if (e.detail && typeof e.detail === 'object') {
+        const total = Object.values(e.detail).reduce((a, b) => a + (Number(b) || 0), 0);
+        setLocalUnreadCount(total);
+      }
+    };
+    window.addEventListener('talovin_unread_change', handleUnread);
+    return () => window.removeEventListener('talovin_unread_change', handleUnread);
+  }, []);
+
+  const effectiveUnreadMessages = Math.max(unreadMessagesCount, localUnreadCount);
 
   const handleSanhClick = () => {
     if (onSwitchTab) {
@@ -98,9 +122,9 @@ export const MobileBottomNav = ({
       >
         <div className="relative flex items-center justify-center">
           <MessageSquare size={18} strokeWidth={activeTab === 'messages' ? 2 : 1.5} />
-          {unreadMessagesCount > 0 && (
-            <span className="absolute -top-1 -right-1.5 min-w-[14px] h-[14px] px-0.5 rounded-full bg-sky-500 text-white text-[8px] font-mono font-bold flex items-center justify-center">
-              {unreadMessagesCount > 9 ? '9+' : unreadMessagesCount}
+          {effectiveUnreadMessages > 0 && (
+            <span className="absolute -top-1 -right-2 min-w-[16px] h-[16px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-mono font-bold flex items-center justify-center border-2 border-zinc-950 shadow-md animate-pulse">
+              {effectiveUnreadMessages > 9 ? '9+' : effectiveUnreadMessages}
             </span>
           )}
         </div>
