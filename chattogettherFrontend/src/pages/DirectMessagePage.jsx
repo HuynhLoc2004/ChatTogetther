@@ -243,6 +243,15 @@ export const DirectMessagePage = () => {
               const cached = cacheMap.get(String(rf.id));
               return cached ? { ...rf, ...cached, ...rf } : rf;
             });
+            // Giữ lại các cuộc hội thoại 1-1 đang mở dù chưa kết bạn hoặc chưa có trong bạn bè
+            prev.forEach(p => {
+              if (p && p.id && !currentList.some(f => String(f.id) === String(p.id))) {
+                currentList.push(p);
+              }
+            });
+            if (activePartnerRef.current && activePartnerRef.current.id && !currentList.some(f => String(f.id) === String(activePartnerRef.current.id))) {
+              currentList.unshift(activePartnerRef.current);
+            }
             return currentList;
           });
           setLoadingFriends(false);
@@ -866,6 +875,16 @@ export const DirectMessagePage = () => {
             setActivePartner(roomRes.data.data.targetUser);
           }
         }
+      }
+
+      if (!targetRoom && targetIdentifier) {
+        try {
+          const directFallback = await axiosClient.get(`/message/direct/${targetIdentifier}`);
+          targetRoom = directFallback?.data?.data?.roomId || directFallback?.data?.data?.id;
+          if (targetRoom) {
+            setActiveRoomId(targetRoom);
+          }
+        } catch (_) {}
       }
 
       // Xử lý tệp đính kèm: Nén ảnh hoặc đọc Base64
