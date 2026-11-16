@@ -283,10 +283,43 @@ export const DirectMessagePage = () => {
           let currentList = [];
           setFriends(prev => {
             const cacheMap = new Map(prev.map(f => [String(f.id), f]));
+            const unreadMapSaved = (() => {
+              try { return JSON.parse(localStorage.getItem('talovin_dm_unread') || '{}'); } catch (_) { return {}; }
+            })();
+
             currentList = convList.map(rf => {
               const cached = cacheMap.get(String(rf.id));
-              // Ưu tiên dữ liệu mới nhất từ server, giữ các field tạm thời nếu có
-              return cached ? { ...cached, ...rf } : rf;
+              let lastMsg = rf.lastMessage || cached?.lastMessage || null;
+              let lastTime = rf.lastMessageTime || cached?.lastMessageTime || null;
+              let lastFmt = rf.lastMessageFormattedTime || cached?.lastMessageFormattedTime || '';
+
+              // Nạp từ bộ nhớ tin nhắn cục bộ nếu chưa có để đảm bảo vị trí luôn chuẩn xác từ đầu
+              if (!lastTime) {
+                try {
+                  const localRaw = localStorage.getItem(`talovin_dm_msgs_${rf.id}`);
+                  if (localRaw) {
+                    const parsed = JSON.parse(localRaw);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                      const lm = parsed[parsed.length - 1];
+                      lastMsg = lm.message || (lm.mediaType === 'IMAGE' ? '[Hình ảnh]' : '[Tệp tin]');
+                      lastTime = lm.timeSend || null;
+                      lastFmt = lm.formattedTime || (lastTime ? new Date(lastTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '');
+                    }
+                  }
+                } catch (_) { }
+              }
+
+              const realUnread = Number(unreadMapSaved[rf.id]) || Number(unreadMapSaved[String(rf.id)]) || 0;
+
+              return {
+                ...cached,
+                ...rf,
+                lastMessage: lastMsg,
+                lastMessageTime: lastTime,
+                lastMessageFormattedTime: lastFmt,
+                unreadCount: realUnread,
+                hasUnread: realUnread > 0
+              };
             });
 
             // Giữ lại các cuộc hội thoại 1-1 đang mở dù chưa có trong danh sách
@@ -386,12 +419,18 @@ export const DirectMessagePage = () => {
       return next;
     });
 
-    setFriends(prev => prev.map(f => {
-      if (f.id?.toString() === targetId?.toString() || (fallbackPartner && f.id === fallbackPartner.id)) {
-        return { ...f, hasUnread: false, unreadCount: 0 };
-      }
-      return f;
-    }));
+    setFriends(prev => {
+      const nextList = prev.map(f => {
+        if (f.id?.toString() === targetId?.toString() || (fallbackPartner && f.id === fallbackPartner.id)) {
+          return { ...f, hasUnread: false, unreadCount: 0 };
+        }
+        return f;
+      });
+      try {
+        localStorage.setItem('talovin_dm_friends_cache', JSON.stringify(nextList));
+      } catch (_) { }
+      return nextList;
+    });
 
     // Kiểm tra thông tin partner dự phòng từ props, friends state hoặc cache localStorage
     let effectivePartner = fallbackPartner;
@@ -534,19 +573,26 @@ export const DirectMessagePage = () => {
             if (lastMsg.userId?.toString() === targetId.toString()) {
               markUserActive(targetId);
             }
-            setFriends(prev => prev.map(f => {
-              if (f.id?.toString() === targetId.toString() || (effectivePartner && f.id?.toString() === effectivePartner.id?.toString())) {
-                return {
-                  ...f,
-                  directRoomId: roomId,
-                  lastMessage: lastMsg.message,
-                  lastMessageTime: lastMsg.timeSend || new Date().toISOString(),
-                  lastMessageFormattedTime: lastMsg.formattedTime,
-                  hasUnread: false
-                };
-              }
-              return f;
-            }));
+            setFriends(prev => {
+              const nextList = prev.map(f => {
+                if (f.id?.toString() === targetId.toString() || (effectivePartner && f.id?.toString() === effectivePartner.id?.toString())) {
+                  return {
+                    ...f,
+                    directRoomId: roomId,
+                    lastMessage: lastMsg.message,
+                    lastMessageTime: lastMsg.timeSend || f.lastMessageTime || new Date().toISOString(),
+                    lastMessageFormattedTime: lastMsg.formattedTime || f.lastMessageFormattedTime,
+                    hasUnread: false,
+                    unreadCount: 0
+                  };
+                }
+                return f;
+              });
+              try {
+                localStorage.setItem('talovin_dm_friends_cache', JSON.stringify(nextList));
+              } catch (_) { }
+              return nextList;
+            });
           }
         }
       } else if (!effectivePartner) {
@@ -1190,8 +1236,8 @@ export const DirectMessagePage = () => {
               filteredConversations.map((partner) => {
                 const partnerIdStr = partner.id?.toString();
                 const isSelected = activePartner?.id?.toString() === partnerIdStr;
-                const unreadCount = unreadMap[partner.id] || unreadMap[partnerIdStr] || (partner.hasUnread && !isSelected ? 1 : 0);
-                const isUnread = unreadCount > 0;
+                const unreadCount = Number(unreadMap[partner.id]) || Number(unreadMap[partnerIdStr]) || (Number(partner.unreadCount) && !isSelected ? Number(partner.unreadCount) : 0);
+                const isUnread = !isSelected && unreadCount > 0;
 
                 // Trạng thái online: Nhanh nhạy & chuẩn xác theo thời gian thực
                 const isPartnerOnline = isUserOnline(partner.id);

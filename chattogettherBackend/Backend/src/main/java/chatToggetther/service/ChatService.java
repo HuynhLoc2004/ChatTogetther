@@ -424,7 +424,9 @@ public class ChatService {
                         Long u2 = Long.parseLong(parts[2]);
                         if (myId.equals(u1) || myId.equals(u2)) {
                             Long partnerId = myId.equals(u1) ? u2 : u1;
-                            partnerToRoomMap.put(partnerId, r);
+                            if (!partnerToRoomMap.containsKey(partnerId)) {
+                                partnerToRoomMap.put(partnerId, r);
+                            }
                             dmRoomIds.add(r.getId());
 
                             // Nếu người này chưa có trong partnersMap (chưa kết bạn nhưng từng nhắn tin 1-1)

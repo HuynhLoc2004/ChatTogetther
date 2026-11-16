@@ -27,7 +27,7 @@ public interface RoomRepository extends JpaRepository<RoomEntity , Long> {
            "(SELECT ur.roomEntity.id FROM UserRoomEntity ur WHERE ur.active = true)")
     List<RoomEntity> findAllEmptyRooms();
 
-    @Query("SELECT r FROM RoomEntity r WHERE r.password LIKE 'DM\\_%' ESCAPE '\\'")
+    @Query("SELECT r FROM RoomEntity r WHERE r.password LIKE 'DM%' ORDER BY r.id DESC")
     List<RoomEntity> findAllDmRooms();
 
     List<RoomEntity> findAllByPasswordOrderByIdDesc(String password);
