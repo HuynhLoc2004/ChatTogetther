@@ -1071,7 +1071,8 @@ export const DirectMessagePage = () => {
                         toast.error("Không tìm thấy thông tin đối phương để gọi!");
                         return;
                       }
-                      navigate(`/call/direct/${safeCallTargetId}?type=audio`);
+                      const currentFrom = encodeURIComponent(location.pathname + (location.search || ''));
+                      navigate(`/call/direct/${safeCallTargetId}?type=audio&from=${currentFrom}`);
                     }}
                     className="h-9 px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-medium flex items-center gap-1.5 transition-colors active:scale-[0.98]"
                     title="Bắt đầu cuộc gọi thoại"
@@ -1087,7 +1088,8 @@ export const DirectMessagePage = () => {
                         toast.error("Không tìm thấy thông tin đối phương để gọi!");
                         return;
                       }
-                      navigate(`/call/direct/${safeCallTargetId}?type=video`);
+                      const currentFrom = encodeURIComponent(location.pathname + (location.search || ''));
+                      navigate(`/call/direct/${safeCallTargetId}?type=video&from=${currentFrom}`);
                     }}
                     className="h-9 px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-medium flex items-center gap-1.5 transition-colors active:scale-[0.98]"
                     title="Bắt đầu cuộc gọi video"
@@ -1122,9 +1124,9 @@ export const DirectMessagePage = () => {
                   messages.map((msg, index) => {
                     const isMe = msg.userId?.toString() === currentUserId?.toString();
                     const rawText = msg.message || '';
-                    const isCallLog = rawText.startsWith('📞') || rawText.startsWith('📹');
-                    const isMissed = isCallLog && rawText.includes('nhỡ');
-                    const isVideo = isCallLog && rawText.startsWith('📹');
+                    const isCallLog = rawText.includes('Cuộc gọi') || rawText.startsWith('📞') || rawText.startsWith('📹');
+                    const isMissed = isCallLog && (rawText.includes('nhỡ') || rawText.includes('từ chối'));
+                    const isVideo = isCallLog && (rawText.includes('video') || rawText.startsWith('📹'));
 
                     // Tách thông tin Reply nếu có format [REPLY:id|sender]: content
                     let replyInfo = msg.replyTo;
@@ -1152,20 +1154,49 @@ export const DirectMessagePage = () => {
                     const reactionEntries = Object.entries(msgReactions).filter(([_, count]) => count > 0);
 
                     if (isCallLog) {
+                      const cleanCallText = rawText
+                        .replace(/^[📞📹\uFFFD\?🔹⯁\s]+/g, '')
+                        .trim() || (isVideo ? 'Cuộc gọi video' : 'Cuộc gọi thoại');
+                      const timeStr = msg.formattedTime || (msg.timeSend ? new Date(msg.timeSend).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '');
+
                       return (
-                        <div key={msg.id || index} className="w-full flex justify-center my-1.5">
-                          <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-zinc-900 border border-zinc-800 text-[11px] font-medium text-zinc-300 shadow-sm">
-                            {isMissed ? (
-                              <PhoneMissed size={13} className="text-rose-400 shrink-0" />
-                            ) : isVideo ? (
-                              <Video size={13} className="text-emerald-400 shrink-0" />
-                            ) : (
-                              <PhoneCall size={13} className="text-emerald-400 shrink-0" />
+                        <div 
+                          key={msg.id || index} 
+                          className={`w-full flex ${isMe ? 'justify-end' : 'justify-start'} my-2`}
+                        >
+                          <div 
+                            className={`flex items-center gap-3 px-4 py-2.5 rounded-2xl shadow-sm text-xs transition-all ${
+                              isMe 
+                                ? 'bg-zinc-800 text-zinc-100 rounded-tr-sm border border-zinc-700/60' 
+                                : 'bg-zinc-900 text-zinc-200 rounded-tl-sm border border-zinc-800/80'
+                            }`}
+                          >
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                              isMissed ? 'bg-rose-500/15 text-rose-400' : 'bg-zinc-700/50 text-emerald-400'
+                            }`}>
+                              {isMissed ? (
+                                <PhoneMissed size={14} />
+                              ) : isVideo ? (
+                                <Video size={14} />
+                              ) : (
+                                <PhoneCall size={14} />
+                              )}
+                            </div>
+                            <div className="flex flex-col min-w-[120px]">
+                              <span className="font-semibold text-xs tracking-tight text-zinc-100">
+                                {cleanCallText}
+                              </span>
+                              <span className="text-[10px] text-zinc-400 font-normal">
+                                {isMissed 
+                                  ? (isMe ? 'Đối phương nhỡ cuộc gọi' : 'Cuộc gọi nhỡ') 
+                                  : (isMe ? 'Cuộc gọi đi' : 'Cuộc gọi đến')}
+                              </span>
+                            </div>
+                            {timeStr && (
+                              <span className="text-[10px] font-mono text-zinc-400 ml-2 self-end shrink-0">
+                                {timeStr}
+                              </span>
                             )}
-                            <span>{rawText.replace(/^[📞📹]\s*/, '')}</span>
-                            <span className="text-[10px] font-mono text-zinc-500 ml-1">
-                              {msg.formattedTime || (msg.timeSend ? new Date(msg.timeSend).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '')}
-                            </span>
                           </div>
                         </div>
                       );
@@ -1566,7 +1597,8 @@ export const DirectMessagePage = () => {
                 const isVid = Boolean(incomingCall.isVideo);
                 const callerId = incomingCall.callerId;
                 setIncomingCall(null);
-                navigate(`/call/direct/${callerId}?video=${isVid}&incoming=true&autoAnswer=true`);
+                const currentFrom = encodeURIComponent(location.pathname + (location.search || ''));
+                navigate(`/call/direct/${callerId}?video=${isVid}&incoming=true&autoAnswer=true&from=${currentFrom}`);
               }}
               className="h-9 px-4 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs flex items-center gap-1.5 transition-colors"
             >

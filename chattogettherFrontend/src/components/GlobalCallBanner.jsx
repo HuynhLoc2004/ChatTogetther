@@ -13,6 +13,8 @@ const GlobalCallBanner = () => {
   const stompClient = useRef(null);
   const ringAudioCtx = useRef(null);
   const ringOscillator = useRef(null);
+  const ringGain = useRef(null);
+  const ringInterval = useRef(null);
   const autoDismissTimer = useRef(null);
 
   const [effectiveUserId, setEffectiveUserId] = useState(() => localStorage.getItem('user_id'));
@@ -39,6 +41,19 @@ const GlobalCallBanner = () => {
   // 1. Play Synthesized Ringtone
   const startRingingSound = useCallback(() => {
     try {
+      if (ringInterval.current) {
+        clearInterval(ringInterval.current);
+        ringInterval.current = null;
+      }
+      if (ringOscillator.current) {
+        try { ringOscillator.current.stop(); ringOscillator.current.disconnect(); } catch (_) {}
+        ringOscillator.current = null;
+      }
+      if (ringAudioCtx.current) {
+        try { ringAudioCtx.current.close(); } catch (_) {}
+        ringAudioCtx.current = null;
+      }
+
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (!AudioCtx) return;
       const ctx = new AudioCtx();
@@ -46,6 +61,7 @@ const GlobalCallBanner = () => {
 
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
+      ringGain.current = gain;
       osc.type = 'triangle';
       osc.frequency.setValueAtTime(520, ctx.currentTime);
       gain.gain.setValueAtTime(0.06, ctx.currentTime);
@@ -57,28 +73,39 @@ const GlobalCallBanner = () => {
 
       // Pulse ringtone pattern
       let toggle = true;
-      const interval = setInterval(() => {
-        if (!ringAudioCtx.current) {
-          clearInterval(interval);
+      ringInterval.current = setInterval(() => {
+        if (!ringAudioCtx.current || ringAudioCtx.current.state === 'closed') {
+          if (ringInterval.current) {
+            clearInterval(ringInterval.current);
+            ringInterval.current = null;
+          }
           return;
         }
         toggle = !toggle;
-        gain.gain.setValueAtTime(toggle ? 0.06 : 0, ctx.currentTime);
+        try {
+          gain.gain.setValueAtTime(toggle ? 0.06 : 0, ctx.currentTime);
+        } catch (_) {}
       }, 1000);
-
-      return () => clearInterval(interval);
     } catch (e) {}
   }, []);
 
   const stopRingingSound = useCallback(() => {
     try {
+      if (ringInterval.current) {
+        clearInterval(ringInterval.current);
+        ringInterval.current = null;
+      }
+      if (ringGain.current) {
+        try { ringGain.current.gain.setValueAtTime(0, ringAudioCtx.current?.currentTime || 0); } catch (_) {}
+        ringGain.current = null;
+      }
       if (ringOscillator.current) {
-        ringOscillator.current.stop();
-        ringOscillator.current.disconnect();
+        try { ringOscillator.current.stop(); } catch (_) {}
+        try { ringOscillator.current.disconnect(); } catch (_) {}
         ringOscillator.current = null;
       }
       if (ringAudioCtx.current) {
-        ringAudioCtx.current.close();
+        try { ringAudioCtx.current.close(); } catch (_) {}
         ringAudioCtx.current = null;
       }
     } catch (e) {}
@@ -180,10 +207,11 @@ const GlobalCallBanner = () => {
     clearDismissTimer();
     setIncomingCall(null);
 
+    const currentFrom = encodeURIComponent((location.pathname + (location.search || '')) || '/');
     if (roomId) {
-      navigate(`/call/room/${roomId}?type=${isVid ? 'video' : 'audio'}&autoAnswer=true`);
+      navigate(`/call/room/${roomId}?type=${isVid ? 'video' : 'audio'}&autoAnswer=true&from=${currentFrom}`);
     } else if (callerId) {
-      navigate(`/call/direct/${callerId}?type=${isVid ? 'video' : 'audio'}&autoAnswer=true`);
+      navigate(`/call/direct/${callerId}?type=${isVid ? 'video' : 'audio'}&autoAnswer=true&from=${currentFrom}`);
     }
   };
 

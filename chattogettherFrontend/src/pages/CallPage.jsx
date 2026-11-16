@@ -58,6 +58,8 @@ const CallPage = () => {
   const dmRoomIdRef = useRef(null);
   const audioContextRef = useRef(null);
   const ringOscillatorRef = useRef(null);
+  const ringGainRef = useRef(null);
+  const ringIntervalRef = useRef(null);
   const isCallEndedRef = useRef(false);
 
   // Sync duration ref
@@ -113,9 +115,34 @@ const CallPage = () => {
   };
 
   // 3. Ring audio sound generator (Web Audio API)
-  const startRingAudio = useCallback(() => {
+  const stopRingAudio = useCallback(() => {
     try {
-      if (isIncoming) return;
+      if (ringIntervalRef.current) {
+        clearInterval(ringIntervalRef.current);
+        ringIntervalRef.current = null;
+      }
+      if (ringGainRef.current) {
+        try { ringGainRef.current.gain.setValueAtTime(0, audioContextRef.current?.currentTime || 0); } catch (_) {}
+        ringGainRef.current = null;
+      }
+      if (ringOscillatorRef.current) {
+        try { ringOscillatorRef.current.stop(); } catch (_) {}
+        try { ringOscillatorRef.current.disconnect(); } catch (_) {}
+        ringOscillatorRef.current = null;
+      }
+      if (audioContextRef.current) {
+        try { audioContextRef.current.close(); } catch (_) {}
+        audioContextRef.current = null;
+      }
+    } catch (e) {}
+  }, []);
+
+  const startRingAudio = useCallback(() => {
+    if (isIncoming || isConnected) return;
+    try {
+      // Dọn dẹp phiên âm thanh cũ nếu còn
+      stopRingAudio();
+
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (!AudioCtx) return;
       const ctx = new AudioCtx();
@@ -123,6 +150,8 @@ const CallPage = () => {
 
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
+      ringGainRef.current = gain;
+
       osc.type = 'sine';
       osc.frequency.setValueAtTime(440, ctx.currentTime);
       gain.gain.setValueAtTime(0.04, ctx.currentTime);
@@ -134,32 +163,21 @@ const CallPage = () => {
 
       // Pulse ringtone
       let beeping = true;
-      const interval = setInterval(() => {
-        if (!audioContextRef.current) {
-          clearInterval(interval);
+      ringIntervalRef.current = setInterval(() => {
+        if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+          if (ringIntervalRef.current) {
+            clearInterval(ringIntervalRef.current);
+            ringIntervalRef.current = null;
+          }
           return;
         }
         beeping = !beeping;
-        gain.gain.setValueAtTime(beeping ? 0.04 : 0, ctx.currentTime);
+        try {
+          gain.gain.setValueAtTime(beeping ? 0.04 : 0, ctx.currentTime);
+        } catch (_) {}
       }, 1400);
-
-      return () => clearInterval(interval);
     } catch (e) {}
-  }, [isIncoming]);
-
-  const stopRingAudio = useCallback(() => {
-    try {
-      if (ringOscillatorRef.current) {
-        ringOscillatorRef.current.stop();
-        ringOscillatorRef.current.disconnect();
-        ringOscillatorRef.current = null;
-      }
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-        audioContextRef.current = null;
-      }
-    } catch (e) {}
-  }, []);
+  }, [isIncoming, isConnected, stopRingAudio]);
 
   // 4. Cleanup Call Resources
   const cleanupCall = useCallback(() => {
@@ -214,22 +232,29 @@ const CallPage = () => {
     }
   }, [currentUserId, currentUserName, currentUserAvatar, isDirectCall, isRoomCall, userId, roomId]);
 
-  // 6. End Call Handler & Auto Post Call Log to Chat
-  const endCall = useCallback(async (shouldSendSignal = true) => {
+  // 6. End Call Handler & Auto Post Call Log to Chat (Zero-Lag Navigation)
+  const endCall = useCallback((shouldSendSignal = true) => {
     if (isCallEndedRef.current) return;
     isCallEndedRef.current = true;
 
+    // Ngắt chuông và giải phóng tài nguyên tức thì
     stopRingAudio();
+    const durationSecs = durationRef.current;
+    const isVideo = Boolean(isVideoParam || isVideoCall);
+
     if (shouldSendSignal) {
-      sendCallSignal({ type: 'END' });
+      sendCallSignal({ 
+        type: 'END', 
+        duration: durationSecs, 
+        isVideo 
+      });
     }
 
-    const durationSecs = durationRef.current;
+    const wasConnectedWs = stompClient.current && stompClient.current.connected;
     cleanupCall();
 
-    // Tự động lưu lịch sử cuộc gọi vào đoạn chat
-    try {
-      const isVideo = isVideoParam || isVideoCall;
+    // Fallback lưu lịch sử cuộc gọi qua HTTP nếu WebSocket bị mất kết nối (tránh trùng lặp)
+    if (!isIncoming && !wasConnectedWs) {
       const durationStr = formatTime(durationSecs);
       let callMsg = '';
 
@@ -239,48 +264,49 @@ const CallPage = () => {
         } else {
           callMsg = isVideo ? `📹 Cuộc gọi video bị nhỡ` : `📞 Cuộc gọi thoại bị nhỡ`;
         }
-        let targetRoom = dmRoomIdRef.current;
-        if (!targetRoom) {
+        
+        (async () => {
           try {
-            const directRoomRes = await axiosClient.get(`/message/direct/${userId}`);
-            targetRoom = directRoomRes?.data?.data?.roomId;
-            dmRoomIdRef.current = targetRoom;
+            let targetRoom = dmRoomIdRef.current;
+            if (!targetRoom) {
+              const directRoomRes = await axiosClient.get(`/message/direct/${userId}`);
+              targetRoom = directRoomRes?.data?.data?.roomId;
+            }
+            if (targetRoom) {
+              await axiosClient.post('/message/send', {
+                message: callMsg,
+                timeSend: new Date().toISOString()
+              }, { params: { user_room: targetRoom } });
+            }
           } catch (_) {}
-        }
-        if (targetRoom) {
-          try {
-            await axiosClient.post('/message/send', {
-              message: callMsg,
-              timeSend: new Date().toISOString()
-            }, { params: { user_room: targetRoom } });
-          } catch (_) {}
-        }
+        })();
       } else if (isRoomCall && roomId) {
         if (durationSecs > 0) {
           callMsg = isVideo ? `📹 Cuộc gọi video nhóm đã kết thúc (${durationStr})` : `📞 Cuộc gọi thoại nhóm đã kết thúc (${durationStr})`;
         } else {
           callMsg = isVideo ? `📹 Cuộc gọi video nhóm đã kết thúc` : `📞 Cuộc gọi thoại nhóm đã kết thúc`;
         }
-        try {
-          await axiosClient.post('/message/send', {
-            message: callMsg,
-            timeSend: new Date().toISOString()
-          }, { params: { user_room: roomId } });
-        } catch (_) {}
+        axiosClient.post('/message/send', {
+          message: callMsg,
+          timeSend: new Date().toISOString()
+        }, { params: { user_room: roomId } }).catch(() => {});
       }
-    } catch (e) {
-      console.warn("Lỗi lưu lịch sử cuộc gọi:", e);
     }
 
-    // Quay lại màn hình trước đó
-    if (isDirectCall && userId) {
+    // Quay lại màn hình xuất phát ngay lập tức (không chờ đợi)
+    const fromParam = searchParams.get('from');
+    if (fromParam) {
+      navigate(decodeURIComponent(fromParam), { replace: true });
+    } else if (window.history.length > 2) {
+      navigate(-1);
+    } else if (isDirectCall && userId) {
       navigate(`/messages/${userId}`, { replace: true });
     } else if (isRoomCall && roomId) {
       navigate(`/room/${roomId}`, { replace: true });
     } else {
-      navigate(-1);
+      navigate('/', { replace: true });
     }
-  }, [sendCallSignal, cleanupCall, stopRingAudio, isVideoParam, isVideoCall, isDirectCall, isRoomCall, userId, roomId, navigate]);
+  }, [sendCallSignal, cleanupCall, stopRingAudio, isIncoming, isVideoParam, isVideoCall, isDirectCall, isRoomCall, userId, roomId, searchParams, navigate]);
 
   // 7. Handle Signal Incoming
   const handleCallSignal = useCallback(async (msg) => {
@@ -299,7 +325,7 @@ const CallPage = () => {
         console.error("Lỗi xử lý OFFER:", e);
       }
     } else if (msg.type === 'ACCEPT') {
-      // Đối phương đã bấm nghe máy -> Caller gửi ngay OFFER
+      // Đối phương đã bấm nghe máy -> Dừng ngay chuông chờ và gửi OFFER
       try {
         stopRingAudio();
         setCallStatusText('Đối phương đã nhận máy. Đang kết nối...');
@@ -334,12 +360,13 @@ const CallPage = () => {
       stopRingAudio();
       setCallStatusText('Đối phương hiện đang bận hoặc từ chối');
       toast.error('Đối phương hiện đang bận hoặc không thể bắt máy!');
-      setTimeout(() => endCall(false), 2000);
+      setTimeout(() => endCall(false), 1500);
     } else if (msg.type === 'END') {
       stopRingAudio();
       setCallStatusText('Cuộc gọi đã kết thúc');
       toast('Đối phương đã kết thúc cuộc gọi.');
-      setTimeout(() => endCall(false), 1200);
+      // Kết thúc ngay lập tức, không chờ trễ
+      endCall(false);
     }
   }, [currentUserId, sendCallSignal, stopRingAudio, isVideoParam, endCall]);
 
@@ -625,23 +652,23 @@ const CallPage = () => {
       {/* ============================================================== */}
       {/* 2. KHU VỰC LIVE CALL STAGE (GRID TẤM HÌNH / AVATAR) */}
       {/* ============================================================== */}
-      <main className="flex-1 p-4 sm:p-6 overflow-hidden flex items-center justify-center relative bg-zinc-950">
-        <div className="w-full max-w-4xl h-full flex flex-col sm:flex-row items-center justify-center gap-4 relative">
+      <main className="flex-1 p-3 sm:p-6 overflow-hidden flex items-center justify-center relative bg-zinc-950">
+        <div className="w-full max-w-4xl h-full flex items-center justify-center relative">
           
           {/* Card Remote (Đối phương / Các thành viên) */}
-          <div className="w-full h-full flex-1 bg-zinc-900/60 border border-zinc-800 rounded-3xl overflow-hidden relative flex items-center justify-center shadow-2xl backdrop-blur-sm">
+          <div className="w-full h-full bg-zinc-900/60 border border-zinc-800 rounded-3xl overflow-hidden relative shadow-2xl backdrop-blur-sm">
             {isVideoCall ? (
               <video 
                 ref={remoteVideoRef} 
                 autoPlay 
                 playsInline 
-                className="w-full h-full object-cover"
+                className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${isConnected ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
               />
             ) : null}
 
             {/* Trạng thái nếu không có video hoặc đang đàm thoại Audio */}
             {(!isVideoCall || !isConnected) && (
-              <div className="flex flex-col items-center gap-4 z-10 p-6 text-center animate-in fade-in duration-300">
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 z-10 p-6 text-center animate-in fade-in duration-300">
                 <div className="relative">
                   {/* Vòng lan tỏa âm thanh mềm mại */}
                   {!isConnected && (
@@ -651,6 +678,7 @@ const CallPage = () => {
                     <UserAvatar 
                       avatar={displayAvatar} 
                       name={displayName} 
+                      username={partnerProfile?.account || displayName}
                       size={144} 
                       className="w-full h-full object-cover rounded-full" 
                     />
@@ -676,7 +704,7 @@ const CallPage = () => {
             )}
 
             {/* Khung Local Video nhỏ ở góc (Picture in Picture) */}
-            <div className="absolute bottom-4 right-4 w-28 h-36 sm:w-32 sm:h-44 rounded-2xl overflow-hidden border border-zinc-800 bg-zinc-950/90 shadow-2xl z-20 backdrop-blur-md">
+            <div className="absolute bottom-4 right-4 w-28 h-36 sm:w-36 sm:h-48 rounded-2xl overflow-hidden border border-zinc-700/80 bg-zinc-950/95 shadow-2xl z-20 backdrop-blur-md transition-all">
               {isVideoCall && isVideoEnabled ? (
                 <video 
                   ref={localVideoRef} 
@@ -690,6 +718,7 @@ const CallPage = () => {
                   <UserAvatar 
                     avatar={currentUserAvatar} 
                     name={currentUserName} 
+                    username={currentUserName}
                     size={40} 
                     className="w-10 h-10 rounded-full"
                   />
