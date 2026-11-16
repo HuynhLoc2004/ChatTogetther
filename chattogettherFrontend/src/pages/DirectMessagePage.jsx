@@ -192,6 +192,8 @@ export const DirectMessagePage = () => {
 
   // Refs
   const stompClient = useRef(null);
+  const roomSubRef = useRef(null);
+  const handleIncomingDirectMsgRef = useRef(null);
   const messagesEndRef = useRef(null);
   const scrollContainerRef = useRef(null);
   const messagesCacheRef = useRef(new Map()); // Cache tin nhắn in-memory để chuyển đổi hội thoại 0ms tức thì
@@ -428,7 +430,7 @@ export const DirectMessagePage = () => {
             messagesCacheRef.current.set(String(targetId), cachedMessages);
           }
         }
-      } catch (_) {}
+      } catch (_) { }
     }
 
     if (cachedMessages && Array.isArray(cachedMessages) && cachedMessages.length > 0) {
@@ -521,7 +523,7 @@ export const DirectMessagePage = () => {
           try {
             localStorage.setItem(`talovin_dm_msgs_${targetId}`, JSON.stringify(fetchedMsgs.slice(-50)));
             if (roomId) localStorage.setItem(`talovin_dm_msgs_${roomId}`, JSON.stringify(fetchedMsgs.slice(-50)));
-          } catch (_) {}
+          } catch (_) { }
           setTimeout(() => scrollToBottom(false), 50);
 
           // Cập nhật preview tin nhắn cuối cùng và đánh dấu hoạt động nếu tin nhắn mới
@@ -600,7 +602,7 @@ export const DirectMessagePage = () => {
       const connectHeaders = { userId: String(currentUserId) };
       if (token) connectHeaders['Authorization'] = `Bearer ${token}`;
 
-      // Xử lý thống nhất mọi tin nhắn 1-1 realtime
+      // Xử lý thống nhất mọi tin nhắn 1-1 realtime (Loại bỏ triệt để tin nhắn trùng lặp)
       const handleIncomingDirectMsg = (rawPayload) => {
         try {
           const newMsg = typeof rawPayload === 'string' ? JSON.parse(rawPayload) : rawPayload;
@@ -616,15 +618,25 @@ export const DirectMessagePage = () => {
             markUserActive(senderId);
           }
 
-          // Đánh dấu người gửi đang hoạt động ngay lập tức
-          if (senderId) {
-            markUserActive(senderId);
-          }
-
           // 1. Nếu đang mở đúng hội thoại này hoặc là tin nhắn do chính mình gửi
           if (isCurrentChat || isFromMe) {
             setMessages(prev => {
-              if (prev.some(m => m.id === newMsg.id)) return prev;
+              // Chống trùng lặp 1: Trùng ID hệ thống
+              if (newMsg.id && prev.some(m => String(m.id) === String(newMsg.id))) {
+                return prev;
+              }
+
+              // Chống trùng lặp 2: Trùng nội dung từ cùng người gửi trong vòng 5 giây
+              const isDuplicate = prev.some(m =>
+                !m.pending &&
+                String(m.senderId || m.userId) === String(senderId) &&
+                m.message === newMsg.message &&
+                Math.abs(new Date(m.timeSend || 0).getTime() - new Date(newMsg.timeSend || 0).getTime()) < 5000
+              );
+              if (isDuplicate) {
+                return prev;
+              }
+
               const hasPending = prev.some(m => m.pending && m.message === newMsg.message);
               let nextList;
               if (hasPending) {
@@ -694,27 +706,32 @@ export const DirectMessagePage = () => {
         }
       };
 
+      handleIncomingDirectMsgRef.current = handleIncomingDirectMsg;
+
       client.connect(connectHeaders, () => {
         // 1. Nhận tin nhắn 1-1 trực tiếp qua /topic/messages/{currentUserId}
         client.subscribe(`/topic/messages/${currentUserId}`, (frame) => {
           handleIncomingDirectMsg(frame.body);
         });
 
-        // 2. Nhận alert tin nhắn /topic/room-alerts/{currentUserId}
+        // 2. Nhận alert tin nhắn /topic/room-alerts/{currentUserId} (Chỉ cập nhật badge unread ngoài lề, TUYỆT ĐỐI không chèn vào messages)
         client.subscribe(`/topic/room-alerts/${currentUserId}`, (frame) => {
           try {
             const alert = JSON.parse(frame.body);
             if (alert.isDirect && alert.senderId) {
-              handleIncomingDirectMsg({
-                id: alert.messageId || Date.now(),
-                message: alert.contentPreview,
-                senderId: alert.senderId,
-                userId: alert.senderId,
-                nickname: alert.senderDisplayName || alert.senderUsername,
-                senderUsername: alert.senderUsername,
-                senderAvatar: alert.senderAvatar,
-                timeSend: alert.createdAt || new Date().toISOString()
-              });
+              const sid = String(alert.senderId);
+              const currentActivePartnerId = activePartnerRef.current?.id?.toString();
+              const isCurrent = currentActivePartnerId && String(currentActivePartnerId) === sid;
+              if (!isCurrent) {
+                setUnreadMap(prev => {
+                  const next = { ...prev, [sid]: (Number(prev[sid]) || 0) + 1 };
+                  try {
+                    localStorage.setItem('talovin_dm_unread', JSON.stringify(next));
+                    window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: next }));
+                  } catch (_) { }
+                  return next;
+                });
+              }
             }
           } catch (_) { }
         });
@@ -724,10 +741,13 @@ export const DirectMessagePage = () => {
           handleIncomingDirectMsg(message.body);
         });
 
-        // 4. Đăng ký phòng DM đang mở nếu có
+        // 4. Đăng ký phòng DM đang mở nếu có (Duy nhất 1 subscription)
         if (activeRoomIdRef.current) {
           try {
-            roomSub = client.subscribe(`/topic/room/${activeRoomIdRef.current}`, (message) => {
+            if (roomSubRef.current) {
+              try { roomSubRef.current.unsubscribe(); } catch (_) { }
+            }
+            roomSubRef.current = client.subscribe(`/topic/room/${activeRoomIdRef.current}`, (message) => {
               handleIncomingDirectMsg(message.body);
             });
           } catch (_) { }
@@ -738,8 +758,9 @@ export const DirectMessagePage = () => {
     }
 
     return () => {
-      if (roomSub) {
-        try { roomSub.unsubscribe(); } catch (_) { }
+      if (roomSubRef.current) {
+        try { roomSubRef.current.unsubscribe(); } catch (_) { }
+        roomSubRef.current = null;
       }
       if (client && client.connected) {
         client.disconnect();
@@ -747,37 +768,26 @@ export const DirectMessagePage = () => {
     };
   }, [currentUserId, scrollToBottom, markUserActive]);
 
-  // Đăng ký lại topic room khi chuyển sang phòng khác
+  // Đăng ký lại topic room khi chuyển sang phòng khác (Đảm bảo duy nhất 1 subscription qua roomSubRef)
   useEffect(() => {
     if (!activeRoomId || !stompClient.current || !stompClient.current.connected) return;
-    let sub = null;
     try {
-      sub = stompClient.current.subscribe(`/topic/room/${activeRoomId}`, (message) => {
-        try {
-          const newMsg = JSON.parse(message.body);
-          const isFromMe = newMsg.userId?.toString() === currentUserId?.toString();
-          setMessages(prev => {
-            if (prev.some(m => m.id === newMsg.id)) return prev;
-            const hasPending = prev.some(m => m.pending && m.message === newMsg.message);
-            if (hasPending) {
-              return prev.map(m => (m.pending && m.message === newMsg.message) ? newMsg : m);
-            }
-            return [...prev, newMsg];
-          });
-          if (!isFromMe) {
-            playMessageIncoming();
-          }
-          setTimeout(() => scrollToBottom(true), 60);
-        } catch (_) { }
+      if (roomSubRef.current) {
+        try { roomSubRef.current.unsubscribe(); } catch (_) { }
+        roomSubRef.current = null;
+      }
+      roomSubRef.current = stompClient.current.subscribe(`/topic/room/${activeRoomId}`, (message) => {
+        handleIncomingDirectMsgRef.current?.(message.body);
       });
     } catch (_) { }
 
     return () => {
-      if (sub) {
-        try { sub.unsubscribe(); } catch (_) { }
+      if (roomSubRef.current) {
+        try { roomSubRef.current.unsubscribe(); } catch (_) { }
+        roomSubRef.current = null;
       }
     };
-  }, [activeRoomId, currentUserId, scrollToBottom]);
+  }, [activeRoomId]);
 
   // 4. Chọn file hình ảnh / video
   const handleSelectMedia = (e) => {
