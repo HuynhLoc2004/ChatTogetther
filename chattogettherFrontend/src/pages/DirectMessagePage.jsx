@@ -260,6 +260,35 @@ export const DirectMessagePage = () => {
     } catch (_) { }
   }, [reactionsMap]);
 
+  // Lắng nghe sự kiện tin nhắn/call log mới tức thì từ các trang khác (ví dụ: CallPage, GlobalCallBanner)
+  useEffect(() => {
+    const handleLocalNewMessage = (e) => {
+      const newMsg = e.detail;
+      if (!newMsg) return;
+      const targetIdStr = String(urlTargetUserId || activePartnerRef.current?.id || '');
+      const msgSenderStr = String(newMsg.senderId || newMsg.userId || '');
+      const msgTargetStr = String(newMsg.targetUserId || '');
+      const currentIdStr = String(currentUserId || '');
+
+      const isRelated = (targetIdStr && (msgSenderStr === targetIdStr || msgTargetStr === targetIdStr)) ||
+                        (msgSenderStr === currentIdStr && msgTargetStr === targetIdStr);
+      if (isRelated) {
+        setMessages(prev => {
+          if (prev.some(m => m.id === newMsg.id || (m.message === newMsg.message && Math.abs(new Date(m.timeSend || 0).getTime() - new Date(newMsg.timeSend || 0).getTime()) < 3000))) {
+            return prev;
+          }
+          const next = [...prev, newMsg];
+          if (activePartnerRef.current?.id) messagesCacheRef.current.set(String(activePartnerRef.current.id), next);
+          return next;
+        });
+        setTimeout(() => scrollToBottom(true), 40);
+      }
+    };
+
+    window.addEventListener('talovin_new_message', handleLocalNewMessage);
+    return () => window.removeEventListener('talovin_new_message', handleLocalNewMessage);
+  }, [urlTargetUserId, currentUserId, scrollToBottom]);
+
   // Cuộn xuống tin nhắn mới nhất
   const scrollToBottom = useCallback((smooth = true) => {
     if (scrollContainerRef.current) {
@@ -601,12 +630,21 @@ export const DirectMessagePage = () => {
         }
 
         if (fetchedMsgs && Array.isArray(fetchedMsgs)) {
-          setMessages(fetchedMsgs);
-          messagesCacheRef.current.set(String(targetId), fetchedMsgs);
-          messagesCacheRef.current.set(String(roomId), fetchedMsgs);
+          let mergedList = [...fetchedMsgs];
+          setMessages(prev => {
+            // Giữ lại các tin nhắn optimistic call log nếu server chưa kịp commit
+            prev.forEach(p => {
+              if (p.pending || (String(p.id).startsWith('call_') && !fetchedMsgs.some(fm => fm.message === p.message))) {
+                mergedList.push(p);
+              }
+            });
+            return mergedList;
+          });
+          messagesCacheRef.current.set(String(targetId), mergedList);
+          messagesCacheRef.current.set(String(roomId), mergedList);
           try {
-            localStorage.setItem(`talovin_dm_msgs_${targetId}`, JSON.stringify(fetchedMsgs.slice(-50)));
-            if (roomId) localStorage.setItem(`talovin_dm_msgs_${roomId}`, JSON.stringify(fetchedMsgs.slice(-50)));
+            localStorage.setItem(`talovin_dm_msgs_${targetId}`, JSON.stringify(mergedList.slice(-50)));
+            if (roomId) localStorage.setItem(`talovin_dm_msgs_${roomId}`, JSON.stringify(mergedList.slice(-50)));
           } catch (_) { }
           setTimeout(() => scrollToBottom(false), 30);
 
@@ -1820,7 +1858,7 @@ export const DirectMessagePage = () => {
                   </div>
                 ) : (
                   messages.map((msg, index) => {
-                    const isMe = msg.userId?.toString() === currentUserId?.toString();
+                    const isMe = (msg.userId ?? msg.senderId)?.toString() === currentUserId?.toString();
                     const rawText = msg.message || '';
                     const isCallLog = rawText.includes('Cuộc gọi') || rawText.startsWith('📞') || rawText.startsWith('📹');
                     const isMissed = isCallLog && (rawText.includes('nhỡ') || rawText.includes('từ chối'));

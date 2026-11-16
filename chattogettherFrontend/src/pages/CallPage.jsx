@@ -321,16 +321,56 @@ const CallPage = () => {
     const durationSecs = durationRef.current;
     const isVideo = Boolean(isVideoParam || isVideoCall);
 
+    // Xác định đúng người gọi gốc (Side A) và người nhận (Side B)
+    const trueCallerId = isIncoming ? userId : currentUserId;
+    const trueTargetId = isIncoming ? currentUserId : userId;
+    const resolvedRoomId = dmRoomIdRef.current || roomId;
+
     const callPayload = {
-      type: 'END',
-      callerId: currentUserId,
-      targetUserId: userId,
-      roomId: roomId,
+      type: durationSecs > 0 ? 'END' : (isIncoming ? 'DECLINE' : 'CANCEL'),
+      callerId: trueCallerId,
+      targetUserId: trueTargetId,
+      endedBy: currentUserId,
+      roomId: resolvedRoomId,
       duration: durationSecs,
       isVideo: isVideo,
       callMode: isVideo ? 'video' : 'audio',
       timestamp: Date.now()
     };
+
+    // Ghi nhận log cuộc gọi ngay lập tức vào bộ nhớ máy (0ms latency, không chờ server/socket)
+    try {
+      const now = new Date();
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      const logText = (durationSecs > 0)
+        ? (isVideo ? `📹 Cuộc gọi video (${String(Math.floor(durationSecs / 60)).padStart(2, '0')}:${String(durationSecs % 60).padStart(2, '0')})` : `📞 Cuộc gọi thoại (${String(Math.floor(durationSecs / 60)).padStart(2, '0')}:${String(durationSecs % 60).padStart(2, '0')})`)
+        : (isVideo ? '📹 Cuộc gọi video nhỡ' : '📞 Cuộc gọi thoại nhỡ');
+
+      const optimisticMsg = {
+        id: `call_${Date.now()}`,
+        userId: Number(trueCallerId),
+        senderId: Number(trueCallerId),
+        targetUserId: Number(trueTargetId),
+        message: logText,
+        timeSend: now.toISOString(),
+        formattedTime: timeStr,
+        isRead: false,
+        pending: false
+      };
+
+      const partnerKey = String(userId);
+      const storageKey = `talovin_dm_msgs_${partnerKey}`;
+      const existingRaw = localStorage.getItem(storageKey);
+      const existing = existingRaw ? JSON.parse(existingRaw) : [];
+      if (!existing.some(m => m.id === optimisticMsg.id || (m.message === logText && Math.abs(new Date(m.timeSend || 0).getTime() - now.getTime()) < 3000))) {
+        const updated = [...existing, optimisticMsg];
+        localStorage.setItem(storageKey, JSON.stringify(updated.slice(-50)));
+        if (resolvedRoomId) {
+          localStorage.setItem(`talovin_dm_msgs_${resolvedRoomId}`, JSON.stringify(updated.slice(-50)));
+        }
+      }
+      window.dispatchEvent(new CustomEvent('talovin_new_message', { detail: optimisticMsg }));
+    } catch (_) {}
 
     if (shouldSendSignal) {
       // 1. Gửi qua WebSocket STOMP
@@ -374,7 +414,7 @@ const CallPage = () => {
         navigate('/', { replace: true });
       }
     }, 120);
-  }, [sendCallSignal, cleanupCall, stopRingAudio, isVideoParam, isVideoCall, isDirectCall, isRoomCall, userId, roomId, searchParams, navigate, currentUserId]);
+  }, [sendCallSignal, cleanupCall, stopRingAudio, isVideoParam, isVideoCall, isDirectCall, isRoomCall, userId, roomId, searchParams, navigate, currentUserId, isIncoming]);
 
   // 7. Handle Signal Incoming
   const handleCallSignal = useCallback(async (msg) => {

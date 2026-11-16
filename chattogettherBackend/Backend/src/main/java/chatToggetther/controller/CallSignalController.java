@@ -106,7 +106,7 @@ public class CallSignalController {
         if (payload == null) return;
         try {
             String type = payload.get("type") != null ? String.valueOf(payload.get("type")).toUpperCase() : "";
-            if (!"END".equals(type) && !"DECLINE".equals(type) && !"CALL_LOG".equals(type) && !"BUSY".equals(type)) {
+            if (!"END".equals(type) && !"DECLINE".equals(type) && !"CALL_LOG".equals(type) && !"BUSY".equals(type) && !"CANCEL".equals(type)) {
                 return;
             }
 
@@ -114,6 +114,11 @@ public class CallSignalController {
             if (payload.get("callerId") != null) {
                 try {
                     callerId = Long.valueOf(String.valueOf(payload.get("callerId")));
+                } catch (Exception ignored) {}
+            }
+            if (payload.get("targetUserId") != null && targetUserId == null) {
+                try {
+                    targetUserId = Long.valueOf(String.valueOf(payload.get("targetUserId")));
                 } catch (Exception ignored) {}
             }
             if (callerId == null) return;
@@ -124,7 +129,8 @@ public class CallSignalController {
             RoomEntity room = null;
             if (roomId != null) {
                 room = roomRepository.findById(roomId).orElse(null);
-            } else if (targetUserId != null) {
+            }
+            if (room == null && targetUserId != null) {
                 long min = Math.min(callerId, targetUserId);
                 long max = Math.max(callerId, targetUserId);
                 String dmPass = "DM_" + min + "_" + max;
@@ -132,7 +138,8 @@ public class CallSignalController {
                 if (room == null) {
                     List<RoomEntity> allRooms = roomRepository.findAll();
                     room = allRooms.stream()
-                            .filter(r -> dmPass.equals(r.getPassword()))
+                            .filter(r -> (r.getPassword() != null && dmPass.equals(r.getPassword())) ||
+                                         (r.getRoomName() != null && r.getRoomName().contains(dmPass)))
                             .findFirst()
                             .orElse(null);
                 }
@@ -165,8 +172,8 @@ public class CallSignalController {
 
             boolean isVideo = Boolean.TRUE.equals(payload.get("isVideo")) || "video".equalsIgnoreCase(String.valueOf(payload.get("callMode")));
             String logText;
-            if ("DECLINE".equals(type) || "BUSY".equals(type)) {
-                logText = isVideo ? "📹 Cuộc gọi video bị từ chối" : "📞 Cuộc gọi thoại bị từ chối";
+            if ("DECLINE".equals(type) || "BUSY".equals(type) || "CANCEL".equals(type)) {
+                logText = isVideo ? "📹 Cuộc gọi video nhỡ" : "📞 Cuộc gọi thoại nhỡ";
             } else if (durationSecs > 0) {
                 int mins = durationSecs / 60;
                 int secs = durationSecs % 60;
@@ -200,6 +207,8 @@ public class CallSignalController {
             if (targetUserId != null) {
                 this.messagingTemplate.convertAndSend("/topic/messages/" + targetUserId, sendDto);
                 this.messagingTemplate.convertAndSend("/topic/messages/" + callerId, sendDto);
+                this.messagingTemplate.convertAndSend("/topic/room-alerts/" + targetUserId, sendDto);
+                this.messagingTemplate.convertAndSend("/topic/room-alerts/" + callerId, sendDto);
             }
         } catch (Exception e) {
             e.printStackTrace();

@@ -200,33 +200,70 @@ const GlobalCallBanner = () => {
     if (!incomingCall) return;
     const callerId = incomingCall.callerId;
     const roomId = incomingCall.roomId;
+    const isVid = Boolean(incomingCall.isVideo);
+
+    const logPayload = {
+      type: 'DECLINE',
+      callerId: callerId, // Người gọi gốc Side A
+      targetUserId: effectiveUserId, // Người nhận Side B
+      endedBy: effectiveUserId,
+      roomId: roomId,
+      duration: 0,
+      isVideo: isVid,
+      callMode: isVid ? 'video' : 'audio',
+      timestamp: Date.now()
+    };
 
     try {
       if (stompClient.current && stompClient.current.connected) {
-        const isVid = Boolean(incomingCall.isVideo);
-        const declinePayload = {
+        const signal = {
           type: 'DECLINE',
           callerId: effectiveUserId,
           reason: 'declined',
           isVideo: isVid
         };
         if (roomId) {
-          stompClient.current.send(`/app/call/${roomId}`, {}, JSON.stringify(declinePayload));
+          stompClient.current.send(`/app/call/${roomId}`, {}, JSON.stringify(signal));
         } else if (callerId) {
-          stompClient.current.send(`/app/call/user/${callerId}`, {}, JSON.stringify(declinePayload));
+          stompClient.current.send(`/app/call/user/${callerId}`, {}, JSON.stringify(signal));
         }
         // Ghi nhận log từ chối cuộc gọi vào lịch sử chat
-        stompClient.current.send('/app/call/log', {}, JSON.stringify({
-          type: 'DECLINE',
-          callerId: callerId,
-          targetUserId: effectiveUserId,
-          roomId: roomId,
-          isVideo: isVid,
-          callMode: isVid ? 'video' : 'audio',
-          duration: 0
-        }));
+        stompClient.current.send('/app/call/log', {}, JSON.stringify(logPayload));
       }
     } catch (e) {}
+
+    // Gửi REST API HTTP dự phòng (bảo đảm 100% không bị sót)
+    try {
+      axiosClient.post('/call/end', logPayload).catch(() => {});
+    } catch (_) {}
+
+    // Ghi nhận log cuộc gọi nhỡ ngay lập tức vào bộ nhớ máy (0ms latency)
+    try {
+      const now = new Date();
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      const logText = isVid ? '📹 Cuộc gọi video nhỡ' : '📞 Cuộc gọi thoại nhỡ';
+      const optimisticMsg = {
+        id: `call_${Date.now()}`,
+        userId: Number(callerId),
+        senderId: Number(callerId),
+        targetUserId: Number(effectiveUserId),
+        message: logText,
+        timeSend: now.toISOString(),
+        formattedTime: timeStr,
+        isRead: false,
+        pending: false
+      };
+
+      const partnerKey = String(callerId);
+      const storageKey = `talovin_dm_msgs_${partnerKey}`;
+      const existingRaw = localStorage.getItem(storageKey);
+      const existing = existingRaw ? JSON.parse(existingRaw) : [];
+      if (!existing.some(m => m.id === optimisticMsg.id || (m.message === logText && Math.abs(new Date(m.timeSend || 0).getTime() - now.getTime()) < 3000))) {
+        const updated = [...existing, optimisticMsg];
+        localStorage.setItem(storageKey, JSON.stringify(updated.slice(-50)));
+      }
+      window.dispatchEvent(new CustomEvent('talovin_new_message', { detail: optimisticMsg }));
+    } catch (_) {}
 
     stopRingingSound();
     clearDismissTimer();
