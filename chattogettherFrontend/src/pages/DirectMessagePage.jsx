@@ -99,8 +99,13 @@ export const sortConversationsList = (list) => {
   if (!Array.isArray(list)) return [];
   const copy = [...list];
   return copy.sort((a, b) => {
-    const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
-    const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
+    const parseTime = (val) => {
+      if (!val) return 0;
+      const t = new Date(val).getTime();
+      return isNaN(t) ? 0 : t;
+    };
+    const timeA = parseTime(a.lastMessageTime);
+    const timeB = parseTime(b.lastMessageTime);
     if (timeA > 0 && timeB > 0) return timeB - timeA; // Mới nhất lên đầu
     if (timeA > 0) return -1;
     if (timeB > 0) return 1;
@@ -154,9 +159,13 @@ export const DirectMessagePage = () => {
   };
 
   // Danh sách bạn bè / hội thoại (Nạp tức thì từ cache, tự động hydrate từ tin nhắn cục bộ và sắp xếp mới nhất từ 0ms)
+  const userPrefix = currentUserId ? `${currentUserId}_` : '';
   const [friends, setFriends] = useState(() => {
     try {
-      const cached = localStorage.getItem('talovin_dm_conversations_cache') || localStorage.getItem('talovin_dm_friends_cache');
+      const cached = localStorage.getItem(`talovin_dm_conversations_cache_${userPrefix}`) ||
+                     localStorage.getItem('talovin_dm_conversations_cache') ||
+                     localStorage.getItem(`talovin_dm_friends_cache_${userPrefix}`) ||
+                     localStorage.getItem('talovin_dm_friends_cache');
       const list = cached ? JSON.parse(cached) : [];
       if (!Array.isArray(list) || list.length === 0) return [];
 
@@ -166,14 +175,20 @@ export const DirectMessagePage = () => {
         let lastFmt = rf.lastMessageFormattedTime;
 
         try {
-          const localRaw = localStorage.getItem(`talovin_dm_msgs_${rf.id}`) ||
-                           (rf.directRoomId ? localStorage.getItem(`talovin_dm_msgs_${rf.directRoomId}`) : null);
+          const localRaw = localStorage.getItem(`talovin_dm_msgs_${userPrefix}${rf.id}`) ||
+                           localStorage.getItem(`talovin_dm_msgs_${rf.id}`) ||
+                           (rf.directRoomId ? (localStorage.getItem(`talovin_dm_msgs_${userPrefix}${rf.directRoomId}`) || localStorage.getItem(`talovin_dm_msgs_${rf.directRoomId}`)) : null);
           if (localRaw) {
             const parsed = JSON.parse(localRaw);
             if (Array.isArray(parsed) && parsed.length > 0) {
               const lm = parsed[parsed.length - 1];
-              const localTimeMs = lm.timeSend ? new Date(lm.timeSend).getTime() : 0;
-              const currentTimeMs = lastTime ? new Date(lastTime).getTime() : 0;
+              const parseTime = (val) => {
+                if (!val) return 0;
+                const t = new Date(val).getTime();
+                return isNaN(t) ? 0 : t;
+              };
+              const localTimeMs = parseTime(lm.timeSend);
+              const currentTimeMs = parseTime(lastTime);
               if (localTimeMs >= currentTimeMs) {
                 lastMsg = lm.message || (lm.mediaType === 'IMAGE' ? '[Hình ảnh]' : '[Video]');
                 lastTime = lm.timeSend || lastTime;
@@ -196,14 +211,15 @@ export const DirectMessagePage = () => {
       return [];
     }
   });
-  // Luôn bật loading khi mới vào trang để chờ dữ liệu mới nhất từ server, tránh hiển thị danh sách cũ/nhảy vị trí
-  const [loadingFriends, setLoadingFriends] = useState(true);
+
+  // Chỉ bật skeleton loading khi chưa có bất kỳ dữ liệu nào trong cache
+  const [loadingFriends, setLoadingFriends] = useState(() => friends.length === 0);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Quản lý số lượng tin nhắn chưa đọc { [partnerId]: count }
   const [unreadMap, setUnreadMap] = useState(() => {
     try {
-      const saved = localStorage.getItem('talovin_dm_unread');
+      const saved = localStorage.getItem(`talovin_dm_unread_${userPrefix}`) || localStorage.getItem('talovin_dm_unread');
       return saved ? JSON.parse(saved) : {};
     } catch (_) {
       return {};
@@ -396,14 +412,20 @@ export const DirectMessagePage = () => {
 
             // Nạp thêm từ bộ nhớ tin nhắn cục bộ nếu có tin nhắn mới hơn (kiểm tra cả id người nhận và id phòng)
             try {
-              const localRaw = localStorage.getItem(`talovin_dm_msgs_${rf.id}`) ||
-                               (rf.directRoomId ? localStorage.getItem(`talovin_dm_msgs_${rf.directRoomId}`) : null);
+              const localRaw = localStorage.getItem(`talovin_dm_msgs_${userPrefix}${rf.id}`) ||
+                               localStorage.getItem(`talovin_dm_msgs_${rf.id}`) ||
+                               (rf.directRoomId ? (localStorage.getItem(`talovin_dm_msgs_${userPrefix}${rf.directRoomId}`) || localStorage.getItem(`talovin_dm_msgs_${rf.directRoomId}`)) : null);
               if (localRaw) {
                 const parsed = JSON.parse(localRaw);
                 if (Array.isArray(parsed) && parsed.length > 0) {
                   const lm = parsed[parsed.length - 1];
-                  const localTimeMs = lm.timeSend ? new Date(lm.timeSend).getTime() : 0;
-                  const serverTimeMs = lastTime ? new Date(lastTime).getTime() : 0;
+                  const parseTime = (val) => {
+                    if (!val) return 0;
+                    const t = new Date(val).getTime();
+                    return isNaN(t) ? 0 : t;
+                  };
+                  const localTimeMs = parseTime(lm.timeSend);
+                  const serverTimeMs = parseTime(lastTime);
                   if (localTimeMs >= serverTimeMs) {
                     lastMsg = lm.message || (lm.mediaType === 'IMAGE' ? '[Hình ảnh]' : '[Tệp tin]');
                     lastTime = lm.timeSend || lastTime;
@@ -435,6 +457,7 @@ export const DirectMessagePage = () => {
           // Đồng bộ tức thì bản đồ tin nhắn chưa đọc vào State & LocalStorage
           setUnreadMap(freshUnreadMap);
           try {
+            localStorage.setItem(`talovin_dm_unread_${userPrefix}`, JSON.stringify(freshUnreadMap));
             localStorage.setItem('talovin_dm_unread', JSON.stringify(freshUnreadMap));
             if (hiddenIds.length > 0) {
               localStorage.setItem('talovin_hidden_partner_ids', JSON.stringify(hiddenIds));
@@ -446,19 +469,13 @@ export const DirectMessagePage = () => {
           const sortedList = sortConversationsList(currentList);
 
           try {
+            localStorage.setItem(`talovin_dm_conversations_cache_${userPrefix}`, JSON.stringify(sortedList));
             localStorage.setItem('talovin_dm_conversations_cache', JSON.stringify(sortedList));
+            localStorage.setItem(`talovin_dm_friends_cache_${userPrefix}`, JSON.stringify(sortedList));
             localStorage.setItem('talovin_dm_friends_cache', JSON.stringify(sortedList));
           } catch (_) { }
 
           setFriends(sortedList);
-
-          // Tự động chọn cuộc trò chuyện đầu tiên trên màn hình rộng nếu chưa chọn ai
-          if (!urlTargetUserId && currentList.length > 0 && typeof window !== 'undefined' && window.innerWidth >= 768) {
-            const hasRecentChat = currentList.find(c => c.lastMessageTime);
-            if (hasRecentChat) {
-              navigate(`/messages/${hasRecentChat.id}`, { replace: true });
-            }
-          }
         }
       } catch (e) {
         console.error('Lỗi nạp danh sách hội thoại:', e);
@@ -516,6 +533,7 @@ export const DirectMessagePage = () => {
         delete next[String(fallbackPartner.id)];
       }
       try {
+        localStorage.setItem(`talovin_dm_unread_${userPrefix}`, JSON.stringify(next));
         localStorage.setItem('talovin_dm_unread', JSON.stringify(next));
         window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: next }));
       } catch (_) { }
@@ -531,7 +549,9 @@ export const DirectMessagePage = () => {
       });
       const sorted = sortConversationsList(nextList);
       try {
+        localStorage.setItem(`talovin_dm_conversations_cache_${userPrefix}`, JSON.stringify(sorted));
         localStorage.setItem('talovin_dm_conversations_cache', JSON.stringify(sorted));
+        localStorage.setItem(`talovin_dm_friends_cache_${userPrefix}`, JSON.stringify(sorted));
         localStorage.setItem('talovin_dm_friends_cache', JSON.stringify(sorted));
       } catch (_) { }
       return sorted;
@@ -545,7 +565,7 @@ export const DirectMessagePage = () => {
     }
     if (!effectivePartner) {
       try {
-        const cached = JSON.parse(localStorage.getItem('talovin_dm_friends_cache') || '[]');
+        const cached = JSON.parse(localStorage.getItem(`talovin_dm_friends_cache_${userPrefix}`) || localStorage.getItem('talovin_dm_friends_cache') || '[]');
         const foundInCache = cached.find(f => String(f.id) === String(targetId) || f.account === targetId);
         if (foundInCache) effectivePartner = foundInCache;
       } catch (_) { }
@@ -569,7 +589,9 @@ export const DirectMessagePage = () => {
     let cachedMessages = messagesCacheRef.current.get(String(targetId)) || (knownRoomId ? messagesCacheRef.current.get(String(knownRoomId)) : null);
     if (!cachedMessages) {
       try {
-        const raw = localStorage.getItem(`talovin_dm_msgs_${targetId}`) || (knownRoomId ? localStorage.getItem(`talovin_dm_msgs_${knownRoomId}`) : null);
+        const raw = localStorage.getItem(`talovin_dm_msgs_${userPrefix}${targetId}`) ||
+                    localStorage.getItem(`talovin_dm_msgs_${targetId}`) ||
+                    (knownRoomId ? (localStorage.getItem(`talovin_dm_msgs_${userPrefix}${knownRoomId}`) || localStorage.getItem(`talovin_dm_msgs_${knownRoomId}`)) : null);
         if (raw) {
           cachedMessages = JSON.parse(raw);
           if (Array.isArray(cachedMessages) && cachedMessages.length > 0) {
@@ -685,8 +707,12 @@ export const DirectMessagePage = () => {
           messagesCacheRef.current.set(String(targetId), mergedList);
           messagesCacheRef.current.set(String(roomId), mergedList);
           try {
+            localStorage.setItem(`talovin_dm_msgs_${userPrefix}${targetId}`, JSON.stringify(mergedList.slice(-50)));
             localStorage.setItem(`talovin_dm_msgs_${targetId}`, JSON.stringify(mergedList.slice(-50)));
-            if (roomId) localStorage.setItem(`talovin_dm_msgs_${roomId}`, JSON.stringify(mergedList.slice(-50)));
+            if (roomId) {
+              localStorage.setItem(`talovin_dm_msgs_${userPrefix}${roomId}`, JSON.stringify(mergedList.slice(-50)));
+              localStorage.setItem(`talovin_dm_msgs_${roomId}`, JSON.stringify(mergedList.slice(-50)));
+            }
           } catch (_) { }
           setTimeout(() => scrollToBottom(false), 30);
 
@@ -863,8 +889,14 @@ export const DirectMessagePage = () => {
               if (activeRoomIdRef.current) messagesCacheRef.current.set(String(activeRoomIdRef.current), nextList);
               if (activePartnerRef.current?.id) messagesCacheRef.current.set(String(activePartnerRef.current.id), nextList);
               try {
-                if (activePartnerRef.current?.id) localStorage.setItem(`talovin_dm_msgs_${activePartnerRef.current.id}`, JSON.stringify(nextList.slice(-50)));
-                if (activeRoomIdRef.current) localStorage.setItem(`talovin_dm_msgs_${activeRoomIdRef.current}`, JSON.stringify(nextList.slice(-50)));
+                if (activePartnerRef.current?.id) {
+                  localStorage.setItem(`talovin_dm_msgs_${userPrefix}${activePartnerRef.current.id}`, JSON.stringify(nextList.slice(-50)));
+                  localStorage.setItem(`talovin_dm_msgs_${activePartnerRef.current.id}`, JSON.stringify(nextList.slice(-50)));
+                }
+                if (activeRoomIdRef.current) {
+                  localStorage.setItem(`talovin_dm_msgs_${userPrefix}${activeRoomIdRef.current}`, JSON.stringify(nextList.slice(-50)));
+                  localStorage.setItem(`talovin_dm_msgs_${activeRoomIdRef.current}`, JSON.stringify(nextList.slice(-50)));
+                }
               } catch (_) { }
               return nextList;
             });
@@ -884,6 +916,7 @@ export const DirectMessagePage = () => {
               const sid = String(senderId);
               const next = { ...prev, [sid]: (Number(prev[sid]) || 0) + 1 };
               try {
+                localStorage.setItem(`talovin_dm_unread_${userPrefix}`, JSON.stringify(next));
                 localStorage.setItem('talovin_dm_unread', JSON.stringify(next));
                 window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: next }));
               } catch (_) { }
@@ -921,7 +954,9 @@ export const DirectMessagePage = () => {
               const nextList = updatedFriend ? [updatedFriend, ...rest] : prev;
               const sorted = sortConversationsList(nextList);
               try {
+                localStorage.setItem(`talovin_dm_conversations_cache_${userPrefix}`, JSON.stringify(sorted));
                 localStorage.setItem('talovin_dm_conversations_cache', JSON.stringify(sorted));
+                localStorage.setItem(`talovin_dm_friends_cache_${userPrefix}`, JSON.stringify(sorted));
                 localStorage.setItem('talovin_dm_friends_cache', JSON.stringify(sorted));
               } catch (_) { }
               return sorted;
@@ -1097,7 +1132,9 @@ export const DirectMessagePage = () => {
       const nextList = updated ? [updated, ...rest] : prev;
       const sorted = sortConversationsList(nextList);
       try {
+        localStorage.setItem(`talovin_dm_conversations_cache_${userPrefix}`, JSON.stringify(sorted));
         localStorage.setItem('talovin_dm_conversations_cache', JSON.stringify(sorted));
+        localStorage.setItem(`talovin_dm_friends_cache_${userPrefix}`, JSON.stringify(sorted));
         localStorage.setItem('talovin_dm_friends_cache', JSON.stringify(sorted));
       } catch (_) { }
       return sorted;
@@ -1774,13 +1811,13 @@ export const DirectMessagePage = () => {
                         {activePartner.nickname || activePartner.account}
                       </h3>
                       {isUserOnline(activePartner.id) ? (
-                        <span className="text-[10px] font-mono flex items-center gap-1.5 text-emerald-400 font-medium">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span className="font-sans text-xs text-zinc-400 flex items-center gap-1.5 font-normal">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
                           Trực tuyến
                         </span>
                       ) : (
-                        <span className="text-[10px] font-mono flex items-center gap-1.5 text-zinc-400 font-medium">
-                          <span className="w-1.5 h-1.5 rounded-full bg-zinc-600"></span>
+                        <span className="font-sans text-xs text-zinc-400 flex items-center gap-1.5 font-normal">
+                          <span className="w-2 h-2 rounded-full bg-zinc-600 shrink-0"></span>
                           {getUserStatusText(activePartner.id)}
                         </span>
                       )}
@@ -1977,36 +2014,28 @@ export const DirectMessagePage = () => {
                       return (
                         <div
                           key={msg.id || index}
-                          className={`w-full flex ${isMe ? 'justify-end' : 'justify-start'} my-2.5`}
+                          className={`w-full flex ${isMe ? 'justify-end' : 'justify-start'} my-2`}
                         >
                           <div
-                            className={`w-64 sm:w-72 rounded-2xl p-3.5 shadow-md border transition-all ${isMe
-                              ? 'bg-zinc-800/90 text-zinc-100 rounded-tr-sm border-zinc-700/70'
-                              : 'bg-zinc-900/90 text-zinc-200 rounded-tl-sm border-zinc-800'
-                              }`}
+                            className={`w-72 rounded-2xl p-3.5 shadow-sm border bg-zinc-900 border-zinc-800 ${isMe ? 'rounded-tr-sm' : 'rounded-tl-sm'}`}
                           >
                             {/* Tiêu đề & Icon loại cuộc gọi */}
-                            <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-zinc-700/50">
+                            <div className="flex items-center justify-between gap-2 mb-2.5 pb-2.5 border-b border-zinc-800/80">
                               <div className="flex items-center gap-2.5">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${isMissed
-                                  ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
-                                  : isVideo
-                                    ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30'
-                                    : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                                  }`}>
+                                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-zinc-800">
                                   {isMissed ? (
-                                    <PhoneMissed size={16} />
+                                    <PhoneMissed size={15} className="text-rose-400" />
                                   ) : isVideo ? (
-                                    <Video size={16} />
+                                    <Video size={15} className="text-emerald-400" />
                                   ) : (
-                                    <PhoneCall size={16} />
+                                    <PhoneCall size={15} className="text-emerald-400" />
                                   )}
                                 </div>
                                 <div className="flex flex-col">
-                                  <span className="font-semibold text-xs text-zinc-100">
+                                  <span className="font-semibold text-xs text-zinc-100 font-sans">
                                     {isVideo ? 'Cuộc gọi video' : 'Cuộc gọi thoại'}
                                   </span>
-                                  <span className={`text-[10px] font-medium ${isMissed ? 'text-rose-400' : 'text-zinc-400'}`}>
+                                  <span className={`text-[11px] font-sans ${isMissed ? 'text-rose-400 font-medium' : 'text-zinc-400'}`}>
                                     {isMissed
                                       ? (isMe ? 'Đối phương nhỡ' : 'Cuộc gọi nhỡ')
                                       : (isMe ? 'Cuộc gọi đi' : 'Cuộc gọi đến')}
@@ -2014,7 +2043,7 @@ export const DirectMessagePage = () => {
                                 </div>
                               </div>
                               {timeStr && (
-                                <span className="text-[10px] font-mono text-zinc-400 shrink-0">
+                                <span className="text-[10px] text-zinc-500 font-sans shrink-0">
                                   {timeStr}
                                 </span>
                               )}
@@ -2022,10 +2051,10 @@ export const DirectMessagePage = () => {
 
                             {/* Thời lượng đàm thoại & Nút gọi lại */}
                             <div className="flex items-center justify-between pt-0.5">
-                              <div className="flex items-center gap-1.5 text-xs text-zinc-300">
-                                <Clock size={12} className="text-zinc-400" />
-                                <span className="text-[11px] text-zinc-400">Thời lượng:</span>
-                                <span className="font-mono font-medium text-[11px] text-zinc-200">
+                              <div className="flex items-center gap-1.5 text-xs text-zinc-400 font-sans">
+                                <Clock size={12} className="text-zinc-500" />
+                                <span className="text-[11px]">Thời lượng:</span>
+                                <span className="font-mono text-[11px] text-zinc-300">
                                   {durationStr || (isMissed ? '00:00' : 'Đã kết thúc')}
                                 </span>
                               </div>
@@ -2039,12 +2068,9 @@ export const DirectMessagePage = () => {
                                     navigate(`/call/direct/${safeTargetId}?type=${isVideo ? 'video' : 'audio'}&from=${currentFrom}`);
                                   }
                                 }}
-                                className={`px-2.5 py-1 rounded-lg text-[11px] font-medium flex items-center gap-1 transition-colors ${isMissed
-                                  ? 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30'
-                                  : 'bg-zinc-700/60 hover:bg-zinc-700 text-zinc-200 border border-zinc-600/50'
-                                  }`}
+                                className="bg-zinc-800 hover:bg-zinc-700 text-white font-sans text-xs font-medium px-3 h-8 rounded-lg flex items-center gap-1.5 transition-colors border border-zinc-700/60"
                               >
-                                {isVideo ? <Video size={11} /> : <PhoneCall size={11} />}
+                                {isVideo ? <Video size={12} /> : <PhoneCall size={12} />}
                                 <span>Gọi lại</span>
                               </button>
                             </div>
@@ -2114,14 +2140,14 @@ export const DirectMessagePage = () => {
 
                           {/* Media: Hình ảnh / Video */}
                           {mediaObj && (
-                            <div className="mb-2 rounded-xl overflow-hidden border border-zinc-800/80 max-w-sm">
+                            <div className="mb-2 rounded-xl overflow-hidden border border-zinc-800/80 max-w-sm aspect-video bg-black flex items-center justify-center">
                               {mediaObj.type === 'VIDEO' ? (
                                 <video
                                   src={resolveMediaUrl(mediaObj.url)}
                                   controls
                                   preload="metadata"
                                   playsInline
-                                  className="w-full max-h-64 object-cover rounded-lg bg-black"
+                                  className="w-full h-full max-h-72 object-cover rounded-xl bg-black"
                                 />
                               ) : (
                                 <img
@@ -2129,7 +2155,7 @@ export const DirectMessagePage = () => {
                                   alt="Đính kèm"
                                   loading="lazy"
                                   onClick={() => setLightboxMedia(resolveMediaUrl(mediaObj.url))}
-                                  className="w-full max-h-64 object-cover cursor-pointer hover:opacity-95 transition-opacity rounded-lg"
+                                  className="w-full h-full max-h-72 object-cover cursor-pointer hover:opacity-95 transition-opacity rounded-xl"
                                 />
                               )}
                             </div>

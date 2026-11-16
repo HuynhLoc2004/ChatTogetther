@@ -29,6 +29,19 @@ public class CallSignalController {
     private final UserRepository userRepository;
     private final MessageRepository messageRepository;
 
+    // Cache idempotent ngăn chặn 100% nhân đôi tin nhắn ghi log cuộc gọi theo callId
+    private static final java.util.Set<String> PROCESSED_CALL_IDS = java.util.Collections.newSetFromMap(
+            new java.util.concurrent.ConcurrentHashMap<String, Boolean>() {
+                @Override
+                public Boolean put(String key, Boolean value) {
+                    if (size() > 5000) {
+                        clear();
+                    }
+                    return super.put(key, value);
+                }
+            }
+    );
+
     public CallSignalController(SimpMessagingTemplate messagingTemplate,
                                 RoomRepository roomRepository,
                                 UserRepository userRepository,
@@ -110,10 +123,28 @@ public class CallSignalController {
                 return;
             }
 
+            // Deduplication via callId / sessionId - CHỐNG TRÙNG LẶP LOG CUỘC GỌI
+            String callId = null;
+            if (payload.get("callId") != null) {
+                callId = String.valueOf(payload.get("callId")).trim();
+            } else if (payload.get("sessionId") != null) {
+                callId = String.valueOf(payload.get("sessionId")).trim();
+            }
+            if (callId != null && !callId.isEmpty()) {
+                if (!PROCESSED_CALL_IDS.add(callId)) {
+                    return; // Đã xử lý log cho phiên gọi này rồi, không lưu thêm
+                }
+            }
+
             Long callerId = null;
             if (payload.get("callerId") != null) {
                 try {
                     callerId = Long.valueOf(String.valueOf(payload.get("callerId")));
+                } catch (Exception ignored) {}
+            }
+            if (callerId == null && payload.get("userId") != null) {
+                try {
+                    callerId = Long.valueOf(String.valueOf(payload.get("userId")));
                 } catch (Exception ignored) {}
             }
             if (payload.get("targetUserId") != null && targetUserId == null) {

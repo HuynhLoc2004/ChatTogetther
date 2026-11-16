@@ -102,6 +102,7 @@ const CallPage = () => {
   const localCandidatesHistoryRef = useRef([]);
   const disconnectTimerRef = useRef(null);
   const connectTimeoutRef = useRef(null);
+  const callIdRef = useRef(searchParams.get('callId') || (`call_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`));
 
   // Sync duration ref
   useEffect(() => {
@@ -295,6 +296,7 @@ const CallPage = () => {
 
     const baseData = {
       ...payload,
+      callId: callIdRef.current,
       callerId: currentUserId,
       callerName: currentUserName,
       callerAvatar: currentUserAvatar,
@@ -327,6 +329,7 @@ const CallPage = () => {
     const resolvedRoomId = dmRoomIdRef.current || roomId;
 
     const callPayload = {
+      callId: callIdRef.current,
       type: durationSecs > 0 ? 'END' : (isIncoming ? 'DECLINE' : 'CANCEL'),
       callerId: trueCallerId,
       targetUserId: trueTargetId,
@@ -347,7 +350,8 @@ const CallPage = () => {
         : (isVideo ? '📹 Cuộc gọi video nhỡ' : '📞 Cuộc gọi thoại nhỡ');
 
       const optimisticMsg = {
-        id: `call_${Date.now()}`,
+        id: callIdRef.current,
+        callId: callIdRef.current,
         userId: Number(trueCallerId),
         senderId: Number(trueCallerId),
         targetUserId: Number(trueTargetId),
@@ -359,14 +363,15 @@ const CallPage = () => {
       };
 
       const partnerKey = String(userId);
-      const storageKey = `talovin_dm_msgs_${partnerKey}`;
+      const userPrefix = currentUserId ? `${currentUserId}_` : '';
+      const storageKey = `talovin_dm_msgs_${userPrefix}${partnerKey}`;
       const existingRaw = localStorage.getItem(storageKey);
       const existing = existingRaw ? JSON.parse(existingRaw) : [];
       if (!existing.some(m => m.id === optimisticMsg.id || (m.message === logText && Math.abs(new Date(m.timeSend || 0).getTime() - now.getTime()) < 3000))) {
         const updated = [...existing, optimisticMsg];
         localStorage.setItem(storageKey, JSON.stringify(updated.slice(-50)));
         if (resolvedRoomId) {
-          localStorage.setItem(`talovin_dm_msgs_${resolvedRoomId}`, JSON.stringify(updated.slice(-50)));
+          localStorage.setItem(`talovin_dm_msgs_${userPrefix}${resolvedRoomId}`, JSON.stringify(updated.slice(-50)));
         }
       }
       window.dispatchEvent(new CustomEvent('talovin_new_message', { detail: optimisticMsg }));

@@ -20,7 +20,7 @@ import java.util.Map;
 import java.util.HashMap;
 
 @RestController
-@RequestMapping({"/api/message", "/api/messages"})
+@RequestMapping({"/api/message", "/api/messages", "/api/conversations"})
 public class ChatController {
     private final ChatService chatService;
     private final chatToggetther.service.MediaStorageService mediaStorageService;
@@ -117,11 +117,29 @@ public class ChatController {
         return ResponseEntity.ok(this.chatService.getOrCreateDirectRoom(token, targetUserId));
     }
 
-    @GetMapping({"/conversations", "/recent-chats"})
+    @GetMapping({"", "/conversations", "/recent-chats"})
     public ResponseEntity<ResponseData<List<Map<String, Object>>>> getRecentConversations(
             JwtAuthenticationToken token
     ) {
         return ResponseEntity.ok(this.chatService.getRecentConversations(token));
+    }
+
+    @GetMapping({"/{targetUserId}/messages", "/messages/{targetUserId}"})
+    public ResponseEntity<ResponseData<List<SendMessageDTO>>> getTargetUserMessages(
+            JwtAuthenticationToken token,
+            @PathVariable("targetUserId") String targetUserId,
+            @RequestParam(value = "beforeId", required = false) Long beforeId,
+            @RequestParam(value = "limit", required = false, defaultValue = "30") Integer limit
+    ) {
+        ResponseData<Map<String, Object>> dmRes = this.chatService.getOrCreateDirectRoom(token, targetUserId);
+        Long roomId = null;
+        if (dmRes.getData() != null && dmRes.getData().get("roomId") != null) {
+            roomId = Long.valueOf(dmRes.getData().get("roomId").toString());
+        }
+        if (roomId == null) {
+            return ResponseEntity.ok(new ResponseData<>(200, "Thành công", java.util.Collections.emptyList()));
+        }
+        return ResponseEntity.ok(this.chatService.getMessageHistory(token, roomId, beforeId, limit));
     }
 
     @PostMapping("/read")

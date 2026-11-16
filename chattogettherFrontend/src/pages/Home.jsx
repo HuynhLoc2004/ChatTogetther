@@ -782,6 +782,8 @@ const Home = ({ initialTab }) => {
           setUnreadDmCount(count);
           localStorage.setItem('talovin_hidden_partner_ids', JSON.stringify(hiddenIds));
           localStorage.setItem('talovin_dm_unread', JSON.stringify(unreadMap));
+          localStorage.setItem(`talovin_dm_unread_${effectiveId}_`, JSON.stringify(unreadMap));
+          localStorage.setItem(`talovin_dm_conversations_cache_${effectiveId}_`, JSON.stringify(res.data.data));
           window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: unreadMap }));
         }
       } catch (_) {}
@@ -5300,8 +5302,8 @@ const Home = ({ initialTab }) => {
       {floatingNotif && (
         <div
           key={floatingNotif.notifKey || floatingNotif.id || Date.now()}
-          className="fixed top-14 left-1/2 -translate-x-1/2 z-[9999] max-w-md w-[92vw] sm:w-[420px] bg-zinc-950/95 border border-zinc-700/80 rounded-2xl p-3.5 shadow-2xl backdrop-blur-xl flex flex-col gap-2.5 animate-floating-notif"
-          style={{ boxShadow: '0 20px 40px -8px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.08)' }}
+          className="fixed top-4 right-4 z-50 max-w-sm w-[92vw] sm:w-[360px] bg-zinc-900 border border-zinc-800 rounded-2xl p-3 shadow-2xl backdrop-blur-xl flex flex-col gap-2 animate-floating-notif"
+          style={{ boxShadow: '0 12px 30px -6px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.06)' }}
         >
           <div
             className="flex items-start gap-3 cursor-pointer"
@@ -6335,23 +6337,19 @@ const Home = ({ initialTab }) => {
           animation: slideInRight 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
 
-        /* Hiệu ứng thông báo nổi chạy mượt mà từ trên trần màn hình xuống cho từng tin nhắn */
+        /* Hiệu ứng thông báo nổi chạy mượt mà từ trên trần màn hình xuống cho từng tin nhắn (Góc phải cố định) */
         @keyframes slideDownNotification {
           0% {
             opacity: 0;
-            transform: translate(-50%, -100%) scale(0.92);
-          }
-          65% {
-            opacity: 1;
-            transform: translate(-50%, 6px) scale(1.02);
+            transform: translateY(-24px) scale(0.95);
           }
           100% {
             opacity: 1;
-            transform: translate(-50%, 0) scale(1);
+            transform: translateY(0) scale(1);
           }
         }
         .animate-floating-notif {
-          animation: slideDownNotification 0.38s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+          animation: slideDownNotification 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
 
         /* Custom Scrollbar tối màu, mảnh dẻ, không lộ thanh cuộn trắng Windows */
