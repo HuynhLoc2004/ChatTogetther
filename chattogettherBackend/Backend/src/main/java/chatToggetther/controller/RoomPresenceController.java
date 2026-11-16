@@ -73,6 +73,7 @@ public class RoomPresenceController {
         if (userId != null) {
             String sessionId = headerAccessor != null ? headerAccessor.getSessionId() : null;
             presenceService.recordActive(userId, sessionId);
+            presenceService.broadcastPresence(userId, true);
         }
     }
 

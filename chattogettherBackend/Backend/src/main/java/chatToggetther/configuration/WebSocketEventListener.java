@@ -4,6 +4,7 @@ import chatToggetther.service.PresenceService;
 import org.springframework.context.event.EventListener;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.stereotype.Component;
+import org.springframework.web.socket.messaging.SessionConnectEvent;
 import org.springframework.web.socket.messaging.SessionConnectedEvent;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 
@@ -18,6 +19,22 @@ public class WebSocketEventListener {
 
     public WebSocketEventListener(PresenceService presenceService) {
         this.presenceService = presenceService;
+    }
+
+    @EventListener
+    public void handleSessionConnect(SessionConnectEvent event) {
+        StompHeaderAccessor headerAccessor = StompHeaderAccessor.wrap(event.getMessage());
+        String sessionId = headerAccessor.getSessionId();
+        String userIdStr = headerAccessor.getFirstNativeHeader("userId");
+        if (userIdStr == null) {
+            userIdStr = headerAccessor.getFirstNativeHeader("user_id");
+        }
+        if (userIdStr != null) {
+            try {
+                Long userId = Long.valueOf(userIdStr);
+                presenceService.recordActive(userId, sessionId);
+            } catch (Exception ignored) {}
+        }
     }
 
     @EventListener

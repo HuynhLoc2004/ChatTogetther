@@ -179,6 +179,7 @@ export const DirectMessagePage = () => {
   const stompClient = useRef(null);
   const messagesEndRef = useRef(null);
   const scrollContainerRef = useRef(null);
+  const messagesCacheRef = useRef(new Map()); // Cache tin nhắn in-memory để chuyển đổi hội thoại 0ms tức thì
 
   // Lưu unreadMap vào localStorage
   useEffect(() => {
@@ -246,9 +247,12 @@ export const DirectMessagePage = () => {
           });
           setLoadingFriends(false);
 
-          // Tự động chọn cuộc trò chuyện đầu tiên nếu chưa chọn ai và đang ở màn hình desktop
+          // Tự động chọn cuộc trò chuyện đầu tiên nếu chưa chọn ai VÀ cuộc trò chuyện đó thực sự có tin nhắn
           if (!urlTargetUserId && currentList.length > 0 && typeof window !== 'undefined' && window.innerWidth >= 768) {
-            navigate(`/messages/${currentList[0].id}`, { replace: true });
+            const hasRecentChat = currentList.find(c => c.lastMessageTime);
+            if (hasRecentChat) {
+              navigate(`/messages/${hasRecentChat.id}`, { replace: true });
+            }
           }
 
           // Nạp ngầm xem trước tin nhắn mà không làm gián đoạn hoặc chặn UI
@@ -378,90 +382,89 @@ export const DirectMessagePage = () => {
       setPartnerNotFound(false);
     }
 
-    try {
+    let knownRoomId = effectivePartner?.directRoomId;
+    if (!knownRoomId) {
+      const found = friends.find(f => String(f.id) === String(targetId));
+      if (found?.directRoomId) knownRoomId = found.directRoomId;
+    }
+
+    // Hiển thị ngay tin nhắn từ bộ nhớ đệm nếu đã từng mở (0ms, không lag, không giật màn hình)
+    const cachedMessages = messagesCacheRef.current.get(String(targetId)) || (knownRoomId ? messagesCacheRef.current.get(String(knownRoomId)) : null);
+    if (cachedMessages && Array.isArray(cachedMessages) && cachedMessages.length > 0) {
+      setMessages(cachedMessages);
+      setLoadingMessages(false);
+      setTimeout(() => scrollToBottom(false), 20);
+    } else {
       setLoadingMessages(true);
+    }
 
-      // Nếu đã biết trước directRoomId của người này, nạp ngay lập tức (Zero-wait)
-      let knownRoomId = effectivePartner?.directRoomId;
-      if (!knownRoomId) {
-        const found = friends.find(f => String(f.id) === String(targetId));
-        if (found?.directRoomId) knownRoomId = found.directRoomId;
-      }
+    try {
+      let roomId = knownRoomId;
 
-      if (knownRoomId) {
-        setActiveRoomId(knownRoomId);
+      if (!roomId) {
+        let res = null;
         try {
-          const quickRes = await axiosClient.get(`/message/${knownRoomId}`);
-          if (quickRes?.data?.data && Array.isArray(quickRes.data.data)) {
-            setMessages(quickRes.data.data);
-            setLoadingMessages(false);
-            setTimeout(() => scrollToBottom(false), 50);
+          res = await axiosClient.get(`/message/direct/${targetId}`);
+        } catch (_) {
+          if (effectivePartner?.account && effectivePartner.account.toString() !== targetId.toString()) {
+            try {
+              res = await axiosClient.get(`/message/direct/${effectivePartner.account}`);
+            } catch (_) {}
           }
-        } catch (_) {}
-      }
-
-      let res = null;
-
-      // Thử gọi lấy phòng chat 1-1 bằng targetId (ID số)
-      try {
-        res = await axiosClient.get(`/message/direct/${targetId}`);
-      } catch (err1) {
-        // Nếu thất bại và có username của đối phương, thử bằng username
-        if (effectivePartner?.account && effectivePartner.account.toString() !== targetId.toString()) {
-          try {
-            res = await axiosClient.get(`/message/direct/${effectivePartner.account}`);
-          } catch (_) {}
-        }
-        // Fallback sang endpoint phòng
-        if (!res) {
-          try {
-            res = await axiosClient.post(`/rooms/direct/${targetId}`);
-          } catch (_) {
-            if (effectivePartner?.account) {
-              try {
-                res = await axiosClient.post(`/rooms/direct/${effectivePartner.account}`);
-              } catch (_) {}
+          if (!res) {
+            try {
+              res = await axiosClient.post(`/rooms/direct/${targetId}`);
+            } catch (_) {
+              if (effectivePartner?.account) {
+                try {
+                  res = await axiosClient.post(`/rooms/direct/${effectivePartner.account}`);
+                } catch (_) {}
+              }
             }
           }
         }
+
+        if (res?.data?.data) {
+          roomId = res.data.data.roomId || res.data.data.id;
+          if (res.data.data.targetUser) {
+            setActivePartner(res.data.data.targetUser);
+          }
+        }
       }
 
-      if (res?.data?.data) {
-        const { roomId, targetUser } = res.data.data;
+      if (roomId) {
         setActiveRoomId(roomId);
-        if (targetUser) {
-          setActivePartner(targetUser);
-        }
         setPartnerNotFound(false);
 
         // Nạp lịch sử tin nhắn của phòng DM này
-        try {
-          const histRes = await axiosClient.get(`/message/${roomId}`);
-          if (histRes?.data?.data && Array.isArray(histRes.data.data)) {
-            setMessages(histRes.data.data);
-            setTimeout(() => scrollToBottom(false), 80);
+        const histRes = await axiosClient.get(`/message/${roomId}`).catch(() => null);
+        if (histRes?.data?.data && Array.isArray(histRes.data.data)) {
+          const fetchedMsgs = histRes.data.data;
+          setMessages(fetchedMsgs);
+          messagesCacheRef.current.set(String(targetId), fetchedMsgs);
+          messagesCacheRef.current.set(String(roomId), fetchedMsgs);
+          setTimeout(() => scrollToBottom(false), 50);
 
-            // Cập nhật preview tin nhắn cuối cùng cho bạn bè này
-            if (histRes.data.data.length > 0) {
-              const lastMsg = histRes.data.data[histRes.data.data.length - 1];
-              setFriends(prev => prev.map(f => {
-                if (f.id?.toString() === targetId.toString() || (targetUser && f.id?.toString() === targetUser.id?.toString())) {
-                  return { 
-                    ...f, 
-                    lastMessage: lastMsg.message, 
-                    lastMessageTime: lastMsg.timeSend || new Date().toISOString(),
-                    lastMessageFormattedTime: lastMsg.formattedTime,
-                    hasUnread: false
-                  };
-                }
-                return f;
-              }));
+          // Cập nhật preview tin nhắn cuối cùng và đánh dấu hoạt động nếu tin nhắn mới
+          if (fetchedMsgs.length > 0) {
+            const lastMsg = fetchedMsgs[fetchedMsgs.length - 1];
+            if (lastMsg.userId?.toString() === targetId.toString()) {
+              markUserActive(targetId);
             }
-          } else {
-            setMessages([]);
+            setFriends(prev => prev.map(f => {
+              if (f.id?.toString() === targetId.toString() || (effectivePartner && f.id?.toString() === effectivePartner.id?.toString())) {
+                return { 
+                  ...f, 
+                  directRoomId: roomId,
+                  lastMessage: lastMsg.message, 
+                  lastMessageTime: lastMsg.timeSend || new Date().toISOString(),
+                  lastMessageFormattedTime: lastMsg.formattedTime,
+                  hasUnread: false
+                };
+              }
+              return f;
+            }));
           }
-        } catch (_) {
-          setMessages([]);
         }
       } else if (!effectivePartner) {
         setPartnerNotFound(true);
@@ -478,7 +481,7 @@ export const DirectMessagePage = () => {
     } finally {
       setLoadingMessages(false);
     }
-  }, [currentUserId, scrollToBottom, friends]);
+  }, [currentUserId, scrollToBottom, friends, markUserActive]);
 
   // Kích hoạt khi URL param thay đổi (Chống vòng lặp vô tận)
   const lastTargetIdRef = useRef(null);
@@ -534,15 +537,25 @@ export const DirectMessagePage = () => {
             markUserActive(senderId);
           }
 
+          // Đánh dấu người gửi đang hoạt động ngay lập tức
+          if (senderId) {
+            markUserActive(senderId);
+          }
+
           // 1. Nếu đang mở đúng hội thoại này hoặc là tin nhắn do chính mình gửi
           if (isCurrentChat || isFromMe) {
             setMessages(prev => {
               if (prev.some(m => m.id === newMsg.id)) return prev;
               const hasPending = prev.some(m => m.pending && m.message === newMsg.message);
+              let nextList;
               if (hasPending) {
-                return prev.map(m => (m.pending && m.message === newMsg.message) ? newMsg : m);
+                nextList = prev.map(m => (m.pending && m.message === newMsg.message) ? newMsg : m);
+              } else {
+                nextList = [...prev, newMsg];
               }
-              return [...prev, newMsg];
+              if (activeRoomIdRef.current) messagesCacheRef.current.set(String(activeRoomIdRef.current), nextList);
+              if (activePartnerRef.current?.id) messagesCacheRef.current.set(String(activePartnerRef.current.id), nextList);
+              return nextList;
             });
 
             if (!isFromMe) {
@@ -948,14 +961,30 @@ export const DirectMessagePage = () => {
     }
   };
 
-  // Lọc danh sách hội thoại theo ô tìm kiếm
+  // Lọc danh sách hội thoại theo ô tìm kiếm và sắp xếp chuẩn
   const filteredConversations = useMemo(() => {
-    if (!searchQuery.trim()) return friends;
-    const q = searchQuery.toLowerCase();
-    return friends.filter(f => 
-      (f.nickname && f.nickname.toLowerCase().includes(q)) ||
-      (f.account && f.account.toLowerCase().includes(q))
-    );
+    let list = [...friends];
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(f => 
+        (f.nickname && f.nickname.toLowerCase().includes(q)) ||
+        (f.account && f.account.toLowerCase().includes(q))
+      );
+    }
+
+    // Sắp xếp danh sách cuộc trò chuyện:
+    // 1. Những người ĐÃ CÓ tin nhắn hoặc cuộc gọi (lastMessageTime) sẽ được đưa lên đầu theo thời gian mới nhất
+    // 2. Những người CHƯA CÓ tin nhắn nào sẽ ở phía dưới, KHÔNG bao giờ bị nhảy lên đầu khi chưa có tin nhắn
+    list.sort((a, b) => {
+      const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
+      const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
+      if (timeA > 0 && timeB > 0) return timeB - timeA;
+      if (timeA > 0) return -1;
+      if (timeB > 0) return 1;
+      return 0;
+    });
+
+    return list;
   }, [friends, searchQuery]);
 
   // ID an toàn cho cuộc gọi WebRTC

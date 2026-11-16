@@ -47,7 +47,7 @@ export const RoomAlertBanner = () => {
       const askPermission = () => {
         try {
           Notification.requestPermission();
-        } catch (_) {}
+        } catch (_) { }
         window.removeEventListener('click', askPermission);
       };
       window.addEventListener('click', askPermission, { once: true });
@@ -65,7 +65,7 @@ export const RoomAlertBanner = () => {
           const payload = JSON.parse(atob(token.split('.')[1]));
           if (payload?.user_id) id = String(payload.user_id);
         }
-      } catch (_) {}
+      } catch (_) { }
     }
     return id ? String(id) : null;
   };
@@ -79,9 +79,9 @@ export const RoomAlertBanner = () => {
     const client = createStompClient();
     stompClientRef.current = client;
 
-    const connectHeaders = { 
+    const connectHeaders = {
       userId: String(userId),
-      Authorization: `Bearer ${token}` 
+      Authorization: `Bearer ${token}`
     };
 
     client.connect(connectHeaders, () => {
@@ -137,10 +137,10 @@ export const RoomAlertBanner = () => {
 
           let isViewingThisChat = false;
           if (alert.isDirect) {
-            isViewingThisChat = (currentPath === `/messages/${alert.senderId}` || 
-                                currentPath === `/messages/${alert.senderUsername}` ||
-                                (currentPath.startsWith('/messages') && String(currentUserIdParam) === String(alert.senderId))) &&
-                               !document.hidden;
+            isViewingThisChat = (currentPath === `/messages/${alert.senderId}` ||
+              currentPath === `/messages/${alert.senderUsername}` ||
+              (currentPath.startsWith('/messages') && String(currentUserIdParam) === String(alert.senderId))) &&
+              !document.hidden;
           } else if (alert.roomId) {
             isViewingThisChat = (currentPath === `/room/${alert.roomId}` || currentPath === `/room/${alert.roomId}/`) && !document.hidden;
           }
@@ -157,7 +157,7 @@ export const RoomAlertBanner = () => {
               currentUnread[sid] = (Number(currentUnread[sid]) || 0) + 1;
               localStorage.setItem('talovin_dm_unread', JSON.stringify(currentUnread));
               window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: currentUnread }));
-            } catch (_) {}
+            } catch (_) { }
           }
 
           // 1. Phát âm thanh nốt ding-dong rõ ràng & nhẹ nhàng
@@ -166,8 +166,8 @@ export const RoomAlertBanner = () => {
           // 2. Kích hoạt System / OS Notification trên Điện thoại hoặc Laptop (nếu user cấp quyền)
           if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
             try {
-              const notifTitle = alert.isDirect 
-                ? (alert.senderDisplayName || alert.senderUsername || 'Tin nhắn mới') 
+              const notifTitle = alert.isDirect
+                ? (alert.senderDisplayName || alert.senderUsername || 'Tin nhắn mới')
                 : (alert.roomName || 'Tin nhắn nhóm mới');
               const cleanPreview = formatPreviewText(alert.contentPreview || 'Đã gửi cho bạn một tin nhắn mới');
               const notifBody = alert.isDirect
@@ -188,7 +188,7 @@ export const RoomAlertBanner = () => {
                 }
                 notif.close();
               };
-            } catch (_) {}
+            } catch (_) { }
           }
 
           // 3. Hiển thị In-App Floating Banner nếu đang ở tab web hoặc trang khác
@@ -203,7 +203,7 @@ export const RoomAlertBanner = () => {
           // 4. Đồng thời bắn Toast thông báo trực quan trên giao diện (Đảm bảo người dùng luôn thấy ngay cả trên mobile)
           try {
             toast.custom((t) => (
-              <div 
+              <div
                 onClick={() => {
                   toast.dismiss(t.id);
                   if (alert.isDirect) {
@@ -229,7 +229,7 @@ export const RoomAlertBanner = () => {
                 </div>
               </div>
             ), { duration: 4000, id: `alert-${alert.senderId || alert.roomId}` });
-          } catch (_) {}
+          } catch (_) { }
         } catch (e) {
           console.error('Lỗi nhận room alert:', e);
         }
@@ -254,7 +254,7 @@ export const RoomAlertBanner = () => {
   if (!currentAlert) return null;
 
   return (
-    <div 
+    <div
       className="fixed top-3 inset-x-3 sm:inset-x-auto sm:top-4 sm:right-4 z-[99999] max-w-sm w-auto sm:w-96 animate-in slide-in-from-top-3 fade-in duration-200 select-none"
       onClick={() => {
         const isDirect = Boolean(currentAlert.isDirect);
@@ -270,11 +270,11 @@ export const RoomAlertBanner = () => {
       <div className="bg-zinc-900/95 backdrop-blur-md border border-zinc-800 shadow-2xl rounded-2xl p-3 flex items-center gap-3 cursor-pointer hover:border-zinc-700/90 transition-all duration-150 active:scale-[0.98]">
         {/* Bên trái: UserAvatar + huy hiệu phòng */}
         <div className="relative shrink-0">
-          <UserAvatar 
-            avatarUrl={currentAlert.senderAvatar} 
-            username={currentAlert.senderUsername} 
-            name={currentAlert.senderDisplayName} 
-            size={38} 
+          <UserAvatar
+            avatarUrl={currentAlert.senderAvatar}
+            username={currentAlert.senderUsername}
+            name={currentAlert.senderDisplayName}
+            size={38}
           />
           <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-300">
             <MessageSquare size={9} />

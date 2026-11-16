@@ -172,6 +172,20 @@ export const PresenceProvider = ({ children }) => {
     // Nạp danh sách ban đầu từ server
     fetchOnlineUsers();
 
+    // Định kỳ đồng bộ danh sách online từ server mỗi 8 giây (đảm bảo cập nhật chính xác 100%)
+    const pollInterval = setInterval(() => {
+      fetchOnlineUsers();
+    }, 8000);
+
+    // Bắt sự kiện khi tab được mở lại để đồng bộ tức thì
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        broadcastMyPresence(true);
+        fetchOnlineUsers();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     // Bắt sự kiện tắt tab / rời trang để thông báo ngoại tuyến
     const handleBeforeUnload = () => {
       broadcastMyPresence(false);
@@ -182,6 +196,8 @@ export const PresenceProvider = ({ children }) => {
       isMounted = false;
       clearInterval(heartbeatInterval);
       clearInterval(pruneInterval);
+      clearInterval(pollInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('beforeunload', handleBeforeUnload);
       broadcastMyPresence(false);
       if (stompClientRef.current) {
@@ -199,9 +215,9 @@ export const PresenceProvider = ({ children }) => {
     const myId = getCurrentUserId();
     if (myId && uid === String(myId)) return true; // Chính mình luôn trực tuyến
 
-    // Kiểm tra timestamp gần nhất từ peer broadcast
+    // Kiểm tra timestamp gần nhất từ peer broadcast hoặc tương tác
     const lastSeen = lastSeenMapRef.current.get(uid);
-    if (lastSeen && (Date.now() - lastSeen < 45000)) {
+    if (lastSeen && (Date.now() - lastSeen < 60000)) {
       return true;
     }
 
