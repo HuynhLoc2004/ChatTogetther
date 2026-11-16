@@ -595,6 +595,9 @@ const Home = ({ initialTab }) => {
 
   // Thanh thông báo nổi thời gian thực (Floating Notification Banner)
   const [floatingNotif, setFloatingNotif] = useState(null);
+  const [quickReplyText, setQuickReplyText] = useState('');
+  const [isSendingQuickReply, setIsSendingQuickReply] = useState(false);
+  const [isTypingQuickReply, setIsTypingQuickReply] = useState(false);
 
   // Lắng nghe phím Esc để đóng Lightbox xem đa phương tiện và Modal chi tiết bài viết
   useEffect(() => {
@@ -904,15 +907,59 @@ const Home = ({ initialTab }) => {
     }
   }, [notifications, currentUserId]);
 
-  // Tự động ẩn thanh thông báo nổi sau 5.5 giây
+  // Tự động ẩn thanh thông báo nổi sau 6.5 giây (nếu người dùng không đang gõ trả lời)
   useEffect(() => {
-    if (floatingNotif) {
+    if (floatingNotif && !isTypingQuickReply && !quickReplyText.trim()) {
       const timer = setTimeout(() => {
         setFloatingNotif(null);
-      }, 5500);
+        setQuickReplyText('');
+      }, 6500);
       return () => clearTimeout(timer);
     }
-  }, [floatingNotif]);
+  }, [floatingNotif, isTypingQuickReply, quickReplyText]);
+
+  // Trả lời trực tiếp tin nhắn ngay trên thanh thông báo nổi (Quick Reply)
+  const handleQuickReplySubmit = async (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (!quickReplyText.trim() || isSendingQuickReply || !floatingNotif) return;
+
+    const partnerId = floatingNotif.actorId || floatingNotif.senderId || floatingNotif.userId;
+    if (!partnerId) {
+      toast.error('Không tìm thấy người nhận để gửi!');
+      return;
+    }
+
+    const replyMsg = quickReplyText.trim();
+    setIsSendingQuickReply(true);
+
+    try {
+      await axiosClient.post('/message/send', {
+        message: replyMsg,
+        targetUserId: partnerId
+      }, {
+        params: { targetUserId: partnerId }
+      });
+
+      // Đánh dấu thông báo đã đọc
+      if (floatingNotif.id) {
+        axiosClient.put(`/notifications/${floatingNotif.id}/read`).catch(() => {});
+        setNotifications(prev => prev.map(item => item.id === floatingNotif.id ? { ...item, unread: false, isRead: true } : item));
+      }
+
+      toast.success('Đã gửi phản hồi tin nhắn!', { id: 'quick-reply' });
+      setQuickReplyText('');
+      setIsTypingQuickReply(false);
+      setFloatingNotif(null);
+    } catch (err) {
+      console.error('Lỗi khi gửi phản hồi nhanh:', err);
+      toast.error(err.response?.data?.message || 'Không thể gửi phản hồi, vui lòng thử lại!');
+    } finally {
+      setIsSendingQuickReply(false);
+    }
+  };
 
   // Xử lý báo cáo bài viết vi phạm
   const handleOpenReportModal = (postId) => {
@@ -2251,13 +2298,15 @@ const Home = ({ initialTab }) => {
               }
 
               const targetPostId = notif.targetPostId || notif.postId || notif.referenceId;
+              const targetActorId = notif.actorId || notif.senderId || notif.userId;
               const normalizedNotif = {
                 id: notif.id || Date.now(),
-                actorId: notif.actorId,
-                actorUsername: notif.actorUsername || notif.actorName,
-                actorDisplayName: notif.actorDisplayName || notif.actorName,
+                actorId: targetActorId,
+                senderId: notif.senderId || targetActorId,
+                actorUsername: notif.actorUsername || notif.senderUsername || notif.account || notif.actorName,
+                actorDisplayName: notif.actorDisplayName || notif.senderDisplayName || notif.nickname || notif.actorName,
                 actorName: notif.actorName || notif.actorDisplayName || notif.actorUsername,
-                actorAvatar: notif.actorAvatar,
+                actorAvatar: notif.actorAvatar || notif.senderAvatar || notif.avatar,
                 referenceId: notif.referenceId || targetPostId,
                 targetPostId: targetPostId,
                 postId: targetPostId,
@@ -2520,10 +2569,23 @@ const Home = ({ initialTab }) => {
     }
     setIsNotifOpen(false);
 
-    // Điều hướng trực tiếp sang Profile nếu là thông báo kết bạn
+    const partnerId = n.actorId || n.senderId || n.userId;
+
+    // 1. Điều hướng thẳng vào đoạn chat 1-1 nếu là thông báo tin nhắn
+    const isMsgNotif = n.type === 'MESSAGE' || n.type === 'CHAT' || n.type === 'DM' ||
+      (n.title && n.title.toLowerCase().includes('tin nhắn')) ||
+      (n.text && n.text.toLowerCase().includes('tin nhắn'));
+    if (isMsgNotif && partnerId) {
+      navigate(`/messages/${partnerId}`, {
+        state: { from: location.pathname + location.search }
+      });
+      return;
+    }
+
+    // 2. Điều hướng trực tiếp sang Profile nếu là thông báo kết bạn
     if (n.type === 'FRIEND_REQUEST' || n.type === 'FRIEND_ACCEPTED' || (n.text && n.text.includes('kết bạn'))) {
-      if (n.actorId) {
-        navigateToProfile(n.actorId);
+      if (partnerId) {
+        navigateToProfile(partnerId);
       }
       return;
     }
@@ -2547,10 +2609,10 @@ const Home = ({ initialTab }) => {
           console.warn('Không thể tải bài viết từ thông báo:', err);
         }
       }
-    } else if (n.actorId) {
-      navigate(`/profile/${n.actorId}`);
+    } else if (partnerId) {
+      navigate(`/profile/${partnerId}`);
     }
-  }, [safePosts, navigate]);
+  }, [safePosts, navigate, location]);
 
   // Nguồn cấp bài viết: Nếu người dùng đã Enter tìm kiếm thì nạp kết quả server (Elastic-like), ngược lại dùng feed bình thường
   const basePostsList = (activeSearchQuery && Array.isArray(searchResults))
@@ -5241,6 +5303,42 @@ const Home = ({ initialTab }) => {
                 Từ chối
               </button>
             </div>
+          )}
+
+          {/* Form trả lời nhanh tin nhắn ngay trên thanh thông báo nổi (Quick Reply) */}
+          {(floatingNotif.type === 'MESSAGE' || floatingNotif.type === 'CHAT' || floatingNotif.type === 'DM' || (floatingNotif.title && floatingNotif.title.toLowerCase().includes('tin nhắn'))) && (
+            <form
+              onSubmit={handleQuickReplySubmit}
+              onClick={(e) => e.stopPropagation()}
+              className="flex items-center gap-2 pt-2 border-t border-zinc-800/80"
+            >
+              <input
+                type="text"
+                value={quickReplyText}
+                onChange={(e) => setQuickReplyText(e.target.value)}
+                onFocus={() => setIsTypingQuickReply(true)}
+                onBlur={() => {
+                  if (!quickReplyText.trim()) setIsTypingQuickReply(false);
+                }}
+                placeholder="Trả lời nhanh tin nhắn này..."
+                className="flex-1 bg-zinc-900/90 border border-zinc-700/70 focus:border-emerald-500/80 focus:ring-1 focus:ring-emerald-500/40 rounded-xl px-3 py-1.5 text-xs text-white placeholder-zinc-500 outline-none transition-all"
+              />
+              <button
+                type="submit"
+                disabled={!quickReplyText.trim() || isSendingQuickReply}
+                className="h-7.5 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:hover:bg-emerald-500 text-zinc-950 font-semibold text-xs transition-all active:scale-95 flex items-center gap-1.5 shadow-sm shrink-0 cursor-pointer"
+                title="Gửi câu trả lời"
+              >
+                {isSendingQuickReply ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : (
+                  <>
+                    <Send size={11} />
+                    <span>Gửi</span>
+                  </>
+                )}
+              </button>
+            </form>
           )}
         </div>
       )}
