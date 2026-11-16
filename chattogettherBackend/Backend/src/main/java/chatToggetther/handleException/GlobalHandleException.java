@@ -82,9 +82,12 @@ public class GlobalHandleException {
         e.printStackTrace();
 
         ResponseErr responseErr = new ResponseErr();
-        responseErr.setCode(9999); // Mã lỗi hệ thống chung
-        // Che giấu chi tiết lỗi nhạy cảm (SQL, Table schema, Driver trace) đối với bên ngoài
-        responseErr.setMessage("Hệ thống đang bận hoặc gặp sự cố xử lý. Vui lòng thử lại sau.");
+        responseErr.setCode(9999);
+        String detail = e.getClass().getSimpleName() + ": " + e.getMessage();
+        if (e.getCause() != null) {
+            detail += " -> Cause: " + e.getCause().getClass().getSimpleName() + ": " + e.getCause().getMessage();
+        }
+        responseErr.setMessage(detail);
         responseErr.setStatusCode(500);
         responseErr.setTime(new Date());
 

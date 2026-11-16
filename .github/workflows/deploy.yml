@@ -133,5 +133,7 @@ jobs:
             sleep 5
             echo "=== Docker Compose Status ==="
             docker compose ps
+            echo "=== Backend Logs ==="
+            docker compose logs --tail=50 backend
             echo "=== Nginx Logs ==="
             docker compose logs --tail=25 nginx
