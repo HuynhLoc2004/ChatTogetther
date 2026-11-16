@@ -33,6 +33,13 @@ public class RoomPresenceController {
         return false;
     }
 
+    public static List<Long> getOnlineUserIdsStatic() {
+        if (staticPresenceService != null) {
+            return staticPresenceService.getOnlineUserIds();
+        }
+        return Collections.emptyList();
+    }
+
     public static void recordHeartbeat(Long userId) {
         if (userId != null && staticPresenceService != null) {
             staticPresenceService.recordActive(userId, null);

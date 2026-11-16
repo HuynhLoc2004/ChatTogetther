@@ -7,6 +7,7 @@ const PresenceContext = createContext({
   isUserOnline: () => false,
   getUserStatusText: () => 'Ngoại tuyến',
   markUserActive: () => {},
+  pingUserPresence: () => {},
   refreshPresence: () => {}
 });
 
@@ -45,6 +46,20 @@ export const PresenceProvider = ({ children }) => {
       return next;
     });
   }, []);
+
+  // Ping chủ động một user cụ thể qua WebSocket STOMP để lấy phản hồi online tức thì (0ms)
+  const pingUserPresence = useCallback((targetUserId) => {
+    if (!targetUserId || !stompClientRef.current || !stompClientRef.current.connected) return;
+    const currentUserId = getCurrentUserId();
+    try {
+      stompClientRef.current.send('/topic/presence', {}, JSON.stringify({
+        type: 'PRESENCE_PING',
+        targetUserId: Number(targetUserId),
+        requesterId: Number(currentUserId),
+        timestamp: Date.now()
+      }));
+    } catch (_) {}
+  }, [getCurrentUserId]);
 
   // 1. Nạp danh sách trực tuyến từ server REST API
   const fetchOnlineUsers = useCallback(async () => {
@@ -118,9 +133,30 @@ export const PresenceProvider = ({ children }) => {
       client.subscribe('/topic/presence', (frame) => {
         try {
           const data = JSON.parse(frame.body);
-          if (data && data.userId) {
+          if (!data) return;
+
+          // Phản hồi lập tức yêu cầu khám phá trực tuyến từ peer khác (P2P Discovery tức thì)
+          if (data.type === 'PRESENCE_REQUEST' && data.requesterId && String(data.requesterId) !== String(currentUserId)) {
+            client.send('/topic/presence', {}, JSON.stringify({
+              type: 'PRESENCE_REPORT',
+              userId: Number(currentUserId),
+              targetUserId: Number(data.requesterId),
+              isOnline: true,
+              timestamp: Date.now()
+            }));
+          } else if (data.type === 'PRESENCE_PING' && data.targetUserId && String(data.targetUserId) === String(currentUserId)) {
+            client.send('/topic/presence', {}, JSON.stringify({
+              type: 'PRESENCE_PONG',
+              userId: Number(currentUserId),
+              targetUserId: Number(data.requesterId),
+              isOnline: true,
+              timestamp: Date.now()
+            }));
+          }
+
+          if (data.userId) {
             const uid = String(data.userId);
-            if (data.isOnline) {
+            if (data.isOnline !== false) {
               lastSeenMapRef.current.set(uid, data.timestamp || Date.now());
               setOnlineUserIds(prev => {
                 if (prev.has(uid)) return prev;
@@ -141,8 +177,17 @@ export const PresenceProvider = ({ children }) => {
         } catch (e) {}
       });
 
-      // Phát tín hiệu ngay khi kết nối thành công
+      // Phát tín hiệu ngay khi kết nối thành công và yêu cầu peer phản hồi
       broadcastMyPresence(true);
+      try {
+        client.send('/topic/presence', {}, JSON.stringify({
+          type: 'PRESENCE_REQUEST',
+          requesterId: Number(currentUserId),
+          userId: Number(currentUserId),
+          isOnline: true,
+          timestamp: Date.now()
+        }));
+      } catch (_) {}
     }, () => {});
 
     // Định kỳ gửi nhịp tim mỗi 15 giây (rất nhẹ, cực chuẩn)
@@ -150,12 +195,12 @@ export const PresenceProvider = ({ children }) => {
       broadcastMyPresence(true);
     }, 15000);
 
-    // Quét loại bỏ người dùng hết hạn tín hiệu (> 45s) mỗi 10 giây
+    // Quét loại bỏ người dùng hết hạn tín hiệu (> 120s) mỗi 15 giây
     const pruneInterval = setInterval(() => {
       const now = Date.now();
       const expired = [];
       lastSeenMapRef.current.forEach((ts, uid) => {
-        if (uid !== String(currentUserId) && now - ts > 45000) {
+        if (uid !== String(currentUserId) && now - ts > 120000) {
           expired.push(uid);
         }
       });
@@ -167,7 +212,7 @@ export const PresenceProvider = ({ children }) => {
           return next;
         });
       }
-    }, 10000);
+    }, 15000);
 
     // Nạp danh sách ban đầu từ server
     fetchOnlineUsers();
@@ -215,9 +260,9 @@ export const PresenceProvider = ({ children }) => {
     const myId = getCurrentUserId();
     if (myId && uid === String(myId)) return true; // Chính mình luôn trực tuyến
 
-    // Kiểm tra timestamp gần nhất từ peer broadcast hoặc tương tác
+    // Kiểm tra timestamp gần nhất từ peer broadcast hoặc tương tác (120 giây)
     const lastSeen = lastSeenMapRef.current.get(uid);
-    if (lastSeen && (Date.now() - lastSeen < 60000)) {
+    if (lastSeen && (Date.now() - lastSeen < 120000)) {
       return true;
     }
 
@@ -253,6 +298,7 @@ export const PresenceProvider = ({ children }) => {
       isUserOnline,
       getUserStatusText,
       markUserActive,
+      pingUserPresence,
       refreshPresence: fetchOnlineUsers
     }}>
       {children}

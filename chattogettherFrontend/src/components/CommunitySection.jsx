@@ -2318,11 +2318,10 @@ export const CommunitySection = ({
                     key={cat.id || cat.slug}
                     type="button"
                     onClick={() => setActiveCategory(cat.slug || cat.id)}
-                    className={`px-3.5 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all border shrink-0 flex items-center gap-1.5 ${
-                      isSelected 
-                        ? 'bg-zinc-800 text-white border-zinc-700 shadow-sm' 
-                        : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200 hover:border-zinc-700'
-                    }`}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all border shrink-0 flex items-center gap-1.5 ${isSelected
+                      ? 'bg-zinc-800 text-white border-zinc-700 shadow-sm'
+                      : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200 hover:border-zinc-700'
+                      }`}
                   >
                     <span>{cat.name}</span>
                     <span className="font-mono text-[11px] tabular-nums text-zinc-500">
@@ -2359,7 +2358,7 @@ export const CommunitySection = ({
             const allList = Array.isArray(groups) ? groups : [];
             const filtered = allList.filter(g => {
               if (activeCategory !== 'all') {
-                const catMatch = 
+                const catMatch =
                   (g.categoryCode && g.categoryCode.toLowerCase() === activeCategory.toLowerCase()) ||
                   (g.categoryId && String(g.categoryId) === String(activeCategory)) ||
                   (g.categoryName && g.categoryName.toLowerCase() === activeCategory.toLowerCase());
@@ -2626,7 +2625,7 @@ export const CommunitySection = ({
                   </div>
                   <div className="relative">
                     <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
-                    <input 
+                    <input
                       type="text"
                       placeholder="Tìm chủ đề có sẵn hoặc tự gõ chủ đề mới..."
                       value={topicInput}
@@ -2645,8 +2644,8 @@ export const CommunitySection = ({
                       className="w-full pl-9 pr-8 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-100 text-xs focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 placeholder-zinc-500 transition-colors"
                     />
                     {topicInput && (
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         onClick={() => {
                           setTopicInput('');
                           setCreateForm(prev => ({ ...prev, categoryName: '', categoryCode: '', categoryId: null }));
@@ -2660,7 +2659,7 @@ export const CommunitySection = ({
 
                   {/* Dropdown danh sách chủ đề + Tùy chọn tạo mới */}
                   {isTopicDropdownOpen && (
-                    <div 
+                    <div
                       className="absolute top-full left-0 right-0 mt-1 z-30 bg-zinc-900 border border-zinc-800 rounded-xl p-1.5 shadow-2xl space-y-1 max-h-52 overflow-y-auto custom-dark-scrollbar"
                       onMouseDown={(e) => e.preventDefault()}
                     >
@@ -2705,9 +2704,8 @@ export const CommunitySection = ({
                                 setTopicInput(c.name);
                                 setIsTopicDropdownOpen(false);
                               }}
-                              className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center justify-between ${
-                                isSelected ? 'bg-zinc-800 text-white font-medium' : 'text-zinc-300 hover:bg-zinc-800/60'
-                              }`}
+                              className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center justify-between ${isSelected ? 'bg-zinc-800 text-white font-medium' : 'text-zinc-300 hover:bg-zinc-800/60'
+                                }`}
                             >
                               <div className="flex items-center gap-2">
                                 <span>{c.name}</span>
@@ -2733,7 +2731,7 @@ export const CommunitySection = ({
                   {/* Khung chứa các tag pill và input */}
                   <div className="min-h-[42px] px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center flex-wrap gap-1.5 focus-within:border-zinc-600 transition-colors">
                     {createForm.tags.map((tag, idx) => (
-                      <span 
+                      <span
                         key={idx}
                         className="inline-flex items-center gap-1 font-mono text-[11px] bg-zinc-800 text-zinc-200 px-2 py-0.5 rounded-lg border border-zinc-700/80"
                       >
@@ -2749,7 +2747,7 @@ export const CommunitySection = ({
                     ))}
 
                     {createForm.tags.length < 5 && (
-                      <input 
+                      <input
                         type="text"
                         placeholder={createForm.tags.length === 0 ? "Nhập từ khóa (VD: lofi, guitar...) rồi gõ Enter" : "Thêm tag..."}
                         value={tagInput}
@@ -2825,13 +2823,12 @@ export const CommunitySection = ({
                   <label className="block text-zinc-300 text-xs font-semibold mb-2">Quyền riêng tư & Tham gia</label>
                   <div className="grid grid-cols-2 gap-2.5">
                     {/* Thẻ Công khai */}
-                    <div 
+                    <div
                       onClick={() => setCreateForm(prev => ({ ...prev, isPrivate: false, requiresApproval: false }))}
-                      className={`p-3.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
-                        !createForm.requiresApproval && !createForm.isPrivate
-                          ? 'bg-zinc-950 border-zinc-600 text-white shadow-sm ring-1 ring-zinc-600'
-                          : 'bg-zinc-950/70 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-300'
-                      }`}
+                      className={`p-3.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${!createForm.requiresApproval && !createForm.isPrivate
+                        ? 'bg-zinc-950 border-zinc-600 text-white shadow-sm ring-1 ring-zinc-600'
+                        : 'bg-zinc-950/70 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-300'
+                        }`}
                     >
                       <div className="flex items-center justify-between mb-2">
                         <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-200">
@@ -2852,13 +2849,12 @@ export const CommunitySection = ({
                     </div>
 
                     {/* Thẻ Riêng tư & Duyệt */}
-                    <div 
+                    <div
                       onClick={() => setCreateForm(prev => ({ ...prev, isPrivate: true, requiresApproval: true }))}
-                      className={`p-3.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
-                        createForm.requiresApproval || createForm.isPrivate
-                          ? 'bg-zinc-950 border-zinc-600 text-white shadow-sm ring-1 ring-zinc-600'
-                          : 'bg-zinc-950/70 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-300'
-                      }`}
+                      className={`p-3.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${createForm.requiresApproval || createForm.isPrivate
+                        ? 'bg-zinc-950 border-zinc-600 text-white shadow-sm ring-1 ring-zinc-600'
+                        : 'bg-zinc-950/70 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-300'
+                        }`}
                     >
                       <div className="flex items-center justify-between mb-2">
                         <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-200">

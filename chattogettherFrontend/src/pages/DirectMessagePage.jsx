@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
-import { 
-  ArrowLeft, Search, MessageSquare, Phone, PhoneOff, Video, VideoOff, 
-  Mic, MicOff, Send, Image as ImageIcon, Smile, MoreVertical, User, 
+import {
+  ArrowLeft, Search, MessageSquare, Phone, PhoneOff, Video, VideoOff,
+  Mic, MicOff, Send, Image as ImageIcon, Smile, MoreVertical, User,
   Clock, CheckCircle2, ChevronDown, Volume2, Shield, Share2, Sparkles,
   PhoneCall, PhoneMissed, Reply, CornerUpLeft, Forward, X, Play, Heart,
   ThumbsUp, Flame, Check, CheckCheck, Users, ExternalLink
@@ -58,7 +58,7 @@ const formatPreviewText = (text) => {
     try {
       let unescaped = text.trim();
       if (unescaped.startsWith('"') && unescaped.endsWith('"')) {
-        try { unescaped = JSON.parse(unescaped); } catch (_) {}
+        try { unescaped = JSON.parse(unescaped); } catch (_) { }
       }
       const jsonMatch = typeof unescaped === 'string' ? unescaped.match(/\{[\s\S]*"type"\s*:\s*"shared_post"[\s\S]*\}/) : null;
       const targetStr = jsonMatch ? jsonMatch[0] : unescaped;
@@ -88,7 +88,7 @@ export const DirectMessagePage = () => {
   const [searchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const { isUserOnline, getUserStatusText, markUserActive } = usePresence();
+  const { isUserOnline, getUserStatusText, markUserActive, pingUserPresence } = usePresence();
 
   const urlTargetUserId = routeUserId || searchParams.get('userId') || searchParams.get('user_id');
   const passedTargetUser = location.state?.targetUser || location.state?.partner;
@@ -103,7 +103,7 @@ export const DirectMessagePage = () => {
       try {
         navigate(decodeURIComponent(fromParam));
         return;
-      } catch (_) {}
+      } catch (_) { }
     }
     if (window.history.state && window.history.state.idx > 0) {
       navigate(-1);
@@ -200,14 +200,14 @@ export const DirectMessagePage = () => {
   useEffect(() => {
     try {
       localStorage.setItem('talovin_dm_unread', JSON.stringify(unreadMap));
-    } catch (_) {}
+    } catch (_) { }
   }, [unreadMap]);
 
   // Lưu reactionsMap vào localStorage
   useEffect(() => {
     try {
       localStorage.setItem('talovin_dm_reactions', JSON.stringify(reactionsMap));
-    } catch (_) {}
+    } catch (_) { }
   }, [reactionsMap]);
 
   // Cuộn xuống tin nhắn mới nhất
@@ -227,7 +227,7 @@ export const DirectMessagePage = () => {
   // Heartbeat định kỳ gửi lên server để duy trì trạng thái online
   useEffect(() => {
     const sendHeartbeat = () => {
-      axiosClient.post('/presence/heartbeat', { userId: Number(currentUserId) }).catch(() => {});
+      axiosClient.post('/presence/heartbeat', { userId: Number(currentUserId) }).catch(() => { });
     };
     sendHeartbeat();
     const interval = setInterval(sendHeartbeat, 20000);
@@ -237,7 +237,7 @@ export const DirectMessagePage = () => {
   // Tự động yêu cầu quyền thông báo hệ thống khi vào trang nhắn tin
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission().catch(() => {});
+      Notification.requestPermission().catch(() => { });
     }
   }, []);
 
@@ -320,13 +320,13 @@ export const DirectMessagePage = () => {
 
                     try {
                       localStorage.setItem('talovin_dm_friends_cache', JSON.stringify(nextList));
-                    } catch (_) {}
+                    } catch (_) { }
 
                     return nextList;
                   });
                 }
               }
-            } catch (_) {}
+            } catch (_) { }
           }
         }
       } catch (e) {
@@ -350,7 +350,7 @@ export const DirectMessagePage = () => {
           const publicRooms = res.data.data.filter(r => !r.nameroom?.startsWith('DIRECT_') && !r.nameroom?.includes('&'));
           setCommunityRooms(publicRooms);
         }
-      } catch (_) {}
+      } catch (_) { }
     };
     fetchRooms();
   }, []);
@@ -358,7 +358,12 @@ export const DirectMessagePage = () => {
   // 2. Mở hoặc tạo đoạn chat khi có targetId
   const openDirectChat = useCallback(async (targetId, fallbackPartner = null) => {
     if (!targetId || targetId.toString() === currentUserId?.toString()) return;
-    
+
+    // Kích hoạt ping trạng thái trực tuyến tức thì qua STOMP cho người nhận
+    if (pingUserPresence) {
+      pingUserPresence(targetId);
+    }
+
     // Nếu có thông tin người bạn từ danh sách hoặc state chuyển qua, luôn giữ thông tin hiển thị
     if (fallbackPartner) {
       setActivePartner(fallbackPartner);
@@ -373,7 +378,7 @@ export const DirectMessagePage = () => {
       try {
         localStorage.setItem('talovin_dm_unread', JSON.stringify(next));
         window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: next }));
-      } catch (_) {}
+      } catch (_) { }
       return next;
     });
 
@@ -395,7 +400,7 @@ export const DirectMessagePage = () => {
         const cached = JSON.parse(localStorage.getItem('talovin_dm_friends_cache') || '[]');
         const foundInCache = cached.find(f => String(f.id) === String(targetId) || f.account === targetId);
         if (foundInCache) effectivePartner = foundInCache;
-      } catch (_) {}
+      } catch (_) { }
     }
     if (!effectivePartner && activePartnerRef.current && (String(activePartnerRef.current.id) === String(targetId) || activePartnerRef.current.account === targetId)) {
       effectivePartner = activePartnerRef.current;
@@ -445,7 +450,7 @@ export const DirectMessagePage = () => {
           if (effectivePartner?.account && effectivePartner.account.toString() !== targetId.toString()) {
             try {
               res = await axiosClient.get(`/message/direct/${effectivePartner.account}`);
-            } catch (_) {}
+            } catch (_) { }
           }
           if (!res) {
             try {
@@ -454,7 +459,7 @@ export const DirectMessagePage = () => {
               if (effectivePartner?.account) {
                 try {
                   res = await axiosClient.post(`/rooms/direct/${effectivePartner.account}`);
-                } catch (_) {}
+                } catch (_) { }
               }
             }
           }
@@ -483,7 +488,7 @@ export const DirectMessagePage = () => {
               setActivePartner(effectivePartner);
               setPartnerNotFound(false);
             }
-          } catch (_) {}
+          } catch (_) { }
         }
       }
 
@@ -527,10 +532,10 @@ export const DirectMessagePage = () => {
             }
             setFriends(prev => prev.map(f => {
               if (f.id?.toString() === targetId.toString() || (effectivePartner && f.id?.toString() === effectivePartner.id?.toString())) {
-                return { 
-                  ...f, 
+                return {
+                  ...f,
                   directRoomId: roomId,
-                  lastMessage: lastMsg.message, 
+                  lastMessage: lastMsg.message,
                   lastMessageTime: lastMsg.timeSend || new Date().toISOString(),
                   lastMessageFormattedTime: lastMsg.formattedTime,
                   hasUnread: false
@@ -564,7 +569,7 @@ export const DirectMessagePage = () => {
     if (urlTargetUserId === lastTargetIdRef.current && activePartnerRef.current) return;
 
     lastTargetIdRef.current = urlTargetUserId;
-    
+
     // Tìm kiếm bạn bè từ cache hoặc state
     let partnerToUse = friends.find(f => f.id?.toString() === urlTargetUserId?.toString() || f.account === urlTargetUserId);
     if (!partnerToUse && passedTargetUser && (passedTargetUser.id?.toString() === urlTargetUserId.toString() || passedTargetUser.account === urlTargetUserId)) {
@@ -574,7 +579,7 @@ export const DirectMessagePage = () => {
       try {
         const cached = JSON.parse(localStorage.getItem('talovin_dm_friends_cache') || '[]');
         partnerToUse = cached.find(f => f.id?.toString() === urlTargetUserId?.toString() || f.account === urlTargetUserId);
-      } catch (_) {}
+      } catch (_) { }
     }
 
     openDirectChat(urlTargetUserId, partnerToUse);
@@ -649,7 +654,7 @@ export const DirectMessagePage = () => {
               try {
                 localStorage.setItem('talovin_dm_unread', JSON.stringify(next));
                 window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: next }));
-              } catch (_) {}
+              } catch (_) { }
               return next;
             });
 
@@ -660,7 +665,7 @@ export const DirectMessagePage = () => {
                   icon: newMsg.senderAvatar || newMsg.avatar || '/favicon.ico',
                   tag: `dm-${senderId}`
                 });
-              } catch (_) {}
+              } catch (_) { }
             }
           }
 
@@ -711,7 +716,7 @@ export const DirectMessagePage = () => {
                 timeSend: alert.createdAt || new Date().toISOString()
               });
             }
-          } catch (_) {}
+          } catch (_) { }
         });
 
         // 3. Nhận tin nhắn riêng tư toàn cục fallback
@@ -725,7 +730,7 @@ export const DirectMessagePage = () => {
             roomSub = client.subscribe(`/topic/room/${activeRoomIdRef.current}`, (message) => {
               handleIncomingDirectMsg(message.body);
             });
-          } catch (_) {}
+          } catch (_) { }
         }
       });
     } catch (e) {
@@ -734,7 +739,7 @@ export const DirectMessagePage = () => {
 
     return () => {
       if (roomSub) {
-        try { roomSub.unsubscribe(); } catch (_) {}
+        try { roomSub.unsubscribe(); } catch (_) { }
       }
       if (client && client.connected) {
         client.disconnect();
@@ -763,13 +768,13 @@ export const DirectMessagePage = () => {
             playMessageIncoming();
           }
           setTimeout(() => scrollToBottom(true), 60);
-        } catch (_) {}
+        } catch (_) { }
       });
-    } catch (_) {}
+    } catch (_) { }
 
     return () => {
       if (sub) {
-        try { sub.unsubscribe(); } catch (_) {}
+        try { sub.unsubscribe(); } catch (_) { }
       }
     };
   }, [activeRoomId, currentUserId, scrollToBottom]);
@@ -870,7 +875,7 @@ export const DirectMessagePage = () => {
           if (activePartner?.account && activePartner.account.toString() !== targetIdentifier.toString()) {
             try {
               roomRes = await axiosClient.get(`/message/direct/${activePartner.account}`);
-            } catch (_) {}
+            } catch (_) { }
           }
           if (!roomRes) {
             try {
@@ -879,7 +884,7 @@ export const DirectMessagePage = () => {
               if (activePartner?.account) {
                 try {
                   roomRes = await axiosClient.post(`/rooms/direct/${activePartner.account}`);
-                } catch (_) {}
+                } catch (_) { }
               }
             }
           }
@@ -903,7 +908,7 @@ export const DirectMessagePage = () => {
           if (targetRoom) {
             setActiveRoomId(targetRoom);
           }
-        } catch (_) {}
+        } catch (_) { }
       }
 
       // Xử lý tệp đính kèm: Nén ảnh hoặc đọc Base64
@@ -925,23 +930,26 @@ export const DirectMessagePage = () => {
         finalMessage = `[REPLY:${currentReply.id}|${currentReply.senderName}]: ${content}`;
       }
       if (uploadedMediaUrl) {
-        finalMessage = finalMessage 
-          ? `${finalMessage} [MEDIA:${currentMedia.type}|${uploadedMediaUrl}]` 
+        finalMessage = finalMessage
+          ? `${finalMessage} [MEDIA:${currentMedia.type}|${uploadedMediaUrl}]`
           : `[MEDIA:${currentMedia.type}|${uploadedMediaUrl}]`;
       }
 
       await axiosClient.post('/message/send', {
-        message: finalMessage || content || '[Tệp tin]'
+        message: finalMessage || content || '[Tệp tin]',
+        user_room: targetRoom || undefined,
+        roomId: targetRoom || undefined,
+        targetUserId: targetIdentifier
       }, {
-        params: { 
+        params: {
           user_room: targetRoom || undefined,
           targetUserId: targetIdentifier
         }
       });
 
       // Đánh dấu tin nhắn gửi thành công
-      setMessages(prev => prev.map(m => m.id === tempId ? { 
-        ...m, 
+      setMessages(prev => prev.map(m => m.id === tempId ? {
+        ...m,
         pending: false,
         mediaUrl: uploadedMediaUrl || m.mediaUrl
       } : m));
@@ -963,7 +971,7 @@ export const DirectMessagePage = () => {
     setReactionsMap(prev => {
       const msgReactions = { ...(prev[msgId] || {}) };
       const currentCount = msgReactions[emoji] || 0;
-      
+
       if (currentCount > 0) {
         msgReactions[emoji] = currentCount - 1;
         if (msgReactions[emoji] <= 0) delete msgReactions[emoji];
@@ -1039,7 +1047,7 @@ export const DirectMessagePage = () => {
     let list = [...friends];
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      list = list.filter(f => 
+      list = list.filter(f =>
         (f.nickname && f.nickname.toLowerCase().includes(q)) ||
         (f.account && f.account.toLowerCase().includes(q))
       );
@@ -1065,22 +1073,25 @@ export const DirectMessagePage = () => {
 
   return (
     <div className="flex flex-col h-screen w-full bg-zinc-950 text-zinc-100 select-none overflow-hidden font-sans">
-      
+
       {/* HEADER TOÀN TRANG (Topbar) */}
       <header className="h-14 border-b border-zinc-800/80 bg-zinc-950/90 backdrop-blur px-4 flex items-center justify-between shrink-0 z-20">
         <div className="flex items-center gap-3">
-          <button 
+          <button
             type="button"
+            onClick={() => navigate('/home')}
             onClick={handleBack}
             className="p-2 -ml-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors flex items-center gap-1.5 text-xs font-medium"
+            title="Quay lại Trang chủ"
             title="Quay lại"
           >
             <ArrowLeft size={16} />
+            <span className="hidden sm:inline">Sảnh</span>
             <span className="hidden sm:inline">Quay lại</span>
           </button>
-          
+
           <div className="h-4 w-[1px] bg-zinc-800" />
-          
+
           <div className="flex items-center gap-2">
             <MessageSquare size={16} className="text-emerald-400" />
             <span className="font-bold text-sm tracking-wide text-zinc-100">Hộp thư Tin nhắn</span>
@@ -1096,14 +1107,14 @@ export const DirectMessagePage = () => {
 
       {/* BODY CHÍNH */}
       <div className="flex-1 flex overflow-hidden">
-        
+
         {/* CỘT TRÁI: DANH SÁCH BẠN BÈ / CUỘC TRÒ CHUYỆN */}
         <aside className={`w-full md:w-80 lg:w-96 flex flex-col border-r border-zinc-800/80 bg-zinc-950 shrink-0 ${urlTargetUserId ? 'hidden md:flex' : 'flex animate-in fade-in duration-150'}`}>
           {/* Ô tìm kiếm bạn bè */}
           <div className="p-3 border-b border-zinc-800/60">
             <div className="relative">
               <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
-              <input 
+              <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -1133,7 +1144,7 @@ export const DirectMessagePage = () => {
                 const isSelected = activePartner?.id?.toString() === partnerIdStr;
                 const unreadCount = unreadMap[partner.id] || unreadMap[partnerIdStr] || (partner.hasUnread && !isSelected ? 1 : 0);
                 const isUnread = unreadCount > 0;
-                
+
                 // Trạng thái online: Nhanh nhạy & chuẩn xác theo thời gian thực
                 const isPartnerOnline = isUserOnline(partner.id);
 
@@ -1144,19 +1155,17 @@ export const DirectMessagePage = () => {
                       navigate(`/messages/${partner.id}`);
                       openDirectChat(partner.id, partner);
                     }}
-                    className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all duration-150 relative ${
-                      isSelected
-                        ? 'bg-zinc-800/90 border border-zinc-700/90 text-white shadow-sm'
-                        : isUnread
+                    className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all duration-150 relative ${isSelected
+                      ? 'bg-zinc-800/90 border border-zinc-700/90 text-white shadow-sm'
+                      : isUnread
                         ? 'bg-zinc-900/95 border border-emerald-500/50 text-white shadow-md'
                         : 'hover:bg-zinc-900/60 text-zinc-300 border border-transparent'
-                    }`}
+                      }`}
                   >
                     <div className="relative shrink-0">
                       <UserAvatar avatarUrl={partner.avatar} username={partner.account} name={partner.nickname || partner.account} size={42} />
-                      <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-zinc-950 ${
-                        isPartnerOnline ? 'bg-emerald-500 ring-2 ring-emerald-500/20' : 'bg-zinc-600'
-                      }`} />
+                      <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-zinc-950 ${isPartnerOnline ? 'bg-emerald-500 ring-2 ring-emerald-500/20' : 'bg-zinc-600'
+                        }`} />
                     </div>
 
                     <div className="min-w-0 flex-1">
@@ -1164,7 +1173,7 @@ export const DirectMessagePage = () => {
                         <h4 className={`text-xs truncate ${isUnread ? 'font-bold text-white' : 'font-semibold text-zinc-200'}`}>
                           {partner.nickname || partner.account}
                         </h4>
-                        
+
                         <span className={`text-[10px] font-mono shrink-0 ml-1 ${isUnread ? 'text-emerald-400 font-semibold' : 'text-zinc-500'}`}>
                           {partner.lastMessageFormattedTime || (partner.lastMessageTime ? new Date(partner.lastMessageTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '')}
                         </span>
@@ -1209,11 +1218,11 @@ export const DirectMessagePage = () => {
             </div>
           ) : (
             <div className="flex-1 flex flex-col h-full overflow-hidden">
-              
+
               {/* TOPBAR CỦA KHUNG CHAT */}
               <div className="h-14 px-4 border-b border-zinc-800/80 bg-zinc-950 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-3 min-w-0">
-                  <button 
+                  <button
                     type="button"
                     onClick={() => {
                       navigate('/messages');
@@ -1226,9 +1235,8 @@ export const DirectMessagePage = () => {
 
                   <div className="relative shrink-0">
                     <UserAvatar avatarUrl={activePartner.avatar} username={activePartner.account} name={activePartner.nickname || activePartner.account} size={36} />
-                    <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-zinc-950 ${
-                      isUserOnline(activePartner.id) ? 'bg-emerald-500 ring-2 ring-emerald-500/20' : 'bg-zinc-600'
-                    }`} />
+                    <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-zinc-950 ${isUserOnline(activePartner.id) ? 'bg-emerald-500 ring-2 ring-emerald-500/20' : 'bg-zinc-600'
+                      }`} />
                   </div>
 
                   <div className="min-w-0">
@@ -1288,7 +1296,7 @@ export const DirectMessagePage = () => {
               </div>
 
               {/* VÙNG HIỂN THỊ NỘI DUNG TIN NHẮN */}
-              <div 
+              <div
                 ref={scrollContainerRef}
                 className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar"
               >
@@ -1365,7 +1373,7 @@ export const DirectMessagePage = () => {
                       try {
                         let unescaped = displayContent.trim();
                         if (unescaped.startsWith('"') && unescaped.endsWith('"')) {
-                          try { unescaped = JSON.parse(unescaped); } catch (_) {}
+                          try { unescaped = JSON.parse(unescaped); } catch (_) { }
                         }
                         if (typeof unescaped === 'string' && unescaped.includes('&quot;')) {
                           unescaped = unescaped.replace(/&quot;/g, '"');
@@ -1376,7 +1384,7 @@ export const DirectMessagePage = () => {
                         if (parsed && (parsed.type === 'shared_post' || parsed.postId)) {
                           sharedPostObj = parsed;
                         }
-                      } catch (_) {}
+                      } catch (_) { }
                     }
 
                     if (isCallLog) {
@@ -1388,27 +1396,25 @@ export const DirectMessagePage = () => {
                       const timeStr = msg.formattedTime || (msg.timeSend ? new Date(msg.timeSend).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '');
 
                       return (
-                        <div 
-                          key={msg.id || index} 
+                        <div
+                          key={msg.id || index}
                           className={`w-full flex ${isMe ? 'justify-end' : 'justify-start'} my-2.5`}
                         >
-                          <div 
-                            className={`w-64 sm:w-72 rounded-2xl p-3.5 shadow-md border transition-all ${
-                              isMe 
-                                ? 'bg-zinc-800/90 text-zinc-100 rounded-tr-sm border-zinc-700/70' 
-                                : 'bg-zinc-900/90 text-zinc-200 rounded-tl-sm border-zinc-800'
-                            }`}
+                          <div
+                            className={`w-64 sm:w-72 rounded-2xl p-3.5 shadow-md border transition-all ${isMe
+                              ? 'bg-zinc-800/90 text-zinc-100 rounded-tr-sm border-zinc-700/70'
+                              : 'bg-zinc-900/90 text-zinc-200 rounded-tl-sm border-zinc-800'
+                              }`}
                           >
                             {/* Tiêu đề & Icon loại cuộc gọi */}
                             <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-zinc-700/50">
                               <div className="flex items-center gap-2.5">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                                  isMissed 
-                                    ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30' 
-                                    : isVideo 
-                                      ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30' 
-                                      : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                                }`}>
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${isMissed
+                                  ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
+                                  : isVideo
+                                    ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30'
+                                    : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                                  }`}>
                                   {isMissed ? (
                                     <PhoneMissed size={16} />
                                   ) : isVideo ? (
@@ -1422,8 +1428,8 @@ export const DirectMessagePage = () => {
                                     {isVideo ? 'Cuộc gọi video' : 'Cuộc gọi thoại'}
                                   </span>
                                   <span className={`text-[10px] font-medium ${isMissed ? 'text-rose-400' : 'text-zinc-400'}`}>
-                                    {isMissed 
-                                      ? (isMe ? 'Đối phương nhỡ' : 'Cuộc gọi nhỡ') 
+                                    {isMissed
+                                      ? (isMe ? 'Đối phương nhỡ' : 'Cuộc gọi nhỡ')
                                       : (isMe ? 'Cuộc gọi đi' : 'Cuộc gọi đến')}
                                   </span>
                                 </div>
@@ -1454,11 +1460,10 @@ export const DirectMessagePage = () => {
                                     navigate(`/call/direct/${safeTargetId}?type=${isVideo ? 'video' : 'audio'}&from=${currentFrom}`);
                                   }
                                 }}
-                                className={`px-2.5 py-1 rounded-lg text-[11px] font-medium flex items-center gap-1 transition-colors ${
-                                  isMissed 
-                                    ? 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30' 
-                                    : 'bg-zinc-700/60 hover:bg-zinc-700 text-zinc-200 border border-zinc-600/50'
-                                }`}
+                                className={`px-2.5 py-1 rounded-lg text-[11px] font-medium flex items-center gap-1 transition-colors ${isMissed
+                                  ? 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30'
+                                  : 'bg-zinc-700/60 hover:bg-zinc-700 text-zinc-200 border border-zinc-600/50'
+                                  }`}
                               >
                                 {isVideo ? <Video size={11} /> : <PhoneCall size={11} />}
                                 <span>Gọi lại</span>
@@ -1470,7 +1475,7 @@ export const DirectMessagePage = () => {
                     }
 
                     return (
-                      <div 
+                      <div
                         key={msg.id || index}
                         className={`flex flex-col group relative ${isMe ? 'items-end' : 'items-start'} space-y-1 ${msg.pending ? 'opacity-70' : ''}`}
                       >
@@ -1510,12 +1515,11 @@ export const DirectMessagePage = () => {
                         </div>
 
                         {/* Bubble Chat */}
-                        <div 
-                          className={`max-w-[85%] sm:max-w-[70%] px-4 py-2.5 rounded-2xl text-xs leading-relaxed break-words relative shadow-sm ${
-                            isMe 
-                              ? 'bg-zinc-800 text-zinc-100 rounded-tr-sm border border-zinc-700/60' 
-                              : 'bg-zinc-900 text-zinc-200 rounded-tl-sm border border-zinc-800/80'
-                          }`}
+                        <div
+                          className={`max-w-[85%] sm:max-w-[70%] px-4 py-2.5 rounded-2xl text-xs leading-relaxed break-words relative shadow-sm ${isMe
+                            ? 'bg-zinc-800 text-zinc-100 rounded-tr-sm border border-zinc-700/60'
+                            : 'bg-zinc-900 text-zinc-200 rounded-tl-sm border border-zinc-800/80'
+                            }`}
                         >
                           {/* Trích dẫn nội dung Reply nếu có */}
                           {replyInfo && (
@@ -1533,15 +1537,15 @@ export const DirectMessagePage = () => {
                           {mediaObj && (
                             <div className="mb-2 rounded-xl overflow-hidden border border-zinc-800/80 max-w-sm">
                               {mediaObj.type === 'VIDEO' ? (
-                                <video 
-                                  src={mediaObj.url} 
-                                  controls 
+                                <video
+                                  src={mediaObj.url}
+                                  controls
                                   className="w-full max-h-64 object-cover rounded-lg bg-black"
                                 />
                               ) : (
-                                <img 
-                                  src={mediaObj.url} 
-                                  alt="Đính kèm" 
+                                <img
+                                  src={mediaObj.url}
+                                  alt="Đính kèm"
                                   onClick={() => setLightboxMedia(mediaObj.url)}
                                   className="w-full max-h-64 object-cover cursor-pointer hover:opacity-95 transition-opacity rounded-lg"
                                 />
@@ -1551,7 +1555,7 @@ export const DirectMessagePage = () => {
 
                           {/* Nội dung tin nhắn: Bài viết chia sẻ hoặc Văn bản thông thường */}
                           {sharedPostObj ? (
-                            <div 
+                            <div
                               onClick={() => {
                                 if (sharedPostObj.postId) {
                                   navigate(`/#post-${sharedPostObj.postId}`);
@@ -1581,9 +1585,9 @@ export const DirectMessagePage = () => {
 
                               {sharedPostObj.imageUrl && (
                                 <div className="rounded-lg overflow-hidden border border-zinc-800/80 max-h-52 bg-black">
-                                  <img 
-                                    src={sharedPostObj.imageUrl} 
-                                    alt="Ảnh bài viết" 
+                                  <img
+                                    src={sharedPostObj.imageUrl}
+                                    alt="Ảnh bài viết"
                                     className="w-full h-full object-cover"
                                     onError={(e) => { e.currentTarget.style.display = 'none'; }}
                                   />
@@ -1609,7 +1613,7 @@ export const DirectMessagePage = () => {
                           {reactionEntries.length > 0 && (
                             <div className="flex items-center gap-1 mt-1.5 flex-wrap">
                               {reactionEntries.map(([emoji, count]) => (
-                                <span 
+                                <span
                                   key={emoji}
                                   onClick={() => handleToggleReaction(msg.id, emoji)}
                                   className="px-1.5 py-0.5 bg-black/40 border border-zinc-700/60 rounded-full text-[10px] cursor-pointer hover:bg-black/60 transition-colors"
@@ -1647,7 +1651,7 @@ export const DirectMessagePage = () => {
                     <span className="text-zinc-400">Đang trả lời <strong className="text-zinc-200">{replyingTo.senderName}</strong>:</span>
                     <span className="truncate italic text-zinc-300 max-w-xs">{replyingTo.message}</span>
                   </div>
-                  <button 
+                  <button
                     type="button"
                     onClick={() => setReplyingTo(null)}
                     className="p-1 hover:text-white text-zinc-400 rounded-md transition-colors"
@@ -1666,9 +1670,9 @@ export const DirectMessagePage = () => {
                         <Play size={18} />
                       </div>
                     ) : (
-                      <img 
-                        src={selectedMedia.previewUrl} 
-                        alt="Preview" 
+                      <img
+                        src={selectedMedia.previewUrl}
+                        alt="Preview"
                         className="w-12 h-12 object-cover rounded-lg border border-zinc-700"
                       />
                     )}
@@ -1680,7 +1684,7 @@ export const DirectMessagePage = () => {
                     </div>
                   </div>
 
-                  <button 
+                  <button
                     type="button"
                     onClick={handleRemoveMedia}
                     className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors"
@@ -1691,17 +1695,17 @@ export const DirectMessagePage = () => {
               )}
 
               {/* KHUNG NHẬP LIỆU DƯỚI ĐÁY */}
-              <form 
+              <form
                 onSubmit={handleSendMessage}
                 className="shrink-0 p-3 sm:p-4 border-t border-zinc-800/80 bg-zinc-950 flex items-center gap-2"
               >
                 {/* Input chọn file ẩn */}
-                <input 
-                  type="file" 
-                  ref={fileInputRef} 
+                <input
+                  type="file"
+                  ref={fileInputRef}
                   onChange={handleSelectMedia}
-                  accept="image/*,video/*" 
-                  className="hidden" 
+                  accept="image/*,video/*"
+                  className="hidden"
                 />
 
                 {/* Nút icon Tải ảnh / Video */}
@@ -1714,7 +1718,7 @@ export const DirectMessagePage = () => {
                   <ImageIcon size={16} />
                 </button>
 
-                <input 
+                <input
                   type="text"
                   value={textInput}
                   disabled={partnerNotFound}
@@ -1753,8 +1757,8 @@ export const DirectMessagePage = () => {
                 <Forward size={16} className="text-emerald-400" />
                 Chuyển tiếp tin nhắn
               </h3>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => setForwardingMsg(null)}
                 className="text-zinc-400 hover:text-white"
               >
@@ -1772,9 +1776,8 @@ export const DirectMessagePage = () => {
               <button
                 type="button"
                 onClick={() => setForwardTab('friends')}
-                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5 ${
-                  forwardTab === 'friends' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
-                }`}
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5 ${forwardTab === 'friends' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
               >
                 <User size={12} />
                 Bạn bè ({friends.length})
@@ -1782,9 +1785,8 @@ export const DirectMessagePage = () => {
               <button
                 type="button"
                 onClick={() => setForwardTab('rooms')}
-                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5 ${
-                  forwardTab === 'rooms' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
-                }`}
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5 ${forwardTab === 'rooms' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
               >
                 <Users size={12} />
                 Nhóm chat ({communityRooms.length})
@@ -1794,7 +1796,7 @@ export const DirectMessagePage = () => {
             {/* Tìm kiếm */}
             <div className="relative">
               <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
-              <input 
+              <input
                 type="text"
                 value={forwardSearch}
                 onChange={(e) => setForwardSearch(e.target.value)}
@@ -1809,7 +1811,7 @@ export const DirectMessagePage = () => {
                 friends
                   .filter(f => !forwardSearch || (f.nickname || f.account).toLowerCase().includes(forwardSearch.toLowerCase()))
                   .map(friend => (
-                    <div 
+                    <div
                       key={friend.id}
                       className="flex items-center justify-between p-2 rounded-xl hover:bg-zinc-800/60 transition-colors"
                     >
@@ -1830,7 +1832,7 @@ export const DirectMessagePage = () => {
                 communityRooms
                   .filter(r => !forwardSearch || (r.nameroom && r.nameroom.toLowerCase().includes(forwardSearch.toLowerCase())))
                   .map(room => (
-                    <div 
+                    <div
                       key={room.id}
                       className="flex items-center justify-between p-2 rounded-xl hover:bg-zinc-800/60 transition-colors"
                     >
@@ -1860,21 +1862,21 @@ export const DirectMessagePage = () => {
 
       {/* LIGHTBOX XEM ẢNH PHÓNG TO */}
       {lightboxMedia && (
-        <div 
+        <div
           onClick={() => setLightboxMedia(null)}
           className="fixed inset-0 z-[999999] bg-black/95 flex items-center justify-center p-4 animate-in fade-in duration-150 cursor-pointer"
         >
-          <button 
+          <button
             type="button"
             onClick={() => setLightboxMedia(null)}
             className="absolute top-4 right-4 p-2 bg-zinc-800/80 hover:bg-zinc-700 text-white rounded-full transition-colors"
           >
             <X size={20} />
           </button>
-          <img 
-            src={lightboxMedia} 
-            alt="Phóng to" 
-            className="max-w-[95vw] max-h-[90vh] object-contain rounded-xl shadow-2xl" 
+          <img
+            src={lightboxMedia}
+            alt="Phóng to"
+            className="max-w-[95vw] max-h-[90vh] object-contain rounded-xl shadow-2xl"
           />
         </div>
       )}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { 
+import {
   Send, Users, LogOut, MessageCircle, Hash, Radio,
   MoreVertical, UserX, ChevronRight, Trash2, Crown, X, Menu, AlertTriangle,
   Phone, PhoneOff, PhoneMissed, PhoneCall, Mic, MicOff, WifiOff, User, UserCheck, ArrowLeft,
@@ -51,7 +51,7 @@ const parseMessagePayload = (rawText) => {
     try {
       const parsed = JSON.parse(rawText.trim());
       if (parsed.type) return parsed;
-    } catch (e) {}
+    } catch (e) { }
   }
   return { type: 'text', text: rawText };
 };
@@ -78,7 +78,7 @@ const ChatRoom = () => {
       try {
         navigate(decodeURIComponent(fromParam));
         return;
-      } catch (_) {}
+      } catch (_) { }
     }
     if (window.history.state && window.history.state.idx > 0) {
       navigate(-1);
@@ -124,7 +124,7 @@ const ChatRoom = () => {
   // Xin quyền Notification hệ thống khi user vào phòng chat
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission().catch(() => {});
+      Notification.requestPermission().catch(() => { });
     }
   }, []);
 
@@ -150,7 +150,7 @@ const ChatRoom = () => {
   const handleToggleRoomNotification = async () => {
     if (!roomId) return;
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission().catch(() => {});
+      Notification.requestPermission().catch(() => { });
     }
     const nextState = !isRoomNotificationMuted;
     setIsRoomNotificationMuted(nextState);
@@ -222,7 +222,7 @@ const ChatRoom = () => {
       if (Array.isArray(chs) && chs.length > 0) {
         setLoungeChannels(chs);
       }
-    }).catch(() => {});
+    }).catch(() => { });
   }, []);
 
   // Pomodoro Timer interval
@@ -281,7 +281,7 @@ const ChatRoom = () => {
     if (loungeAudioRef.current) {
       loungeAudioRef.current.src = nextCh.streamUrl;
       if (isLoungeRadioPlaying) {
-        loungeAudioRef.current.play().catch(() => {});
+        loungeAudioRef.current.play().catch(() => { });
       }
     }
     toast.success(`Chuyển sang: ${nextCh.name}`);
@@ -292,7 +292,7 @@ const ChatRoom = () => {
     setPomoMinutes(pomoMode === 'work' ? 25 : 5);
     setPomoSeconds(0);
   };
-  
+
   // Hàm lấy user_id an toàn (kết hợp localStorage và giải mã JWT token)
   const getUserId = () => {
     let id = localStorage.getItem('user_id');
@@ -508,10 +508,10 @@ const ChatRoom = () => {
       axiosClient.post('/message/send', {
         message: payload,
         timeSend: new Date().toISOString()
-      }, { params: { user_room: roomId } }).catch(() => {});
-    } catch (e) {}
+      }, { params: { user_room: roomId } }).catch(() => { });
+    } catch (e) { }
 
-    sendCallSignal({ 
+    sendCallSignal({
       type: 'END',
       isPrivate: !!privateCallTarget,
       targetUserId: privateCallTarget ? privateCallTarget.id.toString() : null,
@@ -680,9 +680,9 @@ const ChatRoom = () => {
 
       pc.onicecandidate = (e) => {
         if (e.candidate) {
-          sendCallSignal({ 
-            type: 'CANDIDATE', 
-            candidate: e.candidate, 
+          sendCallSignal({
+            type: 'CANDIDATE',
+            candidate: e.candidate,
             isPrivate: true,
             targetUserId: targetUser.id.toString(),
             isVideo: false
@@ -701,10 +701,10 @@ const ChatRoom = () => {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      sendCallSignal({ 
-        type: 'OFFER', 
-        offer, 
-        isPrivate: true, 
+      sendCallSignal({
+        type: 'OFFER',
+        offer,
+        isPrivate: true,
         targetUserId: targetUser.id.toString(),
         isVideo: false
       });
@@ -740,9 +740,9 @@ const ChatRoom = () => {
       setIsCallScreenOpen(true);
       setCallStatusText('Đang đàm thoại');
 
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: true, 
-        video: isVideo ? { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' } : false 
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: isVideo ? { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' } : false
       });
       localStreamRef.current = stream;
 
@@ -756,9 +756,9 @@ const ChatRoom = () => {
 
       pc.onicecandidate = (e) => {
         if (e.candidate) {
-          sendCallSignal({ 
-            type: 'CANDIDATE', 
-            candidate: e.candidate, 
+          sendCallSignal({
+            type: 'CANDIDATE',
+            candidate: e.candidate,
             isPrivate: incomingCall.isPrivate,
             targetUserId: incomingCall.callerId,
             isVideo: isVideo
@@ -781,8 +781,8 @@ const ChatRoom = () => {
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
 
-      sendCallSignal({ 
-        type: 'ANSWER', 
+      sendCallSignal({
+        type: 'ANSWER',
         answer,
         isPrivate: incomingCall.isPrivate,
         targetUserId: incomingCall.callerId,
@@ -816,10 +816,10 @@ const ChatRoom = () => {
         axiosClient.post('/message/send', {
           message: payload,
           timeSend: new Date().toISOString()
-        }, { params: { user_room: roomId } }).catch(() => {});
-      } catch (e) {}
+        }, { params: { user_room: roomId } }).catch(() => { });
+      } catch (e) { }
 
-      sendCallSignal({ 
+      sendCallSignal({
         type: 'END',
         isPrivate: incomingCall.isPrivate,
         targetUserId: incomingCall.callerId,
@@ -872,12 +872,12 @@ const ChatRoom = () => {
               peerConnectionRef.current.addTrack(newTrack, localStreamRef.current);
               const offer = await peerConnectionRef.current.createOffer();
               await peerConnectionRef.current.setLocalDescription(offer);
-              sendCallSignal({ 
-                type: 'OFFER', 
-                offer, 
-                isPrivate: !!privateCallTarget, 
+              sendCallSignal({
+                type: 'OFFER',
+                offer,
+                isPrivate: !!privateCallTarget,
                 targetUserId: privateCallTarget?.id?.toString(),
-                isVideo: true 
+                isVideo: true
               });
             }
             if (localVideoRef.current) {
@@ -903,8 +903,8 @@ const ChatRoom = () => {
       if (!isCallActive) {
         setIncomingCall(msg);
       } else {
-        sendCallSignal({ 
-          type: 'BUSY', 
+        sendCallSignal({
+          type: 'BUSY',
           targetUserId: msg.callerId,
           isPrivate: msg.isPrivate
         });
@@ -999,7 +999,7 @@ const ChatRoom = () => {
         // Báo hiệu đã vào phòng và bắt đầu gửi heartbeat
         if (currentUserId) {
           client.send(`/app/room/${roomId}/presence/join`, {}, JSON.stringify({ userId: currentUserId }));
-          
+
           if (presenceIntervalRef.current) clearInterval(presenceIntervalRef.current);
           presenceIntervalRef.current = setInterval(() => {
             if (stompClient.current && stompClient.current.connected) {
@@ -1012,7 +1012,7 @@ const ChatRoom = () => {
         client.subscribe(`/topic/call/${roomId}`, (message) => {
           try {
             handleCallSignal(JSON.parse(message.body));
-          } catch (e) {}
+          } catch (e) { }
         });
 
         // Sub kênh tín hiệu cuộc gọi riêng
@@ -1020,7 +1020,7 @@ const ChatRoom = () => {
           client.subscribe(`/topic/call/user/${currentUserId}`, (message) => {
             try {
               handleCallSignal(JSON.parse(message.body));
-            } catch (e) {}
+            } catch (e) { }
           });
         }
 
@@ -1031,21 +1031,21 @@ const ChatRoom = () => {
 
             // Logic KICK
             if (receivedMsg.id === -1) {
-               if (receivedMsg.userId?.toString() === currentUserId) {
-                  toast.error("Bạn đã bị quản trị viên mời ra khỏi phòng!", { duration: 5000 });
-                  navigate('/');
-                  return;
-               }
-               toast(`${receivedMsg.message}`);
-               fetchRoomDetail(true);
-               return;
+              if (receivedMsg.userId?.toString() === currentUserId) {
+                toast.error("Bạn đã bị quản trị viên mời ra khỏi phòng!", { duration: 5000 });
+                navigate('/');
+                return;
+              }
+              toast(`${receivedMsg.message}`);
+              fetchRoomDetail(true);
+              return;
             }
 
             // Logic DISBAND
             if (receivedMsg.id === -2) {
-               toast.error("Phòng chat này đã được giải tán!", { duration: 6000 });
-               navigate('/');
-               return;
+              toast.error("Phòng chat này đã được giải tán!", { duration: 6000 });
+              navigate('/');
+              return;
             }
 
             if (receivedMsg.userId === 0 || receivedMsg.userId === '0') {
@@ -1076,7 +1076,7 @@ const ChatRoom = () => {
               setMessages((prev) => {
                 const msgId = receivedMsg.id || Date.now() + Math.random();
                 if (prev.find(m => m.id === msgId)) return prev;
-                
+
                 // Lọc bỏ tin nhắn tạm thời (optimistic) nếu có
                 const filtered = prev.filter(m => !(typeof m.id === 'string' && m.id.startsWith('temp-') && m.text === receivedMsg.message));
 
@@ -1123,7 +1123,7 @@ const ChatRoom = () => {
         if (currentUserId) {
           try {
             stompClient.current.send(`/app/room/${roomId}/presence/leave`, {}, JSON.stringify({ userId: currentUserId }));
-          } catch (e) {}
+          } catch (e) { }
         }
         stompClient.current.disconnect();
         stompClient.current = null;
@@ -1155,7 +1155,7 @@ const ChatRoom = () => {
       time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false }),
       rawTime: new Date().toISOString()
     };
-    
+
     try {
       setNewMessage('');
       setShowEmojiPicker(false);
@@ -1232,13 +1232,13 @@ const ChatRoom = () => {
           message: payload,
           timeSend: new Date().toISOString()
         }, { params: { user_room: roomId } })
-        .then(() => {
-          toast.success("Đã gửi hình ảnh!");
-          setTimeout(() => scrollToBottom("smooth"), 60);
-        })
-        .catch(() => {
-          toast.error("Không thể gửi ảnh!");
-        });
+          .then(() => {
+            toast.success("Đã gửi hình ảnh!");
+            setTimeout(() => scrollToBottom("smooth"), 60);
+          })
+          .catch(() => {
+            toast.error("Không thể gửi ảnh!");
+          });
       };
       img.src = event.target.result;
     };
@@ -1287,13 +1287,13 @@ const ChatRoom = () => {
             message: payload,
             timeSend: new Date().toISOString()
           }, { params: { user_room: roomId } })
-          .then(() => {
-            toast.success("Đã gửi đoạn ghi âm!");
-            setTimeout(() => scrollToBottom("smooth"), 60);
-          })
-          .catch(() => {
-            toast.error("Không thể gửi đoạn ghi âm!");
-          });
+            .then(() => {
+              toast.success("Đã gửi đoạn ghi âm!");
+              setTimeout(() => scrollToBottom("smooth"), 60);
+            })
+            .catch(() => {
+              toast.error("Không thể gửi đoạn ghi âm!");
+            });
         };
         stream.getTracks().forEach(track => track.stop());
       };
@@ -1465,7 +1465,7 @@ const ChatRoom = () => {
   const isAdminOfThisRoom = currentMember?.isAdmin || false;
 
   return (
-    <div 
+    <div
       className="chat-room-container"
       style={{
         '--chat-bg': activeTheme.bg,
@@ -1484,43 +1484,43 @@ const ChatRoom = () => {
       {/* SIDEBAR DANH SÁCH THÀNH VIÊN */}
       <aside className={`chat-sidebar ${isSidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
-           <div className="flex items-center gap-2">
-              <TalovinLogo size={24} />
-           </div>
-           <button onClick={() => setIsSidebarOpen(false)} className="close-sidebar-mobile" title="Đóng">
-              <X size={18} />
-           </button>
+          <div className="flex items-center gap-2">
+            <TalovinLogo size={24} />
+          </div>
+          <button onClick={() => setIsSidebarOpen(false)} className="close-sidebar-mobile" title="Đóng">
+            <X size={18} />
+          </button>
         </div>
 
         <div className="room-profile-card">
-           <GroupCollageAvatar 
-             avatar={roomInfo?.avatar} 
-             name={roomInfo?.nameroom} 
-             members={roomInfo?.userRoomDTOList || []}
-             size={52}
-           />
-           <div className="room-meta">
-              <h3>
-                {roomInfo?.nameroom || roomInfo?.roomName ? (
-                  roomInfo.nameroom || roomInfo.roomName
-                ) : (
-                  <span className="inline-block h-4 w-28 bg-zinc-800 animate-pulse rounded" />
-                )}
-              </h3>
-              <p className="font-mono text-xs text-zinc-400">Mã phòng: {roomId}</p>
-           </div>
-           {isAdminOfThisRoom && <div className="admin-badge">Chủ phòng</div>}
+          <GroupCollageAvatar
+            avatar={roomInfo?.avatar}
+            name={roomInfo?.nameroom}
+            members={roomInfo?.userRoomDTOList || []}
+            size={52}
+          />
+          <div className="room-meta">
+            <h3>
+              {roomInfo?.nameroom || roomInfo?.roomName ? (
+                roomInfo.nameroom || roomInfo.roomName
+              ) : (
+                <span className="inline-block h-4 w-28 bg-zinc-800 animate-pulse rounded" />
+              )}
+            </h3>
+            <p className="font-mono text-xs text-zinc-400">Mã phòng: {roomId}</p>
+          </div>
+          {isAdminOfThisRoom && <div className="admin-badge">Chủ phòng</div>}
         </div>
 
         <div className="sidebar-content">
           <div className="section-title">
-             <Users size={14} />
-             <span>Thành viên ({roomInfo?.userRoomDTOList?.length || 0})</span>
-             {onlineMembers.length > 0 && (
-               <span className="online-badge-count">{onlineMembers.length} online</span>
-             )}
+            <Users size={14} />
+            <span>Thành viên ({roomInfo?.userRoomDTOList?.length || 0})</span>
+            {onlineMembers.length > 0 && (
+              <span className="online-badge-count">{onlineMembers.length} online</span>
+            )}
           </div>
-          
+
           <div className="member-list">
             {onlineMembers.length > 0 && (
               <div className="member-subgroup">
@@ -1530,33 +1530,33 @@ const ChatRoom = () => {
                   const isMe = memberId === currentUserId;
                   const menuKey = `on-${ur.userDTO?.id || idx}`;
                   return (
-                    <div 
-                      key={menuKey} 
+                    <div
+                      key={menuKey}
                       className={`member-item ${isMe ? 'is-me' : ''}`}
                       onClick={() => setSelectedProfileUserId(ur.userDTO?.id)}
                       title="Đang trực tuyến - Nhấp để xem hồ sơ & kết bạn"
                     >
                       <div className="member-avatar">
-                         <UserAvatar avatarUrl={ur.userDTO?.avatar} username={ur.userDTO?.account} name={ur.userDTO?.nickname} size={30} />
-                         <span className="online-indicator" title="Đang trực tuyến"></span>
+                        <UserAvatar avatarUrl={ur.userDTO?.avatar} username={ur.userDTO?.account} name={ur.userDTO?.nickname} size={30} />
+                        <span className="online-indicator" title="Đang trực tuyến"></span>
                       </div>
                       <div className="member-info">
-                         <span className="name">{ur.userDTO?.nickname || "User"}{isMe ? " (Bạn)" : ""}</span>
-                         {ur.isAdmin && <Crown size={14} className="crown-icon" title="Chủ phòng" />}
+                        <span className="name">{ur.userDTO?.nickname || "User"}{isMe ? " (Bạn)" : ""}</span>
+                        {ur.isAdmin && <Crown size={14} className="crown-icon" title="Chủ phòng" />}
                       </div>
-                      
+
                       {isAdminOfThisRoom && !isMe && (
                         <div className="member-actions" onClick={(e) => e.stopPropagation()}>
                           <button onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === menuKey ? null : menuKey); }} className="dots-btn">
-                             <MoreVertical size={14} />
+                            <MoreVertical size={14} />
                           </button>
                           {activeMenu === menuKey && (
                             <div className="member-dropdown">
                               <button onClick={() => handleDelegateAdmin(ur.userDTO.id, ur.userDTO.nickname)} className="action-item">
-                                 <Crown size={14} /> Trao quyền
+                                <Crown size={14} /> Trao quyền
                               </button>
                               <button onClick={() => handleRemoveUser(ur.userDTO.id, ur.userDTO.nickname)} className="action-item kick-item">
-                                 <UserX size={14} /> Kick
+                                <UserX size={14} /> Kick
                               </button>
                             </div>
                           )}
@@ -1576,33 +1576,33 @@ const ChatRoom = () => {
                   const isMe = memberId === currentUserId;
                   const menuKey = `off-${ur.userDTO?.id || idx}`;
                   return (
-                    <div 
-                      key={menuKey} 
+                    <div
+                      key={menuKey}
                       className={`member-item is-offline ${isMe ? 'is-me' : ''}`}
                       onClick={() => setSelectedProfileUserId(ur.userDTO?.id)}
                       title="Ngoại tuyến - Nhấp để xem hồ sơ & kết bạn"
                     >
                       <div className="member-avatar">
-                         <UserAvatar avatarUrl={ur.userDTO?.avatar} username={ur.userDTO?.account} name={ur.userDTO?.nickname} size={30} />
-                         <span className="offline-indicator" title="Ngoại tuyến"></span>
+                        <UserAvatar avatarUrl={ur.userDTO?.avatar} username={ur.userDTO?.account} name={ur.userDTO?.nickname} size={30} />
+                        <span className="offline-indicator" title="Ngoại tuyến"></span>
                       </div>
                       <div className="member-info">
-                         <span className="name">{ur.userDTO?.nickname || "User"}{isMe ? " (Bạn)" : ""}</span>
-                         {ur.isAdmin && <Crown size={14} className="crown-icon" title="Chủ phòng" />}
+                        <span className="name">{ur.userDTO?.nickname || "User"}{isMe ? " (Bạn)" : ""}</span>
+                        {ur.isAdmin && <Crown size={14} className="crown-icon" title="Chủ phòng" />}
                       </div>
-                      
+
                       {isAdminOfThisRoom && !isMe && (
                         <div className="member-actions" onClick={(e) => e.stopPropagation()}>
                           <button onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === menuKey ? null : menuKey); }} className="dots-btn">
-                             <MoreVertical size={14} />
+                            <MoreVertical size={14} />
                           </button>
                           {activeMenu === menuKey && (
                             <div className="member-dropdown">
                               <button onClick={() => handleDelegateAdmin(ur.userDTO.id, ur.userDTO.nickname)} className="action-item">
-                                 <Crown size={14} /> Trao quyền
+                                <Crown size={14} /> Trao quyền
                               </button>
                               <button onClick={() => handleRemoveUser(ur.userDTO.id, ur.userDTO.nickname)} className="action-item kick-item">
-                                 <UserX size={14} /> Kick
+                                <UserX size={14} /> Kick
                               </button>
                             </div>
                           )}
@@ -1617,34 +1617,34 @@ const ChatRoom = () => {
         </div>
 
         <div className="sidebar-footer">
-           <button 
-             onClick={() => setSelectedProfileUserId(currentUserId)} 
-             className="my-profile-btn"
-             title="Xem và chỉnh sửa hồ sơ của bạn"
-           >
-              <User size={16} />
-              <span>Hồ sơ của tôi</span>
-           </button>
+          <button
+            onClick={() => setSelectedProfileUserId(currentUserId)}
+            className="my-profile-btn"
+            title="Xem và chỉnh sửa hồ sơ của bạn"
+          >
+            <User size={16} />
+            <span>Hồ sơ của tôi</span>
+          </button>
 
-           <button 
-             onClick={handleGoBack} 
-             className="back-home-footer-btn"
-             title="Quay lại trang trước"
-           >
-              <ArrowLeft size={16} />
-              <span>Quay lại</span>
-           </button>
+          <button
+            onClick={handleGoBack}
+            className="back-home-footer-btn"
+            title="Quay lại trang trước"
+          >
+            <ArrowLeft size={16} />
+            <span>Quay lại</span>
+          </button>
 
-           {isAdminOfThisRoom && (
-             <button onClick={handleDisbandRoom} className="disband-btn">
-                <Trash2 size={16} />
-                <span>Giải tán nhóm</span>
-             </button>
-           )}
-           <button onClick={handleLeaveRoom} className="leave-btn" title="Rời khỏi phòng trò chuyện này">
-              <LogOut size={16} />
-              <span>Rời phòng</span>
-           </button>
+          {isAdminOfThisRoom && (
+            <button onClick={handleDisbandRoom} className="disband-btn">
+              <Trash2 size={16} />
+              <span>Giải tán nhóm</span>
+            </button>
+          )}
+          <button onClick={handleLeaveRoom} className="leave-btn" title="Rời khỏi phòng trò chuyện này">
+            <LogOut size={16} />
+            <span>Rời phòng</span>
+          </button>
         </div>
       </aside>
 
@@ -1665,8 +1665,8 @@ const ChatRoom = () => {
         {/* ============================================================== */}
         <div className="h-16 px-4 sm:px-6 border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-md flex items-center justify-between shrink-0 z-10">
           <div className="flex items-center gap-3 min-w-0">
-            <button 
-              onClick={handleGoBack} 
+            <button
+              onClick={handleGoBack}
               className="h-9 px-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors flex items-center gap-1.5 text-xs font-mono active:scale-[0.98] shrink-0"
               title="Quay lại"
             >
@@ -1674,9 +1674,9 @@ const ChatRoom = () => {
               <span className="hidden sm:inline">Quay lại</span>
             </button>
 
-            <GroupCollageAvatar 
-              avatar={roomInfo?.avatar} 
-              name={roomInfo?.nameroom} 
+            <GroupCollageAvatar
+              avatar={roomInfo?.avatar}
+              name={roomInfo?.nameroom}
               members={roomInfo?.userRoomDTOList || []}
               size={36}
             />
@@ -1702,12 +1702,12 @@ const ChatRoom = () => {
 
           {/* Nút Gọi thoại nhóm & Gọi Video nhóm chuẩn h-9 rounded-xl */}
           <div className="flex items-center gap-2 shrink-0">
-            <button 
+            <button
               type="button"
               onClick={() => {
                 const currentFrom = encodeURIComponent((location.pathname + (location.search || '')) || `/room/${roomId}`);
                 navigate(`/call/room/${roomId}?type=audio&from=${currentFrom}`);
-              }} 
+              }}
               className="h-9 px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-medium flex items-center gap-1.5 transition-colors duration-150 active:scale-[0.98]"
               title="Chuyển sang màn hình Gọi thoại nhóm"
             >
@@ -1715,12 +1715,12 @@ const ChatRoom = () => {
               <span className="hidden sm:inline">Gọi thoại nhóm</span>
             </button>
 
-            <button 
+            <button
               type="button"
               onClick={() => {
                 const currentFrom = encodeURIComponent((location.pathname + (location.search || '')) || `/room/${roomId}`);
                 navigate(`/call/room/${roomId}?type=video&from=${currentFrom}`);
-              }} 
+              }}
               className="h-9 px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-medium flex items-center gap-1.5 transition-colors duration-150 active:scale-[0.98]"
               title="Chuyển sang màn hình Gọi Video nhóm"
             >
@@ -1728,7 +1728,7 @@ const ChatRoom = () => {
               <span className="hidden sm:inline">Gọi Video nhóm</span>
             </button>
 
-            <button 
+            <button
               type="button"
               onClick={handleToggleRoomNotification}
               className="w-9 h-9 rounded-xl bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-300 hover:text-white flex items-center justify-center transition-colors"
@@ -1741,7 +1741,7 @@ const ChatRoom = () => {
               )}
             </button>
 
-            <button 
+            <button
               onClick={() => setIsThemeModalOpen(true)}
               className="h-9 w-9 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900 border border-transparent hover:border-zinc-800 flex items-center justify-center transition-colors"
               title="Đổi chủ đề chat"
@@ -1749,7 +1749,7 @@ const ChatRoom = () => {
               <Palette size={15} />
             </button>
 
-            <button 
+            <button
               onClick={() => setIsSidebarOpen(true)}
               className="h-9 w-9 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900 border border-transparent hover:border-zinc-800 flex items-center justify-center transition-colors"
               title="Danh sách thành viên"
@@ -1757,7 +1757,7 @@ const ChatRoom = () => {
               <Users size={15} />
             </button>
 
-            <button 
+            <button
               onClick={handleLeaveRoom}
               className="h-9 w-9 rounded-xl text-zinc-400 hover:text-rose-400 hover:bg-zinc-900 border border-transparent hover:border-zinc-800 flex items-center justify-center transition-colors"
               title="Rời khỏi phòng"
@@ -1768,9 +1768,9 @@ const ChatRoom = () => {
         </div>
 
         {/* KHU VỰC TIN NHẮN (MESSAGES AREA) - CHỈ CHỨA TIN NHẮN ĐỂ KHÓA SCROLL CHUẨN */}
-        <div 
-          className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-3 space-y-3 custom-scrollbar" 
-          ref={messagesContainerRef} 
+        <div
+          className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-3 space-y-3 custom-scrollbar"
+          ref={messagesContainerRef}
           onScroll={handleScrollMessages}
         >
           <div className="messages-list">
@@ -1856,23 +1856,23 @@ const ChatRoom = () => {
               return (
                 <div key={msg.id || index} className={`msg-group ${isMe ? 'msg-me' : 'msg-them'}`}>
                   {!isMe && (
-                    <div 
+                    <div
                       className="msg-avatar cursor-pointer"
                       onClick={() => setSelectedProfileUserId(msg.senderId || msg.userId)}
                       title={`Xem thông tin của ${msg.sender}`}
                     >
-                       <UserAvatar 
-                         avatarUrl={effectiveAvatar} 
-                         username={effectiveUsername} 
-                         name={msg.sender} 
-                         size={28} 
-                       />
+                      <UserAvatar
+                        avatarUrl={effectiveAvatar}
+                        username={effectiveUsername}
+                        name={msg.sender}
+                        size={28}
+                      />
                     </div>
                   )}
 
                   <div className="msg-content-wrapper">
                     {!isMe && (
-                      <span 
+                      <span
                         className="msg-sender"
                         onClick={() => setSelectedProfileUserId(msg.senderId || msg.userId)}
                         title={`Xem thông tin của ${msg.sender}`}
@@ -1885,10 +1885,10 @@ const ChatRoom = () => {
                       {/* 3.1: Tin nhắn Hình ảnh */}
                       {payload.type === 'image' && (
                         <div className="msg-media-block">
-                          <img 
-                            src={payload.url} 
-                            alt="Ảnh đính kèm" 
-                            className="msg-img-preview" 
+                          <img
+                            src={payload.url}
+                            alt="Ảnh đính kèm"
+                            className="msg-img-preview"
                             onClick={() => setPreviewImageModal(payload.url)}
                           />
                           {payload.caption && <p className="msg-media-caption">{payload.caption}</p>}
@@ -1898,8 +1898,8 @@ const ChatRoom = () => {
                       {/* 3.2: Tin nhắn Ghi âm Voice Note */}
                       {payload.type === 'voice' && (
                         <div className="msg-voice-note-block">
-                          <button 
-                            type="button" 
+                          <button
+                            type="button"
                             onClick={() => togglePlayAudio(msg.id, payload.audioUrl)}
                             className="btn-play-voice-note"
                           >
@@ -1926,11 +1926,11 @@ const ChatRoom = () => {
                             <span>Bài viết được chia sẻ bởi <strong>{payload.author}</strong></span>
                           </div>
                           {payload.imageUrl && (
-                            <img 
-                              src={payload.imageUrl} 
-                              alt="Khoảnh khắc" 
+                            <img
+                              src={payload.imageUrl}
+                              alt="Khoảnh khắc"
                               onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                              className="shared-post-thumbnail" 
+                              className="shared-post-thumbnail"
                             />
                           )}
                           <p className="shared-post-text">{payload.content}</p>
@@ -1961,7 +1961,7 @@ const ChatRoom = () => {
           <div className="shrink-0 border-t border-zinc-800 bg-zinc-950 px-3 py-2 animate-fade-in">
             <div className="flex items-center gap-1.5 overflow-x-auto py-1 custom-scrollbar">
               {COMMON_EMOJIS.map((emoji) => (
-                <button 
+                <button
                   key={emoji}
                   type="button"
                   onClick={() => {
@@ -1978,99 +1978,99 @@ const ChatRoom = () => {
 
         {/* KHUNG SOẠN TIN NHẮN DƯỚI ĐÁY CỐ ĐỊNH (SHRINK-0 KHÔNG BAO GIỜ BỊ CUỘN MẤT) */}
         <div className="shrink-0 border-t border-zinc-800/80 bg-zinc-950 p-3">
-            {/* Input file hình ảnh ẩn */}
-            <input 
-              type="file" 
-              ref={fileImageRef} 
-              accept="image/*" 
-              onChange={handleImageSelect} 
-              style={{ display: 'none' }} 
-            />
+          {/* Input file hình ảnh ẩn */}
+          <input
+            type="file"
+            ref={fileImageRef}
+            accept="image/*"
+            onChange={handleImageSelect}
+            style={{ display: 'none' }}
+          />
 
-            {/* Trạng thái đang thu âm trực tiếp */}
-            {isRecordingVoice ? (
-              <div className="voice-recording-active-bar animate-fade-in">
-                <div className="flex items-center gap-2">
-                  <span className="voice-recording-pulse"></span>
-                  <span className="text-xs font-mono font-bold text-red-400">
-                    Đang ghi âm: {voiceDuration}s / 15s
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button 
-                    type="button" 
-                    onClick={cancelVoiceRecording} 
-                    className="btn-cancel-recording"
-                    title="Hủy ghi âm"
-                  >
-                    <X size={15} />
-                    <span>Hủy</span>
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={stopVoiceRecording} 
-                    className="btn-finish-recording"
-                    title="Gửi đoạn ghi âm"
-                  >
-                    <Send size={14} />
-                    <span>Gửi</span>
-                  </button>
-                </div>
+          {/* Trạng thái đang thu âm trực tiếp */}
+          {isRecordingVoice ? (
+            <div className="voice-recording-active-bar animate-fade-in">
+              <div className="flex items-center gap-2">
+                <span className="voice-recording-pulse"></span>
+                <span className="text-xs font-mono font-bold text-red-400">
+                  Đang ghi âm: {voiceDuration}s / 15s
+                </span>
               </div>
-            ) : (
-              <form onSubmit={handleSendMessage} className="msg-form">
-                <div className="chat-input-actions-left">
-                  {/* Nút gửi ảnh */}
-                  <button 
-                    type="button" 
-                    onClick={() => fileImageRef.current?.click()} 
-                    className="btn-input-addon"
-                    title="Gửi hình ảnh"
-                  >
-                    <ImageIcon size={18} />
-                  </button>
-
-                  {/* Nút ghi âm giọng nói */}
-                  <button 
-                    type="button" 
-                    onClick={startVoiceRecording} 
-                    className="btn-input-addon"
-                    title="Ghi âm giọng nói 15s"
-                  >
-                    <Mic size={18} />
-                  </button>
-
-                  {/* Nút emoji */}
-                  <button 
-                    type="button" 
-                    onClick={() => setShowEmojiPicker(!showEmojiPicker)} 
-                    className={`btn-input-addon ${showEmojiPicker ? 'active' : ''}`}
-                    title="Biểu tượng cảm xúc"
-                  >
-                    <Smile size={18} />
-                  </button>
-                </div>
-
-                <input 
-                  type="text" 
-                  placeholder={isOffline ? "Đang ngoại tuyến, chỉ xem lịch sử..." : `Nhắn tin trong #${roomInfo?.nameroom || 'phòng'}...`}
-                  value={newMessage}
-                  disabled={isOffline}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                />
-
-                <button 
-                  type="submit" 
-                  disabled={!newMessage.trim() || isOffline} 
-                  className="send-btn" 
-                  title="Gửi tin nhắn"
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={cancelVoiceRecording}
+                  className="btn-cancel-recording"
+                  title="Hủy ghi âm"
                 >
-                  <Send size={18} />
+                  <X size={15} />
+                  <span>Hủy</span>
                 </button>
-              </form>
-            )}
-          </div>
-  </main>
+                <button
+                  type="button"
+                  onClick={stopVoiceRecording}
+                  className="btn-finish-recording"
+                  title="Gửi đoạn ghi âm"
+                >
+                  <Send size={14} />
+                  <span>Gửi</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <form onSubmit={handleSendMessage} className="msg-form">
+              <div className="chat-input-actions-left">
+                {/* Nút gửi ảnh */}
+                <button
+                  type="button"
+                  onClick={() => fileImageRef.current?.click()}
+                  className="btn-input-addon"
+                  title="Gửi hình ảnh"
+                >
+                  <ImageIcon size={18} />
+                </button>
+
+                {/* Nút ghi âm giọng nói */}
+                <button
+                  type="button"
+                  onClick={startVoiceRecording}
+                  className="btn-input-addon"
+                  title="Ghi âm giọng nói 15s"
+                >
+                  <Mic size={18} />
+                </button>
+
+                {/* Nút emoji */}
+                <button
+                  type="button"
+                  onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                  className={`btn-input-addon ${showEmojiPicker ? 'active' : ''}`}
+                  title="Biểu tượng cảm xúc"
+                >
+                  <Smile size={18} />
+                </button>
+              </div>
+
+              <input
+                type="text"
+                placeholder={isOffline ? "Đang ngoại tuyến, chỉ xem lịch sử..." : `Nhắn tin trong #${roomInfo?.nameroom || 'phòng'}...`}
+                value={newMessage}
+                disabled={isOffline}
+                onChange={(e) => setNewMessage(e.target.value)}
+              />
+
+              <button
+                type="submit"
+                disabled={!newMessage.trim() || isOffline}
+                className="send-btn"
+                title="Gửi tin nhắn"
+              >
+                <Send size={18} />
+              </button>
+            </form>
+          )}
+        </div>
+      </main>
 
       {/* MODAL ĐỔI CHỦ ĐỀ MÀU SẮC PHÒNG CHAT */}
       {isThemeModalOpen && (
@@ -2090,7 +2090,7 @@ const ChatRoom = () => {
               {CHAT_THEMES.map((theme) => {
                 const isSelected = theme.id === currentThemeId;
                 return (
-                  <div 
+                  <div
                     key={theme.id}
                     onClick={() => handleSelectTheme(theme.id)}
                     className={`theme-card-option ${isSelected ? 'selected' : ''}`}
@@ -2124,7 +2124,7 @@ const ChatRoom = () => {
 
       {/* Modal Xem Hồ Sơ Người Dùng */}
       {selectedProfileUserId && (
-        <UserProfileModal 
+        <UserProfileModal
           userId={selectedProfileUserId}
           currentUserId={currentUserId}
           isRoomAdmin={roomInfo?.userRoomDTOList?.some(u => u.userDTO?.id?.toString() === selectedProfileUserId?.toString() && u.isAdmin)}
@@ -2135,7 +2135,7 @@ const ChatRoom = () => {
 
       {/* Modal Bạn Bè & Lời Mời Kết Bạn */}
       {isFriendsModalOpen && (
-        <FriendsModal 
+        <FriendsModal
           onClose={() => setIsFriendsModalOpen(false)}
           onSelectUser={(uid) => {
             setIsFriendsModalOpen(false);
@@ -2184,12 +2184,12 @@ const ChatRoom = () => {
               <button onClick={() => setConfirmDialog(null)} className="btn-confirm-cancel">
                 Hủy bỏ
               </button>
-              <button 
+              <button
                 onClick={() => {
                   const action = confirmDialog.onConfirm;
                   setConfirmDialog(null);
                   if (action) action();
-                }} 
+                }}
                 className={`btn-confirm-ok ${confirmDialog.danger ? 'btn-danger' : 'btn-primary'}`}
               >
                 {confirmDialog.confirmLabel || "Đồng ý"}
@@ -2204,9 +2204,9 @@ const ChatRoom = () => {
         <div className="call-fullscreen-overlay animate-fade-in">
           {/* Header màn hình cuộc gọi */}
           <div className="call-screen-header">
-            <button 
-              type="button" 
-              onClick={() => setIsCallScreenOpen(false)} 
+            <button
+              type="button"
+              onClick={() => setIsCallScreenOpen(false)}
               className="btn-minimize-call"
               title="Thu nhỏ để nhắn tin / quay lại đoạn chat"
             >
@@ -2216,8 +2216,8 @@ const ChatRoom = () => {
 
             <div className="call-screen-title-box">
               <span className="call-screen-target-name truncate">
-                {privateCallTarget 
-                  ? `${privateCallTarget.nickname || privateCallTarget.account || 'Người dùng'}` 
+                {privateCallTarget
+                  ? `${privateCallTarget.nickname || privateCallTarget.account || 'Người dùng'}`
                   : (roomInfo?.nameroom || `Phòng #${roomId}`)}
               </span>
               <div className="flex items-center gap-2">
@@ -2261,10 +2261,10 @@ const ChatRoom = () => {
                   <div className="avatar-pulse-ring ring-2"></div>
                   <div className="call-big-avatar">
                     {privateCallTarget ? (
-                      <UserAvatar 
-                        avatar={privateCallTarget.avatar} 
-                        name={privateCallTarget.nickname || privateCallTarget.account} 
-                        size={80} 
+                      <UserAvatar
+                        avatar={privateCallTarget.avatar}
+                        name={privateCallTarget.nickname || privateCallTarget.account}
+                        size={80}
                       />
                     ) : (
                       <Users size={48} className="text-emerald-400" />
@@ -2273,7 +2273,7 @@ const ChatRoom = () => {
                 </div>
 
                 <h3 className="call-partner-heading">
-                  {privateCallTarget 
+                  {privateCallTarget
                     ? (privateCallTarget.nickname || privateCallTarget.account)
                     : (roomInfo?.nameroom || `Phòng đàm thoại #${roomId}`)}
                 </h3>
@@ -2301,9 +2301,9 @@ const ChatRoom = () => {
           {/* Thanh công cụ điều khiển cuộc gọi dưới đáy */}
           <div className="call-screen-controls-bottom">
             {/* Nút Micro */}
-            <button 
-              type="button" 
-              onClick={toggleMute} 
+            <button
+              type="button"
+              onClick={toggleMute}
               className={`call-action-btn ${isMuted ? 'btn-state-off' : 'btn-state-on'}`}
               title={isMuted ? "Bật micro" : "Tắt micro"}
             >
@@ -2312,9 +2312,9 @@ const ChatRoom = () => {
             </button>
 
             {/* Nút Loa ngoài */}
-            <button 
-              type="button" 
-              onClick={toggleSpeaker} 
+            <button
+              type="button"
+              onClick={toggleSpeaker}
               className={`call-action-btn ${!isSpeakerOn ? 'btn-state-off' : 'btn-state-on'}`}
               title={isSpeakerOn ? "Tắt loa ngoài" : "Bật loa ngoài"}
             >
@@ -2323,9 +2323,9 @@ const ChatRoom = () => {
             </button>
 
             {/* Nút Camera / Chuyển sang Video */}
-            <button 
-              type="button" 
-              onClick={toggleVideo} 
+            <button
+              type="button"
+              onClick={toggleVideo}
               className={`call-action-btn ${!isVideoEnabled || !isVideoCall ? 'btn-state-off' : 'btn-state-on'}`}
               title={isVideoCall ? (isVideoEnabled ? "Tắt camera" : "Bật camera") : "Chuyển sang Video"}
             >
@@ -2334,9 +2334,9 @@ const ChatRoom = () => {
             </button>
 
             {/* Nút Hủy / Kết thúc cuộc gọi */}
-            <button 
-              type="button" 
-              onClick={() => endCall(callDuration > 0 ? 'normal' : 'cancelled')} 
+            <button
+              type="button"
+              onClick={() => endCall(callDuration > 0 ? 'normal' : 'cancelled')}
               className="call-action-btn btn-state-danger"
               title={callDuration > 0 ? "Kết thúc cuộc gọi" : "Hủy cuộc gọi"}
             >

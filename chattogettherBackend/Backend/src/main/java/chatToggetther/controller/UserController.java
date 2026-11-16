@@ -29,6 +29,11 @@ public class UserController {
         return ResponseEntity.ok(this.userService.getUserProfile(jwtAuthenticationToken, null));
     }
 
+    @GetMapping({"/online-ids", "/online-users"})
+    public ResponseEntity<ResponseData<java.util.List<Long>>> getOnlineUserIds() {
+        return ResponseEntity.ok(new ResponseData<>(200, "Danh sách người dùng trực tuyến", chatToggetther.controller.RoomPresenceController.getOnlineUserIdsStatic()));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<ResponseData<UserDTO>> getUserById(
             JwtAuthenticationToken jwtAuthenticationToken,
