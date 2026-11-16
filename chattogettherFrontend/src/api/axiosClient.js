@@ -1,7 +1,12 @@
 import axios from 'axios';
 
 // Nhận diện linh hoạt cả VITE_API_URL và VITE_API_BASE_URL (bóc tách /api nếu người dùng lỡ viết vào cuối)
-const rawEndpoint = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/$/, '');
+const defaultProdUrl = 'https://talovin.duckdns.org';
+const rawEndpoint = (
+  import.meta.env.VITE_API_URL || 
+  import.meta.env.VITE_API_BASE_URL || 
+  (import.meta.env.PROD ? defaultProdUrl : '')
+).trim().replace(/\/$/, '');
 export const BACKEND_URL = rawEndpoint.replace(/\/api$/, '');
 
 const axiosClient = axios.create({
