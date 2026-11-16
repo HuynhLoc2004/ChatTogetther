@@ -2246,9 +2246,80 @@ const Home = ({ initialTab }) => {
         if (!isMounted) return;
         stompClient.subscribe('/topic/rooms', () => fetchRooms(true));
         stompClient.subscribe('/topic/posts', (msg) => {
-          const body = msg?.body || '';
-          // Bỏ qua khi chỉ là sự kiện cập nhật cảm xúc hoặc like bình luận để tránh reload lại toàn bộ feed gây giật nhảy màn hình
-          if (body === 'POST_REACTION_UPDATED' || body === 'COMMENT_LIKED') {
+          const raw = msg?.body || '';
+          let data = null;
+          try {
+            data = JSON.parse(raw);
+          } catch (_) {
+            data = { type: raw };
+          }
+          const eventType = data.type || data.event || raw;
+
+          // Cập nhật lượt thích và cảm xúc bài viết thời gian thực (Realtime Reaction)
+          if (eventType === 'POST_REACTION_UPDATED' && data.postId) {
+            setPosts(prevPosts => prevPosts.map(p => {
+              if (Number(p.id) === Number(data.postId)) {
+                return {
+                  ...p,
+                  likesCount: data.likesCount !== undefined ? Number(data.likesCount) : p.likesCount,
+                  reactionBreakdown: data.reactionBreakdown || (data.summary ? data.summary.reactionBreakdown : p.reactionBreakdown)
+                };
+              }
+              return p;
+            }));
+            return;
+          }
+
+          // Cập nhật số lượng và danh sách bình luận thời gian thực (Realtime Comments)
+          if (eventType === 'POST_COMMENT_ADDED' && data.postId) {
+            setPosts(prevPosts => prevPosts.map(p => {
+              if (Number(p.id) === Number(data.postId)) {
+                return {
+                  ...p,
+                  commentsCount: data.commentsCount !== undefined ? Number(data.commentsCount) : (p.commentsCount || 0) + 1
+                };
+              }
+              return p;
+            }));
+            if (data.comment) {
+              setCommentsMap(prev => {
+                const existing = prev[data.postId];
+                if (!existing) return prev;
+                if (existing.some(c => c.id === data.comment.id)) return prev;
+                return {
+                  ...prev,
+                  [data.postId]: [...existing, data.comment]
+                };
+              });
+            }
+            return;
+          }
+
+          // Cập nhật khi xóa bình luận thời gian thực
+          if (eventType === 'POST_COMMENT_DELETED' && data.postId) {
+            setPosts(prevPosts => prevPosts.map(p => {
+              if (Number(p.id) === Number(data.postId)) {
+                return {
+                  ...p,
+                  commentsCount: Math.max(0, data.commentsCount !== undefined ? Number(data.commentsCount) : (p.commentsCount || 1) - 1)
+                };
+              }
+              return p;
+            }));
+            if (data.commentId) {
+              setCommentsMap(prev => {
+                const existing = prev[data.postId];
+                if (!existing) return prev;
+                return {
+                  ...prev,
+                  [data.postId]: existing.filter(c => c.id !== data.commentId)
+                };
+              });
+            }
+            return;
+          }
+
+          if (eventType === 'POST_REACTION_UPDATED' || eventType === 'COMMENT_LIKED') {
             return;
           }
           fetchPosts(true);

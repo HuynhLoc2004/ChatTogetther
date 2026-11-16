@@ -25,9 +25,48 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
     private final SimpMessagingTemplate messagingTemplate;
 
+    // Cache chống spam thông báo (Anti-spam Debounce Cooldown)
+    private final java.util.concurrent.ConcurrentHashMap<String, Long> notifCooldownMap = new java.util.concurrent.ConcurrentHashMap<>();
+
     public NotificationService(NotificationRepository notificationRepository, SimpMessagingTemplate messagingTemplate) {
         this.notificationRepository = notificationRepository;
         this.messagingTemplate = messagingTemplate;
+    }
+
+    private boolean isSpamNotification(Long actorId, Long recipientId, String type, Long referenceId) {
+        if (actorId == null || type == null || referenceId == null) {
+            return false;
+        }
+
+        long now = System.currentTimeMillis();
+        long cooldownMillis;
+
+        if ("POST_REACT".equalsIgnoreCase(type) || "POST_LIKE".equalsIgnoreCase(type)) {
+            // Cooldown 3 phút cho cảm xúc bài viết (chống spam like/unlike/like liên tục)
+            cooldownMillis = 180_000L;
+        } else if ("POST_COMMENT".equalsIgnoreCase(type) || "COMMENT_REPLY".equalsIgnoreCase(type)) {
+            // Cooldown 30 giây cho bình luận dồn dập trên cùng một bài viết
+            cooldownMillis = 30_000L;
+        } else {
+            return false;
+        }
+
+        String key = type.toUpperCase() + ":" + actorId + ":" + referenceId;
+        Long lastSent = notifCooldownMap.get(key);
+
+        if (lastSent != null && (now - lastSent) < cooldownMillis) {
+            // Đã gửi thông báo tương tự trong khoảng cooldown -> Bỏ qua để tránh làm phiền
+            return true;
+        }
+
+        notifCooldownMap.put(key, now);
+
+        // Dọn dẹp cache định kỳ nếu quá 5000 key
+        if (notifCooldownMap.size() > 5000) {
+            notifCooldownMap.entrySet().removeIf(entry -> (now - entry.getValue()) > 600_000L);
+        }
+
+        return false;
     }
 
     private String calculateRelativeTime(LocalDateTime createdAt) {
@@ -89,6 +128,15 @@ public class NotificationService {
             String content,
             String status
     ) {
+        if (recipientId == null || (actorId != null && recipientId.equals(actorId))) {
+            return null;
+        }
+
+        // Chống spam thông báo dồn dập
+        if (isSpamNotification(actorId, recipientId, type, referenceId)) {
+            return null;
+        }
+
         NotificationEntity entity = new NotificationEntity();
         entity.setRecipientId(recipientId);
         entity.setActorId(actorId);

@@ -823,7 +823,16 @@ public class PostService {
         summary.setUserReaction(finalUserReaction);
 
         try {
-            this.messagingTemplate.convertAndSend("/topic/posts", "POST_REACTION_UPDATED");
+            long totalLikes = this.postLikeRepository.countByPost(post);
+            java.util.Map<String, Object> wsMsg = new java.util.HashMap<>();
+            wsMsg.put("type", "POST_REACTION_UPDATED");
+            wsMsg.put("postId", postId);
+            wsMsg.put("likesCount", totalLikes);
+            wsMsg.put("summary", summary);
+            this.messagingTemplate.convertAndSend("/topic/posts", wsMsg);
+            this.messagingTemplate.convertAndSend("/topic/post/" + postId, wsMsg);
+
+            // Chỉ gửi thông báo khi thả cảm xúc (finalUserReaction != null), không gửi khi tháo
             if (finalUserReaction != null && post.getUser() != null && !post.getUser().getId().equals(currentUser.getId())) {
                 String senderDisplayName = currentUser.getNickname() != null && !currentUser.getNickname().isEmpty() ? currentUser.getNickname() : currentUser.getAccount();
                 String content = senderDisplayName + " đã bày tỏ cảm xúc với bài viết của bạn.";
@@ -859,15 +868,18 @@ public class PostService {
                 ? reactionType.trim().toUpperCase() 
                 : "HEART";
 
+        boolean isLikedNow = false;
         Optional<PostLikeEntity> existingLike = this.postLikeRepository.findByPostAndUser(post, currentUser);
         if (existingLike.isPresent()) {
             PostLikeEntity like = existingLike.get();
             if (desiredReaction.equalsIgnoreCase(like.getReactionType())) {
                 this.postLikeRepository.delete(like);
+                isLikedNow = false; // Đã tháo tim
             } else {
                 like.setReactionType(desiredReaction);
                 like.setCreatedAt(LocalDateTime.now());
                 this.postLikeRepository.save(like);
+                isLikedNow = true;
             }
         } else {
             PostLikeEntity like = new PostLikeEntity();
@@ -876,6 +888,7 @@ public class PostService {
             like.setReactionType(desiredReaction);
             like.setCreatedAt(LocalDateTime.now());
             this.postLikeRepository.save(like);
+            isLikedNow = true;
         }
 
         this.postLikeRepository.flush();
@@ -883,8 +896,17 @@ public class PostService {
         PostDTO dto = mapToPostDTO(post, currentUser);
 
         try {
-            this.messagingTemplate.convertAndSend("/topic/posts", "POST_REACTION_UPDATED");
-            if (desiredReaction != null && post.getUser() != null && !post.getUser().getId().equals(currentUser.getId())) {
+            long totalLikes = this.postLikeRepository.countByPost(post);
+            java.util.Map<String, Object> wsMsg = new java.util.HashMap<>();
+            wsMsg.put("type", "POST_REACTION_UPDATED");
+            wsMsg.put("postId", postId);
+            wsMsg.put("likesCount", dto.getLikesCount() != null ? dto.getLikesCount() : totalLikes);
+            wsMsg.put("reactionStats", dto.getReactionStats());
+            this.messagingTemplate.convertAndSend("/topic/posts", wsMsg);
+            this.messagingTemplate.convertAndSend("/topic/post/" + postId, wsMsg);
+
+            // Chỉ gửi thông báo khi thả tim mới (isLikedNow == true), TUYỆT ĐỐI không gửi khi tháo tim
+            if (isLikedNow && post.getUser() != null && !post.getUser().getId().equals(currentUser.getId())) {
                 String senderDisplayName = currentUser.getNickname() != null && !currentUser.getNickname().isEmpty() ? currentUser.getNickname() : currentUser.getAccount();
                 String content = senderDisplayName + " đã bày tỏ cảm xúc với bài viết của bạn.";
                 notificationService.createAndSendNotification(
@@ -943,10 +965,19 @@ public class PostService {
         comment.setParentId(request.getParentId());
         comment.setReplyToUser(request.getReplyToUser() != null && !request.getReplyToUser().trim().isEmpty() ? request.getReplyToUser().trim() : null);
         comment.setCreatedAt(LocalDateTime.now());
-        this.commentRepository.save(comment);
+        CommentEntity savedComment = this.commentRepository.save(comment);
+        CommentDTO commentDTO = this.mapToCommentDTO(savedComment, currentUser);
 
         try {
-            this.messagingTemplate.convertAndSend("/topic/posts", "POST_COMMENT_ADDED");
+            long totalComments = this.commentRepository.countByPost(post);
+            java.util.Map<String, Object> wsMsg = new java.util.HashMap<>();
+            wsMsg.put("type", "POST_COMMENT_ADDED");
+            wsMsg.put("postId", postId);
+            wsMsg.put("commentsCount", totalComments);
+            wsMsg.put("comment", commentDTO);
+            this.messagingTemplate.convertAndSend("/topic/posts", wsMsg);
+            this.messagingTemplate.convertAndSend("/topic/post/" + postId + "/comments", wsMsg);
+
             String senderDisplayName = currentUser.getNickname() != null && !currentUser.getNickname().isEmpty() ? currentUser.getNickname() : currentUser.getAccount();
 
             // Nếu trả lời bình luận của ai đó -> Gửi thông báo đến tác giả bình luận cha
@@ -1298,10 +1329,17 @@ public class PostService {
         }
 
         this.commentLikeRepository.deleteAllByComment(comment);
+        PostEntity post = comment.getPost();
         this.commentRepository.delete(comment);
 
         try {
-            this.messagingTemplate.convertAndSend("/topic/posts", "POST_COMMENT_DELETED");
+            long totalComments = this.commentRepository.countByPost(post);
+            java.util.Map<String, Object> wsMsg = new java.util.HashMap<>();
+            wsMsg.put("type", "POST_COMMENT_DELETED");
+            wsMsg.put("postId", postId);
+            wsMsg.put("commentId", commentId);
+            wsMsg.put("commentsCount", totalComments);
+            this.messagingTemplate.convertAndSend("/topic/posts", wsMsg);
         } catch (Exception ignored) {}
 
         return new ResponseData<>(200, "Xóa bình luận thành công", true);
