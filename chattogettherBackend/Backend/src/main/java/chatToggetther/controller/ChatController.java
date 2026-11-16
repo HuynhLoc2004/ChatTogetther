@@ -108,4 +108,11 @@ public class ChatController {
         return ResponseEntity.ok(this.chatService.getOrCreateDirectRoom(token, targetUserId));
     }
 
+    @GetMapping({"/conversations", "/recent-chats"})
+    public ResponseEntity<ResponseData<List<Map<String, Object>>>> getRecentConversations(
+            JwtAuthenticationToken token
+    ) {
+        return ResponseEntity.ok(this.chatService.getRecentConversations(token));
+    }
+
 }

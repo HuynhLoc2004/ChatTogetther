@@ -6,10 +6,12 @@ import chatToggetther.Customize.SecurityUtils;
 import chatToggetther.DTO.SendMessageDTO;
 import chatToggetther.DataRequest.MessageRequest;
 import chatToggetther.ENUMS.ErrorCode;
+import chatToggetther.modelEntity.FriendshipEntity;
 import chatToggetther.modelEntity.MessageEntity;
 import chatToggetther.modelEntity.RoomEntity;
 import chatToggetther.modelEntity.UserEntity;
 import chatToggetther.modelEntity.UserRoomEntity;
+import chatToggetther.repository.FriendshipRepository;
 import chatToggetther.repository.MessageRepository;
 import chatToggetther.repository.RoomRepository;
 import chatToggetther.repository.UserRepository;
@@ -22,10 +24,12 @@ import org.springframework.stereotype.Service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -35,13 +39,15 @@ public class ChatService {
     private final RoomRepository roomRepository;
     private final UserRepository userRepository;
     private final MessageRepository messageRepository;
+    private final FriendshipRepository friendshipRepository;
     private final SimpMessagingTemplate simpMessagingTemplate;
     private final ObjectMapper objectMapper;
 
-    public ChatService(RoomRepository roomRepository, UserRepository userRepository, MessageRepository messageRepository, SimpMessagingTemplate simpMessagingTemplate, ObjectMapper objectMapper) {
+    public ChatService(RoomRepository roomRepository, UserRepository userRepository, MessageRepository messageRepository, FriendshipRepository friendshipRepository, SimpMessagingTemplate simpMessagingTemplate, ObjectMapper objectMapper) {
         this.roomRepository = roomRepository;
         this.userRepository = userRepository;
         this.messageRepository = messageRepository;
+        this.friendshipRepository = friendshipRepository;
         this.simpMessagingTemplate = simpMessagingTemplate;
         this.objectMapper = objectMapper;
     }
@@ -355,6 +361,124 @@ public class ChatService {
         res.put("targetUser", targetData);
 
         return new ResponseData<>(200, "Lấy phòng chat 1-1 thành công", res);
+    }
+
+    @Transactional
+    public ResponseData<List<Map<String, Object>>> getRecentConversations(JwtAuthenticationToken token) {
+        Long myId = SecurityUtils.extractUserId(token);
+        if (myId == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
+        }
+        UserEntity me = userRepository.findById(myId).orElseThrow(() ->
+            new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "User không tồn tại", 404)
+        );
+
+        // 1. Thu thập tất cả bạn bè đã chấp nhận
+        List<FriendshipEntity> friends = friendshipRepository.findAllAcceptedFriends(me);
+        Map<Long, UserEntity> partnersMap = new LinkedHashMap<>();
+        for (FriendshipEntity f : friends) {
+            UserEntity partner = f.getUser().getId().equals(myId) ? f.getFriend() : f.getUser();
+            if (partner != null && !partner.getId().equals(myId)) {
+                partnersMap.put(partner.getId(), partner);
+            }
+        }
+
+        // 2. Thu thập tất cả phòng DM 1-1 mà user này tham gia
+        List<RoomEntity> allDmRooms = roomRepository.findAllDmRooms();
+        Map<Long, RoomEntity> partnerToRoomMap = new HashMap<>();
+        List<Long> dmRoomIds = new ArrayList<>();
+
+        for (RoomEntity r : allDmRooms) {
+            String pwd = r.getPassword();
+            if (pwd != null && pwd.startsWith("DM_")) {
+                String[] parts = pwd.split("_");
+                if (parts.length >= 3) {
+                    try {
+                        Long u1 = Long.parseLong(parts[1]);
+                        Long u2 = Long.parseLong(parts[2]);
+                        if (myId.equals(u1) || myId.equals(u2)) {
+                            Long partnerId = myId.equals(u1) ? u2 : u1;
+                            partnerToRoomMap.put(partnerId, r);
+                            dmRoomIds.add(r.getId());
+
+                            // Nếu người này chưa có trong partnersMap (chưa kết bạn nhưng từng nhắn tin 1-1)
+                            if (!partnersMap.containsKey(partnerId)) {
+                                userRepository.findById(partnerId).ifPresent(p -> partnersMap.put(partnerId, p));
+                            }
+                        }
+                    } catch (NumberFormatException ignored) {}
+                }
+            }
+        }
+
+        // 3. Batch query tin nhắn mới nhất cho TẤT CẢ các phòng DM cùng 1 truy vấn duy nhất
+        Map<Long, MessageEntity> latestMsgByRoomId = new HashMap<>();
+        if (!dmRoomIds.isEmpty()) {
+            List<MessageEntity> latestMessages = messageRepository.findLatestMessagesForRooms(dmRoomIds);
+            for (MessageEntity m : latestMessages) {
+                if (m.getRoomEntity() != null) {
+                    latestMsgByRoomId.put(m.getRoomEntity().getId(), m);
+                }
+            }
+        }
+
+        // 4. Tạo danh sách hội thoại tổng hợp
+        List<Map<String, Object>> result = new ArrayList<>();
+        DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
+
+        for (Map.Entry<Long, UserEntity> entry : partnersMap.entrySet()) {
+            Long partnerId = entry.getKey();
+            UserEntity partner = entry.getValue();
+            RoomEntity room = partnerToRoomMap.get(partnerId);
+
+            MessageEntity lastMsg = null;
+            if (room != null) {
+                lastMsg = latestMsgByRoomId.get(room.getId());
+            }
+
+            boolean isOnline = chatToggetther.controller.RoomPresenceController.isUserOnline(partnerId);
+
+            Map<String, Object> conv = new HashMap<>();
+            conv.put("id", partner.getId());
+            conv.put("account", partner.getAccount());
+            String nickname = (partner.getNickname() != null && !partner.getNickname().trim().isEmpty())
+                    ? partner.getNickname() : partner.getAccount();
+            conv.put("nickname", nickname);
+            conv.put("avatar", partner.getAvatar() != null ? partner.getAvatar() : "");
+            conv.put("isOnline", isOnline);
+            conv.put("status", isOnline ? "ONLINE" : "OFFLINE");
+            conv.put("directRoomId", room != null ? room.getId() : null);
+
+            if (lastMsg != null) {
+                conv.put("lastMessage", lastMsg.getMessage());
+                conv.put("lastMessageTime", lastMsg.getTimeSend() != null ? lastMsg.getTimeSend().toString() : null);
+                conv.put("lastMessageFormattedTime", lastMsg.getTimeSend() != null ? lastMsg.getTimeSend().format(timeFormatter) : "");
+                conv.put("lastMessageSenderId", lastMsg.getUserEntity() != null ? lastMsg.getUserEntity().getId() : null);
+            } else {
+                conv.put("lastMessage", null);
+                conv.put("lastMessageTime", null);
+                conv.put("lastMessageFormattedTime", "");
+                conv.put("lastMessageSenderId", null);
+            }
+
+            result.add(conv);
+        }
+
+        // 5. Sắp xếp: Ai có tin nhắn gần đây nhất lên đầu (chuẩn Messenger / Telegram)
+        result.sort((a, b) -> {
+            String timeA = (String) a.get("lastMessageTime");
+            String timeB = (String) b.get("lastMessageTime");
+            if (timeA != null && timeB != null) {
+                return timeB.compareTo(timeA); // DESC
+            }
+            if (timeA != null) return -1;
+            if (timeB != null) return 1;
+            String nameA = (String) a.get("nickname");
+            String nameB = (String) b.get("nickname");
+            return nameA.compareToIgnoreCase(nameB);
+        });
+
+        return new ResponseData<>(200, "Lấy danh sách cuộc trò chuyện thành công", result);
     }
 
 }

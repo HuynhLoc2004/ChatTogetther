@@ -22,4 +22,9 @@ public interface MessageRepository extends JpaRepository<MessageEntity , Long> {
            "WHERE m.roomEntity.id = :roomId AND (:beforeId IS NULL OR m.id < :beforeId) " +
            "ORDER BY m.id DESC")
     List<MessageEntity> findMessagesBeforeId(@Param("roomId") Long roomId, @Param("beforeId") Long beforeId, Pageable pageable);
+
+    @Query("SELECT m FROM MessageEntity m " +
+           "LEFT JOIN FETCH m.userEntity u " +
+           "WHERE m.id IN (SELECT MAX(m2.id) FROM MessageEntity m2 WHERE m2.roomEntity.id IN :roomIds GROUP BY m2.roomEntity.id)")
+    List<MessageEntity> findLatestMessagesForRooms(@Param("roomIds") java.util.Collection<Long> roomIds);
 }

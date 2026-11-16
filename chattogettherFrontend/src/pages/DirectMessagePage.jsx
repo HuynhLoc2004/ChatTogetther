@@ -257,24 +257,39 @@ export const DirectMessagePage = () => {
     }
   }, []);
 
-  // 1. Tải danh sách bạn bè & nạp xem trước tin nhắn gần nhất (Siêu tốc & Non-blocking)
+  // 1. Tải danh sách hội thoại & tin nhắn gần nhất (Siêu tốc 1 API duy nhất, không lag, không giật nhảy vị trí)
   useEffect(() => {
     let isMounted = true;
     const fetchFriendsAndPreviews = async () => {
       try {
-        const res = await axiosClient.get('/friends/list');
-        if (res?.data?.data && Array.isArray(res.data.data)) {
-          const rawFriends = res.data.data;
+        let convList = [];
+        try {
+          // Endpoint chuyên dụng: Lấy tất cả hội thoại, tin nhắn mới nhất và trạng thái online trong 1 request duy nhất
+          const res = await axiosClient.get('/message/conversations');
+          if (res?.data?.data && Array.isArray(res.data.data)) {
+            convList = res.data.data;
+          }
+        } catch (_) {
+          // Fallback an toàn nếu backend chưa cập nhật kịp
+          const res = await axiosClient.get('/friends/list');
+          if (res?.data?.data && Array.isArray(res.data.data)) {
+            convList = res.data.data;
+          }
+        }
 
-          // Hợp nhất tức thì với cache để giao diện hiển thị ngay lập tức (0ms chờ)
+        if (!isMounted) return;
+
+        if (convList && convList.length > 0) {
           let currentList = [];
           setFriends(prev => {
             const cacheMap = new Map(prev.map(f => [String(f.id), f]));
-            currentList = rawFriends.map(rf => {
+            currentList = convList.map(rf => {
               const cached = cacheMap.get(String(rf.id));
-              return cached ? { ...rf, ...cached, ...rf } : rf;
+              // Ưu tiên dữ liệu mới nhất từ server, giữ các field tạm thời nếu có
+              return cached ? { ...cached, ...rf } : rf;
             });
-            // Giữ lại các cuộc hội thoại 1-1 đang mở dù chưa kết bạn hoặc chưa có trong bạn bè
+
+            // Giữ lại các cuộc hội thoại 1-1 đang mở dù chưa có trong danh sách
             prev.forEach(p => {
               if (p && p.id && !currentList.some(f => String(f.id) === String(p.id))) {
                 currentList.push(p);
@@ -283,70 +298,34 @@ export const DirectMessagePage = () => {
             if (activePartnerRef.current && activePartnerRef.current.id && !currentList.some(f => String(f.id) === String(activePartnerRef.current.id))) {
               currentList.unshift(activePartnerRef.current);
             }
+
+            // Sắp xếp chuẩn xác 1 lần duy nhất: ai có tin nhắn mới nhất lên đầu
+            currentList.sort((a, b) => {
+              const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
+              const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
+              if (timeA > 0 && timeB > 0) return timeB - timeA;
+              if (timeA > 0) return -1;
+              if (timeB > 0) return 1;
+              return (a.nickname || a.account || '').localeCompare(b.nickname || b.account || '');
+            });
+
+            try {
+              localStorage.setItem('talovin_dm_friends_cache', JSON.stringify(currentList));
+            } catch (_) { }
+
             return currentList;
           });
-          setLoadingFriends(false);
 
-          // Tự động chọn cuộc trò chuyện đầu tiên nếu chưa chọn ai VÀ cuộc trò chuyện đó thực sự có tin nhắn
+          // Tự động chọn cuộc trò chuyện đầu tiên trên màn hình rộng nếu chưa chọn ai
           if (!urlTargetUserId && currentList.length > 0 && typeof window !== 'undefined' && window.innerWidth >= 768) {
             const hasRecentChat = currentList.find(c => c.lastMessageTime);
             if (hasRecentChat) {
               navigate(`/messages/${hasRecentChat.id}`, { replace: true });
             }
           }
-
-          // Nạp ngầm xem trước tin nhắn mà không làm gián đoạn hoặc chặn UI
-          for (const friend of rawFriends) {
-            if (!isMounted) break;
-            try {
-              let directRoomId = friend.directRoomId;
-              if (!directRoomId) {
-                const roomRes = await axiosClient.get(`/message/direct/${friend.id}`).catch(() => null);
-                directRoomId = roomRes?.data?.data?.roomId;
-              }
-
-              if (directRoomId) {
-                const histRes = await axiosClient.get(`/message/${directRoomId}?size=1`).catch(() => null);
-                const msgs = histRes?.data?.data || [];
-                if (msgs.length > 0) {
-                  const lastMsg = msgs[msgs.length - 1];
-
-                  if (!isMounted) break;
-                  setFriends(prev => {
-                    const nextList = prev.map(f => {
-                      if (String(f.id) === String(friend.id)) {
-                        return {
-                          ...f,
-                          directRoomId,
-                          lastMessage: lastMsg.message || (lastMsg.mediaType === 'IMAGE' ? '[Hình ảnh]' : '[Tệp tin]'),
-                          lastMessageTime: lastMsg.timeSend || null,
-                          lastMessageFormattedTime: lastMsg.formattedTime || (lastMsg.timeSend ? new Date(lastMsg.timeSend).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : ''),
-                          lastMessageSenderId: lastMsg.userId
-                        };
-                      }
-                      return f;
-                    });
-
-                    // Sắp xếp: người nhắn tin gần nhất nhảy lên đầu
-                    nextList.sort((a, b) => {
-                      const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
-                      const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
-                      return timeB - timeA;
-                    });
-
-                    try {
-                      localStorage.setItem('talovin_dm_friends_cache', JSON.stringify(nextList));
-                    } catch (_) { }
-
-                    return nextList;
-                  });
-                }
-              }
-            } catch (_) { }
-          }
         }
       } catch (e) {
-        console.error('Lỗi nạp danh sách bạn bè:', e);
+        console.error('Lỗi nạp danh sách hội thoại:', e);
       } finally {
         if (isMounted) setLoadingFriends(false);
       }
