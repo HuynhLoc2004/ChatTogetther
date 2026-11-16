@@ -206,11 +206,14 @@ export const ChallengeDeckModal = ({ isOpen, onClose, onShareToFeed }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in font-sans" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200 font-sans" onClick={onClose}>
       <div
-        className="w-[92vw] max-w-md bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[88dvh]"
+        className="w-full sm:max-w-md bg-zinc-950 border-t sm:border border-zinc-800 rounded-t-[28px] sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85dvh] animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Drag handle cho mobile */}
+        <div className="w-10 h-1 rounded-full bg-zinc-700/80 mx-auto mt-2.5 sm:hidden shrink-0" />
+
         {/* Header */}
         <div className="px-5 py-4 border-b border-zinc-800/80 flex items-center justify-between bg-zinc-950">
           <div className="flex items-center gap-2.5">

@@ -412,8 +412,20 @@ export const DirectMessagePage = () => {
       if (found?.directRoomId) knownRoomId = found.directRoomId;
     }
 
-    // Hiển thị ngay tin nhắn từ bộ nhớ đệm nếu đã từng mở (0ms, không lag, không giật màn hình)
-    const cachedMessages = messagesCacheRef.current.get(String(targetId)) || (knownRoomId ? messagesCacheRef.current.get(String(knownRoomId)) : null);
+    // Hiển thị ngay tin nhắn từ bộ nhớ đệm nếu đã từng mở (0ms tức thì, không lag, không chờ đợi)
+    let cachedMessages = messagesCacheRef.current.get(String(targetId)) || (knownRoomId ? messagesCacheRef.current.get(String(knownRoomId)) : null);
+    if (!cachedMessages) {
+      try {
+        const raw = localStorage.getItem(`talovin_dm_msgs_${targetId}`) || (knownRoomId ? localStorage.getItem(`talovin_dm_msgs_${knownRoomId}`) : null);
+        if (raw) {
+          cachedMessages = JSON.parse(raw);
+          if (Array.isArray(cachedMessages) && cachedMessages.length > 0) {
+            messagesCacheRef.current.set(String(targetId), cachedMessages);
+          }
+        }
+      } catch (_) {}
+    }
+
     if (cachedMessages && Array.isArray(cachedMessages) && cachedMessages.length > 0) {
       setMessages(cachedMessages);
       setLoadingMessages(false);
@@ -501,6 +513,10 @@ export const DirectMessagePage = () => {
           setMessages(fetchedMsgs);
           messagesCacheRef.current.set(String(targetId), fetchedMsgs);
           messagesCacheRef.current.set(String(roomId), fetchedMsgs);
+          try {
+            localStorage.setItem(`talovin_dm_msgs_${targetId}`, JSON.stringify(fetchedMsgs.slice(-50)));
+            if (roomId) localStorage.setItem(`talovin_dm_msgs_${roomId}`, JSON.stringify(fetchedMsgs.slice(-50)));
+          } catch (_) {}
           setTimeout(() => scrollToBottom(false), 50);
 
           // Cập nhật preview tin nhắn cuối cùng và đánh dấu hoạt động nếu tin nhắn mới
@@ -1082,7 +1098,7 @@ export const DirectMessagePage = () => {
       <div className="flex-1 flex overflow-hidden">
         
         {/* CỘT TRÁI: DANH SÁCH BẠN BÈ / CUỘC TRÒ CHUYỆN */}
-        <aside className={`w-full md:w-80 lg:w-96 flex flex-col border-r border-zinc-800/80 bg-zinc-950 shrink-0 ${urlTargetUserId ? 'hidden md:flex' : 'flex'}`}>
+        <aside className={`w-full md:w-80 lg:w-96 flex flex-col border-r border-zinc-800/80 bg-zinc-950 shrink-0 ${urlTargetUserId ? 'hidden md:flex' : 'flex animate-in fade-in duration-150'}`}>
           {/* Ô tìm kiếm bạn bè */}
           <div className="p-3 border-b border-zinc-800/60">
             <div className="relative">
@@ -1180,7 +1196,7 @@ export const DirectMessagePage = () => {
         </aside>
 
         {/* CỘT PHẢI: KHUNG CHAT 1-1 CHI TIẾT */}
-        <main className={`flex-1 flex flex-col bg-zinc-950 overflow-hidden ${!urlTargetUserId ? 'hidden md:flex' : 'flex'}`}>
+        <main className={`flex-1 flex flex-col bg-zinc-950 overflow-hidden ${!urlTargetUserId ? 'hidden md:flex' : 'flex animate-in fade-in slide-in-from-right-3 duration-200'}`}>
           {!urlTargetUserId || !activePartner ? (
             <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-zinc-500">
               <div className="w-16 h-16 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-4">
@@ -1277,8 +1293,27 @@ export const DirectMessagePage = () => {
                 className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar"
               >
                 {loadingMessages ? (
-                  <div className="py-20 text-center text-zinc-500 text-xs font-mono">
-                    Đang nạp tin nhắn...
+                  <div className="py-4 space-y-4 animate-pulse">
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-8 h-8 rounded-full bg-zinc-800/80 shrink-0" />
+                      <div className="space-y-1.5 max-w-[65%]">
+                        <div className="h-9 w-48 bg-zinc-800/80 rounded-2xl rounded-tl-sm" />
+                        <div className="h-2 w-12 bg-zinc-800/50 rounded" />
+                      </div>
+                    </div>
+                    <div className="flex items-start justify-end gap-2.5">
+                      <div className="space-y-1.5 max-w-[65%] flex flex-col items-end">
+                        <div className="h-10 w-56 bg-zinc-800/70 rounded-2xl rounded-tr-sm border border-zinc-700/30" />
+                        <div className="h-2 w-12 bg-zinc-800/50 rounded" />
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-8 h-8 rounded-full bg-zinc-800/80 shrink-0" />
+                      <div className="space-y-1.5 max-w-[65%]">
+                        <div className="h-12 w-52 bg-zinc-800/80 rounded-2xl rounded-tl-sm" />
+                        <div className="h-2 w-12 bg-zinc-800/50 rounded" />
+                      </div>
+                    </div>
                   </div>
                 ) : partnerNotFound ? (
                   <div className="py-16 text-center text-zinc-500 space-y-2">

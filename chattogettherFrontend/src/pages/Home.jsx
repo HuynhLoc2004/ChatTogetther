@@ -312,12 +312,23 @@ const Home = ({ initialTab }) => {
     navigate(`/profile/${uid}?from=${encodeURIComponent(fromPath)}`);
   }, [activeTab, location.pathname, navigate]);
 
-  // Chuyển không gian mượt mà kèm hiệu ứng tải nhẹ (Soft transition)
+  // Ref quản lý thanh cuộn ngang Tab trên Mobile
+  const streamTabsRef = useRef(null);
+
+  // Tự động căn giữa tab đang chọn khi chuyển đổi trên mobile để không bao giờ bị cắt chữ
+  useEffect(() => {
+    if (!streamTabsRef.current) return;
+    const activeBtn = streamTabsRef.current.querySelector('.stream-tab.active');
+    if (activeBtn) {
+      activeBtn.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }
+  }, [activeTab]);
+
+  // Chuyển không gian tức thì 0ms mượt mà không delay
   const handleSwitchTab = (tabId) => {
     if (tabId === activeTab) {
       return;
     }
-    setIsTabSwitching(true);
     setActiveFilterTag(null);
     setActiveTab(tabId);
     if (tabId === 'friends') {
@@ -329,9 +340,6 @@ const Home = ({ initialTab }) => {
     } else {
       navigate(`/?tab=${tabId}`);
     }
-    setTimeout(() => {
-      setIsTabSwitching(false);
-    }, 280);
   };
 
   // Khởi tạo cuộc gọi / đàm thoại riêng 1-1 từ Sảnh hoặc Cộng đồng
@@ -3107,7 +3115,7 @@ const Home = ({ initialTab }) => {
           {/* Thanh Tab điều hướng Sảnh (100% full width trên Mobile & PC, cuộn ngang mượt mà, loại bỏ hoàn toàn chuông trùng) */}
           <div className="stream-header flex items-center justify-between w-full border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-md px-3 py-1.5">
             {/* 1. Phân loại tab: Chiếm trọn bề ngang, cuộn ngang mượt mà */}
-            <div className="stream-tabs flex-1 flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div ref={streamTabsRef} className="stream-tabs flex-1 flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden overscroll-x-contain scroll-smooth">
               <button
                 type="button"
                 className={`stream-tab ${activeTab === 'feed' ? 'active' : ''}`}
@@ -3210,14 +3218,6 @@ const Home = ({ initialTab }) => {
               </button>
             </div>
           </div>
-
-          {/* THANH BÁO HIỆU SOFT TRANSITION KHI CHUYỂN TAB */}
-          {isTabSwitching && (
-            <div className="tab-switching-indicator flex items-center justify-center gap-2 py-2 px-3 mb-2 rounded-xl bg-zinc-900/90 border border-zinc-800 text-xs text-zinc-300 animate-pulse">
-              <div className="w-3.5 h-3.5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin"></div>
-              <span>Đang chuyển không gian...</span>
-            </div>
-          )}
 
           {/* Banner lọc chủ đề đang chọn */}
           {activeFilterTag && (

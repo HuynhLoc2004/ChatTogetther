@@ -24,9 +24,31 @@ export const FriendsSection = ({
 
   // Tab con trong Bạn bè: 'friends' (Danh sách bạn bè) | 'pending' (Lời mời chờ duyệt) | 'explore' (Tìm kiếm & Khám phá mới)
   const [subTab, setSubTab] = useState('friends');
-  const [friends, setFriends] = useState([]);
-  const [pending, setPending] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [friends, setFriends] = useState(() => {
+    try {
+      const cached = localStorage.getItem('talovin_dm_friends_cache');
+      return cached ? JSON.parse(cached) : [];
+    } catch (_) {
+      return [];
+    }
+  });
+  const [pending, setPending] = useState(() => {
+    try {
+      const cached = localStorage.getItem('talovin_pending_friends_cache');
+      return cached ? JSON.parse(cached) : [];
+    } catch (_) {
+      return [];
+    }
+  });
+  const [loading, setLoading] = useState(() => {
+    try {
+      const cached = localStorage.getItem('talovin_dm_friends_cache');
+      const parsed = cached ? JSON.parse(cached) : [];
+      return !(parsed && parsed.length > 0);
+    } catch (_) {
+      return true;
+    }
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [actionInProgress, setActionInProgress] = useState({});
   const [confirmUnfriendId, setConfirmUnfriendId] = useState(null);
@@ -38,7 +60,10 @@ export const FriendsSection = ({
   // Nạp dữ liệu Bạn bè & Lời mời
   const fetchData = async () => {
     try {
-      setLoading(true);
+      // Chỉ bật spinner nếu chưa có dữ liệu trong bộ nhớ đệm
+      if (friends.length === 0) {
+        setLoading(true);
+      }
       const [friendsRes, pendingRes] = await Promise.all([
         axiosClient.get('/friends/list').catch(() => ({ data: { data: [] } })),
         axiosClient.get('/friends/pending').catch(() => ({ data: { data: [] } }))
@@ -51,6 +76,7 @@ export const FriendsSection = ({
       // Lưu cache cục bộ để các trang khác nạp tức thì
       try {
         localStorage.setItem('talovin_dm_friends_cache', JSON.stringify(friendList));
+        localStorage.setItem('talovin_pending_friends_cache', JSON.stringify(pendingList));
       } catch (_) {}
     } catch (err) {
       console.error("Lỗi lấy danh sách bạn bè:", err);
