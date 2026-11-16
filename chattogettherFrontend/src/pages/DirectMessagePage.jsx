@@ -139,7 +139,7 @@ export const DirectMessagePage = () => {
     }
   };
 
-  // Danh sách bạn bè / hội thoại (Nạp tức thì từ cache localStorage nếu có, 0ms chờ)
+  // Danh sách bạn bè / hội thoại
   const [friends, setFriends] = useState(() => {
     try {
       const cached = localStorage.getItem('talovin_dm_friends_cache');
@@ -148,15 +148,8 @@ export const DirectMessagePage = () => {
       return [];
     }
   });
-  const [loadingFriends, setLoadingFriends] = useState(() => {
-    try {
-      const cached = localStorage.getItem('talovin_dm_friends_cache');
-      const parsed = cached ? JSON.parse(cached) : [];
-      return !(parsed && parsed.length > 0);
-    } catch (_) {
-      return true;
-    }
-  });
+  // Luôn bật loading khi mới vào trang để chờ dữ liệu mới nhất từ server, tránh hiển thị danh sách cũ/nhảy vị trí
+  const [loadingFriends, setLoadingFriends] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Quản lý số lượng tin nhắn chưa đọc { [partnerId]: count }
@@ -344,73 +337,76 @@ export const DirectMessagePage = () => {
 
         if (convList && convList.length > 0) {
           let currentList = [];
-          setFriends(prev => {
-            const cacheMap = new Map(prev.map(f => [String(f.id), f]));
-            const unreadMapSaved = (() => {
-              try { return JSON.parse(localStorage.getItem('talovin_dm_unread') || '{}'); } catch (_) { return {}; }
-            })();
+          const freshUnreadMap = {};
+          const hiddenIds = [];
 
-            currentList = convList.map(rf => {
-              const cached = cacheMap.get(String(rf.id));
-              let lastMsg = rf.lastMessage || cached?.lastMessage || null;
-              let lastTime = rf.lastMessageTime || cached?.lastMessageTime || null;
-              let lastFmt = rf.lastMessageFormattedTime || cached?.lastMessageFormattedTime || '';
+          currentList = convList.map(rf => {
+            let lastMsg = rf.lastMessage;
+            let lastTime = rf.lastMessageTime;
+            let lastFmt = rf.lastMessageFormattedTime;
 
-              // Nạp từ bộ nhớ tin nhắn cục bộ nếu chưa có để đảm bảo vị trí luôn chuẩn xác từ đầu
-              if (!lastTime) {
-                try {
-                  const localRaw = localStorage.getItem(`talovin_dm_msgs_${rf.id}`);
-                  if (localRaw) {
-                    const parsed = JSON.parse(localRaw);
-                    if (Array.isArray(parsed) && parsed.length > 0) {
-                      const lm = parsed[parsed.length - 1];
-                      lastMsg = lm.message || (lm.mediaType === 'IMAGE' ? '[Hình ảnh]' : '[Tệp tin]');
-                      lastTime = lm.timeSend || null;
-                      lastFmt = lm.formattedTime || (lastTime ? new Date(lastTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '');
-                    }
-                  }
-                } catch (_) { }
-              }
-
-              const realUnread = Number(unreadMapSaved[rf.id]) || Number(unreadMapSaved[String(rf.id)]) || 0;
-
-              return {
-                ...cached,
-                ...rf,
-                lastMessage: lastMsg,
-                lastMessageTime: lastTime,
-                lastMessageFormattedTime: lastFmt,
-                unreadCount: realUnread,
-                hasUnread: realUnread > 0
-              };
-            });
-
-            // Giữ lại các cuộc hội thoại 1-1 đang mở dù chưa có trong danh sách
-            prev.forEach(p => {
-              if (p && p.id && !currentList.some(f => String(f.id) === String(p.id))) {
-                currentList.push(p);
-              }
-            });
-            if (activePartnerRef.current && activePartnerRef.current.id && !currentList.some(f => String(f.id) === String(activePartnerRef.current.id))) {
-              currentList.unshift(activePartnerRef.current);
-            }
-
-            // Sắp xếp chuẩn xác 1 lần duy nhất: ai có tin nhắn mới nhất lên đầu
-            currentList.sort((a, b) => {
-              const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
-              const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
-              if (timeA > 0 && timeB > 0) return timeB - timeA;
-              if (timeA > 0) return -1;
-              if (timeB > 0) return 1;
-              return (a.nickname || a.account || '').localeCompare(b.nickname || b.account || '');
-            });
-
+            // Nạp thêm từ bộ nhớ tin nhắn cục bộ nếu có tin nhắn mới hơn
             try {
-              localStorage.setItem('talovin_dm_friends_cache', JSON.stringify(currentList));
+              const localRaw = localStorage.getItem(`talovin_dm_msgs_${rf.id}`);
+              if (localRaw) {
+                const parsed = JSON.parse(localRaw);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                  const lm = parsed[parsed.length - 1];
+                  const localTimeMs = lm.timeSend ? new Date(lm.timeSend).getTime() : 0;
+                  const serverTimeMs = lastTime ? new Date(lastTime).getTime() : 0;
+                  if (localTimeMs >= serverTimeMs) {
+                    lastMsg = lm.message || (lm.mediaType === 'IMAGE' ? '[Hình ảnh]' : '[Tệp tin]');
+                    lastTime = lm.timeSend || lastTime;
+                    lastFmt = lm.formattedTime || (lastTime ? new Date(lastTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '');
+                  }
+                }
+              }
             } catch (_) { }
 
-            return currentList;
+            // Lấy chính xác số tin nhắn chưa đọc từ Backend (tuyệt đối không bị reset khi login lại)
+            const srvUnread = Number(rf.unreadCount) || 0;
+            if (srvUnread > 0) {
+              freshUnreadMap[String(rf.id)] = srvUnread;
+            }
+            if (rf.isHidden) {
+              hiddenIds.push(String(rf.id));
+            }
+
+            return {
+              ...rf,
+              lastMessage: lastMsg,
+              lastMessageTime: lastTime,
+              lastMessageFormattedTime: lastFmt,
+              unreadCount: srvUnread,
+              hasUnread: srvUnread > 0
+            };
           });
+
+          // Đồng bộ tức thì bản đồ tin nhắn chưa đọc vào State & LocalStorage
+          setUnreadMap(freshUnreadMap);
+          try {
+            localStorage.setItem('talovin_dm_unread', JSON.stringify(freshUnreadMap));
+            if (hiddenIds.length > 0) {
+              localStorage.setItem('talovin_hidden_partner_ids', JSON.stringify(hiddenIds));
+            }
+            window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: freshUnreadMap }));
+          } catch (_) {}
+
+          // Sắp xếp CHUẨN XÁC: Người có tin nhắn/cuộc gọi mới nhất luôn lên TRÊN CÙNG
+          currentList.sort((a, b) => {
+            const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
+            const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
+            if (timeA > 0 && timeB > 0) return timeB - timeA;
+            if (timeA > 0) return -1;
+            if (timeB > 0) return 1;
+            return (a.nickname || a.account || '').localeCompare(b.nickname || b.account || '');
+          });
+
+          try {
+            localStorage.setItem('talovin_dm_friends_cache', JSON.stringify(currentList));
+          } catch (_) { }
+
+          setFriends(currentList);
 
           // Tự động chọn cuộc trò chuyện đầu tiên trên màn hình rộng nếu chưa chọn ai
           if (!urlTargetUserId && currentList.length > 0 && typeof window !== 'undefined' && window.innerWidth >= 768) {
@@ -1551,8 +1547,19 @@ export const DirectMessagePage = () => {
           {/* Danh sách người dùng */}
           <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
             {loadingFriends ? (
-              <div className="py-12 text-center text-zinc-500 text-xs font-mono">
-                Đang nạp danh sách trò chuyện...
+              <div className="p-1 space-y-2 animate-pulse">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="flex items-center gap-3 p-3 rounded-2xl bg-zinc-900/40 border border-zinc-850/50">
+                    <div className="w-10.5 h-10.5 rounded-full bg-zinc-800/80 shrink-0" />
+                    <div className="flex-1 min-w-0 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="h-3 w-28 bg-zinc-800/80 rounded" />
+                        <div className="h-2 w-10 bg-zinc-800/50 rounded" />
+                      </div>
+                      <div className="h-2.5 w-36 bg-zinc-800/50 rounded" />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : filteredConversations.length === 0 ? (
               <div className="py-12 px-4 text-center text-zinc-500 text-xs">
@@ -1823,25 +1830,31 @@ export const DirectMessagePage = () => {
                 className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar"
               >
                 {loadingMessages ? (
-                  <div className="py-4 space-y-4 animate-pulse">
+                  <div className="py-6 space-y-5 animate-pulse max-w-2xl mx-auto">
                     <div className="flex items-start gap-2.5">
                       <div className="w-8 h-8 rounded-full bg-zinc-800/80 shrink-0" />
                       <div className="space-y-1.5 max-w-[65%]">
-                        <div className="h-9 w-48 bg-zinc-800/80 rounded-2xl rounded-tl-sm" />
-                        <div className="h-2 w-12 bg-zinc-800/50 rounded" />
+                        <div className="h-10 w-52 bg-zinc-800/80 rounded-2xl rounded-tl-sm border border-zinc-700/20" />
+                        <div className="h-2 w-12 bg-zinc-800/40 rounded" />
                       </div>
                     </div>
                     <div className="flex items-start justify-end gap-2.5">
                       <div className="space-y-1.5 max-w-[65%] flex flex-col items-end">
-                        <div className="h-10 w-56 bg-zinc-800/70 rounded-2xl rounded-tr-sm border border-zinc-700/30" />
-                        <div className="h-2 w-12 bg-zinc-800/50 rounded" />
+                        <div className="h-11 w-60 bg-zinc-800/70 rounded-2xl rounded-tr-sm border border-zinc-700/30" />
+                        <div className="h-2 w-12 bg-zinc-800/40 rounded" />
                       </div>
                     </div>
                     <div className="flex items-start gap-2.5">
                       <div className="w-8 h-8 rounded-full bg-zinc-800/80 shrink-0" />
                       <div className="space-y-1.5 max-w-[65%]">
-                        <div className="h-12 w-52 bg-zinc-800/80 rounded-2xl rounded-tl-sm" />
-                        <div className="h-2 w-12 bg-zinc-800/50 rounded" />
+                        <div className="h-12 w-48 bg-zinc-800/80 rounded-2xl rounded-tl-sm border border-zinc-700/20" />
+                        <div className="h-2 w-12 bg-zinc-800/40 rounded" />
+                      </div>
+                    </div>
+                    <div className="flex items-start justify-end gap-2.5">
+                      <div className="space-y-1.5 max-w-[65%] flex flex-col items-end">
+                        <div className="h-9 w-40 bg-zinc-800/70 rounded-2xl rounded-tr-sm border border-zinc-700/30" />
+                        <div className="h-2 w-12 bg-zinc-800/40 rounded" />
                       </div>
                     </div>
                   </div>

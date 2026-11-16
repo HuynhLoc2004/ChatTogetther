@@ -758,7 +758,8 @@ const Home = ({ initialTab }) => {
 
   // Nạp và kiểm tra số tin nhắn chưa đọc chuẩn xác từ Backend (1 API duy nhất, loại trừ đoạn chat ẩn)
   useEffect(() => {
-    if (!currentUserId) return;
+    const effectiveId = currentUserId || localStorage.getItem('user_id');
+    if (!effectiveId) return;
     const syncDmUnread = async () => {
       try {
         const res = await axiosClient.get('/message/conversations').catch(() => null);
@@ -772,7 +773,7 @@ const Home = ({ initialTab }) => {
               hiddenIds.push(String(c.id));
             }
             if (uCount > 0) {
-              unreadMap[c.id] = uCount;
+              unreadMap[String(c.id)] = uCount;
               if (!c.isHidden) {
                 count += uCount;
               }
@@ -786,6 +787,13 @@ const Home = ({ initialTab }) => {
       } catch (_) {}
     };
     syncDmUnread();
+    const interval = setInterval(syncDmUnread, 15000);
+    const handleVis = () => { if (!document.hidden) syncDmUnread(); };
+    document.addEventListener('visibilitychange', handleVis);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVis);
+    };
   }, [currentUserId]);
 
   // Tổng số tin nhắn chưa đọc (tuyệt đối không cộng gộp vào chuông sảnh và không tính chat ẩn)

@@ -190,17 +190,17 @@ export const PresenceProvider = ({ children }) => {
       } catch (_) {}
     }, () => {});
 
-    // Định kỳ gửi nhịp tim mỗi 15 giây (rất nhẹ, cực chuẩn)
+    // Định kỳ gửi nhịp tim mỗi 10 giây (rất nhẹ, phản ứng tức thì)
     const heartbeatInterval = setInterval(() => {
       broadcastMyPresence(true);
-    }, 15000);
+    }, 10000);
 
-    // Quét loại bỏ người dùng hết hạn tín hiệu (> 120s) mỗi 15 giây
+    // Quét loại bỏ người dùng hết hạn tín hiệu (> 25s) mỗi 5 giây
     const pruneInterval = setInterval(() => {
       const now = Date.now();
       const expired = [];
       lastSeenMapRef.current.forEach((ts, uid) => {
-        if (uid !== String(currentUserId) && now - ts > 120000) {
+        if (uid !== String(currentUserId) && now - ts > 25000) {
           expired.push(uid);
         }
       });
@@ -212,15 +212,15 @@ export const PresenceProvider = ({ children }) => {
           return next;
         });
       }
-    }, 15000);
+    }, 5000);
 
     // Nạp danh sách ban đầu từ server
     fetchOnlineUsers();
 
-    // Định kỳ đồng bộ danh sách online từ server mỗi 8 giây (đảm bảo cập nhật chính xác 100%)
+    // Định kỳ đồng bộ danh sách online từ server mỗi 5 giây (đảm bảo cập nhật chính xác 100%)
     const pollInterval = setInterval(() => {
       fetchOnlineUsers();
-    }, 8000);
+    }, 5000);
 
     // Bắt sự kiện khi tab được mở lại để đồng bộ tức thì
     const handleVisibilityChange = () => {
@@ -237,6 +237,19 @@ export const PresenceProvider = ({ children }) => {
     };
     window.addEventListener('pagehide', handlePageHide);
 
+    // Lắng nghe sự kiện đăng xuất chủ động
+    const handleExplicitOffline = (e) => {
+      const offUid = String(e.detail?.userId || currentUserId);
+      broadcastMyPresence(false);
+      lastSeenMapRef.current.delete(offUid);
+      setOnlineUserIds(prev => {
+        const next = new Set(prev);
+        next.delete(offUid);
+        return next;
+      });
+    };
+    window.addEventListener('talovin_presence_offline', handleExplicitOffline);
+
     return () => {
       isMounted = false;
       clearInterval(heartbeatInterval);
@@ -244,6 +257,7 @@ export const PresenceProvider = ({ children }) => {
       clearInterval(pollInterval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pagehide', handlePageHide);
+      window.removeEventListener('talovin_presence_offline', handleExplicitOffline);
       broadcastMyPresence(false);
       if (stompClientRef.current) {
         try {
@@ -260,9 +274,9 @@ export const PresenceProvider = ({ children }) => {
     const myId = getCurrentUserId();
     if (myId && uid === String(myId)) return true; // Chính mình luôn trực tuyến
 
-    // Kiểm tra timestamp gần nhất từ peer broadcast hoặc tương tác (120 giây)
+    // Kiểm tra timestamp gần nhất từ peer broadcast hoặc tương tác (25 giây)
     const lastSeen = lastSeenMapRef.current.get(uid);
-    if (lastSeen && (Date.now() - lastSeen < 120000)) {
+    if (lastSeen && (Date.now() - lastSeen < 25000)) {
       return true;
     }
 

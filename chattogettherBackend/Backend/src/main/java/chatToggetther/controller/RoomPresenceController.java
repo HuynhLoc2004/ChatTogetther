@@ -72,6 +72,25 @@ public class RoomPresenceController {
     }
 
     /**
+     * API báo trạng thái ngoại tuyến ngay lập tức (khi người dùng Đăng xuất / Logout hoặc thoát ứng dụng)
+     */
+    @org.springframework.web.bind.annotation.PostMapping({"/api/presence/offline", "/presence/offline"})
+    public ResponseEntity<ResponseData<Boolean>> postGlobalOffline(
+            org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken token,
+            @org.springframework.web.bind.annotation.RequestBody(required = false) Map<String, Object> body) {
+        Long userId = chatToggetther.Customize.SecurityUtils.extractUserId(token);
+        if (userId == null && body != null && body.get("userId") != null) {
+            try {
+                userId = Long.valueOf(String.valueOf(body.get("userId")));
+            } catch (Exception ignored) {}
+        }
+        if (userId != null) {
+            presenceService.recordOffline(userId, null);
+        }
+        return ResponseEntity.ok(new ResponseData<>(200, "Offline OK", true));
+    }
+
+    /**
      * WebSocket: Nhận nhịp tim toàn cục định kỳ
      */
     @MessageMapping("/presence/heartbeat")

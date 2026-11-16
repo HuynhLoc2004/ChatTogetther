@@ -116,13 +116,20 @@ export const AuthProvider = ({ children }) => {
     return null;
   }, [syncToStorage]);
 
-  // Đăng xuất toàn diện
+  // Đăng xuất toàn diện và thông báo ngay trạng thái ngoại tuyến tức thì (0ms)
   const logout = useCallback(() => {
+    const userId = localStorage.getItem('user_id') || currentUser?.id;
+    if (userId) {
+      try {
+        axiosClient.post('/presence/offline', { userId: Number(userId) }).catch(() => {});
+        window.dispatchEvent(new CustomEvent('talovin_presence_offline', { detail: { userId } }));
+      } catch (_) {}
+    }
     setCurrentUser(null);
     syncToStorage(null);
     localStorage.clear();
     sessionStorage.clear();
-  }, [syncToStorage]);
+  }, [currentUser, syncToStorage]);
 
   // Khi mount, nếu có token thì đồng bộ profile mới nhất từ server trong background
   useEffect(() => {
