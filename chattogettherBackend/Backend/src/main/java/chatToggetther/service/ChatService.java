@@ -506,17 +506,20 @@ public class ChatService {
             result.add(conv);
         }
 
-        // 5. Sắp xếp: Ai có tin nhắn gần đây nhất lên đầu (chuẩn Messenger / Telegram)
+        // 5. Sắp xếp: Ai có tin nhắn gần đây nhất lên đầu (chuẩn Messenger / Telegram), tuyệt đối an toàn NullPointerException
         result.sort((a, b) -> {
             String timeA = (String) a.get("lastMessageTime");
             String timeB = (String) b.get("lastMessageTime");
             if (timeA != null && timeB != null) {
-                return timeB.compareTo(timeA); // DESC
+                int cmp = timeB.compareTo(timeA); // DESC
+                if (cmp != 0) return cmp;
+            } else if (timeA != null) {
+                return -1;
+            } else if (timeB != null) {
+                return 1;
             }
-            if (timeA != null) return -1;
-            if (timeB != null) return 1;
-            String nameA = (String) a.get("nickname");
-            String nameB = (String) b.get("nickname");
+            String nameA = a.get("nickname") != null ? a.get("nickname").toString() : (a.get("account") != null ? a.get("account").toString() : "");
+            String nameB = b.get("nickname") != null ? b.get("nickname").toString() : (b.get("account") != null ? b.get("account").toString() : "");
             return nameA.compareToIgnoreCase(nameB);
         });
 

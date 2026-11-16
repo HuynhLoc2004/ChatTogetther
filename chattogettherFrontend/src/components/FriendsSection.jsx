@@ -26,7 +26,7 @@ export const FriendsSection = ({
   const [subTab, setSubTab] = useState('friends');
   const [friends, setFriends] = useState(() => {
     try {
-      const cached = localStorage.getItem('talovin_dm_friends_cache');
+      const cached = localStorage.getItem('talovin_friends_section_cache');
       return cached ? JSON.parse(cached) : [];
     } catch (_) {
       return [];
@@ -66,9 +66,9 @@ export const FriendsSection = ({
       setFriends(friendList);
       setPending(pendingList);
 
-      // Lưu cache cục bộ để các trang khác nạp tức thì
+      // Lưu cache cục bộ riêng của mục Bạn bè, tuyệt đối không ghi đè mất lịch sử tin nhắn của Hộp thư
       try {
-        localStorage.setItem('talovin_dm_friends_cache', JSON.stringify(friendList));
+        localStorage.setItem('talovin_friends_section_cache', JSON.stringify(friendList));
         localStorage.setItem('talovin_pending_friends_cache', JSON.stringify(pendingList));
       } catch (_) {}
     } catch (err) {

@@ -94,6 +94,20 @@ const formatPreviewText = (text) => {
   return text;
 };
 
+// Hàm sắp xếp danh sách hội thoại chuẩn xác: Ai có tin nhắn mới nhất luôn đứng ĐẦU DANH SÁCH
+export const sortConversationsList = (list) => {
+  if (!Array.isArray(list)) return [];
+  const copy = [...list];
+  return copy.sort((a, b) => {
+    const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
+    const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
+    if (timeA > 0 && timeB > 0) return timeB - timeA; // Mới nhất lên đầu
+    if (timeA > 0) return -1;
+    if (timeB > 0) return 1;
+    return (a.nickname || a.account || '').localeCompare(b.nickname || b.account || '');
+  });
+};
+
 export const DirectMessagePage = () => {
   const { userId: routeUserId } = useParams();
   const [searchParams] = useSearchParams();
@@ -139,11 +153,44 @@ export const DirectMessagePage = () => {
     }
   };
 
-  // Danh sách bạn bè / hội thoại
+  // Danh sách bạn bè / hội thoại (Nạp tức thì từ cache, tự động hydrate từ tin nhắn cục bộ và sắp xếp mới nhất từ 0ms)
   const [friends, setFriends] = useState(() => {
     try {
-      const cached = localStorage.getItem('talovin_dm_friends_cache');
-      return cached ? JSON.parse(cached) : [];
+      const cached = localStorage.getItem('talovin_dm_conversations_cache') || localStorage.getItem('talovin_dm_friends_cache');
+      const list = cached ? JSON.parse(cached) : [];
+      if (!Array.isArray(list) || list.length === 0) return [];
+
+      const hydrated = list.map(rf => {
+        let lastMsg = rf.lastMessage;
+        let lastTime = rf.lastMessageTime;
+        let lastFmt = rf.lastMessageFormattedTime;
+
+        try {
+          const localRaw = localStorage.getItem(`talovin_dm_msgs_${rf.id}`);
+          if (localRaw) {
+            const parsed = JSON.parse(localRaw);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              const lm = parsed[parsed.length - 1];
+              const localTimeMs = lm.timeSend ? new Date(lm.timeSend).getTime() : 0;
+              const currentTimeMs = lastTime ? new Date(lastTime).getTime() : 0;
+              if (localTimeMs >= currentTimeMs) {
+                lastMsg = lm.message || (lm.mediaType === 'IMAGE' ? '[Hình ảnh]' : '[Video]');
+                lastTime = lm.timeSend || lastTime;
+                lastFmt = lm.formattedTime || (lastTime ? new Date(lastTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '');
+              }
+            }
+          }
+        } catch (_) {}
+
+        return {
+          ...rf,
+          lastMessage: lastMsg,
+          lastMessageTime: lastTime,
+          lastMessageFormattedTime: lastFmt
+        };
+      });
+
+      return sortConversationsList(hydrated);
     } catch (_) {
       return [];
     }
@@ -393,20 +440,14 @@ export const DirectMessagePage = () => {
           } catch (_) {}
 
           // Sắp xếp CHUẨN XÁC: Người có tin nhắn/cuộc gọi mới nhất luôn lên TRÊN CÙNG
-          currentList.sort((a, b) => {
-            const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
-            const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
-            if (timeA > 0 && timeB > 0) return timeB - timeA;
-            if (timeA > 0) return -1;
-            if (timeB > 0) return 1;
-            return (a.nickname || a.account || '').localeCompare(b.nickname || b.account || '');
-          });
+          const sortedList = sortConversationsList(currentList);
 
           try {
-            localStorage.setItem('talovin_dm_friends_cache', JSON.stringify(currentList));
+            localStorage.setItem('talovin_dm_conversations_cache', JSON.stringify(sortedList));
+            localStorage.setItem('talovin_dm_friends_cache', JSON.stringify(sortedList));
           } catch (_) { }
 
-          setFriends(currentList);
+          setFriends(sortedList);
 
           // Tự động chọn cuộc trò chuyện đầu tiên trên màn hình rộng nếu chưa chọn ai
           if (!urlTargetUserId && currentList.length > 0 && typeof window !== 'undefined' && window.innerWidth >= 768) {
@@ -485,10 +526,12 @@ export const DirectMessagePage = () => {
         }
         return f;
       });
+      const sorted = sortConversationsList(nextList);
       try {
-        localStorage.setItem('talovin_dm_friends_cache', JSON.stringify(nextList));
+        localStorage.setItem('talovin_dm_conversations_cache', JSON.stringify(sorted));
+        localStorage.setItem('talovin_dm_friends_cache', JSON.stringify(sorted));
       } catch (_) { }
-      return nextList;
+      return sorted;
     });
 
     // Kiểm tra thông tin partner dự phòng từ props, friends state hoặc cache localStorage
@@ -665,10 +708,12 @@ export const DirectMessagePage = () => {
                 }
                 return f;
               });
+              const sorted = sortConversationsList(nextList);
               try {
-                localStorage.setItem('talovin_dm_friends_cache', JSON.stringify(nextList));
+                localStorage.setItem('talovin_dm_conversations_cache', JSON.stringify(sorted));
+                localStorage.setItem('talovin_dm_friends_cache', JSON.stringify(sorted));
               } catch (_) { }
-              return nextList;
+              return sorted;
             });
           }
         }
@@ -870,7 +915,13 @@ export const DirectMessagePage = () => {
               } : null;
 
               const rest = prev.filter(f => f.id?.toString() !== targetFriendIdStr);
-              return updatedFriend ? [updatedFriend, ...rest] : prev;
+              const nextList = updatedFriend ? [updatedFriend, ...rest] : prev;
+              const sorted = sortConversationsList(nextList);
+              try {
+                localStorage.setItem('talovin_dm_conversations_cache', JSON.stringify(sorted));
+                localStorage.setItem('talovin_dm_friends_cache', JSON.stringify(sorted));
+              } catch (_) { }
+              return sorted;
             });
           }
         } catch (e) {
@@ -1041,10 +1092,12 @@ export const DirectMessagePage = () => {
 
       const rest = prev.filter(f => f.id?.toString() !== partnerIdStr);
       const nextList = updated ? [updated, ...rest] : prev;
+      const sorted = sortConversationsList(nextList);
       try {
-        localStorage.setItem('talovin_dm_friends_cache', JSON.stringify(nextList));
+        localStorage.setItem('talovin_dm_conversations_cache', JSON.stringify(sorted));
+        localStorage.setItem('talovin_dm_friends_cache', JSON.stringify(sorted));
       } catch (_) { }
-      return nextList;
+      return sorted;
     });
 
     // Thực thi gửi trong luồng ngầm độc lập (Worker / Concurrent Background Task)
@@ -1425,19 +1478,7 @@ export const DirectMessagePage = () => {
       );
     }
 
-    // Sắp xếp danh sách cuộc trò chuyện:
-    // 1. Những người ĐÃ CÓ tin nhắn hoặc cuộc gọi (lastMessageTime) sẽ được đưa lên đầu theo thời gian mới nhất
-    // 2. Những người CHƯA CÓ tin nhắn nào sẽ ở phía dưới, KHÔNG bao giờ bị nhảy lên đầu khi chưa có tin nhắn
-    list.sort((a, b) => {
-      const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
-      const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
-      if (timeA > 0 && timeB > 0) return timeB - timeA;
-      if (timeA > 0) return -1;
-      if (timeB > 0) return 1;
-      return 0;
-    });
-
-    return list;
+    return sortConversationsList(list);
   }, [friends, searchQuery, isUnlocked, hiddenPartnerIds]);
 
   // ID an toàn cho cuộc gọi WebRTC
