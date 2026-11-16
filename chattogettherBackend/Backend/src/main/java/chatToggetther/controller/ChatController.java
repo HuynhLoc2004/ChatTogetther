@@ -37,6 +37,9 @@ public class ChatController {
                 }
             } catch (Exception ignored) {}
         }
+        if (effectiveRoomId == null) {
+            throw new AppException(400, "Không thể xác định phòng trò chuyện để gửi tin nhắn", 400);
+        }
         return ResponseEntity.ok(this.chatService.sendMessage(jwtAuthenticationToken, messageRequest, effectiveRoomId));
     }
 

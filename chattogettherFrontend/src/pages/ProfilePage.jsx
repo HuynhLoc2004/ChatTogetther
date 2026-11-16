@@ -960,7 +960,7 @@ const ProfilePage = () => {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            navigate(`/messages?userId=${effectiveUserId}`, {
+                            navigate(`/messages/${effectiveUserId}`, {
                               state: {
                                 targetUser: {
                                   id: effectiveUserId,
@@ -997,7 +997,7 @@ const ProfilePage = () => {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            navigate(`/messages?userId=${effectiveUserId}`, {
+                            navigate(`/messages/${effectiveUserId}`, {
                               state: {
                                 targetUser: {
                                   id: effectiveUserId,
@@ -1055,7 +1055,7 @@ const ProfilePage = () => {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            navigate(`/messages?userId=${effectiveUserId}`, {
+                            navigate(`/messages/${effectiveUserId}`, {
                               state: {
                                 targetUser: {
                                   id: effectiveUserId,

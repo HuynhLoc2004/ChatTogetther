@@ -247,6 +247,14 @@ function App() {
               } 
             />
             <Route 
+              path="/friends" 
+              element={
+                <ProtectedRoute>
+                  <Home initialTab="friends" />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
               path="/room/:roomId" 
               element={
                 <ProtectedRoute>

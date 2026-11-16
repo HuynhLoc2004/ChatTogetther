@@ -432,6 +432,38 @@ export const DirectMessagePage = () => {
             setPartnerNotFound(false);
           }
         }
+
+        if (!effectivePartner && targetId) {
+          try {
+            const userProfileRes = await axiosClient.get('/users/profile', { params: { user_id: targetId } });
+            if (userProfileRes.data?.data) {
+              const u = userProfileRes.data.data;
+              effectivePartner = {
+                id: u.id,
+                account: u.account,
+                nickname: u.nickname || u.account,
+                avatar: u.avatar || ''
+              };
+              setActivePartner(effectivePartner);
+              setPartnerNotFound(false);
+            }
+          } catch (_) {}
+        }
+      }
+
+      if (effectivePartner) {
+        setFriends(prev => {
+          const exists = prev.some(f => String(f.id) === String(effectivePartner.id) || f.account === effectivePartner.account);
+          if (!exists) {
+            return [{
+              ...effectivePartner,
+              directRoomId: roomId || undefined,
+              hasUnread: false,
+              unreadCount: 0
+            }, ...prev];
+          }
+          return prev.map(f => (String(f.id) === String(effectivePartner.id) || f.account === effectivePartner.account) ? { ...f, directRoomId: roomId || f.directRoomId } : f);
+        });
       }
 
       if (roomId) {
@@ -861,8 +893,7 @@ export const DirectMessagePage = () => {
       }
 
       await axiosClient.post('/message/send', {
-        message: finalMessage || content || '[Tệp tin]',
-        timeSend: now.toISOString()
+        message: finalMessage || content || '[Tệp tin]'
       }, {
         params: { 
           user_room: targetRoom || undefined,

@@ -17,6 +17,7 @@ import axiosClient, { BACKEND_URL } from '../api/axiosClient';
 import { saveRoomsOffline, getRoomsOffline } from '../utils/offlineDB';
 import UserProfileModal from './UserProfileModal';
 import FriendsModal from './FriendsModal';
+import FriendsSection from '../components/FriendsSection';
 import toast from 'react-hot-toast';
 import TalovinLogo from '../components/TalovinLogo';
 import GroupCollageAvatar from '../components/GroupCollageAvatar';
@@ -252,28 +253,37 @@ const Home = ({ initialTab }) => {
   const currentUserAccount = currentUser?.account || currentUser?.username || localStorage.getItem('account') || localStorage.getItem('username') || 'user';
   const currentUserAvatar = currentUser?.avatarUrl || currentUser?.avatar || localStorage.getItem('user_avatar') || localStorage.getItem('avatar') || '';
 
-  // Navigation tab chính: 'feed' | 'rooms' | 'trending' | 'saved' | 'groups'
+  // Navigation tab chính: 'feed' | 'rooms' | 'trending' | 'saved' | 'groups' | 'friends'
   const [activeTab, setActiveTab] = useState(() => {
     if (initialTab) return initialTab;
-    if (typeof window !== 'undefined' && (window.location.pathname.startsWith('/communities') || window.location.pathname.startsWith('/groups'))) {
-      return 'groups';
+    if (typeof window !== 'undefined') {
+      if (window.location.pathname.startsWith('/friends')) return 'friends';
+      if (window.location.pathname.startsWith('/communities') || window.location.pathname.startsWith('/groups')) return 'groups';
     }
     return 'feed';
   });
 
   useEffect(() => {
-    if (location.pathname.startsWith('/communities') || location.pathname.startsWith('/groups')) {
+    if (location.pathname.startsWith('/friends')) {
+      setActiveTab('friends');
+    } else if (location.pathname.startsWith('/communities') || location.pathname.startsWith('/groups')) {
       setActiveTab('groups');
+    } else if (location.pathname === '/') {
+      if (initialTab === 'friends') {
+        setActiveTab('friends');
+      } else if (initialTab === 'groups') {
+        setActiveTab('groups');
+      }
     }
     if (location.state?.openFm) {
       setIsSpeedMatchOpen(true);
       window.history.replaceState({}, document.title);
     }
     if (location.state?.openFriends || new URLSearchParams(location.search).get('openFriends') === 'true') {
-      setIsFriendsOpen(true);
+      setActiveTab('friends');
       window.history.replaceState({}, document.title);
     }
-  }, [location.pathname, location.state, location.search]);
+  }, [location.pathname, location.state, location.search, initialTab]);
 
   const [isVibesExpanded, setIsVibesExpanded] = useState(false);
   const [isTabSwitching, setIsTabSwitching] = useState(false);
@@ -289,6 +299,13 @@ const Home = ({ initialTab }) => {
     setIsTabSwitching(true);
     setActiveFilterTag(null);
     setActiveTab(tabId);
+    if (tabId === 'friends') {
+      navigate('/friends', { replace: true });
+    } else if (tabId === 'groups') {
+      navigate('/communities', { replace: true });
+    } else if (tabId === 'feed') {
+      navigate('/', { replace: true });
+    }
     setTimeout(() => {
       setIsTabSwitching(false);
     }, 280);
@@ -2756,12 +2773,24 @@ const Home = ({ initialTab }) => {
               {dynamicMenu.groups?.visible !== false && (
                 <button
                   className={`nav-item ${activeTab === 'groups' ? 'active' : ''}`}
-                  onClick={() => { setActiveTab('groups'); setActiveFilterTag(null); }}
+                  onClick={() => handleSwitchTab('groups')}
                 >
                   <Users size={15} strokeWidth={1.5} />
                   <span>{dynamicMenu.groups?.label || "Cộng đồng"}</span>
                 </button>
               )}
+
+              <button
+                className={`nav-item ${activeTab === 'friends' ? 'active' : ''}`}
+                onClick={() => handleSwitchTab('friends')}
+                title="Quản lý và tìm kiếm bạn bè"
+              >
+                <UserCheck size={15} strokeWidth={1.5} />
+                <span>Bạn bè</span>
+                {pendingFriendsCount > 0 && (
+                  <span className="badge-count ml-auto px-1.5 py-0.2 rounded-full bg-emerald-500 text-zinc-950 font-bold text-[10px]">{pendingFriendsCount}</span>
+                )}
+              </button>
 
               {dynamicMenu.rooms?.visible !== false && (
                 <button
@@ -2978,6 +3007,17 @@ const Home = ({ initialTab }) => {
               >
                 <Users size={14} className="tab-icon flex-shrink-0" />
                 <span>Cộng đồng</span>
+              </button>
+              <button
+                type="button"
+                className={`stream-tab ${activeTab === 'friends' ? 'active' : ''}`}
+                onClick={() => handleSwitchTab('friends')}
+              >
+                <UserCheck size={14} className="tab-icon flex-shrink-0" />
+                <span>Bạn bè</span>
+                {pendingFriendsCount > 0 && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                )}
               </button>
               <button
                 type="button"
@@ -4024,6 +4064,21 @@ const Home = ({ initialTab }) => {
           )}
 
           {/* ============================================================== */}
+          {/* TAB: BẠN BÈ & KẾT NỐI (HIỂN THỊ NGUYÊN BẢN TRỌN MÀN HÌNH)     */}
+          {/* ============================================================== */}
+          {activeTab === 'friends' && (
+            <SectionErrorBoundary>
+              <FriendsSection
+                currentUserId={currentUserId}
+                currentUserName={currentUserName}
+                currentUserAvatar={currentUserAvatar}
+                navigate={navigate}
+                onStartPrivateCall={handleStartPrivateCall}
+              />
+            </SectionErrorBoundary>
+          )}
+
+          {/* ============================================================== */}
           {/* TAB: TẤT CẢ PHÒNG ĐÀM THOẠI */}
           {/* ============================================================== */}
           {/* TAB 2: DANH SÁCH PHÒNG ĐÀM THOẠI TRỰC TIẾP                    */}
@@ -4374,11 +4429,11 @@ const Home = ({ initialTab }) => {
 
       {/* THANH ĐIỀU HƯỚNG DÀNH CHO MOBILE - 5 TAB CHUẨN THỰC DỤNG */}
       <MobileBottomNav
-        activeTab={isFriendsOpen ? 'friends' : (activeTab === 'groups' ? 'groups' : 'feed')}
+        activeTab={activeTab === 'friends' ? 'friends' : (activeTab === 'groups' ? 'groups' : 'feed')}
         unreadMessagesCount={unreadMessagesCount}
         pendingFriendsCount={pendingFriendsCount}
         onOpenFm={() => setIsSpeedMatchOpen(true)}
-        onOpenFriends={() => setIsFriendsOpen(true)}
+        onOpenFriends={() => handleSwitchTab('friends')}
         onSwitchTab={handleSwitchTab}
       />
 

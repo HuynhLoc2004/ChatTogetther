@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Users, User, X, UserCheck, Phone, Clock, UserMinus, 
-  MessageSquare, Shield, CheckCircle2, MapPin, Search, 
+import {
+  Users, User, X, UserCheck, Phone, Clock, UserMinus,
+  MessageSquare, Shield, CheckCircle2, MapPin, Search,
   ArrowLeft, ArrowRight, PhoneCall, Send, Sparkles, UserPlus, AlertCircle,
   Compass
 } from 'lucide-react';
@@ -84,7 +84,7 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
       });
       toast.success(`Đã gửi lời mời kết bạn đến ${nickname || 'thành viên'}!`);
       // Update local status in search results
-      setGlobalSearchResults(prev => prev.map(u => 
+      setGlobalSearchResults(prev => prev.map(u =>
         u.id === targetUserId ? { ...u, friendshipStatus: 'PENDING_SENT' } : u
       ));
     } catch (err) {
@@ -104,7 +104,7 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
       });
       toast.success(`Đã trở thành bạn bè với ${nickname || 'thành viên'}!`, { id: 'friend-act' });
       fetchData();
-      setGlobalSearchResults(prev => prev.map(u => 
+      setGlobalSearchResults(prev => prev.map(u =>
         u.id === senderId ? { ...u, friendshipStatus: 'ACCEPTED' } : u
       ));
     } catch (err) {
@@ -140,7 +140,7 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
       });
       toast.success(`Đã hủy kết bạn với ${nickname || 'thành viên'}`, { id: 'friend-act' });
       fetchData();
-      setGlobalSearchResults(prev => prev.map(u => 
+      setGlobalSearchResults(prev => prev.map(u =>
         u.id === friendId ? { ...u, friendshipStatus: 'NONE' } : u
       ));
     } catch (err) {
@@ -189,7 +189,7 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200" onClick={onClose}>
-      <div 
+      <div
         className="relative w-full sm:max-w-lg h-[86vh] sm:h-[560px] rounded-t-[28px] sm:rounded-3xl bg-zinc-950 border-t sm:border border-zinc-800 shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
@@ -198,9 +198,9 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
         {/* TOP HEADER */}
         <div className="sticky top-0 z-30 flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-zinc-800 bg-zinc-900/98 backdrop-blur-md flex-shrink-0">
           <div className="flex items-center gap-2.5">
-            <button 
+            <button
               type="button"
-              onClick={onClose} 
+              onClick={onClose}
               className="px-2.5 py-1.5 rounded-xl bg-zinc-800/90 hover:bg-zinc-700 text-zinc-200 hover:text-white flex items-center gap-1.5 text-xs font-semibold transition-all active:scale-95 border border-zinc-700/60"
               title="Quay lại"
             >
@@ -213,9 +213,9 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
               <h2 className="text-zinc-100 font-bold text-sm tracking-tight">Bạn Bè & Kết Nối</h2>
             </div>
           </div>
-          <button 
+          <button
             type="button"
-            onClick={onClose} 
+            onClick={onClose}
             className="w-8 h-8 rounded-xl bg-zinc-800/60 hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center transition-colors"
             title="Đóng"
           >
@@ -227,8 +227,8 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
         <div className="p-3.5 sm:p-4 border-b border-zinc-800/70 bg-zinc-900/40 flex-shrink-0">
           <div className="relative">
             <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
-            <input 
-              type="text" 
+            <input
+              type="text"
               placeholder="Tìm kiếm thành viên, biệt danh hoặc @account..."
               value={searchQuery}
               onChange={(e) => {
@@ -240,8 +240,8 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
               className="w-full pl-9 pr-8 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-100 text-xs focus:outline-none focus:border-zinc-500 placeholder-zinc-500 transition-colors"
             />
             {searchQuery && (
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => setSearchQuery('')}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white text-xs"
               >
@@ -254,27 +254,25 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
         {/* 3-COLUMN TAB SWITCHER */}
         <div className="px-3.5 sm:px-4 py-2 border-b border-zinc-800/50 bg-zinc-900/20 flex-shrink-0">
           <div className="grid grid-cols-3 gap-1 bg-zinc-900 p-1 rounded-xl border border-zinc-800/80">
-            <button 
+            <button
               type="button"
               onClick={() => setActiveTab('friends')}
-              className={`py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                activeTab === 'friends' 
-                  ? 'bg-zinc-800 text-zinc-100 shadow-sm font-bold' 
+              className={`py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${activeTab === 'friends'
+                  ? 'bg-zinc-800 text-zinc-100 shadow-sm font-bold'
                   : 'text-zinc-400 hover:text-zinc-200'
-              }`}
+                }`}
             >
               <Users size={13} />
               <span>Bạn bè ({friends.length})</span>
             </button>
 
-            <button 
+            <button
               type="button"
               onClick={() => setActiveTab('pending')}
-              className={`py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all relative ${
-                activeTab === 'pending' 
-                  ? 'bg-zinc-800 text-zinc-100 shadow-sm font-bold' 
+              className={`py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all relative ${activeTab === 'pending'
+                  ? 'bg-zinc-800 text-zinc-100 shadow-sm font-bold'
                   : 'text-zinc-400 hover:text-zinc-200'
-              }`}
+                }`}
             >
               <Clock size={13} />
               <span>Lời mời</span>
@@ -285,14 +283,13 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
               )}
             </button>
 
-            <button 
+            <button
               type="button"
               onClick={() => setActiveTab('search')}
-              className={`py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                activeTab === 'search' 
-                  ? 'bg-zinc-800 text-zinc-100 shadow-sm font-bold' 
+              className={`py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${activeTab === 'search'
+                  ? 'bg-zinc-800 text-zinc-100 shadow-sm font-bold'
                   : 'text-zinc-400 hover:text-zinc-200'
-              }`}
+                }`}
             >
               <Sparkles size={13} />
               <span>Khám phá mới</span>
@@ -318,13 +315,13 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
                   {searchQuery ? "Không có bạn bè khớp từ khóa" : "Chưa có người bạn nào"}
                 </h4>
                 <p className="text-zinc-500 text-xs mt-1 max-w-xs leading-relaxed">
-                  {searchQuery 
+                  {searchQuery
                     ? "Người dùng này chưa có trong danh sách bạn bè của bạn."
                     : "Tham gia các phòng đàm thoại hoặc tìm kiếm thành viên mới để mở rộng kết nối!"}
                 </p>
                 {searchQuery ? (
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={() => setActiveTab('search')}
                     className="mt-3 px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-semibold transition-all shadow-md active:scale-95 flex items-center gap-1.5"
                   >
@@ -332,8 +329,8 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
                     <ArrowRight size={13} />
                   </button>
                 ) : (
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={() => setActiveTab('search')}
                     className="mt-3 px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-semibold transition-all shadow-md active:scale-95"
                   >
@@ -346,8 +343,8 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
                   <div className="w-full mt-6 text-left border-t border-zinc-800/80 pt-4">
                     <div className="flex items-center justify-between mb-2.5 px-1">
                       <span className="text-zinc-300 text-xs font-semibold">Tìm thấy trên Talovin ({globalSearchResults.length})</span>
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         onClick={() => setActiveTab('search')}
                         className="text-[11px] text-zinc-400 hover:text-white transition-colors"
                       >
@@ -360,11 +357,11 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
                         const uName = user.nickname || user.account || 'Thành viên';
                         const isBusy = actionInProgress[user.id];
                         return (
-                          <div 
+                          <div
                             key={`search-preview-${user.id}`}
                             className="p-3 rounded-2xl bg-zinc-900/90 border border-zinc-800 flex items-center justify-between gap-2.5 shadow-sm"
                           >
-                            <div 
+                            <div
                               className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
                               onClick={() => {
                                 if (onSelectUser) onSelectUser(user.id);
@@ -431,14 +428,14 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
                 {filteredFriends.map((friend) => {
                   const hasPhotoAvatar = friend.avatar && !friend.avatar.includes('dicebear') && !friend.avatar.includes('bottts');
                   const friendName = friend.nickname || friend.account || 'Thành viên';
-                  
+
                   return (
-                    <div 
-                      key={friend.id} 
+                    <div
+                      key={friend.id}
                       className="p-3 rounded-2xl bg-zinc-900/90 border border-zinc-800/90 hover:border-zinc-700/80 transition-all flex items-center justify-between gap-2.5 shadow-sm"
                     >
                       {/* Left: Avatar & Info */}
-                      <div 
+                      <div
                         className="flex items-center gap-2.5 min-w-0 cursor-pointer flex-1"
                         onClick={() => {
                           if (onSelectUser) onSelectUser(friend.id);
@@ -542,8 +539,8 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
                   const isBusy = actionInProgress[senderId];
 
                   return (
-                    <div 
-                      key={senderId} 
+                    <div
+                      key={senderId}
                       className="p-3 rounded-2xl bg-zinc-900/90 border border-zinc-800 flex items-center justify-between gap-2.5 shadow-sm"
                     >
                       <div className="flex items-center gap-2.5 min-w-0 flex-1">
@@ -611,11 +608,11 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
                     const isBusy = actionInProgress[user.id];
 
                     return (
-                      <div 
+                      <div
                         key={user.id}
                         className="p-3 rounded-2xl bg-zinc-900/90 border border-zinc-800 flex items-center justify-between gap-2.5 shadow-sm"
                       >
-                        <div 
+                        <div
                           className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
                           onClick={() => {
                             if (onSelectUser) onSelectUser(user.id);

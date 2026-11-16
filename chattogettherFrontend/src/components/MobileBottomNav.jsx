@@ -65,10 +65,12 @@ export const MobileBottomNav = ({
   };
 
   const handleFriendsClick = () => {
-    if (onOpenFriends) {
+    if (onSwitchTab) {
+      onSwitchTab('friends');
+    } else if (onOpenFriends) {
       onOpenFriends();
     } else {
-      navigate('/', { state: { openFriends: true } });
+      navigate('/friends');
     }
   };
 
