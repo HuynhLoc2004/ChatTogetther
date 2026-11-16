@@ -2903,7 +2903,7 @@ const Home = ({ initialTab }) => {
               <button
                 type="button"
                 className="nav-item flex items-center justify-between"
-                onClick={() => navigate('/messages')}
+                onClick={() => navigate('/messages', { state: { from: location.pathname + location.search } })}
                 title="Hộp thư tin nhắn"
               >
                 <div className="flex items-center gap-2.5">
@@ -3024,7 +3024,7 @@ const Home = ({ initialTab }) => {
               {/* 3. Icon Tin nhắn (mở thẳng /messages kèm badge chưa đọc) */}
               <button
                 type="button"
-                onClick={() => navigate('/messages')}
+                onClick={() => navigate('/messages', { state: { from: location.pathname + location.search } })}
                 className="w-9 h-9 rounded-full bg-zinc-900 border border-zinc-800 relative flex items-center justify-center text-zinc-300 hover:text-white transition-all active:scale-95"
                 title="Tin nhắn & Hộp thư"
               >
@@ -3145,7 +3145,7 @@ const Home = ({ initialTab }) => {
             <div className="!hidden md:!flex items-center gap-1.5 ml-2">
               <button
                 type="button"
-                onClick={() => navigate('/messages')}
+                onClick={() => navigate('/messages', { state: { from: location.pathname + location.search } })}
                 className="btn-header-notif relative"
                 title="Hộp thư tin nhắn"
               >

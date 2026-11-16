@@ -1,5 +1,5 @@
-import React, { Component } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import React, { Component, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -167,12 +167,34 @@ const PublicRoute = ({ children }) => {
   return children;
 };
 
+// Component tự động lưu màn hình gốc (Screen A) trước khi người dùng chuyển vào /messages hoặc /call
+const RouteTracker = () => {
+  const location = useLocation();
+
+  useEffect(() => {
+    const p = location.pathname;
+    // Bỏ qua các route tạm thời như /messages, /call, /login, /register
+    if (
+      !p.startsWith('/messages') &&
+      !p.startsWith('/call') &&
+      !p.startsWith('/login') &&
+      !p.startsWith('/register')
+    ) {
+      const fullPath = p + location.search + location.hash;
+      sessionStorage.setItem('talovin_origin_screen_a', fullPath);
+    }
+  }, [location]);
+
+  return null;
+};
+
 function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
         <PresenceProvider>
           <Router>
+          <RouteTracker />
           <div className="app-root">
           <Toaster 
             position="top-center" 

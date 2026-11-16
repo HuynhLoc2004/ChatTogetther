@@ -502,7 +502,13 @@ export const UserProfileModal = ({ userId, onClose, onStartPrivateCall, currentU
                       {/* Nút Nhắn tin */}
                       <button 
                         type="button"
-                        onClick={() => { onClose(); navigate(`/messages/${effectiveUserId}`); }}
+                        onClick={() => {
+                          onClose();
+                          const fromPath = window.location.pathname + window.location.search;
+                          navigate(`/messages/${effectiveUserId}?from=${encodeURIComponent(fromPath)}`, {
+                            state: { from: fromPath }
+                          });
+                        }}
                         className="inline-flex items-center justify-center gap-1.5 h-8.5 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 text-xs font-medium transition-all active:scale-[0.98]"
                         title="Gửi tin nhắn"
                       >

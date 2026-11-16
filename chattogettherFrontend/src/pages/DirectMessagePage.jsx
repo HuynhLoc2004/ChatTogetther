@@ -96,8 +96,9 @@ export const DirectMessagePage = () => {
   const currentUserId = localStorage.getItem('user_id');
   const currentUserName = localStorage.getItem('nickname') || localStorage.getItem('account') || 'Bạn';
 
-  // Điều hướng lùi về đúng vị trí trang trước (N+1 -> N)
+  // Điều hướng 1-click quay lại đúng màn hình trước (Screen A) mà không bị kẹt lịch sử
   const handleBack = () => {
+    // 1. Kiểm tra query param ?from=...
     const fromParam = searchParams.get('from');
     if (fromParam) {
       try {
@@ -105,9 +106,22 @@ export const DirectMessagePage = () => {
         return;
       } catch (_) { }
     }
+
+    // 2. Kiểm tra location.state?.from
+    if (location.state?.from) {
+      navigate(location.state.from);
+      return;
+    }
+
+    // 3. Kiểm tra màn hình gốc Screen A được RouteTracker lưu tự động
+    const originScreenA = sessionStorage.getItem('talovin_origin_screen_a');
+    if (originScreenA && !originScreenA.startsWith('/messages') && !originScreenA.startsWith('/call')) {
+      navigate(originScreenA);
+      return;
+    }
+
+    // 4. Nếu có history index hợp lệ từ trang ngoài
     if (window.history.state && window.history.state.idx > 0) {
-      navigate(-1);
-    } else if (window.history.length > 1) {
       navigate(-1);
     } else {
       navigate('/');
@@ -1089,14 +1103,11 @@ export const DirectMessagePage = () => {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => navigate('/home')}
             onClick={handleBack}
-            className="p-2 -ml-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors flex items-center gap-1.5 text-xs font-medium"
-            title="Quay lại Trang chủ"
+            className="p-2 -ml-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors flex items-center gap-1.5 text-xs font-medium cursor-pointer"
             title="Quay lại"
           >
             <ArrowLeft size={16} />
-            <span className="hidden sm:inline">Sảnh</span>
             <span className="hidden sm:inline">Quay lại</span>
           </button>
 
@@ -1162,7 +1173,7 @@ export const DirectMessagePage = () => {
                   <div
                     key={partner.id}
                     onClick={() => {
-                      navigate(`/messages/${partner.id}`);
+                      navigate(`/messages/${partner.id}${location.search}`, { replace: true, state: location.state });
                       openDirectChat(partner.id, partner);
                     }}
                     className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all duration-150 relative ${isSelected
@@ -1235,7 +1246,7 @@ export const DirectMessagePage = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      navigate('/messages');
+                      navigate('/messages', { replace: true });
                       setActivePartner(null);
                     }}
                     className="md:hidden p-1.5 -ml-1 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-900 transition-colors"
