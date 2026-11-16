@@ -269,7 +269,11 @@ const Home = ({ initialTab }) => {
       setIsSpeedMatchOpen(true);
       window.history.replaceState({}, document.title);
     }
-  }, [location.pathname, location.state]);
+    if (location.state?.openFriends || new URLSearchParams(location.search).get('openFriends') === 'true') {
+      setIsFriendsOpen(true);
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.pathname, location.state, location.search]);
 
   const [isVibesExpanded, setIsVibesExpanded] = useState(false);
   const [isTabSwitching, setIsTabSwitching] = useState(false);
@@ -4370,10 +4374,11 @@ const Home = ({ initialTab }) => {
 
       {/* THANH ĐIỀU HƯỚNG DÀNH CHO MOBILE - 5 TAB CHUẨN THỰC DỤNG */}
       <MobileBottomNav
-        activeTab={activeTab === 'groups' ? 'groups' : 'feed'}
+        activeTab={isFriendsOpen ? 'friends' : (activeTab === 'groups' ? 'groups' : 'feed')}
         unreadMessagesCount={unreadMessagesCount}
         pendingFriendsCount={pendingFriendsCount}
         onOpenFm={() => setIsSpeedMatchOpen(true)}
+        onOpenFriends={() => setIsFriendsOpen(true)}
         onSwitchTab={handleSwitchTab}
       />
 

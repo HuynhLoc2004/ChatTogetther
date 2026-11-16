@@ -148,38 +148,33 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
     }
   };
 
-  // Mở đoạn chat 1-1 ngay lập tức qua /messages/:userId
+  // Mở đoạn chat 1-1 ngay lập tức qua /messages?userId=:userId
   const handleOpenDirectChat = (friend) => {
     if (!friend?.id) return;
     onClose();
-    navigate(`/messages/${friend.id}`);
+    navigate(`/messages?userId=${friend.id}`, {
+      state: {
+        targetUser: {
+          id: friend.id,
+          account: friend.account,
+          nickname: friend.nickname || friend.account,
+          avatar: friend.avatar
+        }
+      }
+    });
   };
 
-  // Gọi thoại 1-1
-  const handleStartCall = async (friend) => {
+  // Gọi thoại 1-1 trực tiếp (Direct Call)
+  const handleStartCall = (friend) => {
+    if (!friend?.id) return;
     if (onStartPrivateCall) {
       onClose();
       onStartPrivateCall(friend);
       return;
     }
-
-    try {
-      const myName = localStorage.getItem('nickname') || 'Tôi';
-      const friendName = friend.nickname || friend.account || 'Bạn bè';
-      const roomName = `Cuộc gọi: ${myName} & ${friendName}`;
-      
-      const res = await axiosClient.post('/rooms/create-room', {
-        roomName: roomName,
-        password: null
-      });
-
-      if (res.data && res.data.data) {
-        onClose();
-        navigate(`/room/${res.data.data.id}?autoCall=true`);
-      }
-    } catch (err) {
-      toast.error("Không thể kết nối cuộc gọi lúc này!");
-    }
+    onClose();
+    const fromPath = typeof window !== 'undefined' ? window.location.pathname : '/';
+    navigate(`/call/direct/${friend.id}?type=audio&from=${encodeURIComponent(fromPath)}`);
   };
 
   // Lọc bạn bè hiện có theo ô tìm kiếm
@@ -193,11 +188,13 @@ export const FriendsModal = ({ onClose, onSelectUser, onStartPrivateCall, naviga
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200" onClick={onClose}>
       <div 
-        className="relative w-full max-w-lg h-[540px] max-h-[88vh] rounded-3xl bg-zinc-950 border border-zinc-800 shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 fade-in duration-200"
+        className="relative w-full sm:max-w-lg h-[86vh] sm:h-[560px] rounded-t-[28px] sm:rounded-3xl bg-zinc-950 border-t sm:border border-zinc-800 shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Thanh gạt nhỏ trên Mobile */}
+        <div className="w-10 h-1 rounded-full bg-zinc-700/80 mx-auto mt-2.5 sm:hidden shrink-0" />
         {/* TOP HEADER */}
         <div className="sticky top-0 z-30 flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-zinc-800 bg-zinc-900/98 backdrop-blur-md flex-shrink-0">
           <div className="flex items-center gap-2.5">

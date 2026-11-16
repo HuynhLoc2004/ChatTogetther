@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Compass, Users, Radio, MessageSquare, User } from 'lucide-react';
+import { Compass, Users, Radio, UserCheck, User } from 'lucide-react';
 
 export const MobileBottomNav = ({
-  activeTab = 'feed', // 'feed' | 'groups' | 'messages' | 'profile'
+  activeTab = 'feed', // 'feed' | 'groups' | 'friends' | 'profile'
   unreadMessagesCount = 0,
   pendingFriendsCount = 0,
   onOpenFm = null,
+  onOpenFriends = null,
   onSwitchTab = null
 }) => {
   const navigate = useNavigate();
@@ -63,8 +64,12 @@ export const MobileBottomNav = ({
     }
   };
 
-  const handleMessagesClick = () => {
-    navigate('/messages');
+  const handleFriendsClick = () => {
+    if (onOpenFriends) {
+      onOpenFriends();
+    } else {
+      navigate('/', { state: { openFriends: true } });
+    }
   };
 
   const handleProfileClick = () => {
@@ -111,24 +116,24 @@ export const MobileBottomNav = ({
         </button>
       </div>
 
-      {/* 4. Tin nhắn */}
+      {/* 4. Bạn bè & Kết nối (Thay thế Tin nhắn vì trên Header đã có icon tin nhắn) */}
       <button 
         type="button"
         className={`b-nav-item w-full h-full flex flex-col items-center justify-center gap-1 transition-colors ${
-          activeTab === 'messages' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-zinc-200'
+          activeTab === 'friends' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-zinc-200'
         }`}
-        onClick={handleMessagesClick}
-        title="Tin nhắn & Hộp thư"
+        onClick={handleFriendsClick}
+        title="Bạn bè & Tìm kiếm kết bạn"
       >
         <div className="relative flex items-center justify-center">
-          <MessageSquare size={18} strokeWidth={activeTab === 'messages' ? 2 : 1.5} />
-          {effectiveUnreadMessages > 0 && (
-            <span className="absolute -top-1 -right-2 min-w-[16px] h-[16px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-mono font-bold flex items-center justify-center border-2 border-zinc-950 shadow-md animate-pulse">
-              {effectiveUnreadMessages > 9 ? '9+' : effectiveUnreadMessages}
+          <UserCheck size={18} strokeWidth={activeTab === 'friends' ? 2 : 1.5} />
+          {pendingFriendsCount > 0 && (
+            <span className="absolute -top-1 -right-2 min-w-[16px] h-[16px] px-1 rounded-full bg-emerald-500 text-zinc-950 text-[9px] font-mono font-bold flex items-center justify-center border-2 border-zinc-950 shadow-md animate-pulse">
+              {pendingFriendsCount > 9 ? '9+' : pendingFriendsCount}
             </span>
           )}
         </div>
-        <span className="text-[10px] tracking-tight">Tin nhắn</span>
+        <span className="text-[10px] tracking-tight">Bạn bè</span>
       </button>
 
       {/* 5. Hồ sơ */}
@@ -142,9 +147,6 @@ export const MobileBottomNav = ({
       >
         <div className="relative flex items-center justify-center">
           <User size={18} strokeWidth={activeTab === 'profile' ? 2 : 1.5} />
-          {pendingFriendsCount > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-          )}
         </div>
         <span className="text-[10px] tracking-tight">Hồ sơ</span>
       </button>
