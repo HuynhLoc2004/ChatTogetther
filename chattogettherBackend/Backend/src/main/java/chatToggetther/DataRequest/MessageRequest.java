@@ -18,4 +18,5 @@ public class MessageRequest {
     @Size(max = 2000, message = "Tin nhắn tối đa 2000 ký tự")
     private String message;
     private LocalDateTime timeSend;
+    private String clientTempId;
 }

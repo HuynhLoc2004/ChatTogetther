@@ -11,14 +11,17 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 
 @RestController
 @RequestMapping({"/api/message", "/api/messages"})
 public class ChatController {
     private final ChatService chatService;
+    private final chatToggetther.service.MediaStorageService mediaStorageService;
 
-    public ChatController(ChatService chatService) {
+    public ChatController(ChatService chatService, chatToggetther.service.MediaStorageService mediaStorageService) {
         this.chatService = chatService;
+        this.mediaStorageService = mediaStorageService;
     }
 
     @PostMapping("/send")
@@ -138,6 +141,33 @@ public class ChatController {
             }
         }
         return ResponseEntity.ok(this.chatService.markMessagesAsRead(token, roomId, targetUserId, upToMessageId));
+    }
+
+    @PostMapping(value = "/upload", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ResponseData<Map<String, String>>> uploadMedia(
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file
+    ) {
+        String mediaUrl = this.mediaStorageService.storeChatMedia(file);
+        Map<String, String> res = new HashMap<>();
+        res.put("url", mediaUrl);
+        return ResponseEntity.ok(new ResponseData<>(200, "Tải lên tệp thành công", res));
+    }
+
+    @GetMapping("/files/{fileName:.+}")
+    public ResponseEntity<org.springframework.core.io.Resource> getChatMediaFile(
+            @PathVariable("fileName") String fileName
+    ) {
+        org.springframework.core.io.Resource resource = this.mediaStorageService.loadChatMediaAsResource(fileName);
+        String contentType = "application/octet-stream";
+        try {
+            contentType = java.nio.file.Files.probeContentType(java.nio.file.Paths.get(resource.getFile().getAbsolutePath()));
+        } catch (Exception ignored) {}
+        if (contentType == null) contentType = "application/octet-stream";
+
+        return ResponseEntity.ok()
+                .contentType(org.springframework.http.MediaType.parseMediaType(contentType))
+                .header(org.springframework.http.HttpHeaders.CACHE_CONTROL, "max-age=31536000, public")
+                .body(resource);
     }
 
 }

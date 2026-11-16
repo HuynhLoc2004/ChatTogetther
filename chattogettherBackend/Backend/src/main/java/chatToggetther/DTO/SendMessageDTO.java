@@ -23,6 +23,7 @@ public class SendMessageDTO {
     private Boolean isRead;
     private LocalDateTime timeRead;
     private String formattedTimeRead;
+    private String clientTempId;
 
     // Đồng bộ chuẩn 100% Avatar & Người gửi
     private Long senderId;

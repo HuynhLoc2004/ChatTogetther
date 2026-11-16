@@ -211,6 +211,7 @@ export const DirectMessagePage = () => {
   const messagesEndRef = useRef(null);
   const scrollContainerRef = useRef(null);
   const messagesCacheRef = useRef(new Map()); // Cache tin nhắn in-memory để chuyển đổi hội thoại 0ms tức thì
+  const seenMsgIdsRef = useRef(new Set()); // Bộ lọc chống trùng lặp tin nhắn tuyệt đối
 
   // Lưu unreadMap vào localStorage
   useEffect(() => {
@@ -674,6 +675,17 @@ export const DirectMessagePage = () => {
             return;
           }
 
+          // Chống trùng lặp sớm: Nếu ID tin nhắn này đã được render rồi thì bỏ qua ngay lập tức
+          if (newMsg.id) {
+            const msgIdStr = String(newMsg.id);
+            if (seenMsgIdsRef.current.has(msgIdStr)) return;
+            seenMsgIdsRef.current.add(msgIdStr);
+            if (seenMsgIdsRef.current.size > 500) {
+              const firstVal = seenMsgIdsRef.current.values().next().value;
+              seenMsgIdsRef.current.delete(firstVal);
+            }
+          }
+
           const senderId = newMsg.senderId || newMsg.userId;
           const isFromMe = String(senderId) === String(currentUserId);
           const currentActivePartnerId = activePartnerRef.current?.id?.toString();
@@ -701,24 +713,29 @@ export const DirectMessagePage = () => {
                 return prev;
               }
 
-              // Chống trùng lặp 2: Trùng nội dung từ cùng người gửi trong vòng 5 giây
-              const isDuplicate = prev.some(m =>
-                !m.pending &&
-                String(m.senderId || m.userId) === String(senderId) &&
-                m.message === newMsg.message &&
-                Math.abs(new Date(m.timeSend || 0).getTime() - new Date(newMsg.timeSend || 0).getTime()) < 5000
-              );
-              if (isDuplicate) {
-                return prev;
-              }
+              // Đồng bộ và thay thế tin nhắn đang gửi (Optimistic Message)
+              const pendingIdx = prev.findIndex(m => m.pending && (
+                (newMsg.clientTempId && (String(m.clientTempId) === String(newMsg.clientTempId) || String(m.id) === String(newMsg.clientTempId))) ||
+                (m.message && newMsg.message && m.message === newMsg.message) ||
+                (m.mediaType && newMsg.message && newMsg.message.includes(`[MEDIA:${m.mediaType}`))
+              ));
 
-              const hasPending = prev.some(m => m.pending && m.message === newMsg.message);
               let nextList;
-              if (hasPending) {
-                nextList = prev.map(m => (m.pending && m.message === newMsg.message) ? newMsg : m);
+              if (pendingIdx !== -1) {
+                nextList = [...prev];
+                nextList[pendingIdx] = { ...newMsg, pending: false };
               } else {
+                // Chống trùng lặp nội dung từ cùng người gửi trong vòng 5 giây
+                const isDuplicate = prev.some(m =>
+                  !m.pending &&
+                  String(m.senderId || m.userId) === String(senderId) &&
+                  m.message === newMsg.message &&
+                  Math.abs(new Date(m.timeSend || 0).getTime() - new Date(newMsg.timeSend || 0).getTime()) < 5000
+                );
+                if (isDuplicate) return prev;
                 nextList = [...prev, newMsg];
               }
+
               if (activeRoomIdRef.current) messagesCacheRef.current.set(String(activeRoomIdRef.current), nextList);
               if (activePartnerRef.current?.id) messagesCacheRef.current.set(String(activePartnerRef.current.id), nextList);
               return nextList;
@@ -895,13 +912,13 @@ export const DirectMessagePage = () => {
     setSelectedMedia(null);
   };
 
-  // 5. Gửi tin nhắn 1-1 (Hỗ trợ Reply, Media, Nén ảnh tự động, Optimistic UI)
-  const handleSendMessage = async (e) => {
+  // 5. Gửi tin nhắn 1-1 Realtime phi đồng bộ (Non-blocking: Cho phép gửi liên tục không nghẽn)
+  const handleSendMessage = (e) => {
     if (e) e.preventDefault();
-    if ((!textInput.trim() && !selectedMedia) || sending) return;
+    if (!textInput.trim() && !selectedMedia) return;
 
     const content = textInput.trim();
-    const tempId = 'temp-' + Date.now();
+    const tempId = 'temp-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
     const now = new Date();
     const formattedTime = now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 
@@ -909,10 +926,12 @@ export const DirectMessagePage = () => {
     const currentReply = replyingTo ? { ...replyingTo } : null;
     const currentMedia = selectedMedia ? { ...selectedMedia } : null;
 
-    // Optimistic UI
+    // Optimistic UI - Hiển thị ngay lập tức (0ms chờ)
     const optimisticMsg = {
       id: tempId,
+      clientTempId: tempId,
       userId: Number(currentUserId),
+      senderId: Number(currentUserId),
       message: content,
       timeSend: now.toISOString(),
       formattedTime: formattedTime,
@@ -926,7 +945,6 @@ export const DirectMessagePage = () => {
     setTextInput('');
     setReplyingTo(null);
     setSelectedMedia(null);
-    setSending(true);
     setTimeout(() => scrollToBottom(true), 40);
 
     // Cập nhật preview tin nhắn cuối cùng và đưa lên đầu danh sách hội thoại
@@ -942,110 +960,83 @@ export const DirectMessagePage = () => {
       } : null;
 
       const rest = prev.filter(f => f.id?.toString() !== partnerIdStr);
-      return updated ? [updated, ...rest] : prev;
+      const nextList = updated ? [updated, ...rest] : prev;
+      try {
+        localStorage.setItem('talovin_dm_friends_cache', JSON.stringify(nextList));
+      } catch (_) { }
+      return nextList;
     });
 
-    try {
-      let targetRoom = activeRoomId || activePartner?.directRoomId;
-      const targetIdentifier = activePartner?.id || activePartner?.account || urlTargetUserId;
+    // Thực thi gửi trong luồng ngầm độc lập (Worker / Concurrent Background Task)
+    (async () => {
+      try {
+        let targetRoom = activeRoomId || activePartner?.directRoomId;
+        const targetIdentifier = activePartner?.id || activePartner?.account || urlTargetUserId;
 
-      if (!targetRoom) {
-        if (!targetIdentifier) {
-          throw new Error("Không thể xác định người nhận");
+        if (!targetRoom && targetIdentifier) {
+          try {
+            const roomRes = await axiosClient.get(`/message/direct/${targetIdentifier}`);
+            targetRoom = roomRes?.data?.data?.roomId || roomRes?.data?.data?.id;
+            if (targetRoom) setActiveRoomId(targetRoom);
+          } catch (_) { }
         }
-        let roomRes = null;
-        try {
-          roomRes = await axiosClient.get(`/message/direct/${targetIdentifier}`);
-        } catch (_) {
-          if (activePartner?.account && activePartner.account.toString() !== targetIdentifier.toString()) {
+
+        // Tải lên tệp đa phương tiện (Ảnh / Video) qua endpoint chuyên biệt
+        let uploadedMediaUrl = null;
+        if (currentMedia?.file) {
+          try {
+            const formData = new FormData();
+            formData.append('file', currentMedia.file);
+            const uploadRes = await axiosClient.post('/message/upload', formData, {
+              headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            uploadedMediaUrl = uploadRes.data?.data?.url || uploadRes.data?.url;
+          } catch (_) {
             try {
-              roomRes = await axiosClient.get(`/message/direct/${activePartner.account}`);
-            } catch (_) { }
-          }
-          if (!roomRes) {
-            try {
-              roomRes = await axiosClient.post(`/rooms/direct/${targetIdentifier}`);
+              uploadedMediaUrl = await compressImage(currentMedia.file);
             } catch (_) {
-              if (activePartner?.account) {
-                try {
-                  roomRes = await axiosClient.post(`/rooms/direct/${activePartner.account}`);
-                } catch (_) { }
-              }
+              uploadedMediaUrl = currentMedia.previewUrl;
             }
           }
         }
 
-        if (roomRes?.data?.data) {
-          targetRoom = roomRes.data.data.roomId || roomRes.data.data.id;
-          if (targetRoom) {
-            setActiveRoomId(targetRoom);
-          }
-          if (roomRes.data.data.targetUser && !activePartner) {
-            setActivePartner(roomRes.data.data.targetUser);
-          }
+        // Soạn payload tin nhắn
+        let finalMessage = content;
+        if (currentReply) {
+          finalMessage = `[REPLY:${currentReply.id}|${currentReply.senderName}]: ${content}`;
         }
-      }
-
-      if (!targetRoom && targetIdentifier) {
-        try {
-          const directFallback = await axiosClient.get(`/message/direct/${targetIdentifier}`);
-          targetRoom = directFallback?.data?.data?.roomId || directFallback?.data?.data?.id;
-          if (targetRoom) {
-            setActiveRoomId(targetRoom);
-          }
-        } catch (_) { }
-      }
-
-      // Xử lý tệp đính kèm: Nén ảnh hoặc đọc Base64
-      let uploadedMediaUrl = null;
-      if (currentMedia?.file) {
-        setMediaUploading(true);
-        try {
-          uploadedMediaUrl = await compressImage(currentMedia.file);
-        } catch (_) {
-          uploadedMediaUrl = currentMedia.previewUrl;
-        } finally {
-          setMediaUploading(false);
+        if (uploadedMediaUrl) {
+          finalMessage = finalMessage
+            ? `${finalMessage} [MEDIA:${currentMedia.type}|${uploadedMediaUrl}]`
+            : `[MEDIA:${currentMedia.type}|${uploadedMediaUrl}]`;
         }
-      }
 
-      // Soạn payload tin nhắn
-      let finalMessage = content;
-      if (currentReply) {
-        finalMessage = `[REPLY:${currentReply.id}|${currentReply.senderName}]: ${content}`;
-      }
-      if (uploadedMediaUrl) {
-        finalMessage = finalMessage
-          ? `${finalMessage} [MEDIA:${currentMedia.type}|${uploadedMediaUrl}]`
-          : `[MEDIA:${currentMedia.type}|${uploadedMediaUrl}]`;
-      }
-
-      await axiosClient.post('/message/send', {
-        message: finalMessage || content || '[Tệp tin]',
-        user_room: targetRoom || undefined,
-        roomId: targetRoom || undefined,
-        targetUserId: targetIdentifier
-      }, {
-        params: {
+        await axiosClient.post('/message/send', {
+          message: finalMessage || content || '[Tệp tin]',
           user_room: targetRoom || undefined,
-          targetUserId: targetIdentifier
-        }
-      });
+          roomId: targetRoom || undefined,
+          targetUserId: targetIdentifier,
+          clientTempId: tempId
+        }, {
+          params: {
+            user_room: targetRoom || undefined,
+            targetUserId: targetIdentifier
+          }
+        });
 
-      // Đánh dấu tin nhắn gửi thành công
-      setMessages(prev => prev.map(m => m.id === tempId ? {
-        ...m,
-        pending: false,
-        mediaUrl: uploadedMediaUrl || m.mediaUrl
-      } : m));
+        // Đánh dấu tin nhắn gửi thành công
+        setMessages(prev => prev.map(m => m.id === tempId ? {
+          ...m,
+          pending: false,
+          mediaUrl: uploadedMediaUrl || m.mediaUrl
+        } : m));
 
-    } catch (e) {
-      console.error('Lỗi gửi tin nhắn 1-1:', e);
-      toast.error('Không thể gửi tin nhắn. Vui lòng thử lại!');
-      setMessages(prev => prev.filter(m => m.id !== tempId));
-    } finally {
-      setSending(false);
-    }
+      } catch (e) {
+        console.error('Lỗi gửi tin nhắn 1-1:', e);
+        setMessages(prev => prev.map(m => m.id === tempId ? { ...m, failed: true, pending: false } : m));
+        toast.error('Không thể gửi tin nhắn. Vui lòng thử lại!', { id: tempId });
+      }
+    })();
   };
 
   // 6. Thả cảm xúc Emoji (Reactions)
@@ -1880,7 +1871,7 @@ export const DirectMessagePage = () => {
 
                 <button
                   type="submit"
-                  disabled={(!textInput.trim() && !selectedMedia) || sending || partnerNotFound}
+                  disabled={(!textInput.trim() && !selectedMedia) || partnerNotFound}
                   className="px-4 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1.5 shrink-0"
                 >
                   <Send size={13} />

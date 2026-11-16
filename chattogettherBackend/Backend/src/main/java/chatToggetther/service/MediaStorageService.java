@@ -101,6 +101,46 @@ public class MediaStorageService {
         }
     }
 
+    public String storeChatMedia(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new AppException(400, "Tệp không được để trống", 400);
+        }
+        String originalFilename = StringUtils.cleanPath(file.getOriginalFilename() != null ? file.getOriginalFilename() : "media.dat");
+        String extension = "bin";
+        int dotIndex = originalFilename.lastIndexOf('.');
+        if (dotIndex > 0) {
+            extension = originalFilename.substring(dotIndex + 1).toLowerCase();
+        }
+
+        String uniqueFileName = String.format("media_%d_%s.%s",
+                System.currentTimeMillis(),
+                UUID.randomUUID().toString().substring(0, 8),
+                extension
+        );
+
+        try {
+            Path targetLocation = this.storageDirectory.resolve(uniqueFileName);
+            Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
+            return "/api/message/files/" + uniqueFileName;
+        } catch (IOException e) {
+            throw new AppException(500, "Lỗi khi lưu trữ tệp media: " + e.getMessage(), 500);
+        }
+    }
+
+    public Resource loadChatMediaAsResource(String fileName) {
+        try {
+            Path filePath = this.storageDirectory.resolve(fileName).normalize();
+            Resource resource = new UrlResource(filePath.toUri());
+            if (resource.exists() && resource.isReadable()) {
+                return resource;
+            } else {
+                throw new AppException(404, "Tệp media không tồn tại hoặc không thể đọc", 404);
+            }
+        } catch (MalformedURLException e) {
+            throw new AppException(404, "Đường dẫn tệp media không hợp lệ", 404);
+        }
+    }
+
     public Resource loadAudioSampleAsResource(String fileName) {
         try {
             Path filePath = this.storageDirectory.resolve(fileName).normalize();

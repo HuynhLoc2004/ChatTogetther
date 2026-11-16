@@ -140,12 +140,13 @@ public class ChatService {
             sendMessageDTO.setSenderAvatar(senderAvatar);
             sendMessageDTO.setAvatar(senderAvatar);
             sendMessageDTO.setFormattedTime(now.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")));
+            sendMessageDTO.setClientTempId(messageRequest.getClientTempId());
             
+            // Gửi duy nhất 1 thông điệp vào phòng để triệt tiêu trùng lặp tin nhắn
             this.simpMessagingTemplate.convertAndSend("/topic/room/" + user_room, sendMessageDTO);
-            this.simpMessagingTemplate.convertAndSend("/topic/" + user_room, sendMessageDTO);
             if (partnerId != null) {
+                // Chỉ gửi tới partnerId để cập nhật badge/alert khi đối phương đang ở ngoài phòng
                 this.simpMessagingTemplate.convertAndSend("/topic/messages/" + partnerId, sendMessageDTO);
-                this.simpMessagingTemplate.convertAndSend("/topic/messages/" + userId, sendMessageDTO);
             }
 
             // Bắn sự kiện thông báo realtime (Floating Alert & Âm thanh & OS Notification) cho tin nhắn 1-1
