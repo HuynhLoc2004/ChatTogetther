@@ -2335,11 +2335,6 @@ const Home = ({ initialTab }) => {
               const msg = JSON.parse(message.body);
               const senderId = msg.senderId || msg.userId;
               if (senderId && senderId.toString() !== currentUserId?.toString()) {
-                const senderName = msg.nickname || msg.senderUsername || 'Người dùng';
-                const senderAvatar = msg.senderAvatar || msg.avatar;
-                const text = msg.message || 'Đã gửi tin nhắn';
-
-                playMessageIncoming();
                 setUnreadDmCount(prev => prev + 1);
                 try {
                   const unreadMap = JSON.parse(localStorage.getItem('talovin_dm_unread') || '{}');
@@ -2348,39 +2343,6 @@ const Home = ({ initialTab }) => {
                   localStorage.setItem('talovin_dm_unread', JSON.stringify(unreadMap));
                   window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: unreadMap }));
                 } catch (_) {}
-
-                // Tạo toast thông báo tin nhắn tức thì có thể bấm vào để chat
-                toast.custom((t) => (
-                  <div
-                    onClick={() => {
-                      toast.dismiss(t.id);
-                      navigate(`/messages/${senderId}`);
-                    }}
-                    className="max-w-sm w-full bg-zinc-900/95 border border-zinc-700 shadow-2xl rounded-2xl p-3 flex items-center gap-3 cursor-pointer pointer-events-auto transition-transform hover:scale-[1.02] active:scale-[0.98]"
-                  >
-                    <div className="relative shrink-0">
-                      <UserAvatar avatar={senderAvatar} name={senderName} size={40} />
-                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-zinc-950" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <h4 className="text-xs font-bold text-zinc-100 truncate">{senderName}</h4>
-                        <span className="text-[10px] text-emerald-400 font-mono">Vừa xong</span>
-                      </div>
-                      <p className="text-[11px] text-zinc-300 truncate mt-0.5">{text}</p>
-                    </div>
-                  </div>
-                ), { duration: 5000, id: `msg-${Date.now()}` });
-
-                // Browser Notification
-                if (typeof window !== 'undefined' && "Notification" in window && Notification.permission === "granted") {
-                  try {
-                    new Notification(senderName, {
-                      body: text,
-                      icon: senderAvatar || "/logo.png"
-                    });
-                  } catch (_) {}
-                }
               }
             } catch (err) {
               console.warn("Lỗi nhận tin nhắn trực tiếp:", err);
@@ -2393,7 +2355,6 @@ const Home = ({ initialTab }) => {
               const alert = JSON.parse(message.body);
               const senderId = alert.senderId || alert.userId;
               if (senderId && senderId.toString() !== currentUserId?.toString()) {
-                playMessageIncoming();
                 setUnreadDmCount(prev => prev + 1);
               }
             } catch (_) {}

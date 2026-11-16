@@ -39,6 +39,7 @@ export const RoomAlertBanner = () => {
   const navigate = useNavigate();
   const timeoutRef = useRef(null);
   const stompClientRef = useRef(null);
+  const recentAlertsRef = useRef(new Map()); // Cache chống nhận trùng thông báo trong 5s
   const { markUserActive } = usePresence();
 
   // Yêu cầu quyền Notification trình duyệt (Laptop & Phone) khi người dùng tương tác
@@ -125,24 +126,36 @@ export const RoomAlertBanner = () => {
 
           if (!alert || !alert.senderId) return;
 
+          // Chống trùng lặp thông báo trong 5 giây (Anti-duplicate / Single notification)
+          const alertKey = `${alert.senderId}_${alert.contentPreview || alert.message || ''}`;
+          const lastAlertTime = recentAlertsRef.current.get(alertKey);
+          if (lastAlertTime && (Date.now() - lastAlertTime < 5000)) {
+            return;
+          }
+          recentAlertsRef.current.set(alertKey, Date.now());
+
           // Đánh dấu người gửi đang online tức thì
           if (markUserActive && alert.senderId) {
             markUserActive(alert.senderId);
           }
 
-          // Kiểm tra: nếu user đang mở đúng phòng chat này và tab đang focus thì không hiển thị banner
-          const currentPath = window.location.pathname;
+          // Kiểm tra: nếu user đang mở đúng phòng chat này thì tuyệt đối KHÔNG hiển thị banner
+          const currentPath = window.location.pathname.toLowerCase();
           const searchParams = new URLSearchParams(window.location.search);
-          const currentUserIdParam = searchParams.get('userId') || searchParams.get('user_id');
+          const currentUserIdParam = (searchParams.get('userId') || searchParams.get('user_id') || '').toLowerCase();
+          const senderIdStr = String(alert.senderId || '').toLowerCase();
+          const senderUsernameStr = String(alert.senderUsername || '').toLowerCase();
 
           let isViewingThisChat = false;
           if (alert.isDirect) {
-            isViewingThisChat = (currentPath === `/messages/${alert.senderId}` ||
-              currentPath === `/messages/${alert.senderUsername}` ||
-              (currentPath.startsWith('/messages') && String(currentUserIdParam) === String(alert.senderId))) &&
-              !document.hidden;
+            isViewingThisChat = currentPath.startsWith('/messages') && (
+              currentPath.includes(senderIdStr) ||
+              (senderUsernameStr && currentPath.includes(senderUsernameStr)) ||
+              currentUserIdParam === senderIdStr ||
+              (senderUsernameStr && currentUserIdParam === senderUsernameStr)
+            );
           } else if (alert.roomId) {
-            isViewingThisChat = (currentPath === `/room/${alert.roomId}` || currentPath === `/room/${alert.roomId}/`) && !document.hidden;
+            isViewingThisChat = currentPath.includes(`/room/${alert.roomId}`);
           }
 
           if (isViewingThisChat) {
@@ -191,7 +204,7 @@ export const RoomAlertBanner = () => {
             } catch (_) { }
           }
 
-          // 3. Hiển thị In-App Floating Banner nếu đang ở tab web hoặc trang khác
+          // 3. Hiển thị DUY NHẤT một In-App Floating Banner ở góc phải màn hình
           if (timeoutRef.current) clearTimeout(timeoutRef.current);
           setCurrentAlert(alert);
 
@@ -199,47 +212,14 @@ export const RoomAlertBanner = () => {
           timeoutRef.current = setTimeout(() => {
             setCurrentAlert(null);
           }, 4500);
-
-          // 4. Đồng thời bắn Toast thông báo trực quan trên giao diện (Đảm bảo người dùng luôn thấy ngay cả trên mobile)
-          try {
-            toast.custom((t) => (
-              <div
-                onClick={() => {
-                  toast.dismiss(t.id);
-                  if (alert.isDirect) {
-                    navigate(`/messages/${alert.senderId}`);
-                  } else if (alert.roomId) {
-                    navigate(`/room/${alert.roomId}`);
-                  }
-                }}
-                className={`max-w-sm w-full bg-zinc-900/95 border border-zinc-700/90 shadow-2xl rounded-2xl p-3 flex items-center gap-3 cursor-pointer pointer-events-auto transition-transform hover:scale-[1.02] active:scale-[0.98] ${t.visible ? 'animate-enter' : 'animate-leave'}`}
-              >
-                <div className="relative shrink-0">
-                  <UserAvatar avatarUrl={alert.senderAvatar} username={alert.senderUsername} name={alert.senderDisplayName} size={40} />
-                  <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-zinc-950" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-bold text-zinc-100 truncate">{alert.senderDisplayName || 'Tin nhắn mới'}</h4>
-                    <span className="text-[10px] text-emerald-400 font-mono">Vừa xong</span>
-                  </div>
-                  <p className="text-[11px] text-zinc-300 truncate mt-0.5">
-                    {formatPreviewText(alert.contentPreview || 'Đã gửi tin nhắn')}
-                  </p>
-                </div>
-              </div>
-            ), { duration: 4000, id: `alert-${alert.senderId || alert.roomId}` });
-          } catch (_) { }
         } catch (e) {
           console.error('Lỗi nhận room alert:', e);
         }
       };
 
-      // Đăng ký toàn bộ các kênh nhận tin nhắn và thông báo thời gian thực
-      client.subscribe(`/topic/messages/${userId}`, (msg) => handleAlert(msg.body));
+      // Đăng ký nhận thông báo realtime qua kênh alert chính thức (loại trừ kênh messages để không bị nhân đôi)
       client.subscribe(`/topic/room-alerts/${userId}`, (msg) => handleAlert(msg.body));
       client.subscribe('/user/queue/room-alerts', (msg) => handleAlert(msg.body));
-      client.subscribe('/user/queue/direct-messages', (msg) => handleAlert(msg.body));
     });
 
     return () => {
