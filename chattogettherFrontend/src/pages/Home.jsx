@@ -380,7 +380,11 @@ const Home = ({ initialTab }) => {
   // State Bài Viết (Tối ưu SWR Cache-First: Mở app là có ngay nội dung tức thì)
   const [posts, setPosts] = useState(() => {
     try {
-      const cached = localStorage.getItem('talovin_cached_posts');
+      const storedUser = localStorage.getItem('user');
+      const parsedUser = storedUser ? JSON.parse(storedUser) : null;
+      const uid = parsedUser?.id || null;
+      const cacheKey = uid ? `talovin_cached_posts_${uid}` : 'talovin_cached_posts';
+      const cached = localStorage.getItem(cacheKey) || localStorage.getItem('talovin_cached_posts');
       return cached ? JSON.parse(cached) : [];
     } catch (e) {
       return [];
@@ -388,10 +392,14 @@ const Home = ({ initialTab }) => {
   });
   const [loadingPosts, setLoadingPosts] = useState(() => {
     try {
-      const cached = localStorage.getItem('talovin_cached_posts');
+      const storedUser = localStorage.getItem('user');
+      const parsedUser = storedUser ? JSON.parse(storedUser) : null;
+      const uid = parsedUser?.id || null;
+      const cacheKey = uid ? `talovin_cached_posts_${uid}` : 'talovin_cached_posts';
+      const cached = localStorage.getItem(cacheKey) || localStorage.getItem('talovin_cached_posts');
       return !cached || JSON.parse(cached).length === 0;
     } catch (e) {
-      return true;
+      return false;
     }
   });
   const [newPostContent, setNewPostContent] = useState('');
@@ -1093,14 +1101,22 @@ const Home = ({ initialTab }) => {
   // ====================== BẢNG TIN / POSTS ======================
   const fetchPosts = useCallback(async (isSilent = false) => {
     try {
-      if (!isSilent && posts.length === 0) setLoadingPosts(true);
+      if (!isSilent) {
+        setPosts(prev => {
+          if (prev.length === 0) setLoadingPosts(true);
+          return prev;
+        });
+      }
       const response = await axiosClient.get('/posts', {
         params: { page: 0, size: 25 }
       });
       if (response.data && response.data.data) {
-        setPosts(response.data.data);
+        const freshPosts = response.data.data;
+        setPosts(freshPosts);
         try {
-          localStorage.setItem('talovin_cached_posts', JSON.stringify(response.data.data.slice(0, 20)));
+          const cacheKey = currentUserId ? `talovin_cached_posts_${currentUserId}` : 'talovin_cached_posts';
+          localStorage.setItem(cacheKey, JSON.stringify(freshPosts.slice(0, 25)));
+          localStorage.setItem('talovin_cached_posts', JSON.stringify(freshPosts.slice(0, 25)));
         } catch (e) { }
       }
     } catch (err) {
@@ -1108,7 +1124,7 @@ const Home = ({ initialTab }) => {
     } finally {
       setLoadingPosts(false);
     }
-  }, [posts.length]);
+  }, [currentUserId]);
 
   // Xử lý nén file ảnh bằng Canvas sang WebP nhẹ, hoặc video ngắn
   const handleFileSelect = (e) => {
@@ -1761,17 +1777,13 @@ const Home = ({ initialTab }) => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     setIsTopRefreshing(true);
     try {
-      await Promise.allSettled([
-        fetchPosts(true),
-        fetchRooms(true),
-        fetchFriends()
-      ]);
+      await fetchPosts(true);
+      fetchRooms(true);
+      fetchFriends();
     } catch (e) {
       console.warn("Lỗi làm mới ứng dụng:", e);
     } finally {
-      setTimeout(() => {
-        setIsTopRefreshing(false);
-      }, 700);
+      setIsTopRefreshing(false);
     }
   };
 
@@ -2212,7 +2224,7 @@ const Home = ({ initialTab }) => {
         setLoadingRooms(false);
       }
       fetchRooms();
-      fetchPosts();
+      fetchPosts(true);
       fetchTracks();
       checkActiveRoom();
       fetchFriends();
@@ -2257,65 +2269,125 @@ const Home = ({ initialTab }) => {
 
           // Cập nhật lượt thích và cảm xúc bài viết thời gian thực (Realtime Reaction)
           if (eventType === 'POST_REACTION_UPDATED' && data.postId) {
-            setPosts(prevPosts => prevPosts.map(p => {
-              if (Number(p.id) === Number(data.postId)) {
-                return {
-                  ...p,
-                  likesCount: data.likesCount !== undefined ? Number(data.likesCount) : p.likesCount,
-                  reactionBreakdown: data.reactionBreakdown || (data.summary ? data.summary.reactionBreakdown : p.reactionBreakdown)
-                };
-              }
-              return p;
-            }));
+            const pid = Number(data.postId);
+            const count = data.likesCount !== undefined 
+              ? Number(data.likesCount) 
+              : (data.summary?.totalCount !== undefined ? Number(data.summary.totalCount) : null);
+            const stats = data.summary || null;
+            const top = data.summary?.topReactions || data.topReactions || null;
+
+            setPosts(prevPosts => {
+              const updated = prevPosts.map(p => {
+                if (Number(p.id) === pid) {
+                  return {
+                    ...p,
+                    likesCount: count !== null ? count : p.likesCount,
+                    reactionBreakdown: data.reactionBreakdown || (data.summary ? data.summary.reactionBreakdown : p.reactionBreakdown),
+                    reactionStats: stats || p.reactionStats,
+                    topReactions: top || p.topReactions
+                  };
+                }
+                return p;
+              });
+              try {
+                const cacheKey = currentUserId ? `talovin_cached_posts_${currentUserId}` : 'talovin_cached_posts';
+                localStorage.setItem(cacheKey, JSON.stringify(updated.slice(0, 25)));
+                localStorage.setItem('talovin_cached_posts', JSON.stringify(updated.slice(0, 25)));
+              } catch (_) {}
+              return updated;
+            });
+
+            setSelectedThreadPost(prev => {
+              if (!prev || Number(prev.id) !== pid) return prev;
+              return {
+                ...prev,
+                likesCount: count !== null ? count : prev.likesCount,
+                reactionStats: stats || prev.reactionStats,
+                topReactions: top || prev.topReactions
+              };
+            });
             return;
           }
 
           // Cập nhật số lượng và danh sách bình luận thời gian thực (Realtime Comments)
           if (eventType === 'POST_COMMENT_ADDED' && data.postId) {
-            setPosts(prevPosts => prevPosts.map(p => {
-              if (Number(p.id) === Number(data.postId)) {
-                return {
-                  ...p,
-                  commentsCount: data.commentsCount !== undefined ? Number(data.commentsCount) : (p.commentsCount || 0) + 1
-                };
-              }
-              return p;
-            }));
+            const pid = Number(data.postId);
+            const newCount = data.commentsCount !== undefined ? Number(data.commentsCount) : null;
+            setPosts(prevPosts => {
+              const updated = prevPosts.map(p => {
+                if (Number(p.id) === pid) {
+                  return {
+                    ...p,
+                    commentsCount: newCount !== null ? newCount : (p.commentsCount || 0) + 1
+                  };
+                }
+                return p;
+              });
+              try {
+                const cacheKey = currentUserId ? `talovin_cached_posts_${currentUserId}` : 'talovin_cached_posts';
+                localStorage.setItem(cacheKey, JSON.stringify(updated.slice(0, 25)));
+                localStorage.setItem('talovin_cached_posts', JSON.stringify(updated.slice(0, 25)));
+              } catch (_) {}
+              return updated;
+            });
             if (data.comment) {
               setCommentsMap(prev => {
-                const existing = prev[data.postId];
-                if (!existing) return prev;
+                const existing = prev[pid] || [];
                 if (existing.some(c => c.id === data.comment.id)) return prev;
                 return {
                   ...prev,
-                  [data.postId]: [...existing, data.comment]
+                  [pid]: [...existing, data.comment]
                 };
               });
             }
+            setSelectedThreadPost(prev => {
+              if (!prev || Number(prev.id) !== pid) return prev;
+              return {
+                ...prev,
+                commentsCount: newCount !== null ? newCount : (prev.commentsCount || 0) + 1
+              };
+            });
             return;
           }
 
           // Cập nhật khi xóa bình luận thời gian thực
           if (eventType === 'POST_COMMENT_DELETED' && data.postId) {
-            setPosts(prevPosts => prevPosts.map(p => {
-              if (Number(p.id) === Number(data.postId)) {
-                return {
-                  ...p,
-                  commentsCount: Math.max(0, data.commentsCount !== undefined ? Number(data.commentsCount) : (p.commentsCount || 1) - 1)
-                };
-              }
-              return p;
-            }));
+            const pid = Number(data.postId);
+            const newCount = data.commentsCount !== undefined ? Math.max(0, Number(data.commentsCount)) : null;
+            setPosts(prevPosts => {
+              const updated = prevPosts.map(p => {
+                if (Number(p.id) === pid) {
+                  return {
+                    ...p,
+                    commentsCount: newCount !== null ? newCount : Math.max(0, (p.commentsCount || 1) - 1)
+                  };
+                }
+                return p;
+              });
+              try {
+                const cacheKey = currentUserId ? `talovin_cached_posts_${currentUserId}` : 'talovin_cached_posts';
+                localStorage.setItem(cacheKey, JSON.stringify(updated.slice(0, 25)));
+                localStorage.setItem('talovin_cached_posts', JSON.stringify(updated.slice(0, 25)));
+              } catch (_) {}
+              return updated;
+            });
             if (data.commentId) {
               setCommentsMap(prev => {
-                const existing = prev[data.postId];
+                const existing = prev[pid];
                 if (!existing) return prev;
                 return {
                   ...prev,
-                  [data.postId]: existing.filter(c => c.id !== data.commentId)
+                  [pid]: existing.filter(c => c.id !== data.commentId)
                 };
               });
             }
+            setSelectedThreadPost(prev => {
+              if (!prev || Number(prev.id) !== pid) return prev;
+              return {
+                ...prev,
+                commentsCount: newCount !== null ? newCount : Math.max(0, (prev.commentsCount || 1) - 1)
+              };
+            });
             return;
           }
 
@@ -2552,7 +2624,7 @@ const Home = ({ initialTab }) => {
         stompClient.disconnect();
       }
     };
-  }, [fetchPosts]);
+  }, []);
 
   // Đăng xuất
   const handleLogout = () => {
