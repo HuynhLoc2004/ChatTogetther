@@ -25,9 +25,19 @@ public class ChatController {
     public ResponseEntity<ResponseData<Boolean>> sendMessage(
             JwtAuthenticationToken jwtAuthenticationToken,
             @RequestParam(value = "user_room", required = false) Long user_room,
+            @RequestParam(value = "targetUserId", required = false) String targetUserId,
             @RequestBody MessageRequest messageRequest
     ) {
-        return ResponseEntity.ok(this.chatService.sendMessage(jwtAuthenticationToken, messageRequest, user_room));
+        Long effectiveRoomId = user_room;
+        if (effectiveRoomId == null && targetUserId != null && !targetUserId.trim().isEmpty()) {
+            try {
+                ResponseData<Map<String, Object>> dmRes = this.chatService.getOrCreateDirectRoom(jwtAuthenticationToken, targetUserId.trim());
+                if (dmRes.getData() != null && dmRes.getData().get("roomId") != null) {
+                    effectiveRoomId = Long.valueOf(dmRes.getData().get("roomId").toString());
+                }
+            } catch (Exception ignored) {}
+        }
+        return ResponseEntity.ok(this.chatService.sendMessage(jwtAuthenticationToken, messageRequest, effectiveRoomId));
     }
 
     @PostMapping

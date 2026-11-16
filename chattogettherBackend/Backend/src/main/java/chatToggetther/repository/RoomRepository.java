@@ -27,5 +27,10 @@ public interface RoomRepository extends JpaRepository<RoomEntity , Long> {
            "(SELECT ur.roomEntity.id FROM UserRoomEntity ur WHERE ur.active = true)")
     List<RoomEntity> findAllEmptyRooms();
 
-    Optional<RoomEntity> findByPassword(String password);
+    List<RoomEntity> findAllByPasswordOrderByIdDesc(String password);
+
+    default Optional<RoomEntity> findByPassword(String password) {
+        List<RoomEntity> list = findAllByPasswordOrderByIdDesc(password);
+        return list.isEmpty() ? Optional.empty() : Optional.of(list.get(0));
+    }
 }

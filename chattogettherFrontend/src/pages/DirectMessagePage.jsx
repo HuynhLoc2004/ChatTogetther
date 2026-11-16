@@ -428,6 +428,8 @@ export const DirectMessagePage = () => {
           roomId = res.data.data.roomId || res.data.data.id;
           if (res.data.data.targetUser) {
             setActivePartner(res.data.data.targetUser);
+            effectivePartner = res.data.data.targetUser;
+            setPartnerNotFound(false);
           }
         }
       }
@@ -794,9 +796,10 @@ export const DirectMessagePage = () => {
     });
 
     try {
-      let targetRoom = activeRoomId;
+      let targetRoom = activeRoomId || activePartner?.directRoomId;
+      const targetIdentifier = activePartner?.id || activePartner?.account || urlTargetUserId;
+
       if (!targetRoom) {
-        const targetIdentifier = activePartner?.id || activePartner?.account || urlTargetUserId;
         if (!targetIdentifier) {
           throw new Error("Không thể xác định người nhận");
         }
@@ -822,17 +825,15 @@ export const DirectMessagePage = () => {
           }
         }
 
-        if (roomRes?.data?.data?.roomId) {
-          targetRoom = roomRes.data.data.roomId;
-          setActiveRoomId(targetRoom);
+        if (roomRes?.data?.data) {
+          targetRoom = roomRes.data.data.roomId || roomRes.data.data.id;
+          if (targetRoom) {
+            setActiveRoomId(targetRoom);
+          }
           if (roomRes.data.data.targetUser && !activePartner) {
             setActivePartner(roomRes.data.data.targetUser);
           }
         }
-      }
-
-      if (!targetRoom) {
-        throw new Error("Không thể khởi tạo cuộc trò chuyện với người dùng này");
       }
 
       // Xử lý tệp đính kèm: Nén ảnh hoặc đọc Base64
@@ -863,7 +864,10 @@ export const DirectMessagePage = () => {
         message: finalMessage || content || '[Tệp tin]',
         timeSend: now.toISOString()
       }, {
-        params: { user_room: targetRoom }
+        params: { 
+          user_room: targetRoom || undefined,
+          targetUserId: targetIdentifier
+        }
       });
 
       // Đánh dấu tin nhắn gửi thành công

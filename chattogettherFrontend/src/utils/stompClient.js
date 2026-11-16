@@ -1,50 +1,31 @@
 import Stomp from 'stompjs';
-import SockJS from 'sockjs-client';
 import { BACKEND_URL } from '../api/axiosClient';
 
 /**
  * Trả về URL kết nối WebSocket thuần (ws:// hoặc wss://)
- * Chuẩn Spring Boot STOMP: cần /ws-gs-guide/websocket cho Native WebSocket
+ * Spring Boot STOMP: hỗ trợ /ws-gs-guide và /ws-gs-guide/websocket
  */
 export const getWebSocketUrl = () => {
+  const wsProto = (typeof window !== 'undefined' && window.location.protocol === 'https:') ? 'wss:' : 'ws:';
   if (BACKEND_URL) {
-    const raw = BACKEND_URL.replace(/\/$/, '');
-    const wsProto = (typeof window !== 'undefined' && window.location.protocol === 'https:') ? 'wss:' : 'ws:';
-    return raw.replace(/^https?:/, wsProto) + '/ws-gs-guide/websocket';
+    const raw = BACKEND_URL.replace(/\/$/, '').replace(/^https?:/, wsProto);
+    return `${raw}/ws-gs-guide/websocket`;
   }
-  const protocol = (typeof window !== 'undefined' && window.location.protocol === 'https:') ? 'wss:' : 'ws:';
   const host = typeof window !== 'undefined' ? window.location.host : 'localhost:8080';
-  return `${protocol}//${host}/ws-gs-guide/websocket`;
+  return `${wsProto}//${host}/ws-gs-guide/websocket`;
 };
 
 /**
- * Trả về URL SockJS HTTP(S) fallback
- */
-export const getSockJsUrl = () => {
-  if (BACKEND_URL) {
-    const raw = BACKEND_URL.replace(/\/$/, '');
-    return raw + '/ws-gs-guide';
-  }
-  const protocol = (typeof window !== 'undefined' && window.location.protocol === 'https:') ? 'https:' : 'http:';
-  const host = typeof window !== 'undefined' ? window.location.host : 'localhost:8080';
-  return `${protocol}//${host}/ws-gs-guide`;
-};
-
-/**
- * Khởi tạo STOMP client linh hoạt:
- * Ưu tiên Native WebSocket (/ws-gs-guide/websocket - cực nhanh, không lag)
- * Tự động fallback sang SockJS nếu browser/mạng không hỗ trợ raw WS
+ * Khởi tạo STOMP client qua Native WebSocket chuẩn trình duyệt:
+ * - 100% Native WebSocket (Cực nhanh, kết nối tức thì, không độ trễ)
+ * - Triệt tiêu hoàn toàn Permissions Policy Violation 'unload' của SockJS
  */
 export const createStompClient = () => {
-  let socket;
-  try {
-    const wsUrl = getWebSocketUrl();
-    socket = new WebSocket(wsUrl);
-  } catch (_) {
-    const sockUrl = getSockJsUrl();
-    socket = new SockJS(sockUrl);
-  }
+  const wsUrl = getWebSocketUrl();
+  const socket = new WebSocket(wsUrl);
   const client = Stomp.over(socket);
   client.debug = () => {};
+  client.heartbeat.outgoing = 10000;
+  client.heartbeat.incoming = 10000;
   return client;
 };
