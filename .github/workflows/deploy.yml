@@ -1,0 +1,67 @@
+name: Deploy Talovin Production
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21 Temurin
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Build Spring Boot JAR
+        run: |
+          cd chattogettherBackend/Backend
+          mvn clean package -DskipTests
+
+      - name: Create .env File from GitHub Secret
+        run: |
+          printf "%s\n" "${{ secrets.ENV_FILE }}" > .env
+
+      - name: Prepare Deployment Package
+        run: |
+          mkdir -p deploy_stage/chattogettherBackend/Backend/target
+          mkdir -p deploy_stage/target
+          mkdir -p deploy_stage/nginx
+          cp chattogettherBackend/Backend/target/*.jar deploy_stage/chattogettherBackend/Backend/target/
+          cp chattogettherBackend/Backend/Dockerfile deploy_stage/chattogettherBackend/Backend/
+          cp chattogettherBackend/Backend/target/*.jar deploy_stage/target/
+          cp chattogettherBackend/Backend/Dockerfile deploy_stage/Dockerfile
+          cp docker-compose.yml deploy_stage/
+          cp nginx/default.conf deploy_stage/nginx/
+          cp .env deploy_stage/
+
+      - name: Copy Deployment Artifacts to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "deploy_stage/*,deploy_stage/**"
+          target: "/opt/talovin"
+          strip_components: 1
+
+      - name: Execute Docker Compose Deploy on VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            mkdir -p /var/www/certbot
+            chmod 600 /opt/talovin/.env
+            cd /opt/talovin
+            docker compose up -d --build
+            docker image prune -f
+            sleep 8
+            docker compose ps

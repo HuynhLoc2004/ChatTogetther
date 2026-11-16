@@ -1,24 +1,89 @@
 services:
+  # 1. PostgreSQL Database (Cô lập nội bộ, không expose port ra ngoài)
+  postgres:
+    image: postgres:16-alpine
+    container_name: talovin-postgres
+    restart: unless-stopped
+    mem_limit: 700m
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - talovin-net
+
+  # 2. Redis Cache & Messaging (Cô lập nội bộ, LRU 128MB, có mật khẩu)
+  redis:
+    image: redis:7-alpine
+    container_name: talovin-redis
+    restart: unless-stopped
+    mem_limit: 150m
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - talovin-net
+
+  # 3. Spring Boot Backend (Java 21 JRE Non-root, tối ưu 1.5GB RAM)
   backend:
     build:
       context: ./chattogettherBackend/Backend
       dockerfile: Dockerfile
-    ports:
-      - "8080:8080"
-    environment:
-      - PORT=8080
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://ep-noisy-art-ao5oc2sf.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
-      - SPRING_DATASOURCE_USERNAME=neondb_owner
-      - SPRING_DATASOURCE_PASSWORD=npg_rbka46vhfzjM
+    container_name: talovin-backend
     restart: unless-stopped
+    mem_limit: 1536m
+    env_file: .env
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/${DB_NAME}
+      - SPRING_DATASOURCE_USERNAME=${DB_USER}
+      - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD}
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - talovin-net
 
-  frontend:
-    build:
-      context: ./chattogettherFrontend
-      dockerfile: Dockerfile
+  # 4. Nginx Reverse Proxy (SSL Let's Encrypt, HTTP/2, Rate Limit, WebSocket)
+  nginx:
+    image: nginx:alpine
+    container_name: talovin-nginx
+    restart: unless-stopped
+    mem_limit: 128m
     ports:
-      - "5173:80"
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /var/www/certbot:/var/www/certbot:ro
     depends_on:
       - backend
-    restart: unless-stopped
+    networks:
+      - talovin-net
 
+volumes:
+  pgdata:
+  redisdata:
+
+networks:
+  talovin-net:
+    driver: bridge

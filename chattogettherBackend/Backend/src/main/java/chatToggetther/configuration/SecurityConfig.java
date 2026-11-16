@@ -30,6 +30,10 @@ import java.util.Arrays;
 public class SecurityConfig {
     @Value("${jwt.secret_key}")
     private String secretKey;
+
+    @Value("${allowed.origins:${ALLOWED_ORIGINS:${CORS_ORIGINS:}}}")
+    private String allowedOrigins;
+
     private final RevokeTokenRepository revokeTokenRepository;
 
     public SecurityConfig(RevokeTokenRepository revokeTokenRepository) {
@@ -70,21 +74,29 @@ public class SecurityConfig {
     public org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         
-        // Hỗ trợ biến môi trường CORS_ORIGINS trên Render
-        String envCors = System.getenv("CORS_ORIGINS");
+        // Đọc danh sách domain từ ALLOWED_ORIGINS hoặc CORS_ORIGINS
+        String envCors = (allowedOrigins != null && !allowedOrigins.trim().isEmpty())
+                ? allowedOrigins
+                : System.getenv("ALLOWED_ORIGINS");
+        if (envCors == null || envCors.trim().isEmpty()) {
+            envCors = System.getenv("CORS_ORIGINS");
+        }
+
         if (envCors != null && !envCors.trim().isEmpty() && !envCors.trim().equals("*")) {
-            java.util.List<String> origins = Arrays.stream(envCors.split(","))
+            java.util.List<String> origins = Arrays.stream(envCors.split("[,;]"))
                     .map(String::trim)
+                    .filter(s -> !s.isEmpty())
                     .toList();
             configuration.setAllowedOriginPatterns(origins);
         } else {
-            // Cho phép các domain development và production chính thống (Vercel, Localhost, Klyvix)
+            // Cho phép các domain development và production chính thống (Vercel, Localhost, Klyvix, DuckDNS)
             configuration.setAllowedOriginPatterns(Arrays.asList(
                     "http://localhost:5173",
                     "http://localhost:3000",
                     "https://*.vercel.app",
                     "https://*.klyvix.space",
-                    "https://chat-togetther.vercel.app"
+                    "https://chat-togetther.vercel.app",
+                    "https://talovin.duckdns.org"
             ));
         }
 

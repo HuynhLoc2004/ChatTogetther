@@ -948,7 +948,7 @@ export const ResonanceMatchModal = ({
                             matchedAudioRef.current.pause();
                             setIsPlayingMatchedAudio(false);
                           } else {
-                            matchedAudioRef.current.play().then(() => setIsPlayingMatchedAudio(true)).catch(() => {});
+                            matchedAudioRef.current.play().then(() => setIsPlayingMatchedAudio(true)).catch(() => { });
                           }
                         }}
                         className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 text-[11px] font-sans flex items-center gap-1.5 transition-colors"
@@ -1235,11 +1235,10 @@ export const ResonanceMatchModal = ({
                             stopAutoScan();
                             setFrequency(Number(Number(s.frequency).toFixed(1)));
                           }}
-                          className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between gap-2.5 ${
-                            isCurrent
+                          className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between gap-2.5 ${isCurrent
                               ? 'bg-zinc-800 border-white/60 shadow-sm'
                               : 'bg-zinc-950/70 border-zinc-800 hover:border-zinc-700'
-                          }`}
+                            }`}
                         >
                           <div className="flex items-center gap-2 min-w-0">
                             <UserAvatar
