@@ -1098,8 +1098,8 @@ export const DirectMessagePage = () => {
   return (
     <div className="flex flex-col h-screen w-full bg-zinc-950 text-zinc-100 select-none overflow-hidden font-sans">
 
-      {/* HEADER TOÀN TRANG (Topbar) */}
-      <header className="h-14 border-b border-zinc-800/80 bg-zinc-950/90 backdrop-blur px-4 flex items-center justify-between shrink-0 z-20">
+      {/* HEADER TOÀN TRANG (Topbar) - Ẩn trên mobile khi đang mở khung chat chi tiết để tránh trùng lặp 2 thanh Header */}
+      <header className={`h-14 border-b border-zinc-800/80 bg-zinc-950/90 backdrop-blur px-4 items-center justify-between shrink-0 z-20 ${urlTargetUserId ? 'hidden md:flex' : 'flex'}`}>
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -1241,45 +1241,56 @@ export const DirectMessagePage = () => {
             <div className="flex-1 flex flex-col h-full overflow-hidden">
 
               {/* TOPBAR CỦA KHUNG CHAT */}
-              <div className="h-14 px-4 border-b border-zinc-800/80 bg-zinc-950 flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-3 min-w-0">
+              <div className="h-14 px-3 sm:px-4 border-b border-zinc-800/80 bg-zinc-950/95 backdrop-blur flex items-center justify-between shrink-0 z-10">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                   <button
                     type="button"
                     onClick={() => {
                       navigate('/messages', { replace: true });
                       setActivePartner(null);
                     }}
-                    className="md:hidden p-1.5 -ml-1 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-900 transition-colors"
+                    className="md:hidden p-2 -ml-1 text-zinc-400 hover:text-white rounded-xl hover:bg-zinc-900 transition-colors cursor-pointer active:scale-95 shrink-0"
+                    title="Trở về Hộp thư tin nhắn"
                   >
                     <ArrowLeft size={18} />
                   </button>
 
-                  <div className="relative shrink-0">
-                    <UserAvatar avatarUrl={activePartner.avatar} username={activePartner.account} name={activePartner.nickname || activePartner.account} size={36} />
-                    <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-zinc-950 ${isUserOnline(activePartner.id) ? 'bg-emerald-500 ring-2 ring-emerald-500/20' : 'bg-zinc-600'
-                      }`} />
-                  </div>
+                  <div 
+                    className="flex items-center gap-2.5 min-w-0 cursor-pointer hover:opacity-90 transition-opacity"
+                    onClick={() => {
+                      if (activePartner?.id) {
+                        navigate(`/profile/${activePartner.id}`);
+                      }
+                    }}
+                    title="Xem trang cá nhân"
+                  >
+                    <div className="relative shrink-0">
+                      <UserAvatar avatarUrl={activePartner.avatar} username={activePartner.account} name={activePartner.nickname || activePartner.account} size={36} />
+                      <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-zinc-950 ${isUserOnline(activePartner.id) ? 'bg-emerald-500 ring-2 ring-emerald-500/20' : 'bg-zinc-600'
+                        }`} />
+                    </div>
 
-                  <div className="min-w-0">
-                    <h3 className="text-xs font-bold text-white truncate">
-                      {activePartner.nickname || activePartner.account}
-                    </h3>
-                    {isUserOnline(activePartner.id) ? (
-                      <span className="text-[10px] font-mono flex items-center gap-1.5 text-emerald-400 font-medium">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                        Trực tuyến • Xem hồ sơ
-                      </span>
-                    ) : (
-                      <span className="text-[10px] font-mono flex items-center gap-1.5 text-zinc-400 font-medium">
-                        <span className="w-2 h-2 rounded-full bg-zinc-600"></span>
-                        {getUserStatusText(activePartner.id)} • Xem hồ sơ
-                      </span>
-                    )}
+                    <div className="min-w-0">
+                      <h3 className="text-xs sm:text-sm font-bold text-white truncate">
+                        {activePartner.nickname || activePartner.account}
+                      </h3>
+                      {isUserOnline(activePartner.id) ? (
+                        <span className="text-[10px] font-mono flex items-center gap-1.5 text-emerald-400 font-medium">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                          Trực tuyến
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-mono flex items-center gap-1.5 text-zinc-400 font-medium">
+                          <span className="w-1.5 h-1.5 rounded-full bg-zinc-600"></span>
+                          {getUserStatusText(activePartner.id)}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
                 {/* Nút hành động Gọi thoại & Gọi video */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 sm:gap-2">
                   <button
                     type="button"
                     onClick={() => {
@@ -1290,8 +1301,8 @@ export const DirectMessagePage = () => {
                       const currentFrom = encodeURIComponent(location.pathname + (location.search || ''));
                       navigate(`/call/direct/${safeCallTargetId}?type=audio&from=${currentFrom}`);
                     }}
-                    className="h-9 px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-medium flex items-center gap-1.5 transition-colors active:scale-[0.98]"
-                    title="Bắt đầu cuộc gọi thoại"
+                    className="h-8.5 sm:h-9 px-2.5 sm:px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-medium flex items-center gap-1.5 transition-all active:scale-[0.98] cursor-pointer"
+                    title="Gọi thoại"
                   >
                     <Phone size={13} className="text-zinc-300" />
                     <span className="hidden sm:inline">Gọi thoại</span>
@@ -1307,8 +1318,8 @@ export const DirectMessagePage = () => {
                       const currentFrom = encodeURIComponent(location.pathname + (location.search || ''));
                       navigate(`/call/direct/${safeCallTargetId}?type=video&from=${currentFrom}`);
                     }}
-                    className="h-9 px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-medium flex items-center gap-1.5 transition-colors active:scale-[0.98]"
-                    title="Bắt đầu cuộc gọi video"
+                    className="h-8.5 sm:h-9 px-2.5 sm:px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-medium flex items-center gap-1.5 transition-all active:scale-[0.98] cursor-pointer"
+                    title="Gọi video"
                   >
                     <Video size={13} className="text-zinc-300" />
                     <span className="hidden sm:inline">Gọi Video</span>
