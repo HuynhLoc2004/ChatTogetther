@@ -15,7 +15,7 @@ import UserProfileModal from './UserProfileModal';
 import FriendsModal from './FriendsModal';
 import TalovinLogo from '../components/TalovinLogo';
 import GroupCollageAvatar from '../components/GroupCollageAvatar';
-import { UserAvatar } from './Home';
+import UserAvatar from '../components/UserAvatar';
 import { createStompClient } from '../utils/stompClient';
 import { usePresence } from '../context/PresenceContext';
 import toast from 'react-hot-toast';

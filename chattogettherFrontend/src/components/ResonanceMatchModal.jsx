@@ -7,7 +7,7 @@ import {
 import axiosClient, { BACKEND_URL } from '../api/axiosClient';
 import toast from 'react-hot-toast';
 import { createStompClient } from '../utils/stompClient';
-import { UserAvatar } from '../pages/Home';
+import UserAvatar from './UserAvatar';
 
 export const ResonanceMatchModal = ({
   isOpen,

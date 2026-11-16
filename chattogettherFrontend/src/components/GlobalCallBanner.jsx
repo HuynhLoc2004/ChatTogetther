@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Phone, PhoneOff, Video, Volume2 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import { createStompClient } from '../utils/stompClient';
-import { UserAvatar } from '../pages/Home';
+import UserAvatar from './UserAvatar';
 
 const GlobalCallBanner = () => {
   const [incomingCall, setIncomingCall] = useState(null);

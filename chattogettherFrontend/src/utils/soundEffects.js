@@ -166,6 +166,8 @@ export const playReactionPop = (overrideTheme = null, overrideVolume = null) => 
   } catch (_) {}
 };
 
+export const playHeartSound = playReactionPop;
+
 /**
  * 2. playCommentSend() - Âm thanh khi Gửi Phản Hồi / Bình Luận thành công
  * Chime đôi 2 nốt pha lê ngân thanh thoát (E6 1318Hz & B6 1975Hz), tinh tế, sang trọng, không đục

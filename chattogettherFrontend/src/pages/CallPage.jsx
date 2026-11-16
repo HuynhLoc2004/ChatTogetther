@@ -8,7 +8,7 @@ import {
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
 import { createStompClient } from '../utils/stompClient';
-import { UserAvatar } from './Home';
+import UserAvatar from '../components/UserAvatar';
 
 const ICE_SERVERS = {
   iceServers: [

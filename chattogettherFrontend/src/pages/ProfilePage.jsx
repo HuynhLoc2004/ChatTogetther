@@ -14,7 +14,7 @@ import toast from 'react-hot-toast';
 import TalovinLogo from '../components/TalovinLogo';
 import UserAvatar from '../components/UserAvatar';
 import MobileBottomNav from '../components/MobileBottomNav';
-import { playHeartSound } from './Home';
+import { playHeartSound } from '../utils/soundEffects';
 import { useAuth } from '../context/AuthContext';
 import { usePresence } from '../context/PresenceContext';
 

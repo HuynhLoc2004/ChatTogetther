@@ -11,7 +11,7 @@ import {
 import axiosClient, { BACKEND_URL } from '../api/axiosClient';
 import toast from 'react-hot-toast';
 import { createStompClient } from '../utils/stompClient';
-import { UserAvatar } from './Home';
+import UserAvatar from '../components/UserAvatar';
 import TalovinLogo from '../components/TalovinLogo';
 import MobileBottomNav from '../components/MobileBottomNav';
 import { usePresence } from '../context/PresenceContext';

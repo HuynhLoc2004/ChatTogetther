@@ -108,4 +108,5 @@ const UserAvatar = ({
   );
 };
 
+export { UserAvatar };
 export default UserAvatar;
