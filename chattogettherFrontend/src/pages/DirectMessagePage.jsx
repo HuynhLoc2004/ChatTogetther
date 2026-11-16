@@ -172,9 +172,6 @@ export const DirectMessagePage = () => {
   const [forwardTab, setForwardTab] = useState('friends'); // 'friends' | 'rooms'
   const [communityRooms, setCommunityRooms] = useState([]);
 
-  // Cuộc gọi đến (Incoming Call)
-  const [incomingCall, setIncomingCall] = useState(null);
-
   // Refs
   const stompClient = useRef(null);
   const messagesEndRef = useRef(null);
@@ -659,18 +656,6 @@ export const DirectMessagePage = () => {
       };
 
       client.connect(connectHeaders, () => {
-        // Lắng nghe tín hiệu cuộc gọi đến WebRTC
-        client.subscribe(`/topic/call/user/${currentUserId}`, (message) => {
-          try {
-            const data = JSON.parse(message.body);
-            if (data.type === 'OFFER' || data.type === 'RINGING') {
-              setIncomingCall(data);
-            } else if (data.type === 'END' || data.type === 'DECLINE') {
-              setIncomingCall(null);
-            }
-          } catch (e) {}
-        });
-
         // 1. Nhận tin nhắn 1-1 trực tiếp qua /topic/messages/{currentUserId}
         client.subscribe(`/topic/messages/${currentUserId}`, (frame) => {
           handleIncomingDirectMsg(frame.body);
@@ -1838,53 +1823,6 @@ export const DirectMessagePage = () => {
             alt="Phóng to" 
             className="max-w-[95vw] max-h-[90vh] object-contain rounded-xl shadow-2xl" 
           />
-        </div>
-      )}
-
-      {/* MODAL CUỘC GỌI ĐẾN (INCOMING CALL) */}
-      {incomingCall && (
-        <div className="fixed bottom-6 right-6 z-[99999] bg-zinc-900 border border-zinc-700 rounded-2xl p-4 shadow-2xl flex items-center gap-4 animate-in slide-in-from-bottom-5 duration-200 max-w-sm">
-          <div className="relative">
-            <UserAvatar avatarUrl={incomingCall.callerAvatar} username={incomingCall.callerName} size={44} />
-            <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-zinc-900 animate-ping" />
-          </div>
-
-          <div className="min-w-0 flex-1">
-            <h4 className="text-xs font-bold text-white truncate">{incomingCall.callerName || 'Người dùng'}</h4>
-            <p className="text-[11px] text-zinc-400 truncate">
-              {incomingCall.isVideo ? 'Cuộc gọi video đến...' : 'Cuộc gọi thoại đến...'}
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                if (stompClient.current && stompClient.current.connected) {
-                  stompClient.current.send(`/app/call/user/${incomingCall.callerId}`, {}, JSON.stringify({ type: 'DECLINE' }));
-                }
-                setIncomingCall(null);
-              }}
-              className="p-2.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 transition-colors"
-              title="Từ chối"
-            >
-              <PhoneOff size={15} />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                const isVid = Boolean(incomingCall.isVideo);
-                const callerId = incomingCall.callerId;
-                setIncomingCall(null);
-                const currentFrom = encodeURIComponent(location.pathname + (location.search || ''));
-                navigate(`/call/direct/${callerId}?video=${isVid}&incoming=true&autoAnswer=true&from=${currentFrom}`);
-              }}
-              className="h-9 px-4 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs flex items-center gap-1.5 transition-colors"
-            >
-              <Phone size={14} /> Nghe máy
-            </button>
-          </div>
         </div>
       )}
 

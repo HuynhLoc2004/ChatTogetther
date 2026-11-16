@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { 
   Mic, MicOff, Video, VideoOff, PhoneOff, Monitor, MonitorOff, 
-  Users, Volume2, Shield, ArrowLeft, Radio, Sparkles, PhoneCall
+  Users, Volume2, Shield, ArrowLeft, Radio, Sparkles, PhoneCall,
+  Maximize, Minimize
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import toast from 'react-hot-toast';
@@ -41,6 +42,27 @@ const CallPage = () => {
   const [callDuration, setCallDuration] = useState(0);
   const [callStatusText, setCallStatusText] = useState(isIncoming ? 'Đang kết nối cuộc gọi...' : 'Đang đổ chuông...');
   const [isConnected, setIsConnected] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const stageContainerRef = useRef(null);
+
+  const toggleFullscreen = () => {
+    if (!stageContainerRef.current) return;
+    if (!document.fullscreenElement) {
+      stageContainerRef.current.requestFullscreen?.().catch(() => {});
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen?.().catch(() => {});
+      setIsFullscreen(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleFsChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    };
+    document.addEventListener('fullscreenchange', handleFsChange);
+    return () => document.removeEventListener('fullscreenchange', handleFsChange);
+  }, []);
 
   // Target Information (Partner in 1-1 or Room info in Group)
   const [partnerProfile, setPartnerProfile] = useState(null);
@@ -71,13 +93,19 @@ const CallPage = () => {
   // Luôn đảm bảo localVideoRef nhận srcObject ngay lập tức khi bật camera (tránh lỗi tối đen)
   useEffect(() => {
     if (localVideoRef.current) {
+      localVideoRef.current.muted = true;
+      localVideoRef.current.defaultMuted = true;
+      localVideoRef.current.playsInline = true;
+      localVideoRef.current.setAttribute('playsinline', '');
+      localVideoRef.current.setAttribute('webkit-playsinline', '');
+
       if (isScreenSharing && screenStreamRef.current) {
         localVideoRef.current.srcObject = screenStreamRef.current;
         localVideoRef.current.play().catch(() => {});
       } else if (isVideoEnabled && localStreamRef.current) {
         const videoTrack = localStreamRef.current.getVideoTracks()[0];
         if (videoTrack && videoTrack.enabled) {
-          localVideoRef.current.srcObject = new MediaStream([videoTrack]);
+          localVideoRef.current.srcObject = localStreamRef.current;
           localVideoRef.current.play().catch(() => {});
         } else {
           localVideoRef.current.srcObject = null;
@@ -278,6 +306,21 @@ const CallPage = () => {
         duration: durationSecs, 
         isVideo 
       });
+
+      // Bắn trực tiếp log kết thúc cuộc gọi vào /app/call/log để lưu vào lịch sử đoạn chat
+      try {
+        if (stompClient.current && stompClient.current.connected) {
+          stompClient.current.send('/app/call/log', {}, JSON.stringify({
+            type: 'END',
+            callerId: currentUserId,
+            targetUserId: userId,
+            roomId: roomId,
+            duration: durationSecs,
+            isVideo: isVideo,
+            callMode: isVideo ? 'video' : 'audio'
+          }));
+        }
+      } catch (_) {}
     }
 
     cleanupCall();
@@ -538,7 +581,10 @@ const CallPage = () => {
       setIsVideoCall(true);
 
       if (existingTrack.enabled && localVideoRef.current) {
-        localVideoRef.current.srcObject = new MediaStream([existingTrack]);
+        localVideoRef.current.muted = true;
+        localVideoRef.current.defaultMuted = true;
+        localVideoRef.current.playsInline = true;
+        localVideoRef.current.srcObject = localStreamRef.current;
         localVideoRef.current.play().catch(() => {});
       }
       return;
@@ -569,7 +615,10 @@ const CallPage = () => {
       setIsVideoEnabled(true);
 
       if (localVideoRef.current) {
-        localVideoRef.current.srcObject = new MediaStream([newTrack]);
+        localVideoRef.current.muted = true;
+        localVideoRef.current.defaultMuted = true;
+        localVideoRef.current.playsInline = true;
+        localVideoRef.current.srcObject = localStreamRef.current;
         localVideoRef.current.play().catch(() => {});
       }
       setCallStatusText('Đang đàm thoại');
@@ -705,8 +754,19 @@ const CallPage = () => {
       {/* 2. KHU VỰC LIVE CALL STAGE (GRID TẤM HÌNH / AVATAR) */}
       {/* ============================================================== */}
       <main className="flex-1 p-3 sm:p-6 overflow-hidden flex items-center justify-center relative bg-zinc-950">
-        <div className="w-full max-w-4xl h-full flex items-center justify-center relative">
+        <div ref={stageContainerRef} className="w-full max-w-4xl h-full flex items-center justify-center relative">
           
+          {/* Nút bật/tắt toàn màn hình sân khấu */}
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            className="absolute top-4 right-4 z-30 p-2.5 rounded-xl bg-black/60 hover:bg-black/80 text-zinc-300 hover:text-white backdrop-blur-md border border-zinc-700/50 shadow-lg transition-all active:scale-95 flex items-center gap-1.5 text-xs font-medium"
+            title={isFullscreen ? "Thoát toàn màn hình" : "Toàn màn hình (F11)"}
+          >
+            {isFullscreen ? <Minimize size={15} /> : <Maximize size={15} />}
+            <span className="hidden sm:inline">{isFullscreen ? "Thu nhỏ" : "Toàn màn hình"}</span>
+          </button>
+
           {/* Card Remote (Đối phương / Các thành viên) */}
           <div className="w-full h-full bg-zinc-900/60 border border-zinc-800 rounded-3xl overflow-hidden relative shadow-2xl backdrop-blur-sm">
             {/* Video Remote: Luôn nằm trong DOM, dùng object-contain khi chia sẻ màn hình để không bao giờ bị cắt hình */}
@@ -715,7 +775,7 @@ const CallPage = () => {
               autoPlay 
               playsInline 
               className={`absolute inset-0 w-full h-full ${
-                (isScreenSharing || isRemoteScreenSharing) ? 'object-contain bg-black' : 'object-cover'
+                (isScreenSharing || isRemoteScreenSharing) ? 'object-contain bg-black' : 'object-cover sm:object-contain'
               } transition-opacity duration-300 ${isConnected && isVideoCall ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
             />
 

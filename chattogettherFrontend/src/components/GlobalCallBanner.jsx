@@ -223,16 +223,28 @@ const GlobalCallBanner = () => {
 
     try {
       if (stompClient.current && stompClient.current.connected) {
+        const isVid = Boolean(incomingCall.isVideo);
         const declinePayload = {
           type: 'DECLINE',
           callerId: effectiveUserId,
-          reason: 'declined'
+          reason: 'declined',
+          isVideo: isVid
         };
         if (roomId) {
           stompClient.current.send(`/app/call/${roomId}`, {}, JSON.stringify(declinePayload));
         } else if (callerId) {
           stompClient.current.send(`/app/call/user/${callerId}`, {}, JSON.stringify(declinePayload));
         }
+        // Ghi nhận log từ chối cuộc gọi vào lịch sử chat
+        stompClient.current.send('/app/call/log', {}, JSON.stringify({
+          type: 'DECLINE',
+          callerId: callerId,
+          targetUserId: effectiveUserId,
+          roomId: roomId,
+          isVideo: isVid,
+          callMode: isVid ? 'video' : 'audio',
+          duration: 0
+        }));
       }
     } catch (e) {}
 
