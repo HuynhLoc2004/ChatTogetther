@@ -75,6 +75,18 @@ public class CallSignalController {
                 long max = Math.max(callerId, targetUserId);
                 String dmPass = "DM_" + min + "_" + max;
                 room = roomRepository.findByPassword(dmPass).orElse(null);
+                if (room == null) {
+                    UserEntity targetUser = userRepository.findById(targetUserId).orElse(null);
+                    if (targetUser != null) {
+                        room = new RoomEntity();
+                        room.setActive(true);
+                        room.setPassword(dmPass);
+                        room.setRoomName("Chat: " + sender.getAccount() + " & " + targetUser.getAccount() + "_" + dmPass);
+                        room.setDescription("Cuộc trò chuyện riêng tư 1-1");
+                        room.setLocalDateTime(LocalDateTime.now());
+                        room = roomRepository.save(room);
+                    }
+                }
             }
             if (room == null) return;
 
@@ -117,6 +129,11 @@ public class CallSignalController {
             int minute = msg.getTimeSend().getMinute();
             sendDto.setFormattedTime(String.format("%02d:%02d", hour, minute));
             this.messagingTemplate.convertAndSend("/topic/room/" + room.getId(), sendDto);
+            this.messagingTemplate.convertAndSend("/topic/" + room.getId(), sendDto);
+            if (targetUserId != null) {
+                this.messagingTemplate.convertAndSend("/topic/messages/" + targetUserId, sendDto);
+                this.messagingTemplate.convertAndSend("/topic/messages/" + callerId, sendDto);
+            }
         } catch (Exception ignored) {}
     }
 }

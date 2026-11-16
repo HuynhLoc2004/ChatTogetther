@@ -200,7 +200,7 @@ const CallPage = () => {
     } catch (e) {}
   }, [isIncoming, isConnected, stopRingAudio]);
 
-  // 4. Cleanup Call Resources
+  // 4. Cleanup Call Resources (Zero-Lag + An toàn WebSocket)
   const cleanupCall = useCallback(() => {
     stopRingAudio();
     if (callTimerRef.current) {
@@ -228,8 +228,17 @@ const CallPage = () => {
     if (localVideoRef.current) {
       localVideoRef.current.srcObject = null;
     }
-    if (stompClient.current && stompClient.current.connected) {
-      stompClient.current.disconnect();
+
+    // Giữ kết nối thêm 300ms trong nền để đảm bảo gói tin END đến được đối phương trước khi đóng socket
+    const clientToClose = stompClient.current;
+    if (clientToClose) {
+      setTimeout(() => {
+        try {
+          if (clientToClose.connected) {
+            clientToClose.disconnect();
+          }
+        } catch (_) {}
+      }, 300);
       stompClient.current = null;
     }
   }, [stopRingAudio]);
@@ -253,7 +262,7 @@ const CallPage = () => {
     }
   }, [currentUserId, currentUserName, currentUserAvatar, isDirectCall, isRoomCall, userId, roomId]);
 
-  // 6. End Call Handler & Auto Post Call Log to Chat (Zero-Lag Navigation)
+  // 6. End Call Handler & Zero-Lag Instant Exit (0ms Delay)
   const endCall = useCallback((shouldSendSignal = true) => {
     if (isCallEndedRef.current) return;
     isCallEndedRef.current = true;
@@ -271,51 +280,9 @@ const CallPage = () => {
       });
     }
 
-    const wasConnectedWs = stompClient.current && stompClient.current.connected;
     cleanupCall();
 
-    // Tự động lưu lịch sử cuộc gọi ngầm (chỉ người gọi gửi để 100% được ghi nhận vào phòng chat)
-    if (!isIncoming) {
-      const isVideo = Boolean(isVideoParam || isVideoCall);
-      const durationStr = formatTime(durationSecs);
-      let callMsg = '';
-
-      if (isDirectCall && userId) {
-        if (durationSecs > 0) {
-          callMsg = isVideo ? `📹 Cuộc gọi video (${durationStr})` : `📞 Cuộc gọi thoại (${durationStr})`;
-        } else {
-          callMsg = isVideo ? `📹 Cuộc gọi video bị nhỡ` : `📞 Cuộc gọi thoại bị nhỡ`;
-        }
-        
-        (async () => {
-          try {
-            let targetRoom = dmRoomIdRef.current;
-            if (!targetRoom) {
-              const directRoomRes = await axiosClient.post(`/rooms/direct/${userId}`).catch(() => null);
-              targetRoom = directRoomRes?.data?.data?.id || directRoomRes?.data?.data?.roomId || directRoomRes?.data?.id;
-            }
-            if (targetRoom) {
-              await axiosClient.post('/message/send', {
-                message: callMsg,
-                timeSend: new Date().toISOString()
-              }, { params: { user_room: targetRoom } });
-            }
-          } catch (_) {}
-        })();
-      } else if (isRoomCall && roomId) {
-        if (durationSecs > 0) {
-          callMsg = isVideo ? `📹 Cuộc gọi video nhóm (${durationStr})` : `📞 Cuộc gọi thoại nhóm (${durationStr})`;
-        } else {
-          callMsg = isVideo ? `📹 Cuộc gọi video nhóm bị nhỡ` : `📞 Cuộc gọi thoại nhóm bị nhỡ`;
-        }
-        axiosClient.post('/message/send', {
-          message: callMsg,
-          timeSend: new Date().toISOString()
-        }, { params: { user_room: roomId } }).catch(() => {});
-      }
-    }
-
-    // Quay lại màn hình xuất phát ngay lập tức (không chờ đợi)
+    // Quay lại màn hình xuất phát ngay lập tức (0ms trễ, không chờ HTTP)
     const fromParam = searchParams.get('from');
     if (fromParam) {
       navigate(decodeURIComponent(fromParam), { replace: true });
@@ -328,7 +295,7 @@ const CallPage = () => {
     } else {
       navigate('/', { replace: true });
     }
-  }, [sendCallSignal, cleanupCall, stopRingAudio, isIncoming, isVideoParam, isVideoCall, isDirectCall, isRoomCall, userId, roomId, searchParams, navigate]);
+  }, [sendCallSignal, cleanupCall, stopRingAudio, isVideoParam, isVideoCall, isDirectCall, isRoomCall, userId, roomId, searchParams, navigate]);
 
   // 7. Handle Signal Incoming
   const handleCallSignal = useCallback(async (msg) => {
@@ -390,12 +357,11 @@ const CallPage = () => {
       stopRingAudio();
       setCallStatusText('Đối phương hiện đang bận hoặc từ chối');
       toast.error('Đối phương hiện đang bận hoặc không thể bắt máy!');
-      setTimeout(() => endCall(false), 1500);
+      setTimeout(() => endCall(false), 400);
     } else if (msg.type === 'END') {
       stopRingAudio();
       setCallStatusText('Cuộc gọi đã kết thúc');
-      toast('Đối phương đã kết thúc cuộc gọi.');
-      // Kết thúc ngay lập tức, không chờ trễ
+      // Kết thúc ngay lập tức không trễ 1 mili-giây
       endCall(false);
     }
   }, [currentUserId, sendCallSignal, stopRingAudio, isVideoParam, endCall]);
