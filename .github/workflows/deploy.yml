@@ -24,6 +24,19 @@ jobs:
           cd chattogettherBackend/Backend
           mvn clean package -DskipTests
 
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: chattogettherFrontend/package-lock.json
+
+      - name: Build React Frontend SPA
+        run: |
+          cd chattogettherFrontend
+          npm ci
+          npm run build
+
       - name: Create .env File from GitHub Secret
         run: |
           printf "%s\n" "${{ secrets.ENV_FILE }}" > .env
@@ -33,10 +46,12 @@ jobs:
           mkdir -p deploy_stage/chattogettherBackend/Backend/target
           mkdir -p deploy_stage/target
           mkdir -p deploy_stage/nginx
+          mkdir -p deploy_stage/frontend_dist
           cp chattogettherBackend/Backend/target/*.jar deploy_stage/chattogettherBackend/Backend/target/
           cp chattogettherBackend/Backend/Dockerfile deploy_stage/chattogettherBackend/Backend/
           cp chattogettherBackend/Backend/target/*.jar deploy_stage/target/
           cp chattogettherBackend/Backend/Dockerfile deploy_stage/Dockerfile
+          cp -r chattogettherFrontend/dist/* deploy_stage/frontend_dist/
           cp docker-compose.yml deploy_stage/
           cp nginx/default.conf deploy_stage/nginx/
           cp .env deploy_stage/
