@@ -14,8 +14,10 @@ const ICE_SERVERS = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' }
-  ]
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun.cloudflare.com:3478' }
+  ],
+  iceCandidatePoolSize: 10
 };
 
 const CallPage = () => {
@@ -29,7 +31,19 @@ const CallPage = () => {
   const isDirectCall = Boolean(userId);
   const isRoomCall = Boolean(roomId);
 
-  const currentUserId = localStorage.getItem('user_id');
+  const currentUserId = (() => {
+    let id = localStorage.getItem('user_id');
+    if (!id) {
+      try {
+        const token = localStorage.getItem('accesstoken');
+        if (token) {
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          if (payload?.user_id) id = String(payload.user_id);
+        }
+      } catch (_) {}
+    }
+    return id ? String(id) : null;
+  })();
   const currentUserName = localStorage.getItem('nickname') || localStorage.getItem('username') || 'Tôi';
   const currentUserAvatar = localStorage.getItem('user_avatar') || localStorage.getItem('avatar') || '';
 
@@ -84,6 +98,10 @@ const CallPage = () => {
   const ringGainRef = useRef(null);
   const ringIntervalRef = useRef(null);
   const isCallEndedRef = useRef(false);
+  const iceCandidateQueueRef = useRef([]);
+  const localCandidatesHistoryRef = useRef([]);
+  const disconnectTimerRef = useRef(null);
+  const connectTimeoutRef = useRef(null);
 
   // Sync duration ref
   useEffect(() => {
@@ -297,48 +315,66 @@ const CallPage = () => {
 
     // Ngắt chuông và giải phóng tài nguyên tức thì
     stopRingAudio();
+    if (disconnectTimerRef.current) clearTimeout(disconnectTimerRef.current);
+    if (connectTimeoutRef.current) clearTimeout(connectTimeoutRef.current);
+
     const durationSecs = durationRef.current;
     const isVideo = Boolean(isVideoParam || isVideoCall);
 
-    if (shouldSendSignal) {
-      sendCallSignal({ 
-        type: 'END', 
-        duration: durationSecs, 
-        isVideo 
-      });
+    const callPayload = {
+      type: 'END',
+      callerId: currentUserId,
+      targetUserId: userId,
+      roomId: roomId,
+      duration: durationSecs,
+      isVideo: isVideo,
+      callMode: isVideo ? 'video' : 'audio',
+      timestamp: Date.now()
+    };
 
-      // Bắn trực tiếp log kết thúc cuộc gọi vào /app/call/log để lưu vào lịch sử đoạn chat
+    if (shouldSendSignal) {
+      // 1. Gửi qua WebSocket STOMP
+      sendCallSignal(callPayload);
+
+      // 2. Gửi log trực tiếp qua STOMP /app/call/log
       try {
         if (stompClient.current && stompClient.current.connected) {
-          stompClient.current.send('/app/call/log', {}, JSON.stringify({
-            type: 'END',
-            callerId: currentUserId,
-            targetUserId: userId,
-            roomId: roomId,
-            duration: durationSecs,
-            isVideo: isVideo,
-            callMode: isVideo ? 'video' : 'audio'
-          }));
+          stompClient.current.send('/app/call/log', {}, JSON.stringify(callPayload));
+        }
+      } catch (_) {}
+
+      // 3. Gửi qua REST API HTTP dự phòng (Bảo đảm 100% cuộc gọi được lưu và bên kia nhận lệnh tắt)
+      try {
+        axiosClient.post('/call/end', callPayload).catch(() => {});
+      } catch (_) {}
+
+      // 4. Fallback sendBeacon nếu tắt tab hoặc điều hướng gấp
+      try {
+        if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+          const blob = new Blob([JSON.stringify(callPayload)], { type: 'application/json' });
+          navigator.sendBeacon('/api/call/end', blob);
         }
       } catch (_) {}
     }
 
     cleanupCall();
 
-    // Quay lại màn hình xuất phát ngay lập tức (0ms trễ, không chờ HTTP)
-    const fromParam = searchParams.get('from');
-    if (fromParam) {
-      navigate(decodeURIComponent(fromParam), { replace: true });
-    } else if (window.history.length > 2) {
-      navigate(-1);
-    } else if (isDirectCall && userId) {
-      navigate(`/messages/${userId}`, { replace: true });
-    } else if (isRoomCall && roomId) {
-      navigate(`/room/${roomId}`, { replace: true });
-    } else {
-      navigate('/', { replace: true });
-    }
-  }, [sendCallSignal, cleanupCall, stopRingAudio, isVideoParam, isVideoCall, isDirectCall, isRoomCall, userId, roomId, searchParams, navigate]);
+    // Giữ trễ nhỏ 120ms để browser kịp flush dữ liệu socket ra ngoài trước khi chuyển route
+    setTimeout(() => {
+      const fromParam = searchParams.get('from');
+      if (fromParam) {
+        navigate(decodeURIComponent(fromParam), { replace: true });
+      } else if (window.history.length > 2) {
+        navigate(-1);
+      } else if (isDirectCall && userId) {
+        navigate(`/messages/${userId}`, { replace: true });
+      } else if (isRoomCall && roomId) {
+        navigate(`/room/${roomId}`, { replace: true });
+      } else {
+        navigate('/', { replace: true });
+      }
+    }, 120);
+  }, [sendCallSignal, cleanupCall, stopRingAudio, isVideoParam, isVideoCall, isDirectCall, isRoomCall, userId, roomId, searchParams, navigate, currentUserId]);
 
   // 7. Handle Signal Incoming
   const handleCallSignal = useCallback(async (msg) => {
@@ -347,12 +383,22 @@ const CallPage = () => {
     if (msg.type === 'OFFER') {
       try {
         stopRingAudio();
-        setCallStatusText('Đang thiết lập kết nối...');
+        setCallStatusText('Đang kết nối đàm thoại...');
         if (msg.isVideo) setIsVideoCall(true);
         if (!peerConnectionRef.current) return;
-        await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(msg.offer));
-        const answer = await peerConnectionRef.current.createAnswer();
-        await peerConnectionRef.current.setLocalDescription(answer);
+        const pc = peerConnectionRef.current;
+        await pc.setRemoteDescription(new RTCSessionDescription(msg.offer));
+
+        // Đổ toàn bộ ICE candidate đã lưu trong hàng đợi
+        while (iceCandidateQueueRef.current.length > 0) {
+          const cand = iceCandidateQueueRef.current.shift();
+          try {
+            await pc.addIceCandidate(new RTCIceCandidate(cand));
+          } catch (_) {}
+        }
+
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
         sendCallSignal({ type: 'ANSWER', answer, isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled) });
       } catch (e) {
         console.error("Lỗi xử lý OFFER:", e);
@@ -363,9 +409,17 @@ const CallPage = () => {
         stopRingAudio();
         setCallStatusText('Đối phương đã nhận máy. Đang kết nối...');
         if (peerConnectionRef.current) {
-          const offer = await peerConnectionRef.current.createOffer();
-          await peerConnectionRef.current.setLocalDescription(offer);
+          const pc = peerConnectionRef.current;
+          const offer = await pc.createOffer({
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled)
+          });
+          await pc.setLocalDescription(offer);
           sendCallSignal({ type: 'OFFER', offer, isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled) });
+          // Gửi kèm toàn bộ candidate đã thu thập sẵn
+          localCandidatesHistoryRef.current.forEach(cand => {
+            sendCallSignal({ type: 'CANDIDATE', candidate: cand });
+          });
         }
       } catch (e) {
         console.error("Lỗi gửi OFFER sau ACCEPT:", e);
@@ -376,8 +430,16 @@ const CallPage = () => {
         setCallStatusText('Đang đàm thoại');
         setIsConnected(true);
         if (msg.isVideo) setIsVideoCall(true);
-        if (peerConnectionRef.current && peerConnectionRef.current.signalingState !== 'stable') {
-          await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(msg.answer));
+        const pc = peerConnectionRef.current;
+        if (pc && pc.signalingState !== 'stable') {
+          await pc.setRemoteDescription(new RTCSessionDescription(msg.answer));
+          // Đổ toàn bộ ICE candidate trong hàng đợi
+          while (iceCandidateQueueRef.current.length > 0) {
+            const cand = iceCandidateQueueRef.current.shift();
+            try {
+              await pc.addIceCandidate(new RTCIceCandidate(cand));
+            } catch (_) {}
+          }
         }
       } catch (e) {
         console.error("Lỗi xử lý ANSWER:", e);
@@ -389,11 +451,17 @@ const CallPage = () => {
         setIsVideoCall(true);
       }
     } else if (msg.type === 'CANDIDATE') {
-      if (peerConnectionRef.current && msg.candidate) {
-        try {
-          await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(msg.candidate));
-        } catch (e) {
-          console.error("Lỗi thêm ICE Candidate:", e);
+      if (msg.candidate) {
+        const pc = peerConnectionRef.current;
+        if (pc && pc.remoteDescription && pc.remoteDescription.type) {
+          try {
+            await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
+          } catch (e) {
+            console.warn("Lỗi addIceCandidate:", e);
+          }
+        } else {
+          // Lưu vào queue đợi remoteDescription được set
+          iceCandidateQueueRef.current.push(msg.candidate);
         }
       }
     } else if (msg.type === 'BUSY' || msg.type === 'DECLINE') {
@@ -407,7 +475,7 @@ const CallPage = () => {
       // Kết thúc ngay lập tức không trễ 1 mili-giây
       endCall(false);
     }
-  }, [currentUserId, sendCallSignal, stopRingAudio, isVideoParam, endCall]);
+  }, [currentUserId, sendCallSignal, stopRingAudio, isVideoParam, isVideoCall, isVideoEnabled, endCall]);
 
   // 8. Initialize WebRTC Media & STOMP Socket
   useEffect(() => {
@@ -458,6 +526,7 @@ const CallPage = () => {
         // ICE Candidate
         pc.onicecandidate = (event) => {
           if (event.candidate) {
+            localCandidatesHistoryRef.current.push(event.candidate);
             sendCallSignal({ type: 'CANDIDATE', candidate: event.candidate });
           }
         };
@@ -486,8 +555,27 @@ const CallPage = () => {
             stopRingAudio();
             setIsConnected(true);
             setCallStatusText('Đang đàm thoại');
+            if (disconnectTimerRef.current) {
+              clearTimeout(disconnectTimerRef.current);
+              disconnectTimerRef.current = null;
+            }
           } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
-            setCallStatusText('Tín hiệu mạng không ổn định...');
+            setCallStatusText('Đối phương đã ngắt kết nối...');
+            if (!disconnectTimerRef.current) {
+              disconnectTimerRef.current = setTimeout(() => {
+                endCall(false);
+              }, 2500);
+            }
+          }
+        };
+
+        pc.oniceconnectionstatechange = () => {
+          if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+            stopRingAudio();
+            setIsConnected(true);
+            setCallStatusText('Đang đàm thoại');
+          } else if (pc.iceConnectionState === 'failed') {
+            pc.restartIce?.();
           }
         };
 
@@ -521,17 +609,19 @@ const CallPage = () => {
 
           if (isIncoming) {
             // Là người nhận máy: gửi tín hiệu ACCEPT để người gọi biết và gửi OFFER
-            setCallStatusText('Đang thiết lập kênh âm thanh...');
+            setCallStatusText('Đang thiết lập kênh đàm thoại...');
             sendCallSignal({ type: 'ACCEPT' });
           } else {
-            // Là người khởi tạo cuộc gọi: bắt đầu đổ chuông và gửi OFFER
+            // Là người khởi tạo cuộc gọi: bắt đầu đổ chuông và gửi tín hiệu RINGING
             startRingAudio();
             setCallStatusText('Đang đổ chuông...');
-            // Bắn tín hiệu RINGING ngay lập tức để bên nhận máy nhận thông báo trượt xuống tức thì
             sendCallSignal({ type: 'RINGING', isVideo: isVideoParam });
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
-            sendCallSignal({ type: 'OFFER', offer, isVideo: isVideoParam });
+
+            // Tự động ngắt sau 45s nếu đối phương không bắt máy
+            connectTimeoutRef.current = setTimeout(() => {
+              toast.error('Đối phương không trả lời cuộc gọi.');
+              endCall(true);
+            }, 45000);
           }
 
           // Khởi động đồng hồ đếm thời gian cuộc gọi

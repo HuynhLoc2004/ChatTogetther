@@ -7,13 +7,18 @@ import chatToggetther.modelEntity.UserEntity;
 import chatToggetther.repository.MessageRepository;
 import chatToggetther.repository.RoomRepository;
 import chatToggetther.repository.UserRepository;
+import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.ResponseBody;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 
 @Controller
@@ -48,11 +53,60 @@ public class CallSignalController {
         recordCallLog(null, userId, payload);
     }
 
+    // Kênh tiếp nhận ghi log kết thúc cuộc gọi trực tiếp qua WebSocket
+    @MessageMapping("/call/log")
+    public void handleDirectCallLog(@Payload Map<String, Object> payload) {
+        if (payload == null) return;
+        Long targetUserId = null;
+        if (payload.get("targetUserId") != null) {
+            try {
+                targetUserId = Long.valueOf(String.valueOf(payload.get("targetUserId")));
+            } catch (Exception ignored) {}
+        }
+        Long roomId = null;
+        if (payload.get("roomId") != null) {
+            try {
+                roomId = Long.valueOf(String.valueOf(payload.get("roomId")));
+            } catch (Exception ignored) {}
+        }
+        recordCallLog(roomId, targetUserId, payload);
+    }
+
+    // REST API Endpoint kết thúc cuộc gọi & ghi log dự phòng (reliable HTTP fallback)
+    @PostMapping({"/api/call/end", "/call/end", "/api/call/log", "/call/log"})
+    @ResponseBody
+    public ResponseEntity<?> endCallRest(@RequestBody Map<String, Object> payload) {
+        if (payload == null) return ResponseEntity.ok(Map.of("success", true));
+        Long targetUserId = null;
+        if (payload.get("targetUserId") != null) {
+            try {
+                targetUserId = Long.valueOf(String.valueOf(payload.get("targetUserId")));
+            } catch (Exception ignored) {}
+        }
+        Long roomId = null;
+        if (payload.get("roomId") != null) {
+            try {
+                roomId = Long.valueOf(String.valueOf(payload.get("roomId")));
+            } catch (Exception ignored) {}
+        }
+
+        // Bắn tín hiệu END qua WebSocket để bên kia thoát ngay lập tức nếu đang treo
+        if (targetUserId != null) {
+            this.messagingTemplate.convertAndSend("/topic/call/user/" + targetUserId, payload);
+        } else if (roomId != null) {
+            this.messagingTemplate.convertAndSend("/topic/call/" + roomId, payload);
+        }
+
+        // Ghi log cuộc gọi vào DB
+        recordCallLog(roomId, targetUserId, payload);
+        return ResponseEntity.ok(Map.of("success", true));
+    }
+
     private void recordCallLog(Long roomId, Long targetUserId, Map<String, Object> payload) {
         if (payload == null) return;
         try {
             String type = payload.get("type") != null ? String.valueOf(payload.get("type")).toUpperCase() : "";
-            if (!"END".equals(type) && !"DECLINE".equals(type) && !"CALL_LOG".equals(type)) {
+            if (!"END".equals(type) && !"DECLINE".equals(type) && !"CALL_LOG".equals(type) && !"BUSY".equals(type)) {
                 return;
             }
 
@@ -76,12 +130,21 @@ public class CallSignalController {
                 String dmPass = "DM_" + min + "_" + max;
                 room = roomRepository.findByPassword(dmPass).orElse(null);
                 if (room == null) {
+                    List<RoomEntity> allRooms = roomRepository.findAll();
+                    room = allRooms.stream()
+                            .filter(r -> dmPass.equals(r.getPassword()))
+                            .findFirst()
+                            .orElse(null);
+                }
+                if (room == null) {
                     UserEntity targetUser = userRepository.findById(targetUserId).orElse(null);
                     if (targetUser != null) {
                         room = new RoomEntity();
                         room.setActive(true);
                         room.setPassword(dmPass);
-                        room.setRoomName("Chat: " + sender.getAccount() + " & " + targetUser.getAccount() + "_" + dmPass);
+                        String sName = sender.getNickname() != null ? sender.getNickname() : sender.getAccount();
+                        String tName = targetUser.getNickname() != null ? targetUser.getNickname() : targetUser.getAccount();
+                        room.setRoomName("Chat: " + sName + " & " + tName + "_" + dmPass);
                         room.setDescription("Cuộc trò chuyện riêng tư 1-1");
                         room.setLocalDateTime(LocalDateTime.now());
                         room = roomRepository.save(room);
@@ -94,11 +157,15 @@ public class CallSignalController {
             int durationSecs = 0;
             if (durationObj instanceof Number) {
                 durationSecs = ((Number) durationObj).intValue();
+            } else if (durationObj != null) {
+                try {
+                    durationSecs = Integer.parseInt(durationObj.toString());
+                } catch (Exception ignored) {}
             }
 
             boolean isVideo = Boolean.TRUE.equals(payload.get("isVideo")) || "video".equalsIgnoreCase(String.valueOf(payload.get("callMode")));
             String logText;
-            if ("DECLINE".equals(type)) {
+            if ("DECLINE".equals(type) || "BUSY".equals(type)) {
                 logText = isVideo ? "📹 Cuộc gọi video bị từ chối" : "📞 Cuộc gọi thoại bị từ chối";
             } else if (durationSecs > 0) {
                 int mins = durationSecs / 60;
@@ -134,6 +201,8 @@ public class CallSignalController {
                 this.messagingTemplate.convertAndSend("/topic/messages/" + targetUserId, sendDto);
                 this.messagingTemplate.convertAndSend("/topic/messages/" + callerId, sendDto);
             }
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }
