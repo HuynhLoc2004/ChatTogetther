@@ -46,4 +46,10 @@ public interface MessageRepository extends JpaRepository<MessageEntity , Long> {
             @Param("roomId") Long roomId,
             @Param("senderId") Long senderId
     );
+
+    @Query("SELECT COUNT(m) > 0 FROM MessageEntity m " +
+           "WHERE m.roomEntity.id = :roomId " +
+           "AND m.timeSend >= :since " +
+           "AND (m.message LIKE '📞 Cuộc gọi%' OR m.message LIKE '📹 Cuộc gọi%')")
+    boolean existsRecentCallLog(@Param("roomId") Long roomId, @Param("since") java.time.LocalDateTime since);
 }

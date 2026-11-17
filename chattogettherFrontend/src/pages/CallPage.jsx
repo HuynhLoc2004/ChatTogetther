@@ -378,27 +378,12 @@ const CallPage = () => {
     } catch (_) {}
 
     if (shouldSendSignal) {
-      // 1. Gửi qua WebSocket STOMP
+      // 1. Gửi tín hiệu END cho đối phương qua WebSocket (để đối phương lập tức thoát cuộc gọi)
       sendCallSignal(callPayload);
 
-      // 2. Gửi log trực tiếp qua STOMP /app/call/log
-      try {
-        if (stompClient.current && stompClient.current.connected) {
-          stompClient.current.send('/app/call/log', {}, JSON.stringify(callPayload));
-        }
-      } catch (_) {}
-
-      // 3. Gửi qua REST API HTTP dự phòng (Bảo đảm 100% cuộc gọi được lưu và bên kia nhận lệnh tắt)
+      // 2. Gửi duy nhất 1 request lưu log cuộc gọi qua REST API đáng tin cậy
       try {
         axiosClient.post('/call/end', callPayload).catch(() => {});
-      } catch (_) {}
-
-      // 4. Fallback sendBeacon nếu tắt tab hoặc điều hướng gấp
-      try {
-        if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
-          const blob = new Blob([JSON.stringify(callPayload)], { type: 'application/json' });
-          navigator.sendBeacon('/api/call/end', blob);
-        }
       } catch (_) {}
     }
 
@@ -668,12 +653,6 @@ const CallPage = () => {
               endCall(true);
             }, 45000);
           }
-
-          // Khởi động đồng hồ đếm thời gian cuộc gọi
-          if (callTimerRef.current) clearInterval(callTimerRef.current);
-          callTimerRef.current = setInterval(() => {
-            setCallDuration(prev => prev + 1);
-          }, 1000);
         }, (err) => {
           console.warn("Lỗi kết nối máy chủ tín hiệu:", err);
           setCallStatusText('Đang kết nối lại đường truyền đàm thoại...');
@@ -693,6 +672,21 @@ const CallPage = () => {
       cleanupCall();
     };
   }, [isVideoParam, isIncoming, isDirectCall, isRoomCall, currentUserId, roomId, userId, sendCallSignal, handleCallSignal, cleanupCall, startRingAudio, stopRingAudio]);
+
+  // Khởi động đồng hồ đếm thời gian CHỈ KHI cuộc gọi đã thực sự kết nối (đối phương đã nhấc máy)
+  useEffect(() => {
+    if (isConnected) {
+      if (callTimerRef.current) clearInterval(callTimerRef.current);
+      callTimerRef.current = setInterval(() => {
+        setCallDuration(prev => prev + 1);
+      }, 1000);
+    } else {
+      if (callTimerRef.current) clearInterval(callTimerRef.current);
+    }
+    return () => {
+      if (callTimerRef.current) clearInterval(callTimerRef.current);
+    };
+  }, [isConnected]);
 
   // Toggle Mic
   const toggleMute = () => {

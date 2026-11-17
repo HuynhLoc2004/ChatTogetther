@@ -56,14 +56,12 @@ public class CallSignalController {
     @MessageMapping("/call/{roomId}")
     public void handleRoomCallSignal(@DestinationVariable("roomId") Long roomId, @Payload Map<String, Object> payload) {
         this.messagingTemplate.convertAndSend("/topic/call/" + roomId, payload);
-        recordCallLog(roomId, null, payload);
     }
 
     // Cuộc gọi 1-1 riêng giữa 2 thành viên
     @MessageMapping("/call/user/{userId}")
     public void handlePrivateCallSignal(@DestinationVariable("userId") Long userId, @Payload Map<String, Object> payload) {
         this.messagingTemplate.convertAndSend("/topic/call/user/" + userId, payload);
-        recordCallLog(null, userId, payload);
     }
 
     // Kênh tiếp nhận ghi log kết thúc cuộc gọi trực tiếp qua WebSocket
@@ -123,19 +121,6 @@ public class CallSignalController {
                 return;
             }
 
-            // Deduplication via callId / sessionId - CHỐNG TRÙNG LẶP LOG CUỘC GỌI
-            String callId = null;
-            if (payload.get("callId") != null) {
-                callId = String.valueOf(payload.get("callId")).trim();
-            } else if (payload.get("sessionId") != null) {
-                callId = String.valueOf(payload.get("sessionId")).trim();
-            }
-            if (callId != null && !callId.isEmpty()) {
-                if (!PROCESSED_CALL_IDS.add(callId)) {
-                    return; // Đã xử lý log cho phiên gọi này rồi, không lưu thêm
-                }
-            }
-
             Long callerId = null;
             if (payload.get("callerId") != null) {
                 try {
@@ -153,6 +138,26 @@ public class CallSignalController {
                 } catch (Exception ignored) {}
             }
             if (callerId == null) return;
+
+            // Deduplication via callId / time bucket - CHỐNG TRÙNG LẶP LOG CUỘC GỌI TUYỆT ĐỐI
+            String callId = null;
+            if (payload.get("callId") != null) {
+                callId = String.valueOf(payload.get("callId")).trim();
+            } else if (payload.get("sessionId") != null) {
+                callId = String.valueOf(payload.get("sessionId")).trim();
+            }
+
+            long u1 = Math.min(callerId, targetUserId != null ? targetUserId : 0);
+            long u2 = Math.max(callerId, targetUserId != null ? targetUserId : 0);
+            long timeBucket = System.currentTimeMillis() / 8000; // Khung 8 giây
+
+            String dedupKey = (callId != null && !callId.isEmpty())
+                    ? ("call_" + callId)
+                    : ("call_bucket_" + u1 + "_" + u2 + "_" + (roomId != null ? roomId : 0) + "_" + timeBucket);
+
+            if (!PROCESSED_CALL_IDS.add(dedupKey)) {
+                return; // Đã xử lý log cho cuộc gọi này rồi, không lặp lại
+            }
 
             UserEntity sender = userRepository.findById(callerId).orElse(null);
             if (sender == null) return;
@@ -190,6 +195,12 @@ public class CallSignalController {
                 }
             }
             if (room == null) return;
+
+            // Kiểm tra DB: nếu trong vòng 6 giây trước phòng này đã lưu tin nhắn cuộc gọi, bỏ qua ngay
+            LocalDateTime recentCutoff = LocalDateTime.now().minusSeconds(6);
+            if (messageRepository.existsRecentCallLog(room.getId(), recentCutoff)) {
+                return;
+            }
 
             Object durationObj = payload.get("duration");
             int durationSecs = 0;

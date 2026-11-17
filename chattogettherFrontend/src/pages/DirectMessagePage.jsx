@@ -113,6 +113,34 @@ export const sortConversationsList = (list) => {
   });
 };
 
+// Hàm khử trùng lặp tin nhắn cuộc gọi (chỉ giữ duy nhất 1 thông báo cho mỗi phiên gọi trong vòng 10 giây)
+export const deduplicateCallMessages = (msgList = []) => {
+  if (!Array.isArray(msgList) || msgList.length === 0) return [];
+  const isCall = (txt = '') => typeof txt === 'string' && (txt.includes('Cuộc gọi') || txt.startsWith('📞') || txt.startsWith('📹'));
+  const result = [];
+  for (const m of msgList) {
+    if (!m) continue;
+    if (isCall(m.message)) {
+      const mTime = new Date(m.timeSend || 0).getTime();
+      const duplicateIdx = result.findIndex(r => 
+        isCall(r.message) && Math.abs(new Date(r.timeSend || 0).getTime() - mTime) < 10000
+      );
+      if (duplicateIdx !== -1) {
+        // Ưu tiên giữ tin nhắn có ID số từ server hoặc có thời lượng thực tế
+        const existing = result[duplicateIdx];
+        if (typeof m.id === 'number' && typeof existing.id !== 'number') {
+          result[duplicateIdx] = m;
+        } else if (!existing.message?.includes('(') && m.message?.includes('(')) {
+          result[duplicateIdx] = m;
+        }
+        continue;
+      }
+    }
+    result.push(m);
+  }
+  return result;
+};
+
 export const DirectMessagePage = () => {
   const { userId: routeUserId } = useParams();
   const [searchParams] = useSearchParams();
@@ -348,7 +376,7 @@ export const DirectMessagePage = () => {
           if (prev.some(m => m.id === newMsg.id || (m.message === newMsg.message && Math.abs(new Date(m.timeSend || 0).getTime() - new Date(newMsg.timeSend || 0).getTime()) < 3000))) {
             return prev;
           }
-          const next = [...prev, newMsg];
+          const next = deduplicateCallMessages([...prev, newMsg]);
           if (activePartnerRef.current?.id) messagesCacheRef.current.set(String(activePartnerRef.current.id), next);
           return next;
         });
@@ -617,7 +645,7 @@ export const DirectMessagePage = () => {
     }
 
     if (cachedMessages && Array.isArray(cachedMessages) && cachedMessages.length > 0) {
-      setMessages(cachedMessages);
+      setMessages(deduplicateCallMessages(cachedMessages));
       setLoadingMessages(false);
       setTimeout(() => scrollToBottom(false), 20);
     } else {
@@ -717,16 +745,17 @@ export const DirectMessagePage = () => {
                 mergedList.push(p);
               }
             });
-            return mergedList;
+            return deduplicateCallMessages(mergedList);
           });
-          messagesCacheRef.current.set(String(targetId), mergedList);
-          messagesCacheRef.current.set(String(roomId), mergedList);
+          const cleanMerged = deduplicateCallMessages(mergedList);
+          messagesCacheRef.current.set(String(targetId), cleanMerged);
+          messagesCacheRef.current.set(String(roomId), cleanMerged);
           try {
-            localStorage.setItem(`talovin_dm_msgs_${userPrefix}${targetId}`, JSON.stringify(mergedList.slice(-50)));
-            localStorage.setItem(`talovin_dm_msgs_${targetId}`, JSON.stringify(mergedList.slice(-50)));
+            localStorage.setItem(`talovin_dm_msgs_${userPrefix}${targetId}`, JSON.stringify(cleanMerged.slice(-50)));
+            localStorage.setItem(`talovin_dm_msgs_${targetId}`, JSON.stringify(cleanMerged.slice(-50)));
             if (roomId) {
-              localStorage.setItem(`talovin_dm_msgs_${userPrefix}${roomId}`, JSON.stringify(mergedList.slice(-50)));
-              localStorage.setItem(`talovin_dm_msgs_${roomId}`, JSON.stringify(mergedList.slice(-50)));
+              localStorage.setItem(`talovin_dm_msgs_${userPrefix}${roomId}`, JSON.stringify(cleanMerged.slice(-50)));
+              localStorage.setItem(`talovin_dm_msgs_${roomId}`, JSON.stringify(cleanMerged.slice(-50)));
             }
           } catch (_) { }
           setTimeout(() => scrollToBottom(false), 30);
@@ -898,7 +927,7 @@ export const DirectMessagePage = () => {
                   Math.abs(new Date(m.timeSend || 0).getTime() - new Date(newMsg.timeSend || 0).getTime()) < 5000
                 );
                 if (isDuplicate) return prev;
-                nextList = [...prev, newMsg];
+                nextList = deduplicateCallMessages([...prev, newMsg]);
               }
 
               if (activeRoomIdRef.current) messagesCacheRef.current.set(String(activeRoomIdRef.current), nextList);

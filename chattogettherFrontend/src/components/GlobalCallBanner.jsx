@@ -202,8 +202,10 @@ const GlobalCallBanner = () => {
     const callerId = incomingCall.callerId;
     const roomId = incomingCall.roomId;
     const isVid = Boolean(incomingCall.isVideo);
+    const callId = incomingCall.callId;
 
     const logPayload = {
+      callId: callId,
       type: 'DECLINE',
       callerId: callerId, // Người gọi gốc Side A
       targetUserId: effectiveUserId, // Người nhận Side B
@@ -218,8 +220,10 @@ const GlobalCallBanner = () => {
     try {
       if (stompClient.current && stompClient.current.connected) {
         const signal = {
+          callId: callId,
           type: 'DECLINE',
-          callerId: effectiveUserId,
+          callerId: callerId,
+          targetUserId: effectiveUserId,
           reason: 'declined',
           isVideo: isVid
         };
@@ -228,12 +232,10 @@ const GlobalCallBanner = () => {
         } else if (callerId) {
           stompClient.current.send(`/app/call/user/${callerId}`, {}, JSON.stringify(signal));
         }
-        // Ghi nhận log từ chối cuộc gọi vào lịch sử chat
-        stompClient.current.send('/app/call/log', {}, JSON.stringify(logPayload));
       }
     } catch (e) {}
 
-    // Gửi REST API HTTP dự phòng (bảo đảm 100% không bị sót)
+    // Gửi REST API ghi nhận log cuộc gọi nhỡ (Backend đã có deduplication an toàn theo callId)
     try {
       axiosClient.post('/call/end', logPayload).catch(() => {});
     } catch (_) {}
