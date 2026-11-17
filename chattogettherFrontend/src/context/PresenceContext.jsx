@@ -131,6 +131,35 @@ export const PresenceProvider = ({ children }) => {
     let reconnectTimer = null;
     let client = null;
 
+    const broadcastMyPresence = (isOnline = true) => {
+      try {
+        const sc = stompClientRef.current;
+        if (sc && sc.connected && sc.ws && sc.ws.readyState === WebSocket.OPEN) {
+          const payload = JSON.stringify({
+            userId: Number(currentUserId),
+            isOnline,
+            timestamp: Date.now()
+          });
+          sc.send('/topic/presence', {}, payload);
+          sc.send('/app/presence/heartbeat', {}, payload);
+        }
+      } catch (_) {}
+
+      // Gửi tín hiệu REST API
+      if (isOnline) {
+        axiosClient.post('/presence/heartbeat', { userId: Number(currentUserId) }).catch(() => {});
+      } else {
+        // Rời trang: gửi beacon báo offline lập tức
+        try {
+          if (navigator.sendBeacon) {
+            navigator.sendBeacon('/api/presence/offline', new Blob([JSON.stringify({ userId: Number(currentUserId) })], { type: 'application/json' }));
+          } else {
+            axiosClient.post('/presence/offline', { userId: Number(currentUserId) }).catch(() => {});
+          }
+        } catch (_) {}
+      }
+    };
+
     const connectPresenceSocket = () => {
       if (!isMounted) return;
       try {

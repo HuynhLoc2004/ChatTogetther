@@ -576,30 +576,36 @@ const CallPage = () => {
       // Đối phương đã bấm nghe máy -> Dừng ngay chuông chờ và gửi OFFER
       try {
         stopRingAudio();
+        const pc = peerConnectionRef.current;
+        if (!pc) return;
+
+        // Nếu cuộc gọi đã kết nối thành công (đã có remoteDescription), tuyệt đối không tạo lại OFFER để tránh lỗi InvalidAccessError m-lines
+        if (pc.remoteDescription) {
+          return;
+        }
+
         setCallStatusText('Đối phương đã nhận máy. Đang kết nối...');
-        if (peerConnectionRef.current) {
-          const pc = peerConnectionRef.current;
-          if (pc.signalingState === 'stable') {
-            const offer = await pc.createOffer({
-              offerToReceiveAudio: true,
-              offerToReceiveVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled)
-            });
-            await pc.setLocalDescription(offer);
-            const offerPayload = { type: offer.type, sdp: offer.sdp };
-            lastOfferRef.current = offerPayload;
-            sendCallSignal({
-              type: 'OFFER',
-              offer: offerPayload,
-              isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled)
-            });
-          } else if (pc.signalingState === 'have-local-offer' && lastOfferRef.current) {
-            // Bên nhận thử gửi lại ACCEPT (retry), gửi lại ngay bản OFFER đã tạo
-            sendCallSignal({
-              type: 'OFFER',
-              offer: lastOfferRef.current,
-              isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled)
-            });
-          }
+
+        if (pc.signalingState === 'have-local-offer' && lastOfferRef.current) {
+          // Bên nhận thử gửi lại ACCEPT (retry packet), gửi lại ngay bản OFFER đã tạo
+          sendCallSignal({
+            type: 'OFFER',
+            offer: lastOfferRef.current,
+            isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled)
+          });
+          return;
+        }
+
+        if (pc.signalingState === 'stable') {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          const offerPayload = { type: offer.type, sdp: offer.sdp };
+          lastOfferRef.current = offerPayload;
+          sendCallSignal({
+            type: 'OFFER',
+            offer: offerPayload,
+            isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled)
+          });
         }
       } catch (e) {
         console.error("Lỗi gửi OFFER sau ACCEPT:", e);
@@ -823,7 +829,7 @@ const CallPage = () => {
                 if (peerConnectionRef.current && (peerConnectionRef.current.connectionState === 'disconnected' || peerConnectionRef.current.connectionState === 'failed')) {
                   endCallRef.current?.(false);
                 }
-              }, 8000);
+              }, 15000);
             }
           }
         };
@@ -833,6 +839,10 @@ const CallPage = () => {
             stopRingAudio();
             setIsConnected(true);
             setCallStatusText('Đang đàm thoại');
+            if (disconnectTimerRef.current) {
+              clearTimeout(disconnectTimerRef.current);
+              disconnectTimerRef.current = null;
+            }
           } else if (pc.iceConnectionState === 'checking') {
             setCallStatusText('Đang tìm đường truyền tốt nhất...');
           } else if (pc.iceConnectionState === 'failed') {
@@ -890,7 +900,8 @@ const CallPage = () => {
               if (acceptRetryTimerRef.current) clearInterval(acceptRetryTimerRef.current);
               acceptRetryTimerRef.current = setInterval(() => {
                 acceptTries++;
-                if (acceptTries > 6 || isConnected || (peerConnectionRef.current && peerConnectionRef.current.remoteDescription)) {
+                const pc = peerConnectionRef.current;
+                if (acceptTries > 6 || (pc && pc.remoteDescription) || (pc && pc.signalingState !== 'stable')) {
                   if (acceptRetryTimerRef.current) {
                     clearInterval(acceptRetryTimerRef.current);
                     acceptRetryTimerRef.current = null;
@@ -995,12 +1006,19 @@ const CallPage = () => {
       localStreamRef.current.addTrack(newTrack);
 
       if (peerConnectionRef.current) {
-        const senders = peerConnectionRef.current.getSenders();
-        const videoSender = senders.find(s => s.track && s.track.kind === 'video');
-        if (videoSender) {
-          videoSender.replaceTrack(newTrack);
+        const transceivers = peerConnectionRef.current.getTransceivers();
+        const videoTransceiver = transceivers.find(t => (t.sender && t.sender.track && t.sender.track.kind === 'video') || (t.receiver && t.receiver.track && t.receiver.track.kind === 'video'));
+        if (videoTransceiver && videoTransceiver.sender) {
+          videoTransceiver.direction = 'sendrecv';
+          videoTransceiver.sender.replaceTrack(newTrack);
         } else {
-          peerConnectionRef.current.addTrack(newTrack, localStreamRef.current);
+          const senders = peerConnectionRef.current.getSenders();
+          const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+          if (videoSender) {
+            videoSender.replaceTrack(newTrack);
+          } else {
+            peerConnectionRef.current.addTrack(newTrack, localStreamRef.current);
+          }
         }
         const offer = await peerConnectionRef.current.createOffer();
         await peerConnectionRef.current.setLocalDescription(offer);
@@ -1073,12 +1091,19 @@ const CallPage = () => {
         };
 
         if (peerConnectionRef.current) {
-          const senders = peerConnectionRef.current.getSenders();
-          const videoSender = senders.find(s => s.track && s.track.kind === 'video');
-          if (videoSender) {
-            videoSender.replaceTrack(screenTrack);
+          const transceivers = peerConnectionRef.current.getTransceivers();
+          const videoTransceiver = transceivers.find(t => (t.sender && t.sender.track && t.sender.track.kind === 'video') || (t.receiver && t.receiver.track && t.receiver.track.kind === 'video'));
+          if (videoTransceiver && videoTransceiver.sender) {
+            videoTransceiver.direction = 'sendrecv';
+            videoTransceiver.sender.replaceTrack(screenTrack);
           } else {
-            peerConnectionRef.current.addTrack(screenTrack, stream);
+            const senders = peerConnectionRef.current.getSenders();
+            const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+            if (videoSender) {
+              videoSender.replaceTrack(screenTrack);
+            } else {
+              peerConnectionRef.current.addTrack(screenTrack, stream);
+            }
           }
           const offer = await peerConnectionRef.current.createOffer();
           await peerConnectionRef.current.setLocalDescription(offer);
