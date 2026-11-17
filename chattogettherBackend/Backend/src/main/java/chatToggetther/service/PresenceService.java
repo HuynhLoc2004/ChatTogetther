@@ -29,8 +29,8 @@ public class PresenceService {
     // userId -> pending offline disconnect task timestamp
     private final ConcurrentHashMap<Long, Long> pendingDisconnectTimestamps = new ConcurrentHashMap<>();
 
-    public static final long DISCONNECT_GRACE_PERIOD_MS = 3_000L;  // 3s grace period
-    public static final long HEARTBEAT_TIMEOUT_MS = 15_000L;       // 15s heartbeat timeout (nhanh nhạy, tức thì)
+    public static final long DISCONNECT_GRACE_PERIOD_MS = 25_000L; // 25s grace period (tránh chập chờn khi chuyển trang, đổi tab, 4G sang wifi)
+    public static final long HEARTBEAT_TIMEOUT_MS = 45_000L;       // 45s heartbeat timeout (chuẩn ổn định real-time)
 
     public PresenceService(SimpMessagingTemplate messagingTemplate) {
         this.messagingTemplate = messagingTemplate;

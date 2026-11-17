@@ -146,6 +146,7 @@ const CallPage = () => {
   const iceCandidateQueueRef = useRef([]);
   const localCandidatesHistoryRef = useRef([]);
   const lastOfferRef = useRef(null);
+  const lastOfferSdpRef = useRef(null);
   const lastAnswerRef = useRef(null);
   const hasHandledDeclineRef = useRef(false);
   const disconnectTimerRef = useRef(null);
@@ -513,8 +514,8 @@ const CallPage = () => {
         if (!peerConnectionRef.current) return;
         const pc = peerConnectionRef.current;
 
-        // Nếu đã phản hồi và đang ở trạng thái stable, gửi lại answer phòng khi bên gọi chưa nhận được
-        if (pc.signalingState === 'stable' && lastAnswerRef.current) {
+        // Chỉ gửi lại answer cũ NẾU OFFER này hoàn toàn trùng lặp SDP với offer trước đó (retry packet)
+        if (lastOfferSdpRef.current && lastOfferSdpRef.current === msg.offer?.sdp && pc.signalingState === 'stable' && lastAnswerRef.current) {
           sendCallSignal({
             type: 'ANSWER',
             answer: lastAnswerRef.current,
@@ -522,6 +523,7 @@ const CallPage = () => {
           });
           return;
         }
+        lastOfferSdpRef.current = msg.offer?.sdp;
 
         await pc.setRemoteDescription(new RTCSessionDescription(msg.offer));
 
@@ -625,7 +627,12 @@ const CallPage = () => {
       hasHandledDeclineRef.current = true;
       stopRingAudio();
       setCallStatusText('Đối phương hiện đang bận hoặc từ chối');
-      toast.error('Đối phương hiện đang bận hoặc không thể bắt máy!', { id: 'call_busy_toast' });
+      const now = Date.now();
+      if (!window._lastBusyToastTime || now - window._lastBusyToastTime > 2500) {
+        window._lastBusyToastTime = now;
+        toast.dismiss('call_busy_toast');
+        toast.error('Đối phương hiện đang bận hoặc không thể bắt máy!', { id: 'call_busy_toast', duration: 3000 });
+      }
       setTimeout(() => endCall(false), 300);
     } else if (msg.type === 'END' || msg.type === 'CANCEL') {
       stopRingAudio();
@@ -688,6 +695,13 @@ const CallPage = () => {
         // Thêm tracks vào PC
         stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
+        // Chuẩn bị sẵn video transceiver để đàm thoại video 2 chiều không bị chậm trễ
+        if (stream.getVideoTracks().length === 0) {
+          try {
+            pc.addTransceiver('video', { direction: 'recvonly' });
+          } catch (_) { }
+        }
+
         // ICE Candidate
         pc.onicecandidate = (event) => {
           if (event.candidate) {
@@ -713,13 +727,18 @@ const CallPage = () => {
 
             if (event.track.kind === 'video') {
               setHasRemoteVideo(true);
+              setIsRemoteVideoEnabled(true);
               setIsVideoCall(true);
 
               event.track.onmute = () => setHasRemoteVideo(false);
-              event.track.onunmute = () => setHasRemoteVideo(true);
+              event.track.onunmute = () => {
+                setHasRemoteVideo(true);
+                setIsRemoteVideoEnabled(true);
+              };
               event.track.onended = () => setHasRemoteVideo(false);
 
               if (remoteVideoRef.current) {
+                remoteVideoRef.current.srcObject = remoteStream;
                 remoteVideoRef.current.play().catch(() => {});
               }
             }

@@ -906,10 +906,17 @@ const Home = ({ initialTab }) => {
         const seenKeys = new Set();
         const consolidated = [];
         for (const n of socialNotifs) {
-          const isAggregatable = ['POST_COMMENT', 'COMMENT_REPLY', 'POST_REACT', 'POST_LIKE', 'REACTION', 'COMMENT_LIKE', 'POST_SHARE'].includes(n.type);
-          const refId = n.referenceId || n.targetPostId || n.postId;
-          if (isAggregatable && n.actorId && refId) {
-            const groupKey = `${n.type}_${n.actorId}_${refId}`;
+          const typeUpper = (n.type || '').toUpperCase();
+          const isCommentGroup = typeUpper.includes('COMMENT') || typeUpper.includes('REPLY');
+          const isReactGroup = typeUpper.includes('REACT') || typeUpper.includes('LIKE');
+          const isShareGroup = typeUpper.includes('SHARE') || typeUpper.includes('REPOST');
+
+          if (isCommentGroup || isReactGroup || isShareGroup) {
+            const groupCategory = isCommentGroup ? 'COMMENT' : (isReactGroup ? 'REACT' : 'SHARE');
+            const actorKey = n.actorId || n.actorUsername || n.actorName || (n.text ? n.text.split(' ')[0] : 'actor');
+            const refKey = n.referenceId || n.targetPostId || n.postId || (n.text ? n.text.trim() : 'ref');
+            const groupKey = `${groupCategory}_${actorKey}_${refKey}`;
+
             if (seenKeys.has(groupKey)) continue;
             seenKeys.add(groupKey);
           }
@@ -1750,7 +1757,7 @@ const Home = ({ initialTab }) => {
     fetchComments(post.id);
     try {
       window.history.pushState({ talovinModal: 'post', postId: post.id }, '');
-    } catch (_) {}
+    } catch (_) { }
     if (autoFocusComment) {
       setTimeout(() => {
         const input = document.getElementById('thread-modal-reply-input') || document.getElementById('thread-mobile-reply-input');
@@ -2654,15 +2661,26 @@ const Home = ({ initialTab }) => {
               // TUYỆT ĐỐI không đưa tin nhắn chat vào danh sách Chuông thông báo (Bell icon)
               if (!isChatMsg) {
                 setNotifications(prev => {
-                  const isAggregatable = ['POST_COMMENT', 'COMMENT_REPLY', 'POST_REACT', 'POST_LIKE', 'REACTION', 'COMMENT_LIKE', 'POST_SHARE'].includes(normalizedNotif.type);
-                  const targetRefId = normalizedNotif.referenceId || normalizedNotif.targetPostId || normalizedNotif.postId;
+                  const typeUpper = (normalizedNotif.type || '').toUpperCase();
+                  const isCommentGroup = typeUpper.includes('COMMENT') || typeUpper.includes('REPLY');
+                  const isReactGroup = typeUpper.includes('REACT') || typeUpper.includes('LIKE');
+                  const isShareGroup = typeUpper.includes('SHARE') || typeUpper.includes('REPOST');
+
+                  const targetCategory = isCommentGroup ? 'COMMENT' : (isReactGroup ? 'REACT' : (isShareGroup ? 'SHARE' : typeUpper));
+                  const targetActor = normalizedNotif.actorId || normalizedNotif.actorUsername || normalizedNotif.actorName || (normalizedNotif.text ? normalizedNotif.text.split(' ')[0] : 'actor');
+                  const targetRef = normalizedNotif.referenceId || normalizedNotif.targetPostId || normalizedNotif.postId || (normalizedNotif.text ? normalizedNotif.text.trim() : 'ref');
+
                   const filtered = prev.filter(n => {
                     if (n.id === normalizedNotif.id) return false;
-                    if (isAggregatable && n.type === normalizedNotif.type && String(n.actorId) === String(normalizedNotif.actorId)) {
-                      const existingRefId = n.referenceId || n.targetPostId || n.postId;
-                      if (String(existingRefId) === String(targetRefId)) {
-                        return false; // Gôm gọn: bỏ thông báo cũ của cùng người + cùng bài viết
-                      }
+                    const prevType = (n.type || '').toUpperCase();
+                    const prevCategory = (prevType.includes('COMMENT') || prevType.includes('REPLY')) ? 'COMMENT' :
+                      ((prevType.includes('REACT') || prevType.includes('LIKE')) ? 'REACT' :
+                        ((prevType.includes('SHARE') || prevType.includes('REPOST')) ? 'SHARE' : prevType));
+                    const prevActor = n.actorId || n.actorUsername || n.actorName || (n.text ? n.text.split(' ')[0] : 'actor');
+                    const prevRef = n.referenceId || n.targetPostId || n.postId || (n.text ? n.text.trim() : 'ref');
+
+                    if (prevCategory === targetCategory && String(prevActor) === String(targetActor) && String(prevRef) === String(targetRef)) {
+                      return false; // Gôm gọn: bỏ thông báo cũ của cùng người + cùng bài viết
                     }
                     return true;
                   });

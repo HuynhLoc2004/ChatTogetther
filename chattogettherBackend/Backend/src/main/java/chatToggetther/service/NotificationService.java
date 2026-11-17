@@ -166,11 +166,33 @@ public class NotificationService {
 
         NotificationEntity entity = null;
         if (isAggregatable && actorId != null && referenceId != null) {
-            List<NotificationEntity> existingList = notificationRepository
-                    .findByRecipientIdAndActorIdAndTypeAndReferenceIdOrderByCreatedAtDesc(recipientId, actorId, type, referenceId);
-            if (!existingList.isEmpty()) {
+            // Nhóm rộng: Các loại bình luận (POST_COMMENT, COMMENT_REPLY) hoặc cảm xúc (POST_REACT, POST_LIKE, REACTION)
+            List<String> relatedTypes = new ArrayList<>();
+            if (type.toUpperCase().contains("COMMENT") || type.toUpperCase().contains("REPLY")) {
+                relatedTypes.add("POST_COMMENT");
+                relatedTypes.add("COMMENT_REPLY");
+            } else if (type.toUpperCase().contains("REACT") || type.toUpperCase().contains("LIKE")) {
+                relatedTypes.add("POST_REACT");
+                relatedTypes.add("POST_LIKE");
+                relatedTypes.add("REACTION");
+            } else {
+                relatedTypes.add(type);
+            }
+
+            List<NotificationEntity> existingList = notificationRepository.findByRecipientIdOrderByCreatedAtDesc(recipientId);
+            List<NotificationEntity> matched = new ArrayList<>();
+            for (NotificationEntity ex : existingList) {
+                if (ex.getActorId() != null && ex.getActorId().equals(actorId)
+                        && ex.getReferenceId() != null && ex.getReferenceId().equals(referenceId)
+                        && ex.getType() != null && relatedTypes.contains(ex.getType().toUpperCase())) {
+                    matched.add(ex);
+                }
+            }
+
+            if (!matched.isEmpty()) {
                 // Tái sử dụng bản ghi mới nhất, cập nhật thời gian mới nhất và đánh dấu chưa đọc
-                entity = existingList.get(0);
+                entity = matched.get(0);
+                entity.setType(type);
                 entity.setActorUsername(actorUsername);
                 entity.setActorName(actorDisplayName != null && !actorDisplayName.isEmpty() ? actorDisplayName : actorUsername);
                 entity.setActorAvatar(actorAvatar);
@@ -180,8 +202,8 @@ public class NotificationService {
                 entity.setCreatedAt(LocalDateTime.now());
 
                 // Nếu có các bản ghi trùng lặp cũ từ trước trong DB, xóa sạch để giải phóng bộ nhớ lưu trữ
-                if (existingList.size() > 1) {
-                    List<NotificationEntity> duplicatesToDelete = existingList.subList(1, existingList.size());
+                if (matched.size() > 1) {
+                    List<NotificationEntity> duplicatesToDelete = matched.subList(1, matched.size());
                     try {
                         notificationRepository.deleteAll(duplicatesToDelete);
                         log.info(">>> [NOTIFICATION] Đã dọn dẹp {} bản ghi thông báo trùng lặp cũ trong DB", duplicatesToDelete.size());
@@ -284,8 +306,34 @@ public class NotificationService {
                     || "POST_SHARE".equalsIgnoreCase(type)
             );
 
-            if (isAggregatable && entity.getActorId() != null && entity.getReferenceId() != null) {
-                String groupKey = type.toUpperCase() + "_" + entity.getActorId() + "_" + entity.getReferenceId();
+            if (isAggregatable) {
+                // Nhóm theo nhóm loại tương tác (COMMENT hoặc REACT)
+                String groupCategory = "POST_INTERACTION";
+                if (type.toUpperCase().contains("COMMENT") || type.toUpperCase().contains("REPLY")) {
+                    groupCategory = "COMMENT";
+                } else if (type.toUpperCase().contains("REACT") || type.toUpperCase().contains("LIKE")) {
+                    groupCategory = "REACT";
+                }
+
+                // Xác định Actor (qua ID, username hoặc tên trích xuất từ content)
+                String actorKey = entity.getActorId() != null ? String.valueOf(entity.getActorId()) : null;
+                if (actorKey == null && entity.getActorUsername() != null && !entity.getActorUsername().isEmpty()) {
+                    actorKey = entity.getActorUsername().trim().toLowerCase();
+                }
+                if (actorKey == null && entity.getContent() != null) {
+                    String[] parts = entity.getContent().trim().split("\\s+");
+                    if (parts.length > 0) actorKey = parts[0].toLowerCase();
+                }
+                if (actorKey == null) actorKey = "unknown_actor";
+
+                // Xác định Reference (qua referenceId hoặc trích xuất từ content)
+                String refKey = entity.getReferenceId() != null ? String.valueOf(entity.getReferenceId()) : null;
+                if (refKey == null && entity.getContent() != null) {
+                    refKey = entity.getContent().trim();
+                }
+                if (refKey == null) refKey = "unknown_ref";
+
+                String groupKey = groupCategory + "_" + actorKey + "_" + refKey;
                 if (seenKeys.contains(groupKey)) {
                     toDelete.add(entity);
                     continue;
