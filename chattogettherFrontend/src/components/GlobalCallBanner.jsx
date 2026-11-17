@@ -105,7 +105,7 @@ const GlobalCallBanner = () => {
       // Pulse ringtone pattern
       let toggle = true;
       ringInterval.current = setInterval(() => {
-        if (!ringAudioCtx.current || ringAudioCtx.current.state === 'closed') {
+        if (!ringAudioCtx.current || ringAudioCtx.current.state === 'closed' || !ringGain.current) {
           if (ringInterval.current) {
             clearInterval(ringInterval.current);
             ringInterval.current = null;
@@ -114,7 +114,9 @@ const GlobalCallBanner = () => {
         }
         toggle = !toggle;
         try {
-          gain.gain.setValueAtTime(toggle ? 0.06 : 0, ctx.currentTime);
+          if (ringGain.current && ringAudioCtx.current) {
+            ringGain.current.gain.setValueAtTime(toggle ? 0.06 : 0, ringAudioCtx.current.currentTime);
+          }
         } catch (_) {}
       }, 1000);
     } catch (e) {}
@@ -178,10 +180,16 @@ const GlobalCallBanner = () => {
             const msg = JSON.parse(frame.body);
             if (!msg || String(msg.callerId) === String(effectiveUserId)) return;
 
-            // Don't show banner if already inside /call
-            if (window.location.pathname.startsWith('/call')) return;
+            // Không hiện banner và không đổ chuông nếu đang ở màn hình /call
+            if (window.location.pathname.startsWith('/call') || location.pathname.startsWith('/call')) {
+              stopRingingSound();
+              setIncomingCall(null);
+              clearDismissTimer();
+              return;
+            }
 
-            if (msg.type === 'OFFER' || msg.type === 'RINGING') {
+            // Chỉ đổ chuông và hiện banner khi có tín hiệu cuộc gọi mới RINGING hoặc CALL
+            if (msg.type === 'RINGING' || msg.type === 'CALL') {
               setIncomingCall(msg);
               startRingingSound();
 
@@ -191,7 +199,7 @@ const GlobalCallBanner = () => {
                 setIncomingCall(null);
                 stopRingingSound();
               }, 30000);
-            } else if (msg.type === 'END' || msg.type === 'CANCEL' || msg.type === 'BUSY' || msg.type === 'DECLINE') {
+            } else if (msg.type === 'END' || msg.type === 'CANCEL' || msg.type === 'BUSY' || msg.type === 'DECLINE' || msg.type === 'ACCEPT' || msg.type === 'ANSWER' || msg.type === 'OFFER') {
               setIncomingCall(null);
               stopRingingSound();
               clearDismissTimer();
@@ -228,6 +236,17 @@ const GlobalCallBanner = () => {
       clearDismissTimer();
     }
   }, [location.pathname, stopRingingSound, clearDismissTimer]);
+
+  // Lắng nghe sự kiện ngắt chuông toàn cục từ CallPage
+  useEffect(() => {
+    const handleGlobalStop = () => {
+      setIncomingCall(null);
+      stopRingingSound();
+      clearDismissTimer();
+    };
+    window.addEventListener('talovin_stop_all_ring_audio', handleGlobalStop);
+    return () => window.removeEventListener('talovin_stop_all_ring_audio', handleGlobalStop);
+  }, [stopRingingSound, clearDismissTimer]);
 
   // 4. Accept Call
   const handleAccept = () => {

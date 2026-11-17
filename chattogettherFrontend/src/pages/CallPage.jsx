@@ -152,6 +152,7 @@ const CallPage = () => {
   const lastOfferRef = useRef(null);
   const lastOfferSdpRef = useRef(null);
   const lastAnswerRef = useRef(null);
+  const isProcessingOfferRef = useRef(false);
   const hasHandledDeclineRef = useRef(false);
   const disconnectTimerRef = useRef(null);
   const connectTimeoutRef = useRef(null);
@@ -266,6 +267,8 @@ const CallPage = () => {
         try { audioContextRef.current.close(); } catch (_) { }
         audioContextRef.current = null;
       }
+      // Dập tắt bất kỳ chuông nào còn sót lại từ banner toàn cục hoặc component khác
+      window.dispatchEvent(new CustomEvent('talovin_stop_all_ring_audio'));
     } catch (e) { }
   }, []);
 
@@ -296,7 +299,7 @@ const CallPage = () => {
       // Pulse ringtone
       let beeping = true;
       ringIntervalRef.current = setInterval(() => {
-        if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+        if (!audioContextRef.current || audioContextRef.current.state === 'closed' || !ringGainRef.current) {
           if (ringIntervalRef.current) {
             clearInterval(ringIntervalRef.current);
             ringIntervalRef.current = null;
@@ -305,7 +308,9 @@ const CallPage = () => {
         }
         beeping = !beeping;
         try {
-          gain.gain.setValueAtTime(beeping ? 0.04 : 0, ctx.currentTime);
+          if (ringGainRef.current && audioContextRef.current) {
+            ringGainRef.current.gain.setValueAtTime(beeping ? 0.04 : 0, audioContextRef.current.currentTime);
+          }
         } catch (_) { }
       }, 1400);
     } catch (e) { }
@@ -539,8 +544,13 @@ const CallPage = () => {
         if (!peerConnectionRef.current) return;
         const pc = peerConnectionRef.current;
 
-        // Chỉ gửi lại answer cũ NẾU OFFER này hoàn toàn trùng lặp SDP với offer trước đó (retry packet)
-        if (lastOfferSdpRef.current && lastOfferSdpRef.current === msg.offer?.sdp && pc.signalingState === 'stable' && lastAnswerRef.current) {
+        // 1. Chống race condition nếu đang xử lý một gói tin OFFER khác
+        if (isProcessingOfferRef.current) {
+          return;
+        }
+
+        // 2. Nếu OFFER này trùng lặp với OFFER đã nhận và đã có ANSWER sẵn, gửi lại ANSWER cũ ngay lập tức
+        if (lastOfferSdpRef.current === msg.offer?.sdp && lastAnswerRef.current) {
           sendCallSignal({
             type: 'ANSWER',
             answer: lastAnswerRef.current,
@@ -548,7 +558,15 @@ const CallPage = () => {
           });
           return;
         }
+
+        isProcessingOfferRef.current = true;
         lastOfferSdpRef.current = msg.offer?.sdp;
+
+        // 3. Chỉ setRemoteDescription nếu peerConnection ở trạng thái hợp lệ
+        if (pc.signalingState !== 'stable' && pc.signalingState !== 'have-local-offer') {
+          isProcessingOfferRef.current = false;
+          return;
+        }
 
         await pc.setRemoteDescription(new RTCSessionDescription(msg.offer));
 
@@ -560,17 +578,22 @@ const CallPage = () => {
           } catch (_) { }
         }
 
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        const answerPayload = { type: answer.type, sdp: answer.sdp };
-        lastAnswerRef.current = answerPayload;
-        sendCallSignal({
-          type: 'ANSWER',
-          answer: answerPayload,
-          isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled)
-        });
+        // 4. Chỉ tạo và gán Answer nếu pc đang ở đúng trạng thái have-remote-offer
+        if (pc.signalingState === 'have-remote-offer') {
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          const answerPayload = { type: answer.type, sdp: answer.sdp };
+          lastAnswerRef.current = answerPayload;
+          sendCallSignal({
+            type: 'ANSWER',
+            answer: answerPayload,
+            isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled)
+          });
+        }
       } catch (e) {
         console.error("Lỗi xử lý OFFER:", e);
+      } finally {
+        isProcessingOfferRef.current = false;
       }
     } else if (msg.type === 'ACCEPT') {
       // Đối phương đã bấm nghe máy -> Dừng ngay chuông chờ và gửi OFFER
@@ -683,6 +706,12 @@ const CallPage = () => {
   // 8. Initialize WebRTC Media & STOMP Socket (Chỉ mount 1 lần duy nhất)
   useEffect(() => {
     let isActive = true;
+
+    // Ngay khi mount CallPage, dập tắt toàn bộ chuông reo từ banner hoặc component khác
+    window.dispatchEvent(new CustomEvent('talovin_stop_all_ring_audio'));
+    if (isIncoming) {
+      stopRingAudio();
+    }
 
     const initCall = async () => {
       try {
