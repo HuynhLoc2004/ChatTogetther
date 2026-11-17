@@ -15,7 +15,18 @@ const ICE_SERVERS = {
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
-    { urls: 'stun:stun.cloudflare.com:3478' }
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
+    { urls: 'stun:stun.cloudflare.com:3478' },
+    {
+      urls: [
+        'turn:openrelay.metered.ca:80',
+        'turn:openrelay.metered.ca:443',
+        'turn:openrelay.metered.ca:443?transport=tcp'
+      ],
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    }
   ],
   iceCandidatePoolSize: 10
 };
@@ -69,8 +80,28 @@ const CallPage = () => {
   const [callDuration, setCallDuration] = useState(0);
   const [callStatusText, setCallStatusText] = useState(isIncoming ? 'Đang kết nối cuộc gọi...' : 'Đang đổ chuông...');
   const [isConnected, setIsConnected] = useState(false);
+  const [hasRemoteVideo, setHasRemoteVideo] = useState(false);
+  const [isRemoteVideoEnabled, setIsRemoteVideoEnabled] = useState(true);
+  const [audioBlocked, setAudioBlocked] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const stageContainerRef = useRef(null);
+
+  // Mở khóa âm thanh tức thì khi người dùng tương tác lần đầu (đặc trị iOS Safari & Chrome autoplay policy)
+  useEffect(() => {
+    const tryUnblock = () => {
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.play().then(() => {
+          setAudioBlocked(false);
+        }).catch(() => {});
+      }
+    };
+    window.addEventListener('touchstart', tryUnblock, { passive: true });
+    window.addEventListener('click', tryUnblock, { passive: true });
+    return () => {
+      window.removeEventListener('touchstart', tryUnblock);
+      window.removeEventListener('click', tryUnblock);
+    };
+  }, []);
 
   const toggleFullscreen = () => {
     if (!stageContainerRef.current) return;
@@ -103,6 +134,7 @@ const CallPage = () => {
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
   const remoteAudioRef = useRef(null);
+  const remoteStreamRef = useRef(null);
   const callTimerRef = useRef(null);
   const durationRef = useRef(0);
   const dmRoomIdRef = useRef(null);
@@ -305,6 +337,10 @@ const CallPage = () => {
     if (remoteAudioRef.current) {
       remoteAudioRef.current.srcObject = null;
     }
+    if (remoteStreamRef.current) {
+      remoteStreamRef.current.getTracks().forEach(track => track.stop());
+      remoteStreamRef.current = null;
+    }
     if (localVideoRef.current) {
       localVideoRef.current.srcObject = null;
     }
@@ -472,8 +508,7 @@ const CallPage = () => {
           clearInterval(acceptRetryTimerRef.current);
           acceptRetryTimerRef.current = null;
         }
-        setCallStatusText('Đang đàm thoại');
-        setIsConnected(true);
+        setCallStatusText('Đang thiết lập kênh đàm thoại...');
         if (msg.isVideo) setIsVideoCall(true);
         if (!peerConnectionRef.current) return;
         const pc = peerConnectionRef.current;
@@ -545,8 +580,7 @@ const CallPage = () => {
     } else if (msg.type === 'ANSWER') {
       try {
         stopRingAudio();
-        setCallStatusText('Đang đàm thoại');
-        setIsConnected(true);
+        setCallStatusText('Đối phương đã trả lời. Đang kết nối đường truyền...');
         if (msg.isVideo) setIsVideoCall(true);
         const pc = peerConnectionRef.current;
         if (pc && pc.signalingState !== 'stable') {
@@ -561,6 +595,10 @@ const CallPage = () => {
         }
       } catch (e) {
         console.error("Lỗi xử lý ANSWER:", e);
+      }
+    } else if (msg.type === 'MEDIA_STATE') {
+      if (typeof msg.isVideoEnabled === 'boolean') {
+        setIsRemoteVideoEnabled(msg.isVideoEnabled);
       }
     } else if (msg.type === 'SCREEN_SHARE') {
       const isSharing = Boolean(msg.isSharing);
@@ -658,25 +696,46 @@ const CallPage = () => {
           }
         };
 
+        const remoteStream = new MediaStream();
+        remoteStreamRef.current = remoteStream;
+
+        if (remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = remoteStream;
+        }
+        if (remoteAudioRef.current) {
+          remoteAudioRef.current.srcObject = remoteStream;
+        }
+
         // Track nhận từ remote
         pc.ontrack = (event) => {
-          let remoteStream = event.streams && event.streams[0];
-          if (!remoteStream) {
-            remoteStream = new MediaStream([event.track]);
+          if (event.track) {
+            remoteStream.addTrack(event.track);
+
+            if (event.track.kind === 'video') {
+              setHasRemoteVideo(true);
+              setIsVideoCall(true);
+
+              event.track.onmute = () => setHasRemoteVideo(false);
+              event.track.onunmute = () => setHasRemoteVideo(true);
+              event.track.onended = () => setHasRemoteVideo(false);
+
+              if (remoteVideoRef.current) {
+                remoteVideoRef.current.play().catch(() => {});
+              }
+            }
+
+            if (event.track.kind === 'audio') {
+              if (remoteAudioRef.current) {
+                remoteAudioRef.current.muted = false;
+                remoteAudioRef.current.volume = 1.0;
+                remoteAudioRef.current.play().catch((audioErr) => {
+                  console.warn("Autoplay remote audio blocked:", audioErr);
+                  setAudioBlocked(true);
+                });
+              }
+            }
           }
-          if (remoteVideoRef.current && (event.track?.kind === 'video' || remoteStream.getVideoTracks().length > 0)) {
-            remoteVideoRef.current.srcObject = remoteStream;
-            remoteVideoRef.current.play().catch(() => { });
-            setIsVideoCall(true);
-          }
-          if (remoteAudioRef.current) {
-            remoteAudioRef.current.srcObject = remoteStream;
-            remoteAudioRef.current.muted = false;
-            remoteAudioRef.current.volume = 1.0;
-            remoteAudioRef.current.play().catch((audioErr) => {
-              console.warn("Autoplay remote audio blocked:", audioErr);
-            });
-          }
+
           stopRingAudio();
           setIsConnected(true);
           setCallStatusText('Đang đàm thoại');
@@ -691,6 +750,8 @@ const CallPage = () => {
               clearTimeout(disconnectTimerRef.current);
               disconnectTimerRef.current = null;
             }
+          } else if (pc.connectionState === 'connecting') {
+            setCallStatusText('Đang thiết lập kết nối đàm thoại...');
           } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
             setCallStatusText('Đang thử kết nối lại...');
             if (!disconnectTimerRef.current) {
@@ -708,6 +769,8 @@ const CallPage = () => {
             stopRingAudio();
             setIsConnected(true);
             setCallStatusText('Đang đàm thoại');
+          } else if (pc.iceConnectionState === 'checking') {
+            setCallStatusText('Đang tìm đường truyền tốt nhất...');
           } else if (pc.iceConnectionState === 'failed') {
             pc.restartIce?.();
           }
@@ -828,6 +891,7 @@ const CallPage = () => {
       existingTrack.enabled = !existingTrack.enabled;
       setIsVideoEnabled(existingTrack.enabled);
       setIsVideoCall(true);
+      sendCallSignal({ type: 'MEDIA_STATE', isVideoEnabled: existingTrack.enabled });
 
       if (existingTrack.enabled && localVideoRef.current) {
         localVideoRef.current.muted = true;
@@ -862,6 +926,7 @@ const CallPage = () => {
 
       setIsVideoCall(true);
       setIsVideoEnabled(true);
+      sendCallSignal({ type: 'MEDIA_STATE', isVideoEnabled: true });
 
       if (localVideoRef.current) {
         localVideoRef.current.muted = true;
@@ -1010,6 +1075,22 @@ const CallPage = () => {
       {/* 2. KHU VỰC LIVE CALL STAGE (GRID TẤM HÌNH / AVATAR) */}
       {/* ============================================================== */}
       <main className="flex-1 p-3 sm:p-6 overflow-hidden flex items-center justify-center relative bg-zinc-950">
+        {/* Banner thông báo chạm để bật âm thanh nếu bị Safari / Chrome chặn Autoplay */}
+        {audioBlocked && (
+          <button
+            type="button"
+            onClick={() => {
+              if (remoteAudioRef.current) {
+                remoteAudioRef.current.play().then(() => setAudioBlocked(false)).catch(() => {});
+              }
+            }}
+            className="absolute top-4 left-1/2 -translate-x-1/2 z-40 px-4 py-2 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold text-xs shadow-2xl shadow-emerald-500/30 flex items-center gap-2 animate-bounce cursor-pointer active:scale-95 transition-all"
+          >
+            <Volume2 size={16} />
+            <span>Chạm vào đây để bật âm thanh cuộc gọi</span>
+          </button>
+        )}
+
         <div ref={stageContainerRef} className="w-full max-w-4xl h-full flex items-center justify-center relative">
 
           {/* Nút bật/tắt toàn màn hình sân khấu */}
@@ -1030,12 +1111,13 @@ const CallPage = () => {
               ref={remoteVideoRef}
               autoPlay
               playsInline
+              muted
               className={`absolute inset-0 w-full h-full ${(isScreenSharing || isRemoteScreenSharing) ? 'object-contain bg-black' : 'object-cover sm:object-contain'
-                } transition-opacity duration-300 ${isConnected && isVideoCall ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
+                } transition-opacity duration-300 ${isConnected && hasRemoteVideo && isRemoteVideoEnabled ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none z-0'}`}
             />
 
-            {/* Trạng thái nếu không có video hoặc đang đàm thoại Audio */}
-            {(!isVideoCall || !isConnected) && (
+            {/* Trạng thái nếu không có video hoặc đối phương chưa bật video hoặc đang đàm thoại Audio */}
+            {(!isConnected || !hasRemoteVideo || !isRemoteVideoEnabled) && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 z-10 p-6 text-center animate-in fade-in duration-300">
                 <div className="relative">
                   {/* Vòng lan tỏa âm thanh mềm mại */}
@@ -1065,7 +1147,11 @@ const CallPage = () => {
                   )}
                   <p className="text-xs sm:text-sm text-zinc-400 font-medium pt-1 flex items-center justify-center gap-2">
                     <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400 animate-ping'}`} />
-                    <span>{callStatusText}</span>
+                    <span>
+                      {!isConnected
+                        ? callStatusText
+                        : (isVideoCall && (!hasRemoteVideo || !isRemoteVideoEnabled) ? 'Đối phương chưa bật camera' : 'Đang đàm thoại')}
+                    </span>
                   </p>
                 </div>
               </div>
