@@ -150,52 +150,72 @@ const GlobalCallBanner = () => {
     }
   }, []);
 
-  // 3. Connect to WebSocket & listen for calls
+  // 3. Connect to WebSocket & listen for calls (Tự động kết nối lại khi mạng gián đoạn / server restart)
   useEffect(() => {
     if (!effectiveUserId) return;
 
     let isMounted = true;
-    const client = createStompClient();
-    stompClient.current = client;
+    let reconnectTimer = null;
+    let client = null;
 
-    client.connect({}, () => {
+    const connectSocket = () => {
       if (!isMounted) return;
+      try {
+        if (client && client.connected) {
+          try { client.disconnect(); } catch (_) {}
+        }
+      } catch (_) {}
 
-      // Subscribe direct call signal for this user
-      client.subscribe(`/topic/call/user/${effectiveUserId}`, (frame) => {
-        try {
-          const msg = JSON.parse(frame.body);
-          if (!msg || String(msg.callerId) === String(effectiveUserId)) return;
+      client = createStompClient();
+      stompClient.current = client;
 
-          // Don't show banner if already inside /call
-          if (window.location.pathname.startsWith('/call')) return;
+      client.connect({}, () => {
+        if (!isMounted) return;
 
-          if (msg.type === 'OFFER' || msg.type === 'RINGING') {
-            setIncomingCall(msg);
-            startRingingSound();
+        // Subscribe direct call signal for this user
+        client.subscribe(`/topic/call/user/${effectiveUserId}`, (frame) => {
+          try {
+            const msg = JSON.parse(frame.body);
+            if (!msg || String(msg.callerId) === String(effectiveUserId)) return;
 
-            clearDismissTimer();
-            // Auto dismiss after 30s
-            autoDismissTimer.current = setTimeout(() => {
+            // Don't show banner if already inside /call
+            if (window.location.pathname.startsWith('/call')) return;
+
+            if (msg.type === 'OFFER' || msg.type === 'RINGING') {
+              setIncomingCall(msg);
+              startRingingSound();
+
+              clearDismissTimer();
+              // Auto dismiss after 30s
+              autoDismissTimer.current = setTimeout(() => {
+                setIncomingCall(null);
+                stopRingingSound();
+              }, 30000);
+            } else if (msg.type === 'END' || msg.type === 'CANCEL' || msg.type === 'BUSY' || msg.type === 'DECLINE') {
               setIncomingCall(null);
               stopRingingSound();
-            }, 30000);
-          } else if (msg.type === 'END' || msg.type === 'CANCEL' || msg.type === 'BUSY' || msg.type === 'DECLINE') {
-            setIncomingCall(null);
-            stopRingingSound();
-            clearDismissTimer();
-          }
-        } catch (e) {}
-      });
+              clearDismissTimer();
+            }
+          } catch (e) {}
+        });
 
-    }, () => {});
+      }, (err) => {
+        console.warn("GlobalCallBanner socket mất kết nối, tự động kết nối lại sau 2.5s...", err);
+        if (isMounted) {
+          reconnectTimer = setTimeout(connectSocket, 2500);
+        }
+      });
+    };
+
+    connectSocket();
 
     return () => {
       isMounted = false;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
       stopRingingSound();
       clearDismissTimer();
       if (client && client.connected) {
-        client.disconnect();
+        try { client.disconnect(); } catch (_) {}
       }
     };
   }, [effectiveUserId, startRingingSound, stopRingingSound, clearDismissTimer]);

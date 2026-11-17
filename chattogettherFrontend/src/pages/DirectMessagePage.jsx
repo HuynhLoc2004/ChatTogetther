@@ -918,16 +918,26 @@ export const DirectMessagePage = () => {
   useEffect(() => {
     if (!currentUserId) return;
 
+    let isMounted = true;
+    let reconnectTimer = null;
     let client = null;
     let roomSub = null;
 
-    try {
-      client = createStompClient();
-      stompClient.current = client;
-      const token = localStorage.getItem('accesstoken');
+    const connectDirectSocket = () => {
+      if (!isMounted) return;
+      try {
+        if (client && client.connected) {
+          try { client.disconnect(); } catch (_) { }
+        }
+      } catch (_) { }
 
-      const connectHeaders = { userId: String(currentUserId) };
-      if (token) connectHeaders['Authorization'] = `Bearer ${token}`;
+      try {
+        client = createStompClient();
+        stompClient.current = client;
+        const token = localStorage.getItem('accesstoken');
+
+        const connectHeaders = { userId: String(currentUserId) };
+        if (token) connectHeaders['Authorization'] = `Bearer ${token}`;
 
       // Xử lý thống nhất mọi tin nhắn 1-1 realtime (Loại bỏ triệt để tin nhắn trùng lặp)
       const handleIncomingDirectMsg = (rawPayload) => {
@@ -1177,20 +1187,33 @@ export const DirectMessagePage = () => {
             });
           } catch (_) { }
         }
+      }, (err) => {
+        console.warn("DirectMessagePage socket mất kết nối, tự động kết nối lại sau 2.5s...", err);
+        if (isMounted) {
+          reconnectTimer = setTimeout(connectDirectSocket, 2500);
+        }
       });
     } catch (e) {
       console.error('Lỗi kết nối WebSocket tin nhắn riêng:', e);
+      if (isMounted) {
+        reconnectTimer = setTimeout(connectDirectSocket, 2500);
+      }
     }
+  };
 
-    return () => {
-      if (roomSubRef.current) {
-        try { roomSubRef.current.unsubscribe(); } catch (_) { }
-        roomSubRef.current = null;
-      }
-      if (client && client.connected) {
-        client.disconnect();
-      }
-    };
+  connectDirectSocket();
+
+  return () => {
+    isMounted = false;
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    if (roomSubRef.current) {
+      try { roomSubRef.current.unsubscribe(); } catch (_) { }
+      roomSubRef.current = null;
+    }
+    if (client && client.connected) {
+      try { client.disconnect(); } catch (_) { }
+    }
+  };
   }, [currentUserId, scrollToBottom, markUserActive]);
 
   // Đăng ký lại topic room khi chuyển sang phòng khác (Đảm bảo duy nhất 1 subscription qua roomSubRef)

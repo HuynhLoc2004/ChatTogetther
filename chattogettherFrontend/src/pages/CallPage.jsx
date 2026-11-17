@@ -52,11 +52,11 @@ const CallPage = () => {
     try {
       const prof = JSON.parse(localStorage.getItem('user_profile') || '{}');
       if (prof?.id || prof?.userId) return String(prof.id || prof.userId);
-    } catch (_) {}
+    } catch (_) { }
     try {
       const u = JSON.parse(localStorage.getItem('user') || '{}');
       if (u?.id || u?.userId) return String(u.id || u.userId);
-    } catch (_) {}
+    } catch (_) { }
     try {
       const token = localStorage.getItem('accesstoken');
       if (token) {
@@ -65,7 +65,7 @@ const CallPage = () => {
         if (payload?.userId) return String(payload.userId);
         if (payload?.id) return String(payload.id);
       }
-    } catch (_) {}
+    } catch (_) { }
     return null;
   })();
   const currentUserName = localStorage.getItem('nickname') || localStorage.getItem('username') || 'Tôi';
@@ -89,10 +89,10 @@ const CallPage = () => {
   useEffect(() => {
     const silentUnlock = () => {
       if (remoteAudioCtxRef.current && remoteAudioCtxRef.current.state === 'suspended') {
-        remoteAudioCtxRef.current.resume().catch(() => {});
+        remoteAudioCtxRef.current.resume().catch(() => { });
       }
       if (remoteAudioRef.current && remoteAudioRef.current.paused) {
-        remoteAudioRef.current.play().catch(() => {});
+        remoteAudioRef.current.play().catch(() => { });
       }
     };
     window.addEventListener('touchstart', silentUnlock, { passive: true });
@@ -751,7 +751,7 @@ const CallPage = () => {
 
               if (remoteVideoRef.current) {
                 remoteVideoRef.current.srcObject = remoteStream;
-                remoteVideoRef.current.play().catch(() => {});
+                remoteVideoRef.current.play().catch(() => { });
               }
             }
 
@@ -763,7 +763,7 @@ const CallPage = () => {
                 remoteAudioRef.current.srcObject = streamToPlay;
                 remoteAudioRef.current.muted = false;
                 remoteAudioRef.current.volume = 1.0;
-                remoteAudioRef.current.play().catch(() => {});
+                remoteAudioRef.current.play().catch(() => { });
               }
 
               // Kênh 2: Web Audio API (Bypass 100% rào cản Autoplay trên Mobile Safari/Chrome, phát tiếng ngay lập tức)
@@ -775,7 +775,7 @@ const CallPage = () => {
                   }
                   const ctx = remoteAudioCtxRef.current;
                   if (ctx.state === 'suspended') {
-                    ctx.resume().catch(() => {});
+                    ctx.resume().catch(() => { });
                   }
                   if (!webAudioSourceRef.current) {
                     const src = ctx.createMediaStreamSource(streamToPlay);
@@ -783,7 +783,7 @@ const CallPage = () => {
                     webAudioSourceRef.current = src;
                   }
                 }
-              } catch (_) {}
+              } catch (_) { }
             }
           }
 
@@ -827,70 +827,89 @@ const CallPage = () => {
           }
         };
 
-        // Kết nối WebSocket STOMP chuẩn native browser kèm Authorization token
-        const stomp = createStompClient();
-        stompClient.current = stomp;
-        const authToken = localStorage.getItem('accesstoken');
-        const connHeaders = {};
-        if (authToken) connHeaders['Authorization'] = `Bearer ${authToken}`;
-        if (currentUserId) connHeaders['userId'] = String(currentUserId);
+        // Kết nối WebSocket STOMP chuẩn native browser kèm Authorization token (Tự động kết nối lại khi có gián đoạn)
+        let isStompMounted = true;
+        let stompRetryTimer = null;
 
-        stomp.connect(connHeaders, async () => {
-          if (!isActive) return;
+        const connectStomp = () => {
+          if (!isActive || !isStompMounted || isCallEndedRef.current) return;
+          try {
+            if (stompClient.current && stompClient.current.connected) {
+              try { stompClient.current.disconnect(); } catch (_) { }
+            }
+          } catch (_) { }
 
-          // Subscribe topic nhận tín hiệu cá nhân (Direct call)
-          if (currentUserId) {
-            stomp.subscribe(`/topic/call/user/${currentUserId}`, (frame) => {
-              try {
-                const msg = JSON.parse(frame.body);
-                handleCallSignalRef.current?.(msg);
-              } catch (e) { }
-            });
-          }
-          if (roomId) {
-            stomp.subscribe(`/topic/call/${roomId}`, (frame) => {
-              try {
-                const msg = JSON.parse(frame.body);
-                handleCallSignalRef.current?.(msg);
-              } catch (e) { }
-            });
-          }
+          const stomp = createStompClient();
+          stompClient.current = stomp;
+          const authToken = localStorage.getItem('accesstoken');
+          const connHeaders = {};
+          if (authToken) connHeaders['Authorization'] = `Bearer ${authToken}`;
+          if (currentUserId) connHeaders['userId'] = String(currentUserId);
 
-          if (isIncoming) {
-            // Là người nhận máy: gửi tín hiệu ACCEPT để người gọi biết và gửi OFFER
-            setCallStatusText('Đang thiết lập kênh đàm thoại...');
-            sendCallSignalRef.current?.({ type: 'ACCEPT' });
+          stomp.connect(connHeaders, async () => {
+            if (!isActive || !isStompMounted || isCallEndedRef.current) return;
 
-            // Gửi lặp lại ACCEPT sau mỗi 1.2s (tối đa 6 lần) phòng ngừa trường hợp gói tin đầu bị lỡ khi bên gọi đang mount
-            let acceptTries = 0;
-            if (acceptRetryTimerRef.current) clearInterval(acceptRetryTimerRef.current);
-            acceptRetryTimerRef.current = setInterval(() => {
-              acceptTries++;
-              if (acceptTries > 6 || isConnected || (peerConnectionRef.current && peerConnectionRef.current.remoteDescription)) {
-                if (acceptRetryTimerRef.current) {
-                  clearInterval(acceptRetryTimerRef.current);
-                  acceptRetryTimerRef.current = null;
-                }
-                return;
-              }
+            // Subscribe topic nhận tín hiệu cá nhân (Direct call)
+            if (currentUserId) {
+              stomp.subscribe(`/topic/call/user/${currentUserId}`, (frame) => {
+                try {
+                  const msg = JSON.parse(frame.body);
+                  handleCallSignalRef.current?.(msg);
+                } catch (e) { }
+              });
+            }
+            if (roomId) {
+              stomp.subscribe(`/topic/call/${roomId}`, (frame) => {
+                try {
+                  const msg = JSON.parse(frame.body);
+                  handleCallSignalRef.current?.(msg);
+                } catch (e) { }
+              });
+            }
+
+            if (isIncoming) {
+              // Là người nhận máy: gửi tín hiệu ACCEPT để người gọi biết và gửi OFFER
+              setCallStatusText('Đang thiết lập kênh đàm thoại...');
               sendCallSignalRef.current?.({ type: 'ACCEPT' });
-            }, 1200);
-          } else {
-            // Là người khởi tạo cuộc gọi: bắt đầu đổ chuông và gửi tín hiệu RINGING
-            startRingAudio();
-            setCallStatusText('Đang đổ chuông...');
-            sendCallSignalRef.current?.({ type: 'RINGING', isVideo: isVideoParam });
 
-            // Tự động ngắt sau 45s nếu đối phương không bắt máy
-            connectTimeoutRef.current = setTimeout(() => {
-              toast.error('Đối phương không trả lời cuộc gọi.');
-              endCallRef.current?.(true);
-            }, 45000);
-          }
-        }, (err) => {
-          console.warn("Lỗi kết nối máy chủ tín hiệu:", err);
-          setCallStatusText('Đang kết nối lại đường truyền đàm thoại...');
-        });
+              // Gửi lặp lại ACCEPT sau mỗi 1.2s (tối đa 6 lần) phòng ngừa trường hợp gói tin đầu bị lỡ khi bên gọi đang mount
+              let acceptTries = 0;
+              if (acceptRetryTimerRef.current) clearInterval(acceptRetryTimerRef.current);
+              acceptRetryTimerRef.current = setInterval(() => {
+                acceptTries++;
+                if (acceptTries > 6 || isConnected || (peerConnectionRef.current && peerConnectionRef.current.remoteDescription)) {
+                  if (acceptRetryTimerRef.current) {
+                    clearInterval(acceptRetryTimerRef.current);
+                    acceptRetryTimerRef.current = null;
+                  }
+                  return;
+                }
+                sendCallSignalRef.current?.({ type: 'ACCEPT' });
+              }, 1200);
+            } else {
+              // Là người khởi tạo cuộc gọi: bắt đầu đổ chuông và gửi tín hiệu RINGING
+              startRingAudio();
+              setCallStatusText('Đang đổ chuông...');
+              sendCallSignalRef.current?.({ type: 'RINGING', isVideo: isVideoParam });
+
+              // Tự động ngắt sau 45s nếu đối phương không bắt máy
+              if (!connectTimeoutRef.current) {
+                connectTimeoutRef.current = setTimeout(() => {
+                  toast.error('Đối phương không trả lời cuộc gọi.');
+                  endCallRef.current?.(true);
+                }, 45000);
+              }
+            }
+          }, (err) => {
+            console.warn("Lỗi kết nối máy chủ tín hiệu, tự động kết nối lại sau 1.5s...", err);
+            setCallStatusText('Đang kết nối lại đường truyền đàm thoại...');
+            if (isActive && isStompMounted && !isCallEndedRef.current) {
+              stompRetryTimer = setTimeout(connectStomp, 1500);
+            }
+          });
+        };
+
+        connectStomp();
 
       } catch (err) {
         console.error("Lỗi khởi tạo cuộc gọi WebRTC:", err);
@@ -1234,8 +1253,8 @@ const CallPage = () => {
           type="button"
           onClick={toggleMute}
           className={`h-11 w-11 rounded-2xl border flex items-center justify-center transition-all active:scale-95 ${isMuted
-              ? 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20'
-              : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
+            ? 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20'
+            : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
             }`}
           title={isMuted ? "Bật Microphone" : "Tắt Microphone"}
         >
@@ -1247,8 +1266,8 @@ const CallPage = () => {
           type="button"
           onClick={toggleVideo}
           className={`h-11 w-11 rounded-2xl border flex items-center justify-center transition-all active:scale-95 ${!isVideoEnabled
-              ? 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20'
-              : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
+            ? 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20'
+            : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
             }`}
           title={isVideoEnabled ? "Tắt Camera" : "Bật Camera"}
         >
@@ -1260,8 +1279,8 @@ const CallPage = () => {
           type="button"
           onClick={toggleScreenShare}
           className={`h-11 w-11 rounded-2xl border flex items-center justify-center transition-all active:scale-95 ${isScreenSharing
-              ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
-              : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
+            ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
+            : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
             }`}
           title={isScreenSharing ? "Dừng chia sẻ màn hình" : "Chia sẻ màn hình"}
         >

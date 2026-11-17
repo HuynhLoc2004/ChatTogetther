@@ -128,108 +128,99 @@ export const PresenceProvider = ({ children }) => {
     if (!currentUserId) return;
 
     let isMounted = true;
-    const client = createStompClient();
-    stompClientRef.current = client;
+    let reconnectTimer = null;
+    let client = null;
 
-    const token = localStorage.getItem('accesstoken');
-    const connectHeaders = { userId: String(currentUserId) };
-    if (token) connectHeaders['Authorization'] = `Bearer ${token}`;
-
-    const broadcastMyPresence = (isOnline = true) => {
+    const connectPresenceSocket = () => {
+      if (!isMounted) return;
       try {
-        if (client && client.connected && client.ws && client.ws.readyState === WebSocket.OPEN) {
-          const payload = JSON.stringify({
-            userId: Number(currentUserId),
-            isOnline,
-            timestamp: Date.now()
-          });
-          client.send('/topic/presence', {}, payload);
-          client.send('/app/presence/heartbeat', {}, payload);
+        if (client && client.connected) {
+          try { client.disconnect(); } catch (_) {}
         }
       } catch (_) {}
 
-      // Gửi tín hiệu REST API
-      if (isOnline) {
-        axiosClient.post('/presence/heartbeat', { userId: Number(currentUserId) }).catch(() => {});
-      } else {
-        // Rời trang: gửi beacon báo offline lập tức
+      client = createStompClient();
+      stompClientRef.current = client;
+
+      const token = localStorage.getItem('accesstoken');
+      const connectHeaders = { userId: String(currentUserId) };
+      if (token) connectHeaders['Authorization'] = `Bearer ${token}`;
+
+      client.connect(connectHeaders, () => {
+        if (!isMounted) return;
+
+        // Bản thân luôn trực tuyến
+        markUserActive(currentUserId);
+
+        // Đăng ký nhận tín hiệu presence toàn cục
+        client.subscribe('/topic/presence', (frame) => {
+          try {
+            const data = JSON.parse(frame.body);
+            if (!data) return;
+
+            // Phản hồi lập tức yêu cầu khám phá trực tuyến từ peer khác (P2P Discovery tức thì)
+            if (data.type === 'PRESENCE_REQUEST' && data.requesterId && String(data.requesterId) !== String(currentUserId)) {
+              client.send('/topic/presence', {}, JSON.stringify({
+                type: 'PRESENCE_REPORT',
+                userId: Number(currentUserId),
+                targetUserId: Number(data.requesterId),
+                isOnline: true,
+                timestamp: Date.now()
+              }));
+            } else if (data.type === 'PRESENCE_PING' && data.targetUserId && String(data.targetUserId) === String(currentUserId)) {
+              client.send('/topic/presence', {}, JSON.stringify({
+                type: 'PRESENCE_PONG',
+                userId: Number(currentUserId),
+                targetUserId: Number(data.requesterId),
+                isOnline: true,
+                timestamp: Date.now()
+              }));
+            }
+
+            if (data.userId) {
+              const uid = String(data.userId);
+              if (data.isOnline !== false && data.type !== 'PRESENCE_OFFLINE') {
+                lastSeenMapRef.current.set(uid, data.timestamp || Date.now());
+                setOnlineUserIds(prev => {
+                  if (prev.has(uid)) return prev;
+                  const next = new Set(prev);
+                  next.add(uid);
+                  return next;
+                });
+              } else {
+                // Đối phương đã ngoại tuyến: gỡ bỏ tức khắc
+                lastSeenMapRef.current.delete(uid);
+                setOnlineUserIds(prev => {
+                  if (!prev.has(uid)) return prev;
+                  const next = new Set(prev);
+                  next.delete(uid);
+                  return next;
+                });
+              }
+            }
+          } catch (e) {}
+        });
+
+        // Phát tín hiệu ngay khi kết nối thành công và yêu cầu peer phản hồi
+        broadcastMyPresence(true);
         try {
-          if (navigator.sendBeacon) {
-            navigator.sendBeacon('/api/presence/offline', new Blob([JSON.stringify({ userId: Number(currentUserId) })], { type: 'application/json' }));
-          } else {
-            axiosClient.post('/presence/offline', { userId: Number(currentUserId) }).catch(() => {});
-          }
+          client.send('/topic/presence', {}, JSON.stringify({
+            type: 'PRESENCE_REQUEST',
+            requesterId: Number(currentUserId),
+            userId: Number(currentUserId),
+            isOnline: true,
+            timestamp: Date.now()
+          }));
         } catch (_) {}
-      }
+      }, (err) => {
+        console.warn("Presence socket mất kết nối, tự động kết nối lại sau 3s...", err);
+        if (isMounted) {
+          reconnectTimer = setTimeout(connectPresenceSocket, 3000);
+        }
+      });
     };
 
-    client.connect(connectHeaders, () => {
-      if (!isMounted) return;
-
-      // Bản thân luôn trực tuyến
-      markUserActive(currentUserId);
-
-      // Đăng ký nhận tín hiệu presence toàn cục
-      client.subscribe('/topic/presence', (frame) => {
-        try {
-          const data = JSON.parse(frame.body);
-          if (!data) return;
-
-          // Phản hồi lập tức yêu cầu khám phá trực tuyến từ peer khác (P2P Discovery tức thì)
-          if (data.type === 'PRESENCE_REQUEST' && data.requesterId && String(data.requesterId) !== String(currentUserId)) {
-            client.send('/topic/presence', {}, JSON.stringify({
-              type: 'PRESENCE_REPORT',
-              userId: Number(currentUserId),
-              targetUserId: Number(data.requesterId),
-              isOnline: true,
-              timestamp: Date.now()
-            }));
-          } else if (data.type === 'PRESENCE_PING' && data.targetUserId && String(data.targetUserId) === String(currentUserId)) {
-            client.send('/topic/presence', {}, JSON.stringify({
-              type: 'PRESENCE_PONG',
-              userId: Number(currentUserId),
-              targetUserId: Number(data.requesterId),
-              isOnline: true,
-              timestamp: Date.now()
-            }));
-          }
-
-          if (data.userId) {
-            const uid = String(data.userId);
-            if (data.isOnline !== false && data.type !== 'PRESENCE_OFFLINE') {
-              lastSeenMapRef.current.set(uid, data.timestamp || Date.now());
-              setOnlineUserIds(prev => {
-                if (prev.has(uid)) return prev;
-                const next = new Set(prev);
-                next.add(uid);
-                return next;
-              });
-            } else {
-              // Đối phương đã ngoại tuyến: gỡ bỏ tức khắc
-              lastSeenMapRef.current.delete(uid);
-              setOnlineUserIds(prev => {
-                if (!prev.has(uid)) return prev;
-                const next = new Set(prev);
-                next.delete(uid);
-                return next;
-              });
-            }
-          }
-        } catch (e) {}
-      });
-
-      // Phát tín hiệu ngay khi kết nối thành công và yêu cầu peer phản hồi
-      broadcastMyPresence(true);
-      try {
-        client.send('/topic/presence', {}, JSON.stringify({
-          type: 'PRESENCE_REQUEST',
-          requesterId: Number(currentUserId),
-          userId: Number(currentUserId),
-          isOnline: true,
-          timestamp: Date.now()
-        }));
-      } catch (_) {}
-    }, () => {});
+    connectPresenceSocket();
 
     // Định kỳ gửi nhịp tim mỗi 10 giây
     const heartbeatInterval = setInterval(() => {
