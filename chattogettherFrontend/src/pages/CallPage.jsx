@@ -102,7 +102,13 @@ const CallPage = () => {
   const localCandidatesHistoryRef = useRef([]);
   const disconnectTimerRef = useRef(null);
   const connectTimeoutRef = useRef(null);
+  const acceptRetryTimerRef = useRef(null);
   const callIdRef = useRef(searchParams.get('callId') || (`call_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`));
+
+  // Mutable refs to prevent useEffect from re-triggering and tearing down WebRTC
+  const handleCallSignalRef = useRef(null);
+  const sendCallSignalRef = useRef(null);
+  const endCallRef = useRef(null);
 
   // Sync duration ref
   useEffect(() => {
@@ -250,6 +256,10 @@ const CallPage = () => {
   // 4. Cleanup Call Resources (Zero-Lag + An toàn WebSocket)
   const cleanupCall = useCallback(() => {
     stopRingAudio();
+    if (acceptRetryTimerRef.current) {
+      clearInterval(acceptRetryTimerRef.current);
+      acceptRetryTimerRef.current = null;
+    }
     if (callTimerRef.current) {
       clearInterval(callTimerRef.current);
       callTimerRef.current = null;
@@ -263,7 +273,9 @@ const CallPage = () => {
       screenStreamRef.current = null;
     }
     if (peerConnectionRef.current) {
-      peerConnectionRef.current.close();
+      try {
+        peerConnectionRef.current.close();
+      } catch (_) {}
       peerConnectionRef.current = null;
     }
     if (remoteVideoRef.current) {
@@ -298,6 +310,7 @@ const CallPage = () => {
       ...payload,
       callId: callIdRef.current,
       callerId: currentUserId,
+      senderId: currentUserId,
       callerName: currentUserName,
       callerAvatar: currentUserAvatar,
       timestamp: Date.now()
@@ -408,12 +421,21 @@ const CallPage = () => {
 
   // 7. Handle Signal Incoming
   const handleCallSignal = useCallback(async (msg) => {
-    if (!msg || String(msg.callerId) === String(currentUserId)) return;
+    if (!msg) return;
+    const actualSender = msg.endedBy || msg.senderId;
+    // Bỏ qua nếu chính mình là người gửi đi
+    if (actualSender && String(actualSender) === String(currentUserId)) return;
+    if (!actualSender && msg.type !== 'DECLINE' && msg.type !== 'CANCEL' && msg.type !== 'END' && String(msg.callerId) === String(currentUserId)) return;
 
     if (msg.type === 'OFFER') {
       try {
         stopRingAudio();
-        setCallStatusText('Đang kết nối đàm thoại...');
+        if (acceptRetryTimerRef.current) {
+          clearInterval(acceptRetryTimerRef.current);
+          acceptRetryTimerRef.current = null;
+        }
+        setCallStatusText('Đang đàm thoại');
+        setIsConnected(true);
         if (msg.isVideo) setIsVideoCall(true);
         if (!peerConnectionRef.current) return;
         const pc = peerConnectionRef.current;
@@ -430,6 +452,9 @@ const CallPage = () => {
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         sendCallSignal({ type: 'ANSWER', answer, isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled) });
+        localCandidatesHistoryRef.current.forEach(cand => {
+          sendCallSignal({ type: 'CANDIDATE', candidate: cand });
+        });
       } catch (e) {
         console.error("Lỗi xử lý OFFER:", e);
       }
@@ -440,16 +465,18 @@ const CallPage = () => {
         setCallStatusText('Đối phương đã nhận máy. Đang kết nối...');
         if (peerConnectionRef.current) {
           const pc = peerConnectionRef.current;
-          const offer = await pc.createOffer({
-            offerToReceiveAudio: true,
-            offerToReceiveVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled)
-          });
-          await pc.setLocalDescription(offer);
-          sendCallSignal({ type: 'OFFER', offer, isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled) });
-          // Gửi kèm toàn bộ candidate đã thu thập sẵn
-          localCandidatesHistoryRef.current.forEach(cand => {
-            sendCallSignal({ type: 'CANDIDATE', candidate: cand });
-          });
+          if (pc.signalingState === 'stable') {
+            const offer = await pc.createOffer({
+              offerToReceiveAudio: true,
+              offerToReceiveVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled)
+            });
+            await pc.setLocalDescription(offer);
+            sendCallSignal({ type: 'OFFER', offer, isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled) });
+            // Gửi kèm toàn bộ candidate đã thu thập sẵn
+            localCandidatesHistoryRef.current.forEach(cand => {
+              sendCallSignal({ type: 'CANDIDATE', candidate: cand });
+            });
+          }
         }
       } catch (e) {
         console.error("Lỗi gửi OFFER sau ACCEPT:", e);
@@ -498,8 +525,8 @@ const CallPage = () => {
       stopRingAudio();
       setCallStatusText('Đối phương hiện đang bận hoặc từ chối');
       toast.error('Đối phương hiện đang bận hoặc không thể bắt máy!');
-      setTimeout(() => endCall(false), 400);
-    } else if (msg.type === 'END') {
+      setTimeout(() => endCall(false), 300);
+    } else if (msg.type === 'END' || msg.type === 'CANCEL') {
       stopRingAudio();
       setCallStatusText('Cuộc gọi đã kết thúc');
       // Kết thúc ngay lập tức không trễ 1 mili-giây
@@ -507,7 +534,14 @@ const CallPage = () => {
     }
   }, [currentUserId, sendCallSignal, stopRingAudio, isVideoParam, isVideoCall, isVideoEnabled, endCall]);
 
-  // 8. Initialize WebRTC Media & STOMP Socket
+  // Đồng bộ mutable refs mỗi render để không làm re-run effect WebRTC
+  useEffect(() => {
+    handleCallSignalRef.current = handleCallSignal;
+    sendCallSignalRef.current = sendCallSignal;
+    endCallRef.current = endCall;
+  });
+
+  // 8. Initialize WebRTC Media & STOMP Socket (Chỉ mount 1 lần duy nhất)
   useEffect(() => {
     let isActive = true;
 
@@ -557,23 +591,28 @@ const CallPage = () => {
         pc.onicecandidate = (event) => {
           if (event.candidate) {
             localCandidatesHistoryRef.current.push(event.candidate);
-            sendCallSignal({ type: 'CANDIDATE', candidate: event.candidate });
+            sendCallSignalRef.current?.({ type: 'CANDIDATE', candidate: event.candidate });
           }
         };
 
         // Track nhận từ remote
         pc.ontrack = (event) => {
-          const [remoteStream] = event.streams;
-          if (remoteVideoRef.current) {
+          let remoteStream = event.streams && event.streams[0];
+          if (!remoteStream) {
+            remoteStream = new MediaStream([event.track]);
+          }
+          if (remoteVideoRef.current && (event.track?.kind === 'video' || remoteStream.getVideoTracks().length > 0)) {
             remoteVideoRef.current.srcObject = remoteStream;
             remoteVideoRef.current.play().catch(() => {});
+            setIsVideoCall(true);
           }
           if (remoteAudioRef.current) {
             remoteAudioRef.current.srcObject = remoteStream;
-            remoteAudioRef.current.play().catch(() => {});
-          }
-          if (event.track?.kind === 'video' || remoteStream.getVideoTracks().length > 0) {
-            setIsVideoCall(true);
+            remoteAudioRef.current.muted = false;
+            remoteAudioRef.current.volume = 1.0;
+            remoteAudioRef.current.play().catch((audioErr) => {
+              console.warn("Autoplay remote audio blocked:", audioErr);
+            });
           }
           stopRingAudio();
           setIsConnected(true);
@@ -593,7 +632,7 @@ const CallPage = () => {
             setCallStatusText('Đối phương đã ngắt kết nối...');
             if (!disconnectTimerRef.current) {
               disconnectTimerRef.current = setTimeout(() => {
-                endCall(false);
+                endCallRef.current?.(false);
               }, 2500);
             }
           }
@@ -625,14 +664,14 @@ const CallPage = () => {
             stomp.subscribe(`/topic/call/user/${currentUserId}`, (frame) => {
               try {
                 const msg = JSON.parse(frame.body);
-                handleCallSignal(msg);
+                handleCallSignalRef.current?.(msg);
               } catch (e) {}
             });
           } else if (isRoomCall && roomId) {
             stomp.subscribe(`/topic/call/${roomId}`, (frame) => {
               try {
                 const msg = JSON.parse(frame.body);
-                handleCallSignal(msg);
+                handleCallSignalRef.current?.(msg);
               } catch (e) {}
             });
           }
@@ -640,17 +679,32 @@ const CallPage = () => {
           if (isIncoming) {
             // Là người nhận máy: gửi tín hiệu ACCEPT để người gọi biết và gửi OFFER
             setCallStatusText('Đang thiết lập kênh đàm thoại...');
-            sendCallSignal({ type: 'ACCEPT' });
+            sendCallSignalRef.current?.({ type: 'ACCEPT' });
+
+            // Gửi lặp lại ACCEPT sau mỗi 1.2s (tối đa 4 lần) phòng ngừa trường hợp gói tin đầu bị lỡ khi bên gọi đang mount
+            let acceptTries = 0;
+            if (acceptRetryTimerRef.current) clearInterval(acceptRetryTimerRef.current);
+            acceptRetryTimerRef.current = setInterval(() => {
+              acceptTries++;
+              if (acceptTries > 4 || isConnected || (peerConnectionRef.current && peerConnectionRef.current.remoteDescription)) {
+                if (acceptRetryTimerRef.current) {
+                  clearInterval(acceptRetryTimerRef.current);
+                  acceptRetryTimerRef.current = null;
+                }
+                return;
+              }
+              sendCallSignalRef.current?.({ type: 'ACCEPT' });
+            }, 1200);
           } else {
             // Là người khởi tạo cuộc gọi: bắt đầu đổ chuông và gửi tín hiệu RINGING
             startRingAudio();
             setCallStatusText('Đang đổ chuông...');
-            sendCallSignal({ type: 'RINGING', isVideo: isVideoParam });
+            sendCallSignalRef.current?.({ type: 'RINGING', isVideo: isVideoParam });
 
             // Tự động ngắt sau 45s nếu đối phương không bắt máy
             connectTimeoutRef.current = setTimeout(() => {
               toast.error('Đối phương không trả lời cuộc gọi.');
-              endCall(true);
+              endCallRef.current?.(true);
             }, 45000);
           }
         }, (err) => {
@@ -671,7 +725,7 @@ const CallPage = () => {
       isActive = false;
       cleanupCall();
     };
-  }, [isVideoParam, isIncoming, isDirectCall, isRoomCall, currentUserId, roomId, userId, sendCallSignal, handleCallSignal, cleanupCall, startRingAudio, stopRingAudio]);
+  }, [userId, roomId, isIncoming, isVideoParam, isDirectCall, isRoomCall, currentUserId, cleanupCall, startRingAudio, stopRingAudio]);
 
   // Khởi động đồng hồ đếm thời gian CHỈ KHI cuộc gọi đã thực sự kết nối (đối phương đã nhấc máy)
   useEffect(() => {
@@ -837,9 +891,16 @@ const CallPage = () => {
   const displayAvatar = partnerProfile?.avatar || roomInfo?.avatar;
 
   return (
-    <div className="h-screen w-screen bg-zinc-950 text-zinc-100 flex flex-col justify-between overflow-hidden select-none font-sans">
-      {/* Ẩn Audio remote để phát âm thanh */}
-      <audio ref={remoteAudioRef} autoPlay playsInline />
+    <div 
+      className="h-screen w-screen bg-zinc-950 text-zinc-100 flex flex-col justify-between overflow-hidden select-none font-sans"
+      onClick={() => {
+        if (remoteAudioRef.current && remoteAudioRef.current.paused) {
+          remoteAudioRef.current.play().catch(() => {});
+        }
+      }}
+    >
+      {/* Thẻ audio remote phát âm thanh đàm thoại */}
+      <audio ref={remoteAudioRef} autoPlay playsInline controls={false} />
 
       {/* ============================================================== */}
       {/* 1. HEADER CUỘC GỌI TOÀN MÀN HÌNH (DARK ZINC TỐI GIẢN) */}

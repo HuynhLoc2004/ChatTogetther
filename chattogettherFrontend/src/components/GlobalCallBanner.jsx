@@ -208,8 +208,8 @@ const GlobalCallBanner = () => {
       callId: callId,
       type: 'DECLINE',
       callerId: callerId, // Người gọi gốc Side A
-      targetUserId: effectiveUserId, // Người nhận Side B
-      endedBy: effectiveUserId,
+      targetUserId: callerId, // Đối phương cần ngắt là người gọi A
+      endedBy: effectiveUserId, // Người thực hiện bấm từ chối là B
       roomId: roomId,
       duration: 0,
       isVideo: isVid,
@@ -223,7 +223,9 @@ const GlobalCallBanner = () => {
           callId: callId,
           type: 'DECLINE',
           callerId: callerId,
-          targetUserId: effectiveUserId,
+          senderId: effectiveUserId,
+          endedBy: effectiveUserId,
+          targetUserId: callerId,
           reason: 'declined',
           isVideo: isVid
         };

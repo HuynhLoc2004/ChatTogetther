@@ -101,10 +101,21 @@ public class CallSignalController {
             } catch (Exception ignored) {}
         }
 
-        // Bắn tín hiệu END qua WebSocket để bên kia thoát ngay lập tức nếu đang treo
+        Long callerId = null;
+        if (payload.get("callerId") != null) {
+            try {
+                callerId = Long.valueOf(String.valueOf(payload.get("callerId")));
+            } catch (Exception ignored) {}
+        }
+
+        // Bắn tín hiệu kết thúc/từ chối qua WebSocket tới cả 2 phía để bên kia thoát ngay lập tức nếu đang treo
         if (targetUserId != null) {
             this.messagingTemplate.convertAndSend("/topic/call/user/" + targetUserId, payload);
-        } else if (roomId != null) {
+        }
+        if (callerId != null && !callerId.equals(targetUserId)) {
+            this.messagingTemplate.convertAndSend("/topic/call/user/" + callerId, payload);
+        }
+        if (roomId != null) {
             this.messagingTemplate.convertAndSend("/topic/call/" + roomId, payload);
         }
 
