@@ -13,7 +13,11 @@ import java.util.Optional;
 
 @Repository
 public interface PostLikeRepository extends JpaRepository<PostLikeEntity, Long> {
-    Optional<PostLikeEntity> findByPostAndUser(PostEntity post, UserEntity user);
+    Optional<PostLikeEntity> findFirstByPostAndUserOrderByIdDesc(PostEntity post, UserEntity user);
+    default Optional<PostLikeEntity> findByPostAndUser(PostEntity post, UserEntity user) {
+        return findFirstByPostAndUserOrderByIdDesc(post, user);
+    }
+    List<PostLikeEntity> findAllByPostAndUser(PostEntity post, UserEntity user);
     boolean existsByPostAndUser(PostEntity post, UserEntity user);
     int countByPost(PostEntity post);
 

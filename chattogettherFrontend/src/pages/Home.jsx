@@ -195,11 +195,20 @@ const parsePostMedia = (raw, fallbackPost = null) => {
 const buildCommentThreads = (comments) => {
   if (!Array.isArray(comments) || comments.length === 0) return [];
 
+  // Khử trùng lặp bình luận theo ID (chống hiển thị x2 khi vừa gửi vừa nhận socket)
+  const uniqueComments = [];
+  const seenIds = new Set();
+  comments.forEach(c => {
+    if (!c || seenIds.has(c.id)) return;
+    seenIds.add(c.id);
+    uniqueComments.push(c);
+  });
+
   const rootComments = [];
   const repliesMap = new Map();
 
   // 1. Phân loại root comments và replies
-  comments.forEach(c => {
+  uniqueComments.forEach(c => {
     if (!c.parentId) {
       rootComments.push({ ...c, replies: [] });
     } else {
@@ -428,6 +437,8 @@ const Home = ({ initialTab }) => {
   const reactionTimeoutRef = useRef(null);
   const reactionInFlightMapRef = useRef(new Map());
   const reactionDesiredStateRef = useRef(new Map());
+  const reactionDebounceMapRef = useRef(new Map());
+  const submittingCommentRef = useRef(new Set());
 
   // Lắng nghe click bên ngoài, di chuột ra ngoài và cuộn trang để đóng reactions popup
   useEffect(() => {
@@ -1529,18 +1540,19 @@ const Home = ({ initialTab }) => {
       reactionType: nextReaction
     });
 
-    // Nếu đang có request in-flight cho bài viết này, nó sẽ tiếp tục xử lý sau khi hoàn thành
-    if (reactionInFlightMapRef.current.get(strPostId)) {
-      return;
+    // Hủy bỏ timer đồng bộ đang chờ cũ nếu người dùng đang spam bấm liên tục
+    if (reactionDebounceMapRef.current.has(strPostId)) {
+      clearTimeout(reactionDebounceMapRef.current.get(strPostId));
     }
 
-    reactionInFlightMapRef.current.set(strPostId, true);
+    // Đặt timer debounce 200ms: Khi người dùng bấm xong, chỉ gửi duy nhất 1 request đồng bộ cuối cùng
+    const timer = setTimeout(async () => {
+      reactionDebounceMapRef.current.delete(strPostId);
+      const desired = reactionDesiredStateRef.current.get(strPostId);
+      if (!desired) return;
 
-    try {
-      while (true) {
-        const desired = reactionDesiredStateRef.current.get(strPostId);
-        const sendType = desired?.reactionType || targetType;
-
+      try {
+        const sendType = desired.reactionType || targetType;
         let res;
         try {
           res = await axiosClient.post(`/posts/${postId}/react`, null, {
@@ -1548,7 +1560,6 @@ const Home = ({ initialTab }) => {
           });
         } catch (apiErr) {
           if (apiErr.response?.status === 404) {
-            // Tương thích: fallback gọi /like nếu backend route /react trả 404
             res = await axiosClient.post(`/posts/${postId}/like`, null, {
               params: { type: sendType || 'HEART' }
             });
@@ -1558,26 +1569,14 @@ const Home = ({ initialTab }) => {
         }
 
         const serverData = res?.data?.data;
-        const latestDesired = reactionDesiredStateRef.current.get(strPostId);
-
-        // Hỗ trợ cả cấu trúc ReactionSummaryDTO (/react) và PostDTO (/like)
-        const serverLiked = serverData
-          ? (serverData.userReaction !== undefined ? !!serverData.userReaction : !!serverData.isLikedByMe)
-          : false;
-        const serverReaction = serverData?.userReaction || serverData?.myReaction || null;
-        const serverLikesCount = serverData?.totalCount !== undefined
-          ? serverData.totalCount
-          : (serverData?.likesCount ?? 0);
-        const serverTopReactions = serverData?.topReactions || [];
-
-        // Kiểm tra xem trạng thái server trả về có trùng khớp với mong muốn mới nhất không
-        if (latestDesired && latestDesired.isLiked !== serverLiked) {
-          // Người dùng đã ấn thêm trong lúc request đang bay, lặp lại để đồng bộ
-          continue;
-        }
-
-        // Đã đồng bộ hoàn tất, cập nhật summary an toàn
         if (serverData) {
+          const serverLiked = serverData.userReaction !== undefined ? !!serverData.userReaction : !!serverData.isLikedByMe;
+          const serverReaction = serverData.userReaction || serverData.myReaction || null;
+          const serverLikesCount = serverData.totalCount !== undefined
+            ? serverData.totalCount
+            : (serverData?.likesCount ?? 0);
+          const serverTopReactions = serverData?.topReactions || [];
+
           setPosts(prev => prev.map(p => {
             if (String(p.id) !== strPostId) return p;
             return {
@@ -1601,16 +1600,14 @@ const Home = ({ initialTab }) => {
             };
           });
         }
-        break;
+      } catch (err) {
+        console.warn("Lỗi sync cảm xúc:", err);
+      } finally {
+        reactionDesiredStateRef.current.delete(strPostId);
       }
-    } catch (err) {
-      console.warn("Lỗi sync cảm xúc:", err);
-      // TUYỆT ĐỐI KHÔNG XÓA BÀI VIẾT KHỎI FEED ĐỂ TRÁNH GIẬT NHẢY MÀN HÌNH
-      fetchPosts(true);
-    } finally {
-      reactionInFlightMapRef.current.delete(strPostId);
-      reactionDesiredStateRef.current.delete(strPostId);
-    }
+    }, 200);
+
+    reactionDebounceMapRef.current.set(strPostId, timer);
   }, []);
 
   // Bình luận
@@ -1789,10 +1786,11 @@ const Home = ({ initialTab }) => {
   };
 
   const handleAddComment = async (postId) => {
-    if (submittingComment[postId]) return;
+    if (submittingComment[postId] || submittingCommentRef.current.has(postId)) return;
     const text = commentInputs[postId]?.trim();
     if (!text) return;
 
+    submittingCommentRef.current.add(postId);
     const replyTarget = replyTargetMap[postId];
     const payload = {
       content: text,
@@ -1800,17 +1798,26 @@ const Home = ({ initialTab }) => {
       replyToUser: replyTarget?.authorAccount || null
     };
 
+    // Xóa input ngay lập tức để chống spam Enter liên tục
+    setCommentInputs(prev => ({ ...prev, [postId]: '' }));
+    setReplyTargetMap(prev => ({ ...prev, [postId]: null }));
+
     try {
       setSubmittingComment(prev => ({ ...prev, [postId]: true }));
       const res = await axiosClient.post(`/posts/${postId}/comments`, payload);
       if (res.data && res.data.data) {
-        setCommentsMap(prev => ({
-          ...prev,
-          [postId]: [...(prev[postId] || []), res.data.data]
-        }));
+        const newCmt = res.data.data;
+        setCommentsMap(prev => {
+          const currentList = prev[postId] || [];
+          if (currentList.some(c => c.id === newCmt.id)) {
+            return prev;
+          }
+          return {
+            ...prev,
+            [postId]: [...currentList, newCmt]
+          };
+        });
         playCommentSuccessSound();
-        setCommentInputs(prev => ({ ...prev, [postId]: '' }));
-        setReplyTargetMap(prev => ({ ...prev, [postId]: null }));
         setPosts(prev => prev.map(p => p.id === postId ? { ...p, commentsCount: (p.commentsCount || 0) + 1 } : p));
       }
     } catch (err) {
@@ -1818,8 +1825,11 @@ const Home = ({ initialTab }) => {
         setPosts(prev => prev.filter(p => p.id !== postId));
         setSelectedThreadPost(prev => prev?.id === postId ? null : prev);
       }
+      // Phục hồi lại nội dung nhập nếu bị lỗi mạng/server
+      setCommentInputs(prev => ({ ...prev, [postId]: text }));
       toast.error(err.response?.data?.message || "Lỗi gửi phản hồi!", { id: 'comment-err' });
     } finally {
+      submittingCommentRef.current.delete(postId);
       setSubmittingComment(prev => ({ ...prev, [postId]: false }));
     }
   };

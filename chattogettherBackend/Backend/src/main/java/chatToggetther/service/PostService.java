@@ -794,10 +794,15 @@ public class PostService {
                 ? reactionType.trim().toUpperCase() 
                 : "HEART";
 
-        Optional<PostLikeEntity> existingLike = this.postLikeRepository.findByPostAndUser(post, currentUser);
         String finalUserReaction = null;
-        if (existingLike.isPresent()) {
-            PostLikeEntity like = existingLike.get();
+        List<PostLikeEntity> existingLikes = this.postLikeRepository.findAllByPostAndUser(post, currentUser);
+        if (!existingLikes.isEmpty()) {
+            PostLikeEntity like = existingLikes.get(0);
+            if (existingLikes.size() > 1) {
+                for (int i = 1; i < existingLikes.size(); i++) {
+                    this.postLikeRepository.delete(existingLikes.get(i));
+                }
+            }
             if (desiredReaction.equalsIgnoreCase(like.getReactionType())) {
                 this.postLikeRepository.delete(like);
                 finalUserReaction = null;
@@ -869,9 +874,14 @@ public class PostService {
                 : "HEART";
 
         boolean isLikedNow = false;
-        Optional<PostLikeEntity> existingLike = this.postLikeRepository.findByPostAndUser(post, currentUser);
-        if (existingLike.isPresent()) {
-            PostLikeEntity like = existingLike.get();
+        List<PostLikeEntity> existingLikes = this.postLikeRepository.findAllByPostAndUser(post, currentUser);
+        if (!existingLikes.isEmpty()) {
+            PostLikeEntity like = existingLikes.get(0);
+            if (existingLikes.size() > 1) {
+                for (int i = 1; i < existingLikes.size(); i++) {
+                    this.postLikeRepository.delete(existingLikes.get(i));
+                }
+            }
             if (desiredReaction.equalsIgnoreCase(like.getReactionType())) {
                 this.postLikeRepository.delete(like);
                 isLikedNow = false; // Đã tháo tim
@@ -957,6 +967,13 @@ public class PostService {
         PostEntity post = this.postRepository.findById(postId).orElseThrow(() ->
             new AppException(404, "Bài viết không tồn tại", 404)
         );
+
+        // Chống spam bình luận liên tục (Anti-spam / Debounce 2 giây)
+        LocalDateTime twoSecsAgo = LocalDateTime.now().minusSeconds(2);
+        List<CommentEntity> recentCmts = this.commentRepository.findRecentUserComments(post, currentUser, request.getContent().trim(), twoSecsAgo);
+        if (!recentCmts.isEmpty()) {
+            return new ResponseData<>(200, "Bình luận thành công", this.mapToCommentDTO(recentCmts.get(0), currentUser));
+        }
 
         CommentEntity comment = new CommentEntity();
         comment.setPost(post);
