@@ -809,8 +809,11 @@ const ProfilePage = () => {
         />
       )}
 
-      {/* TOP NAVBAR MINIMAL */}
-      <header className="sticky top-0 z-40 bg-[#0c0d12]/90 backdrop-blur-md border-b border-zinc-800/80 px-4 sm:px-6 py-3.5">
+      {/* TOP NAVBAR MINIMAL (SAFE AREA) */}
+      <header 
+        style={{ paddingTop: 'calc(14px + env(safe-area-inset-top, 0px))' }}
+        className="sticky top-0 z-40 bg-[#0c0d12]/90 backdrop-blur-md border-b border-zinc-800/80 px-4 sm:px-6 pb-3.5"
+      >
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button

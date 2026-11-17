@@ -1772,7 +1772,10 @@ export const DirectMessagePage = () => {
     <div className="flex flex-col h-screen w-full bg-zinc-950 text-zinc-100 select-none overflow-hidden font-sans animate-in fade-in duration-200">
 
       {/* HEADER TOÀN TRANG (Topbar) - Ẩn trên mobile khi đang mở khung chat chi tiết để tránh trùng lặp 2 thanh Header */}
-      <header className={`h-14 border-b border-zinc-800/80 bg-zinc-950/90 backdrop-blur px-4 items-center justify-between shrink-0 z-20 ${urlTargetUserId ? 'hidden md:flex' : 'flex'}`}>
+      <header 
+        style={{ paddingTop: 'calc(10px + env(safe-area-inset-top, 0px))', paddingBottom: '10px' }}
+        className={`min-h-14 border-b border-zinc-800/80 bg-zinc-950/90 backdrop-blur px-4 items-center justify-between shrink-0 z-20 ${urlTargetUserId ? 'hidden md:flex' : 'flex'}`}
+      >
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -2024,8 +2027,11 @@ export const DirectMessagePage = () => {
           ) : (
             <div className="flex-1 flex flex-col h-full overflow-hidden">
 
-              {/* TOPBAR CỦA KHUNG CHAT */}
-              <div className="h-14 px-3 sm:px-4 border-b border-zinc-800/80 bg-zinc-950/95 backdrop-blur flex items-center justify-between shrink-0 z-10">
+              {/* TOPBAR CỦA KHUNG CHAT (SAFE-AREA TOP) */}
+              <div 
+                style={{ paddingTop: 'calc(10px + env(safe-area-inset-top, 0px))', paddingBottom: '10px' }}
+                className="min-h-14 px-3 sm:px-4 border-b border-zinc-800/80 bg-zinc-950/95 backdrop-blur flex items-center justify-between shrink-0 z-10"
+              >
                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                   <button
                     type="button"
@@ -2607,6 +2613,7 @@ export const DirectMessagePage = () => {
               {/* KHUNG NHẬP LIỆU DƯỚI ĐÁY */}
               <form
                 onSubmit={handleSendMessage}
+                style={{ paddingBottom: 'calc(12px + env(safe-area-inset-bottom, 0px))' }}
                 className="shrink-0 p-3 sm:p-4 border-t border-zinc-800/80 bg-zinc-950 flex items-center gap-2"
               >
                 {/* Input chọn file ẩn */}

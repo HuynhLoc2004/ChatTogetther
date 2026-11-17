@@ -10,6 +10,7 @@ import ProfilePage from './pages/ProfilePage';
 import DirectMessagePage from './pages/DirectMessagePage';
 import CallPage from './pages/CallPage';
 import GlobalCallBanner from './components/GlobalCallBanner';
+import OnboardingIntro from './components/OnboardingIntro';
 import { AuthProvider } from './context/AuthContext';
 import { PresenceProvider } from './context/PresenceContext';
 import './App.css';
@@ -195,39 +196,42 @@ function App() {
           <Router>
           <RouteTracker />
           <div className="app-root">
+          <OnboardingIntro />
           <Toaster 
             position="top-center" 
             reverseOrder={false}
             containerStyle={{
-              top: 58,
+              top: 'calc(16px + env(safe-area-inset-top, 0px))',
               left: 12,
               right: 12,
               zIndex: 99999
             }}
             toastOptions={{
-              duration: 2500,
+              duration: 3000,
               style: {
-                background: 'rgba(24, 24, 27, 0.95)',
-                color: '#f4f4f5',
-                border: '1px solid #3f3f46',
-                borderRadius: '12px',
-                fontSize: '12px',
+                background: 'rgba(22, 25, 34, 0.92)',
+                color: '#F8FAFC',
+                border: '1px solid rgba(255, 255, 255, 0.10)',
+                borderRadius: '14px',
+                fontSize: '13px',
                 fontWeight: '500',
-                padding: '8px 14px',
-                backdropFilter: 'blur(10px)',
-                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.6)',
-                maxWidth: '92vw'
+                padding: '10px 16px',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
+                boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.05)',
+                maxWidth: '92vw',
+                fontFamily: "'Plus Jakarta Sans', 'Inter', sans-serif"
               },
               success: {
                 iconTheme: {
-                  primary: '#27272a',
-                  secondary: '#10b981',
+                  primary: '#10B981',
+                  secondary: '#0D0F14',
                 },
               },
               error: {
                 iconTheme: {
-                  primary: '#27272a',
-                  secondary: '#f43f5e',
+                  primary: '#F43F5E',
+                  secondary: '#0D0F14',
                 },
               },
             }}

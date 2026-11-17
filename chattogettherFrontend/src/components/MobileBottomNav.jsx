@@ -79,82 +79,88 @@ export const MobileBottomNav = ({
   };
 
   return (
-    <nav className="mobile-bottom-nav lg:hidden fixed bottom-0 left-0 right-0 h-16 bg-zinc-950/95 backdrop-blur-md border-t border-zinc-800/80 grid grid-cols-5 items-center justify-items-center z-50 px-1">
+    <nav
+      className="mobile-bottom-nav lg:hidden fixed bottom-0 left-0 right-0 bg-[#161922]/95 backdrop-blur-md border-t border-white/10 grid grid-cols-5 items-center justify-items-center z-50 px-1 select-none"
+      style={{
+        paddingBottom: 'max(8px, env(safe-area-inset-bottom))',
+        height: 'calc(62px + env(safe-area-inset-bottom, 0px))'
+      }}
+    >
       {/* 1. Sảnh */}
       <button 
         type="button"
-        className={`b-nav-item w-full h-full flex flex-col items-center justify-center gap-1 transition-all active:scale-90 ${
-          activeTab === 'feed' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-zinc-200'
+        className={`b-nav-item w-full min-h-[44px] flex flex-col items-center justify-center gap-1 transition-all active:scale-90 cursor-pointer ${
+          activeTab === 'feed' ? 'text-white font-semibold' : 'text-[#94A3B8] hover:text-[#F8FAFC]'
         }`}
         onClick={handleSanhClick}
-        title="Bảng tin trực tuyến"
+        title="Sảnh trực tuyến"
       >
-        <div className={`p-1 rounded-xl transition-all ${activeTab === 'feed' ? 'bg-zinc-800/80 shadow-sm' : ''}`}>
-          <Compass size={18} strokeWidth={activeTab === 'feed' ? 2.2 : 1.6} />
+        <div className={`p-1.5 rounded-xl transition-all ${activeTab === 'feed' ? 'bg-white/10 shadow-sm' : ''}`}>
+          <Compass size={22} strokeWidth={1.75} />
         </div>
-        <span className="text-[10px] tracking-tight">Sảnh</span>
+        <span className="text-[10px] tracking-tight font-medium">Sảnh</span>
       </button>
 
       {/* 2. Cộng đồng */}
       <button 
         type="button"
-        className={`b-nav-item w-full h-full flex flex-col items-center justify-center gap-1 transition-all active:scale-90 ${
-          activeTab === 'groups' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-zinc-200'
+        className={`b-nav-item w-full min-h-[44px] flex flex-col items-center justify-center gap-1 transition-all active:scale-90 cursor-pointer ${
+          activeTab === 'groups' ? 'text-white font-semibold' : 'text-[#94A3B8] hover:text-[#F8FAFC]'
         }`}
         onClick={handleCommunityClick}
-        title="Cộng đồng & Thảo luận"
+        title="Cộng đồng"
       >
-        <div className={`p-1 rounded-xl transition-all ${activeTab === 'groups' ? 'bg-zinc-800/80 shadow-sm' : ''}`}>
-          <Users size={18} strokeWidth={activeTab === 'groups' ? 2.2 : 1.6} />
+        <div className={`p-1.5 rounded-xl transition-all ${activeTab === 'groups' ? 'bg-white/10 shadow-sm' : ''}`}>
+          <Users size={22} strokeWidth={1.75} />
         </div>
-        <span className="text-[10px] tracking-tight">Cộng đồng</span>
+        <span className="text-[10px] tracking-tight font-medium">Cộng đồng</span>
       </button>
 
-      {/* 3. Dò FM (Nút tròn trắng nổi bật chính giữa w-11 h-11) */}
-      <div className="b-nav-cell flex items-center justify-center w-full h-full">
+      {/* 3. Dò FM (Gradient Indigo -> Violet phát sáng nhẹ shadow-indigo-500/30) */}
+      <div className="b-nav-cell flex items-center justify-center w-full min-h-[44px]">
         <button 
           type="button"
-          className="w-11 h-11 rounded-full bg-white text-zinc-950 shadow-md flex items-center justify-center hover:bg-zinc-200 active:scale-90 transition-all shadow-white/10"
+          className="w-12 h-12 rounded-full bg-gradient-to-tr from-[#6366F1] to-[#8B5CF6] text-white shadow-lg shadow-indigo-500/30 flex items-center justify-center hover:opacity-95 active:scale-90 transition-all border border-white/20 cursor-pointer"
           onClick={handleFmClick}
           title="Mở Trạm Dò Sóng FM"
         >
-          <Radio size={20} className="text-zinc-950" />
+          <Radio size={22} strokeWidth={1.75} className="text-white" />
         </button>
       </div>
 
-      {/* 4. Bạn bè & Kết nối (Thay thế Tin nhắn vì trên Header đã có icon tin nhắn) */}
+      {/* 4. Bạn bè & Kết nối */}
       <button 
         type="button"
-        className={`b-nav-item w-full h-full flex flex-col items-center justify-center gap-1 transition-all active:scale-90 ${
-          activeTab === 'friends' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-zinc-200'
+        className={`b-nav-item w-full min-h-[44px] flex flex-col items-center justify-center gap-1 transition-all active:scale-90 cursor-pointer ${
+          activeTab === 'friends' ? 'text-white font-semibold' : 'text-[#94A3B8] hover:text-[#F8FAFC]'
         }`}
         onClick={handleFriendsClick}
-        title="Bạn bè & Tìm kiếm kết bạn"
+        title="Bạn bè"
       >
-        <div className={`relative p-1 rounded-xl transition-all ${activeTab === 'friends' ? 'bg-zinc-800/80 shadow-sm' : ''}`}>
-          <UserCheck size={18} strokeWidth={activeTab === 'friends' ? 2.2 : 1.6} />
+        <div className={`relative p-1.5 rounded-xl transition-all ${activeTab === 'friends' ? 'bg-white/10 shadow-sm' : ''}`}>
+          <UserCheck size={22} strokeWidth={1.75} />
           {pendingFriendsCount > 0 && (
-            <span className="absolute -top-1 -right-2 min-w-[16px] h-[16px] px-1 rounded-full bg-emerald-500 text-zinc-950 text-[9px] font-mono font-bold flex items-center justify-center border-2 border-zinc-950 shadow-md animate-pulse">
+            <span className="absolute -top-1 -right-2 min-w-[16px] h-[16px] px-1 rounded-full bg-[#10B981] text-zinc-950 text-[9px] font-mono font-bold flex items-center justify-center border-2 border-[#161922] shadow-md animate-pulse">
               {pendingFriendsCount > 9 ? '9+' : pendingFriendsCount}
             </span>
           )}
         </div>
-        <span className="text-[10px] tracking-tight">Bạn bè</span>
+        <span className="text-[10px] tracking-tight font-medium">Bạn bè</span>
       </button>
 
       {/* 5. Hồ sơ */}
       <button 
         type="button"
-        className={`b-nav-item w-full h-full flex flex-col items-center justify-center gap-1 transition-all active:scale-90 ${
-          activeTab === 'profile' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-zinc-200'
+        className={`b-nav-item w-full min-h-[44px] flex flex-col items-center justify-center gap-1 transition-all active:scale-90 cursor-pointer ${
+          activeTab === 'profile' ? 'text-white font-semibold' : 'text-[#94A3B8] hover:text-[#F8FAFC]'
         }`}
         onClick={handleProfileClick}
         title="Hồ sơ cá nhân"
       >
-        <div className={`p-1 rounded-xl transition-all ${activeTab === 'profile' ? 'bg-zinc-800/80 shadow-sm' : ''}`}>
-          <User size={18} strokeWidth={activeTab === 'profile' ? 2.2 : 1.6} />
+        <div className={`p-1.5 rounded-xl transition-all ${activeTab === 'profile' ? 'bg-white/10 shadow-sm' : ''}`}>
+          <User size={22} strokeWidth={1.75} />
         </div>
-        <span className="text-[10px] tracking-tight">Hồ sơ</span>
+        <span className="text-[10px] tracking-tight font-medium">Hồ sơ</span>
       </button>
     </nav>
   );

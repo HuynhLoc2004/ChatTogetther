@@ -1171,9 +1171,12 @@ const CallPage = () => {
       <audio ref={remoteAudioRef} autoPlay playsInline controls={false} />
 
       {/* ============================================================== */}
-      {/* 1. HEADER CUỘC GỌI TOÀN MÀN HÌNH (DARK ZINC TỐI GIẢN) */}
+      {/* 1. HEADER CUỘC GỌI TOÀN MÀN HÌNH (DARK ZINC TỐI GIẢN & SAFE AREA) */}
       {/* ============================================================== */}
-      <header className="h-16 px-4 sm:px-8 border-b border-zinc-800 bg-zinc-900/90 backdrop-blur-md flex items-center justify-between shrink-0 z-20">
+      <header 
+        style={{ paddingTop: 'calc(10px + env(safe-area-inset-top, 0px))', paddingBottom: '10px' }}
+        className="min-h-16 px-4 sm:px-8 border-b border-zinc-800 bg-zinc-900/90 backdrop-blur-md flex items-center justify-between shrink-0 z-20"
+      >
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -1312,9 +1315,12 @@ const CallPage = () => {
       </main>
 
       {/* ============================================================== */}
-      {/* 3. THANH ĐIỀU KHIỂN DƯỚI ĐÁY (ACTION CONTROLS BAR) */}
+      {/* 3. THANH ĐIỀU KHIỂN DƯỚI ĐÁY (ACTION CONTROLS BAR & SAFE AREA) */}
       {/* ============================================================== */}
-      <footer className="h-20 px-4 sm:px-8 border-t border-zinc-800 bg-zinc-900/90 backdrop-blur-md flex items-center justify-center gap-3 sm:gap-4 shrink-0 z-20">
+      <footer 
+        style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom, 0px))', paddingTop: '14px' }}
+        className="min-h-20 px-4 sm:px-8 border-t border-zinc-800 bg-zinc-900/90 backdrop-blur-md flex items-center justify-center gap-3 sm:gap-4 shrink-0 z-20"
+      >
         {/* Nút Bật / Tắt Mic */}
         <button
           type="button"

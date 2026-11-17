@@ -7157,7 +7157,11 @@ const Home = ({ initialTab }) => {
 
         .mobile-top-bar {
           display: none;
-          padding: 10px 14px;
+          padding-top: max(10px, calc(10px + env(safe-area-inset-top, 0px)));
+          padding-bottom: 10px;
+          padding-left: max(14px, calc(14px + env(safe-area-inset-left, 0px)));
+          padding-right: max(14px, calc(14px + env(safe-area-inset-right, 0px)));
+          min-height: calc(56px + env(safe-area-inset-top, 0px));
           align-items: center;
           justify-content: space-between;
           border-bottom: 1px solid var(--card-border);
@@ -7956,24 +7960,26 @@ const Home = ({ initialTab }) => {
           color: #fb7185;
         }
 
-        /* Nút CTA Đăng bài: Tối giản, tương phản cao chuẩn dark mode (Không dùng màu neon bóng chói mắt) */
+        /* Nút CTA Đăng bài: Gradient Midnight Indigo -> Violet chuẩn Brand Primary */
         .btn-publish-submit {
-          background: #f4f4f5;
-          color: #09090b;
+          background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+          color: #ffffff;
           border: none;
           padding: 7px 18px;
           border-radius: 9px;
           font-size: 12px;
           font-weight: 600;
           cursor: pointer;
-          transition: all 0.15s ease;
+          transition: all 0.2s cubic-bezier(0.22, 1, 0.36, 1);
           white-space: nowrap;
           flex-shrink: 0;
           min-width: max-content;
+          box-shadow: 0 4px 14px 0 rgba(99, 102, 241, 0.35);
         }
         .btn-publish-submit:hover:not(:disabled) {
-          background: #ffffff;
+          filter: brightness(1.08);
           transform: translateY(-1px);
+          box-shadow: 0 6px 18px 0 rgba(99, 102, 241, 0.45);
         }
         .btn-publish-submit:active:not(:disabled) {
           transform: scale(0.97);

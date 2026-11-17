@@ -1,20 +1,20 @@
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap');
 
 :root {
-  --primary: #f1f5f9;
-  --primary-hover: #ffffff;
-  --bg-dark: #13151b;
-  --bg-card: #171a23;
-  --text-white: #f1f5f9;
-  --text-muted: #8896ab;
-  --border-color: #232838;
+  --primary: #6366F1;
+  --primary-hover: #8B5CF6;
+  --bg-dark: #0D0F14;
+  --bg-card: #161922;
+  --text-white: #F8FAFC;
+  --text-muted: #94A3B8;
+  --border-color: rgba(255, 255, 255, 0.06);
 }
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  background-color: #13151b;
-  color: #f1f5f9;
+  font-family: 'Inter', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: #0D0F14;
+  color: #F8FAFC;
   -webkit-font-smoothing: antialiased;
 }
 

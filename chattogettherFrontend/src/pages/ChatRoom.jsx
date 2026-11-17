@@ -1661,9 +1661,12 @@ const ChatRoom = () => {
         )}
 
         {/* ============================================================== */}
-        {/* HEADER PHÒNG CHAT NHÓM ĐỒNG BỘ */}
+        {/* HEADER PHÒNG CHAT NHÓM ĐỒNG BỘ (SAFE AREA) */}
         {/* ============================================================== */}
-        <div className="h-16 px-4 sm:px-6 border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-md flex items-center justify-between shrink-0 z-10">
+        <div 
+          style={{ paddingTop: 'calc(10px + env(safe-area-inset-top, 0px))', paddingBottom: '10px' }}
+          className="min-h-16 px-4 sm:px-6 border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-md flex items-center justify-between shrink-0 z-10"
+        >
           <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={handleGoBack}
