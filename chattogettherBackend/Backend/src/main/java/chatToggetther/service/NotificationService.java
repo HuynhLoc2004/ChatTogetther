@@ -16,9 +16,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -148,18 +151,61 @@ public class NotificationService {
             return null;
         }
 
-        NotificationEntity entity = new NotificationEntity();
-        entity.setRecipientId(recipientId);
-        entity.setActorId(actorId);
-        entity.setActorUsername(actorUsername);
-        entity.setActorName(actorDisplayName != null && !actorDisplayName.isEmpty() ? actorDisplayName : actorUsername);
-        entity.setActorAvatar(actorAvatar);
-        entity.setType(type);
-        entity.setReferenceId(referenceId);
-        entity.setContent(content);
-        entity.setStatus(status != null ? status : "PENDING");
-        entity.setIsRead(false);
-        entity.setCreatedAt(LocalDateTime.now());
+        // Gôm gọn thông báo (Deduplicate / Aggregate):
+        // Nếu cùng 1 người tương tác nhiều lần trên 1 đối tượng (bình luận, trả lời bình luận, thả cảm xúc),
+        // gôm lại thành 1 thông báo duy nhất, cập nhật thời gian mới nhất và nội dung mới nhất.
+        boolean isAggregatable = type != null && (
+                "POST_COMMENT".equalsIgnoreCase(type)
+                || "COMMENT_REPLY".equalsIgnoreCase(type)
+                || "POST_REACT".equalsIgnoreCase(type)
+                || "POST_LIKE".equalsIgnoreCase(type)
+                || "COMMENT_LIKE".equalsIgnoreCase(type)
+                || "REACTION".equalsIgnoreCase(type)
+                || "POST_SHARE".equalsIgnoreCase(type)
+        );
+
+        NotificationEntity entity = null;
+        if (isAggregatable && actorId != null && referenceId != null) {
+            List<NotificationEntity> existingList = notificationRepository
+                    .findByRecipientIdAndActorIdAndTypeAndReferenceIdOrderByCreatedAtDesc(recipientId, actorId, type, referenceId);
+            if (!existingList.isEmpty()) {
+                // Tái sử dụng bản ghi mới nhất, cập nhật thời gian mới nhất và đánh dấu chưa đọc
+                entity = existingList.get(0);
+                entity.setActorUsername(actorUsername);
+                entity.setActorName(actorDisplayName != null && !actorDisplayName.isEmpty() ? actorDisplayName : actorUsername);
+                entity.setActorAvatar(actorAvatar);
+                entity.setContent(content);
+                entity.setStatus(status != null ? status : "COMPLETED");
+                entity.setIsRead(false);
+                entity.setCreatedAt(LocalDateTime.now());
+
+                // Nếu có các bản ghi trùng lặp cũ từ trước trong DB, xóa sạch để giải phóng bộ nhớ lưu trữ
+                if (existingList.size() > 1) {
+                    List<NotificationEntity> duplicatesToDelete = existingList.subList(1, existingList.size());
+                    try {
+                        notificationRepository.deleteAll(duplicatesToDelete);
+                        log.info(">>> [NOTIFICATION] Đã dọn dẹp {} bản ghi thông báo trùng lặp cũ trong DB", duplicatesToDelete.size());
+                    } catch (Exception e) {
+                        log.warn("Lỗi dọn dẹp thông báo trùng lặp: {}", e.getMessage());
+                    }
+                }
+            }
+        }
+
+        if (entity == null) {
+            entity = new NotificationEntity();
+            entity.setRecipientId(recipientId);
+            entity.setActorId(actorId);
+            entity.setActorUsername(actorUsername);
+            entity.setActorName(actorDisplayName != null && !actorDisplayName.isEmpty() ? actorDisplayName : actorUsername);
+            entity.setActorAvatar(actorAvatar);
+            entity.setType(type);
+            entity.setReferenceId(referenceId);
+            entity.setContent(content);
+            entity.setStatus(status != null ? status : "PENDING");
+            entity.setIsRead(false);
+            entity.setCreatedAt(LocalDateTime.now());
+        }
 
         NotificationEntity saved = notificationRepository.save(entity);
         NotificationDTO dto = mapToDTO(saved);
@@ -207,7 +253,7 @@ public class NotificationService {
         }
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public ResponseData<NotificationListResponseDTO> getNotifications(JwtAuthenticationToken token) {
         if (token == null) {
             return new ResponseData<>(200, "Lấy danh sách thông báo thành công",
@@ -220,9 +266,49 @@ public class NotificationService {
         }
 
         List<NotificationEntity> entities = notificationRepository.findByRecipientIdOrderByCreatedAtDesc(currentUserId);
-        long unreadCount = notificationRepository.countByRecipientIdAndIsReadFalse(currentUserId);
 
-        List<NotificationDTO> dtos = entities.stream()
+        // Gôm gọn thông báo trùng lặp và dọn dẹp các bản ghi cũ thừa trong database
+        List<NotificationEntity> consolidatedEntities = new ArrayList<>();
+        List<NotificationEntity> toDelete = new ArrayList<>();
+        Set<String> seenKeys = new HashSet<>();
+
+        for (NotificationEntity entity : entities) {
+            String type = entity.getType();
+            boolean isAggregatable = type != null && (
+                    "POST_COMMENT".equalsIgnoreCase(type)
+                    || "COMMENT_REPLY".equalsIgnoreCase(type)
+                    || "POST_REACT".equalsIgnoreCase(type)
+                    || "POST_LIKE".equalsIgnoreCase(type)
+                    || "COMMENT_LIKE".equalsIgnoreCase(type)
+                    || "REACTION".equalsIgnoreCase(type)
+                    || "POST_SHARE".equalsIgnoreCase(type)
+            );
+
+            if (isAggregatable && entity.getActorId() != null && entity.getReferenceId() != null) {
+                String groupKey = type.toUpperCase() + "_" + entity.getActorId() + "_" + entity.getReferenceId();
+                if (seenKeys.contains(groupKey)) {
+                    toDelete.add(entity);
+                    continue;
+                }
+                seenKeys.add(groupKey);
+            }
+            consolidatedEntities.add(entity);
+        }
+
+        if (!toDelete.isEmpty()) {
+            try {
+                notificationRepository.deleteAll(toDelete);
+                log.info(">>> [NOTIFICATION] Đã gôm gọn và xóa {} bản ghi thông báo trùng lặp cũ trong DB cho user {}", toDelete.size(), currentUserId);
+            } catch (Exception e) {
+                log.warn("Lỗi dọn dẹp bản ghi thông báo trùng lặp: {}", e.getMessage());
+            }
+        }
+
+        long unreadCount = consolidatedEntities.stream()
+                .filter(n -> n.getIsRead() == null || !n.getIsRead())
+                .count();
+
+        List<NotificationDTO> dtos = consolidatedEntities.stream()
                 .map(this::mapToDTO)
                 .collect(Collectors.toList());
 

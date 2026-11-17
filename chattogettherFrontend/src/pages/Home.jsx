@@ -902,7 +902,20 @@ const Home = ({ initialTab }) => {
         const socialNotifs = res.data.data.notifications.filter(n =>
           n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM'
         );
-        setNotifications(socialNotifs);
+        // Gôm gọn thông báo: Cùng người + cùng bài viết + cùng loại -> Chỉ giữ 1 thông báo mới nhất
+        const seenKeys = new Set();
+        const consolidated = [];
+        for (const n of socialNotifs) {
+          const isAggregatable = ['POST_COMMENT', 'COMMENT_REPLY', 'POST_REACT', 'POST_LIKE', 'REACTION', 'COMMENT_LIKE', 'POST_SHARE'].includes(n.type);
+          const refId = n.referenceId || n.targetPostId || n.postId;
+          if (isAggregatable && n.actorId && refId) {
+            const groupKey = `${n.type}_${n.actorId}_${refId}`;
+            if (seenKeys.has(groupKey)) continue;
+            seenKeys.add(groupKey);
+          }
+          consolidated.push(n);
+        }
+        setNotifications(consolidated);
       }
     } catch (_) {
       // Bỏ qua lỗi êm đềm khi server khởi động hoặc chưa có thông báo
@@ -2640,7 +2653,21 @@ const Home = ({ initialTab }) => {
               const isChatMsg = notif.type === 'MESSAGE' || notif.type === 'CHAT' || notif.type === 'DM';
               // TUYỆT ĐỐI không đưa tin nhắn chat vào danh sách Chuông thông báo (Bell icon)
               if (!isChatMsg) {
-                setNotifications(prev => [normalizedNotif, ...prev.filter(n => n.id !== normalizedNotif.id)]);
+                setNotifications(prev => {
+                  const isAggregatable = ['POST_COMMENT', 'COMMENT_REPLY', 'POST_REACT', 'POST_LIKE', 'REACTION', 'COMMENT_LIKE', 'POST_SHARE'].includes(normalizedNotif.type);
+                  const targetRefId = normalizedNotif.referenceId || normalizedNotif.targetPostId || normalizedNotif.postId;
+                  const filtered = prev.filter(n => {
+                    if (n.id === normalizedNotif.id) return false;
+                    if (isAggregatable && n.type === normalizedNotif.type && String(n.actorId) === String(normalizedNotif.actorId)) {
+                      const existingRefId = n.referenceId || n.targetPostId || n.postId;
+                      if (String(existingRefId) === String(targetRefId)) {
+                        return false; // Gôm gọn: bỏ thông báo cũ của cùng người + cùng bài viết
+                      }
+                    }
+                    return true;
+                  });
+                  return [normalizedNotif, ...filtered];
+                });
                 setQuickReplyText('');
                 setIsTypingQuickReply(false);
                 setFloatingNotif({

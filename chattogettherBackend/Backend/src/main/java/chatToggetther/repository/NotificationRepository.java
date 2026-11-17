@@ -20,6 +20,10 @@ public interface NotificationRepository extends JpaRepository<NotificationEntity
             Long recipientId, Long actorId, String type
     );
 
+    List<NotificationEntity> findByRecipientIdAndActorIdAndTypeAndReferenceIdOrderByCreatedAtDesc(
+            Long recipientId, Long actorId, String type, Long referenceId
+    );
+
     @Modifying
     @Query("UPDATE NotificationEntity n SET n.isRead = true WHERE n.recipientId = :recipientId")
     void markAllAsRead(@Param("recipientId") Long recipientId);
