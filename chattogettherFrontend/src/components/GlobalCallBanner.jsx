@@ -216,6 +216,15 @@ const GlobalCallBanner = () => {
     const callerId = incomingCall.callerId || incomingCall.senderId || incomingCall.userId || incomingCall.fromUserId;
     const roomId = incomingCall.roomId;
 
+    // Kích hoạt quyền phát âm thanh đàm thoại trong sự kiện tương tác bấm chuột của người dùng (User Activation)
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) {
+        const dummyCtx = new AudioCtx();
+        dummyCtx.resume().then(() => dummyCtx.close()).catch(() => {});
+      }
+    } catch (_) {}
+
     stopRingingSound();
     clearDismissTimer();
     setIncomingCall(null);

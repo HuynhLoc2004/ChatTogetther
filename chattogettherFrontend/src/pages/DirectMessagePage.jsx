@@ -2487,396 +2487,396 @@ export const DirectMessagePage = () => {
                               </span>
                             )
                           )}
-                                </div>
+                        </div>
 
-                                {/* Cyber Seen Stamp cho tin nhắn đọc sau cùng */}
-                                {isMe && msg.id === lastReadMyMsgId && (
-                                  <div className="flex items-center gap-1.5 pt-1 text-[10px] text-emerald-400 select-none animate-in fade-in zoom-in-95 duration-200">
-                                    <div className="relative flex items-center justify-center">
-                                      <UserAvatar
-                                        avatarUrl={activePartner?.avatar}
-                                        username={activePartner?.account}
-                                        name={activePartner?.nickname || activePartner?.account}
-                                        size={16}
-                                        className="ring-1 ring-emerald-400/60"
-                                      />
-                                      <span className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-400 ring-1 ring-zinc-950 animate-pulse" />
-                                    </div>
-                                    <span className="font-mono text-[10px] text-emerald-400/90 font-medium">
-                                      {activePartner?.nickname || activePartner?.account || 'Đối phương'} đã xem {msg.formattedTimeRead ? `lúc ${msg.formattedTimeRead}` : ''}
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-                            );
+                        {/* Cyber Seen Stamp cho tin nhắn đọc sau cùng */}
+                        {isMe && msg.id === lastReadMyMsgId && (
+                          <div className="flex items-center gap-1.5 pt-1 text-[10px] text-emerald-400 select-none animate-in fade-in zoom-in-95 duration-200">
+                            <div className="relative flex items-center justify-center">
+                              <UserAvatar
+                                avatarUrl={activePartner?.avatar}
+                                username={activePartner?.account}
+                                name={activePartner?.nickname || activePartner?.account}
+                                size={16}
+                                className="ring-1 ring-emerald-400/60"
+                              />
+                              <span className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-400 ring-1 ring-zinc-950 animate-pulse" />
+                            </div>
+                            <span className="font-mono text-[10px] text-emerald-400/90 font-medium">
+                              {activePartner?.nickname || activePartner?.account || 'Đối phương'} đã xem {msg.formattedTimeRead ? `lúc ${msg.formattedTimeRead}` : ''}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
                   })
                 )}
-                          <div ref={messagesEndRef} />
-                        </div>
+                <div ref={messagesEndRef} />
+              </div>
 
-                        {/* THANH XEM TRƯỚC TRẢ LỜI TIN NHẮN (REPLY BAR) */}
-                        {replyingTo && (
-                          <div className="px-4 py-2 bg-zinc-900/90 border-t border-zinc-800 flex items-center justify-between text-xs animate-in slide-in-from-bottom-2 duration-150">
-                            <div className="flex items-center gap-2 truncate">
-                              <CornerUpLeft size={14} className="text-emerald-400 shrink-0" />
-                              <span className="text-zinc-400">Đang trả lời <strong className="text-zinc-200">{replyingTo.senderName}</strong>:</span>
-                              <span className="truncate italic text-zinc-300 max-w-xs">{replyingTo.message}</span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => setReplyingTo(null)}
-                              className="p-1 hover:text-white text-zinc-400 rounded-md transition-colors"
-                            >
-                              <X size={14} />
-                            </button>
-                          </div>
-                        )}
+              {/* THANH XEM TRƯỚC TRẢ LỜI TIN NHẮN (REPLY BAR) */}
+              {replyingTo && (
+                <div className="px-4 py-2 bg-zinc-900/90 border-t border-zinc-800 flex items-center justify-between text-xs animate-in slide-in-from-bottom-2 duration-150">
+                  <div className="flex items-center gap-2 truncate">
+                    <CornerUpLeft size={14} className="text-emerald-400 shrink-0" />
+                    <span className="text-zinc-400">Đang trả lời <strong className="text-zinc-200">{replyingTo.senderName}</strong>:</span>
+                    <span className="truncate italic text-zinc-300 max-w-xs">{replyingTo.message}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReplyingTo(null)}
+                    className="p-1 hover:text-white text-zinc-400 rounded-md transition-colors"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
 
-                        {/* THANH XEM TRƯỚC MEDIA TRƯỚC KHI GỬI */}
-                        {selectedMedia && (
-                          <div className="px-4 py-2.5 bg-zinc-900 border-t border-zinc-800 flex items-center justify-between animate-in slide-in-from-bottom-2 duration-150">
-                            <div className="flex items-center gap-3">
-                              {selectedMedia.type === 'VIDEO' ? (
-                                <div className="w-12 h-12 bg-black rounded-lg flex items-center justify-center text-white border border-zinc-700">
-                                  <Play size={18} />
-                                </div>
-                              ) : (
-                                <img
-                                  src={selectedMedia.previewUrl}
-                                  alt="Preview"
-                                  className="w-12 h-12 object-cover rounded-lg border border-zinc-700"
-                                />
-                              )}
-                              <div className="text-xs">
-                                <p className="font-medium text-white truncate max-w-xs">{selectedMedia.name}</p>
-                                <span className="text-[10px] text-zinc-400 uppercase font-mono">
-                                  {selectedMedia.type === 'VIDEO' ? 'Tệp Video' : 'Hình ảnh'}
-                                </span>
-                              </div>
-                            </div>
-
-                            <button
-                              type="button"
-                              onClick={handleRemoveMedia}
-                              className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors"
-                            >
-                              <X size={15} />
-                            </button>
-                          </div>
-                        )}
-
-                        {/* KHUNG NHẬP LIỆU DƯỚI ĐÁY */}
-                        <form
-                          onSubmit={handleSendMessage}
-                          className="shrink-0 p-3 sm:p-4 border-t border-zinc-800/80 bg-zinc-950 flex items-center gap-2"
-                        >
-                          {/* Input chọn file ẩn */}
-                          <input
-                            type="file"
-                            ref={fileInputRef}
-                            onChange={handleSelectMedia}
-                            accept="image/*,video/*"
-                            className="hidden"
-                          />
-
-                          {/* Nút icon Tải ảnh / Video */}
-                          <button
-                            type="button"
-                            onClick={() => fileInputRef.current?.click()}
-                            className="p-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white border border-zinc-800 transition-colors shrink-0"
-                            title="Gửi hình ảnh hoặc video"
-                          >
-                            <ImageIcon size={16} />
-                          </button>
-
-                          <input
-                            type="text"
-                            value={textInput}
-                            disabled={partnerNotFound}
-                            onChange={(e) => setTextInput(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' && !e.shiftKey) {
-                                e.preventDefault();
-                                handleSendMessage(e);
-                              }
-                            }}
-                            placeholder={partnerNotFound ? "Không thể nhắn tin cho người dùng này..." : `Nhắn tin cho ${activePartner?.nickname || activePartner?.account || 'đối phương'}...`}
-                            className="flex-1 px-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-700 font-sans disabled:opacity-50"
-                          />
-
-                          <button
-                            type="submit"
-                            disabled={(!textInput.trim() && !selectedMedia) || partnerNotFound}
-                            className="px-4 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1.5 shrink-0"
-                          >
-                            <Send size={13} />
-                            <span className="hidden sm:inline">Gửi</span>
-                          </button>
-                        </form>
-
+              {/* THANH XEM TRƯỚC MEDIA TRƯỚC KHI GỬI */}
+              {selectedMedia && (
+                <div className="px-4 py-2.5 bg-zinc-900 border-t border-zinc-800 flex items-center justify-between animate-in slide-in-from-bottom-2 duration-150">
+                  <div className="flex items-center gap-3">
+                    {selectedMedia.type === 'VIDEO' ? (
+                      <div className="w-12 h-12 bg-black rounded-lg flex items-center justify-center text-white border border-zinc-700">
+                        <Play size={18} />
                       </div>
-                    )
-                  }
-        </main>
+                    ) : (
+                      <img
+                        src={selectedMedia.previewUrl}
+                        alt="Preview"
+                        className="w-12 h-12 object-cover rounded-lg border border-zinc-700"
+                      />
+                    )}
+                    <div className="text-xs">
+                      <p className="font-medium text-white truncate max-w-xs">{selectedMedia.name}</p>
+                      <span className="text-[10px] text-zinc-400 uppercase font-mono">
+                        {selectedMedia.type === 'VIDEO' ? 'Tệp Video' : 'Hình ảnh'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleRemoveMedia}
+                    className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors"
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+              )}
+
+              {/* KHUNG NHẬP LIỆU DƯỚI ĐÁY */}
+              <form
+                onSubmit={handleSendMessage}
+                className="shrink-0 p-3 sm:p-4 border-t border-zinc-800/80 bg-zinc-950 flex items-center gap-2"
+              >
+                {/* Input chọn file ẩn */}
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleSelectMedia}
+                  accept="image/*,video/*"
+                  className="hidden"
+                />
+
+                {/* Nút icon Tải ảnh / Video */}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white border border-zinc-800 transition-colors shrink-0"
+                  title="Gửi hình ảnh hoặc video"
+                >
+                  <ImageIcon size={16} />
+                </button>
+
+                <input
+                  type="text"
+                  value={textInput}
+                  disabled={partnerNotFound}
+                  onChange={(e) => setTextInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage(e);
+                    }
+                  }}
+                  placeholder={partnerNotFound ? "Không thể nhắn tin cho người dùng này..." : `Nhắn tin cho ${activePartner?.nickname || activePartner?.account || 'đối phương'}...`}
+                  className="flex-1 px-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-700 font-sans disabled:opacity-50"
+                />
+
+                <button
+                  type="submit"
+                  disabled={(!textInput.trim() && !selectedMedia) || partnerNotFound}
+                  className="px-4 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1.5 shrink-0"
+                >
+                  <Send size={13} />
+                  <span className="hidden sm:inline">Gửi</span>
+                </button>
+              </form>
+
             </div>
+          )
+          }
+        </main>
+      </div>
 
       {/* MODAL CHUYỂN TIẾP TIN NHẮN (FORWARD MODAL: BẠN BÈ & NHÓM CHAT) */}
-          {forwardingMsg && (
-            <div className="fixed inset-0 z-[99999] bg-black/80 flex items-center justify-center p-4 animate-in fade-in duration-150">
-              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-sm w-full p-4 space-y-3 shadow-2xl">
-                <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    <Forward size={16} className="text-emerald-400" />
-                    Chuyển tiếp tin nhắn
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={() => setForwardingMsg(null)}
-                    className="text-zinc-400 hover:text-white"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-
-                {/* Xem trước nội dung tin nhắn cần chuyển tiếp */}
-                <div className="p-2.5 rounded-xl bg-zinc-950 border border-zinc-800/80 text-xs text-zinc-300 italic line-clamp-2">
-                  "{forwardingMsg.message || '[Tệp đính kèm]'}"
-                </div>
-
-                {/* Chuyển tab: Bạn bè / Nhóm chat */}
-                <div className="flex items-center gap-1 p-1 bg-zinc-950 rounded-xl border border-zinc-800">
-                  <button
-                    type="button"
-                    onClick={() => setForwardTab('friends')}
-                    className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5 ${forwardTab === 'friends' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
-                      }`}
-                  >
-                    <User size={12} />
-                    Bạn bè ({friends.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setForwardTab('rooms')}
-                    className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5 ${forwardTab === 'rooms' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
-                      }`}
-                  >
-                    <Users size={12} />
-                    Nhóm chat ({communityRooms.length})
-                  </button>
-                </div>
-
-                {/* Tìm kiếm */}
-                <div className="relative">
-                  <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
-                  <input
-                    type="text"
-                    value={forwardSearch}
-                    onChange={(e) => setForwardSearch(e.target.value)}
-                    placeholder={forwardTab === 'friends' ? "Tìm bạn bè..." : "Tìm nhóm chat..."}
-                    className="w-full pl-8 pr-3 py-1.5 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-white placeholder-zinc-500 focus:outline-none"
-                  />
-                </div>
-
-                {/* Danh sách người nhận / nhóm nhận */}
-                <div className="max-h-56 overflow-y-auto space-y-1 custom-scrollbar">
-                  {forwardTab === 'friends' ? (
-                    friends
-                      .filter(f => !forwardSearch || (f.nickname || f.account).toLowerCase().includes(forwardSearch.toLowerCase()))
-                      .map(friend => (
-                        <div
-                          key={friend.id}
-                          className="flex items-center justify-between p-2 rounded-xl hover:bg-zinc-800/60 transition-colors"
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <UserAvatar avatarUrl={friend.avatar} username={friend.account} name={friend.nickname || friend.account} size={30} />
-                            <span className="text-xs font-medium text-zinc-200 truncate">{friend.nickname || friend.account}</span>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleForwardMessage(friend)}
-                            className="px-3 py-1 bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-semibold rounded-lg transition-colors active:scale-95"
-                          >
-                            Gửi
-                          </button>
-                        </div>
-                      ))
-                  ) : (
-                    communityRooms
-                      .filter(r => !forwardSearch || (r.nameroom && r.nameroom.toLowerCase().includes(forwardSearch.toLowerCase())))
-                      .map(room => (
-                        <div
-                          key={room.id}
-                          className="flex items-center justify-between p-2 rounded-xl hover:bg-zinc-800/60 transition-colors"
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-emerald-400 font-bold text-xs shrink-0">
-                              #
-                            </div>
-                            <div className="truncate">
-                              <span className="text-xs font-medium text-zinc-200 truncate block">{room.nameroom}</span>
-                              <span className="text-[10px] text-zinc-500">{room.soluong || 0} thành viên</span>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleForwardToRoom(room)}
-                            className="px-3 py-1 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-semibold rounded-lg transition-colors active:scale-95"
-                          >
-                            Gửi
-                          </button>
-                        </div>
-                      ))
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* LIGHTBOX XEM ẢNH PHÓNG TO */}
-          {lightboxMedia && (
-            <div
-              onClick={() => setLightboxMedia(null)}
-              className="fixed inset-0 z-[999999] bg-black/95 flex items-center justify-center p-4 animate-in fade-in duration-150 cursor-pointer"
-            >
+      {forwardingMsg && (
+        <div className="fixed inset-0 z-[99999] bg-black/80 flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-sm w-full p-4 space-y-3 shadow-2xl">
+            <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Forward size={16} className="text-emerald-400" />
+                Chuyển tiếp tin nhắn
+              </h3>
               <button
                 type="button"
-                onClick={() => setLightboxMedia(null)}
-                className="absolute top-4 right-4 p-2 bg-zinc-800/80 hover:bg-zinc-700 text-white rounded-full transition-colors"
+                onClick={() => setForwardingMsg(null)}
+                className="text-zinc-400 hover:text-white"
               >
-                <X size={20} />
+                <X size={16} />
               </button>
-              <img
-                src={lightboxMedia}
-                alt="Phóng to"
-                className="max-w-[95vw] max-h-[90vh] object-contain rounded-xl shadow-2xl"
+            </div>
+
+            {/* Xem trước nội dung tin nhắn cần chuyển tiếp */}
+            <div className="p-2.5 rounded-xl bg-zinc-950 border border-zinc-800/80 text-xs text-zinc-300 italic line-clamp-2">
+              "{forwardingMsg.message || '[Tệp đính kèm]'}"
+            </div>
+
+            {/* Chuyển tab: Bạn bè / Nhóm chat */}
+            <div className="flex items-center gap-1 p-1 bg-zinc-950 rounded-xl border border-zinc-800">
+              <button
+                type="button"
+                onClick={() => setForwardTab('friends')}
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5 ${forwardTab === 'friends' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+              >
+                <User size={12} />
+                Bạn bè ({friends.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setForwardTab('rooms')}
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5 ${forwardTab === 'rooms' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+              >
+                <Users size={12} />
+                Nhóm chat ({communityRooms.length})
+              </button>
+            </div>
+
+            {/* Tìm kiếm */}
+            <div className="relative">
+              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+              <input
+                type="text"
+                value={forwardSearch}
+                onChange={(e) => setForwardSearch(e.target.value)}
+                placeholder={forwardTab === 'friends' ? "Tìm bạn bè..." : "Tìm nhóm chat..."}
+                className="w-full pl-8 pr-3 py-1.5 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-white placeholder-zinc-500 focus:outline-none"
               />
             </div>
-          )}
 
-                  {/* ============================================================== */}
-                  {/* MODAL MÃ PIN 6 SỐ BẢO MẬT CUỘC TRÒ CHUYỆN ẨN (SERVER BCRYPT) */}
-                  {/* ============================================================== */}
-                  {pinModal.open && (
+            {/* Danh sách người nhận / nhóm nhận */}
+            <div className="max-h-56 overflow-y-auto space-y-1 custom-scrollbar">
+              {forwardTab === 'friends' ? (
+                friends
+                  .filter(f => !forwardSearch || (f.nickname || f.account).toLowerCase().includes(forwardSearch.toLowerCase()))
+                  .map(friend => (
                     <div
-                      className="fixed inset-0 z-[999999] bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200"
-                      onClick={() => setPinModal({ open: false, mode: 'verify', targetPartner: null })}
+                      key={friend.id}
+                      className="flex items-center justify-between p-2 rounded-xl hover:bg-zinc-800/60 transition-colors"
                     >
-                      <div
-                        onClick={(e) => e.stopPropagation()}
-                        className="bg-zinc-900 border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-3xl max-w-sm w-full p-6 sm:p-7 space-y-4 shadow-2xl relative animate-in slide-in-from-bottom-8 sm:zoom-in-95 duration-200"
+                      <div className="flex items-center gap-2 min-w-0">
+                        <UserAvatar avatarUrl={friend.avatar} username={friend.account} name={friend.nickname || friend.account} size={30} />
+                        <span className="text-xs font-medium text-zinc-200 truncate">{friend.nickname || friend.account}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleForwardMessage(friend)}
+                        className="px-3 py-1 bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-semibold rounded-lg transition-colors active:scale-95"
                       >
-                        {/* Thanh kéo nhỏ phong cách Native App trên điện thoại */}
-                        <div className="w-10 h-1 bg-zinc-700/70 rounded-full mx-auto mb-2 sm:hidden" />
-
-                        <button
-                          type="button"
-                          onClick={() => setPinModal({ open: false, mode: 'verify', targetPartner: null })}
-                          className="absolute top-4 right-4 p-2 rounded-full text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
-                          title="Đóng"
-                        >
-                          <X size={16} />
-                        </button>
-
-                        <div className="text-center space-y-2 pt-1">
-                          <div className="w-12 h-12 rounded-2xl bg-zinc-800/90 border border-zinc-700/60 text-emerald-400 flex items-center justify-center mx-auto shadow-inner">
-                            {pinModal.mode === 'setup' ? <KeyRound size={22} /> : <Lock size={22} />}
-                          </div>
-
-                          <h3 className="text-base font-bold text-white tracking-tight">
-                            {pinModal.mode === 'setup'
-                              ? (pinStep === 1 ? 'Cài đặt mã PIN 6 số' : 'Xác nhận lại mã PIN')
-                              : pinModal.mode === 'hide'
-                                ? 'Ẩn cuộc trò chuyện'
-                                : pinModal.mode === 'unhide'
-                                  ? 'Bỏ ẩn cuộc trò chuyện'
-                                  : 'Mở khóa cuộc trò chuyện ẩn'}
-                          </h3>
-
-                          <p className="text-xs text-zinc-400 leading-relaxed max-w-xs mx-auto">
-                            {pinModal.mode === 'setup'
-                              ? (pinStep === 1
-                                ? 'Nhập mã PIN 6 số bí mật để bảo vệ các cuộc trò chuyện riêng tư của bạn.'
-                                : 'Vui lòng nhập lại chính xác 6 số vừa đặt để hoàn tất.')
-                              : pinModal.mode === 'hide'
-                                ? `Nhập mã PIN để ẩn cuộc trò chuyện với ${pinModal.targetPartner?.nickname || pinModal.targetPartner?.account}.`
-                                : pinModal.mode === 'unhide'
-                                  ? 'Nhập mã PIN để đưa cuộc trò chuyện này trở lại hộp thư.'
-                                  : 'Nhập mã PIN để mở khóa và xem các cuộc trò chuyện đã ẩn.'}
-                          </p>
+                        Gửi
+                      </button>
+                    </div>
+                  ))
+              ) : (
+                communityRooms
+                  .filter(r => !forwardSearch || (r.nameroom && r.nameroom.toLowerCase().includes(forwardSearch.toLowerCase())))
+                  .map(room => (
+                    <div
+                      key={room.id}
+                      className="flex items-center justify-between p-2 rounded-xl hover:bg-zinc-800/60 transition-colors"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-emerald-400 font-bold text-xs shrink-0">
+                          #
                         </div>
+                        <div className="truncate">
+                          <span className="text-xs font-medium text-zinc-200 truncate block">{room.nameroom}</span>
+                          <span className="text-[10px] text-zinc-500">{room.soluong || 0} thành viên</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleForwardToRoom(room)}
+                        className="px-3 py-1 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-semibold rounded-lg transition-colors active:scale-95"
+                      >
+                        Gửi
+                      </button>
+                    </div>
+                  ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
-                        <form onSubmit={handlePinSubmit} className="space-y-4 pt-1">
-                          {/* 6 ô hiển thị số bảo mật phong cách thẻ số rời chuẩn ngân hàng / Zalo */}
-                          <div className="relative py-2 cursor-pointer" onClick={() => pinInputRef.current?.focus()}>
-                            <input
-                              ref={pinInputRef}
-                              type="password"
-                              inputMode="numeric"
-                              pattern="[0-9]*"
-                              maxLength={6}
-                              autoFocus
-                              value={pinModal.mode === 'setup' && pinStep === 2 ? pinConfirmInput : pinInput}
-                              onChange={(e) => {
-                                const val = e.target.value.replace(/\D/g, '').slice(0, 6);
-                                if (pinModal.mode === 'setup' && pinStep === 2) {
-                                  setPinConfirmInput(val);
-                                } else {
-                                  setPinInput(val);
-                                }
-                                if (pinError) setPinError('');
-                              }}
-                              className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
-                              aria-label="Nhập mã PIN 6 số"
-                            />
+      {/* LIGHTBOX XEM ẢNH PHÓNG TO */}
+      {lightboxMedia && (
+        <div
+          onClick={() => setLightboxMedia(null)}
+          className="fixed inset-0 z-[999999] bg-black/95 flex items-center justify-center p-4 animate-in fade-in duration-150 cursor-pointer"
+        >
+          <button
+            type="button"
+            onClick={() => setLightboxMedia(null)}
+            className="absolute top-4 right-4 p-2 bg-zinc-800/80 hover:bg-zinc-700 text-white rounded-full transition-colors"
+          >
+            <X size={20} />
+          </button>
+          <img
+            src={lightboxMedia}
+            alt="Phóng to"
+            className="max-w-[95vw] max-h-[90vh] object-contain rounded-xl shadow-2xl"
+          />
+        </div>
+      )}
 
-                            <div className="flex items-center justify-center gap-2 sm:gap-2.5">
-                              {[0, 1, 2, 3, 4, 5].map((index) => {
-                                const currentVal = pinModal.mode === 'setup' && pinStep === 2 ? pinConfirmInput : pinInput;
-                                const char = currentVal[index];
-                                const isCurrent = index === currentVal.length;
-                                return (
-                                  <div
-                                    key={index}
-                                    className={`w-11 h-13 sm:w-12 sm:h-14 rounded-2xl border flex items-center justify-center transition-all ${char
-                                      ? 'border-emerald-500/70 bg-emerald-500/10 text-emerald-400 shadow-sm'
-                                      : isCurrent
-                                        ? 'border-emerald-400 bg-zinc-800/80 ring-2 ring-emerald-500/20 text-white'
-                                        : 'border-zinc-800/90 bg-zinc-950 text-zinc-600'
-                                      }`}
-                                  >
-                                    {char ? (
-                                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-sm animate-in zoom-in-50 duration-150" />
-                                    ) : isCurrent ? (
-                                      <span className="w-0.5 h-5 bg-emerald-400 animate-pulse rounded-full" />
-                                    ) : null}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
+      {/* ============================================================== */}
+      {/* MODAL MÃ PIN 6 SỐ BẢO MẬT CUỘC TRÒ CHUYỆN ẨN (SERVER BCRYPT) */}
+      {/* ============================================================== */}
+      {pinModal.open && (
+        <div
+          className="fixed inset-0 z-[999999] bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200"
+          onClick={() => setPinModal({ open: false, mode: 'verify', targetPartner: null })}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-zinc-900 border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-3xl max-w-sm w-full p-6 sm:p-7 space-y-4 shadow-2xl relative animate-in slide-in-from-bottom-8 sm:zoom-in-95 duration-200"
+          >
+            {/* Thanh kéo nhỏ phong cách Native App trên điện thoại */}
+            <div className="w-10 h-1 bg-zinc-700/70 rounded-full mx-auto mb-2 sm:hidden" />
 
-                          {pinError && (
-                            <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs text-center font-medium animate-in fade-in duration-150">
-                              {pinError}
-                            </div>
-                          )}
+            <button
+              type="button"
+              onClick={() => setPinModal({ open: false, mode: 'verify', targetPartner: null })}
+              className="absolute top-4 right-4 p-2 rounded-full text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+              title="Đóng"
+            >
+              <X size={16} />
+            </button>
 
-                          <div className="flex items-center gap-2.5 pt-1">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (pinModal.mode === 'setup' && pinStep === 2) {
-                                  setPinStep(1);
-                                  setPinConfirmInput('');
-                                  setPinError('');
-                                } else {
-                                  setPinModal({ open: false, mode: 'verify', targetPartner: null });
-                                }
-                              }}
-                              className="flex-1 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition-colors cursor-pointer"
-                            >
-                              {pinModal.mode === 'setup' && pinStep === 2 ? 'Quay lại' : 'Hủy'}
-                            </button>
+            <div className="text-center space-y-2 pt-1">
+              <div className="w-12 h-12 rounded-2xl bg-zinc-800/90 border border-zinc-700/60 text-emerald-400 flex items-center justify-center mx-auto shadow-inner">
+                {pinModal.mode === 'setup' ? <KeyRound size={22} /> : <Lock size={22} />}
+              </div>
+
+              <h3 className="text-base font-bold text-white tracking-tight">
+                {pinModal.mode === 'setup'
+                  ? (pinStep === 1 ? 'Cài đặt mã PIN 6 số' : 'Xác nhận lại mã PIN')
+                  : pinModal.mode === 'hide'
+                    ? 'Ẩn cuộc trò chuyện'
+                    : pinModal.mode === 'unhide'
+                      ? 'Bỏ ẩn cuộc trò chuyện'
+                      : 'Mở khóa cuộc trò chuyện ẩn'}
+              </h3>
+
+              <p className="text-xs text-zinc-400 leading-relaxed max-w-xs mx-auto">
+                {pinModal.mode === 'setup'
+                  ? (pinStep === 1
+                    ? 'Nhập mã PIN 6 số bí mật để bảo vệ các cuộc trò chuyện riêng tư của bạn.'
+                    : 'Vui lòng nhập lại chính xác 6 số vừa đặt để hoàn tất.')
+                  : pinModal.mode === 'hide'
+                    ? `Nhập mã PIN để ẩn cuộc trò chuyện với ${pinModal.targetPartner?.nickname || pinModal.targetPartner?.account}.`
+                    : pinModal.mode === 'unhide'
+                      ? 'Nhập mã PIN để đưa cuộc trò chuyện này trở lại hộp thư.'
+                      : 'Nhập mã PIN để mở khóa và xem các cuộc trò chuyện đã ẩn.'}
+              </p>
+            </div>
+
+            <form onSubmit={handlePinSubmit} className="space-y-4 pt-1">
+              {/* 6 ô hiển thị số bảo mật phong cách thẻ số rời chuẩn ngân hàng / Zalo */}
+              <div className="relative py-2 cursor-pointer" onClick={() => pinInputRef.current?.focus()}>
+                <input
+                  ref={pinInputRef}
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  autoFocus
+                  value={pinModal.mode === 'setup' && pinStep === 2 ? pinConfirmInput : pinInput}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, '').slice(0, 6);
+                    if (pinModal.mode === 'setup' && pinStep === 2) {
+                      setPinConfirmInput(val);
+                    } else {
+                      setPinInput(val);
+                    }
+                    if (pinError) setPinError('');
+                  }}
+                  className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
+                  aria-label="Nhập mã PIN 6 số"
+                />
+
+                <div className="flex items-center justify-center gap-2 sm:gap-2.5">
+                  {[0, 1, 2, 3, 4, 5].map((index) => {
+                    const currentVal = pinModal.mode === 'setup' && pinStep === 2 ? pinConfirmInput : pinInput;
+                    const char = currentVal[index];
+                    const isCurrent = index === currentVal.length;
+                    return (
+                      <div
+                        key={index}
+                        className={`w-11 h-13 sm:w-12 sm:h-14 rounded-2xl border flex items-center justify-center transition-all ${char
+                          ? 'border-emerald-500/70 bg-emerald-500/10 text-emerald-400 shadow-sm'
+                          : isCurrent
+                            ? 'border-emerald-400 bg-zinc-800/80 ring-2 ring-emerald-500/20 text-white'
+                            : 'border-zinc-800/90 bg-zinc-950 text-zinc-600'
+                          }`}
+                      >
+                        {char ? (
+                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-sm animate-in zoom-in-50 duration-150" />
+                        ) : isCurrent ? (
+                          <span className="w-0.5 h-5 bg-emerald-400 animate-pulse rounded-full" />
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {pinError && (
+                <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs text-center font-medium animate-in fade-in duration-150">
+                  {pinError}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (pinModal.mode === 'setup' && pinStep === 2) {
+                      setPinStep(1);
+                      setPinConfirmInput('');
+                      setPinError('');
+                    } else {
+                      setPinModal({ open: false, mode: 'verify', targetPartner: null });
+                    }
+                  }}
+                  className="flex-1 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition-colors cursor-pointer"
+                >
+                  {pinModal.mode === 'setup' && pinStep === 2 ? 'Quay lại' : 'Hủy'}
+                </button>
 
                 <button
                   type="submit"

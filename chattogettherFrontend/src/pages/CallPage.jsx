@@ -82,24 +82,26 @@ const CallPage = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [hasRemoteVideo, setHasRemoteVideo] = useState(false);
   const [isRemoteVideoEnabled, setIsRemoteVideoEnabled] = useState(true);
-  const [audioBlocked, setAudioBlocked] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const stageContainerRef = useRef(null);
 
-  // Mở khóa âm thanh tức thì khi người dùng tương tác lần đầu (đặc trị iOS Safari & Chrome autoplay policy)
+  // Mở khóa âm thanh tức thì và tự động kích hoạt AudioContext đàm thoại trong nền (0ms, không cần banner phiền toái)
   useEffect(() => {
-    const tryUnblock = () => {
-      if (remoteAudioRef.current) {
-        remoteAudioRef.current.play().then(() => {
-          setAudioBlocked(false);
-        }).catch(() => {});
+    const silentUnlock = () => {
+      if (remoteAudioCtxRef.current && remoteAudioCtxRef.current.state === 'suspended') {
+        remoteAudioCtxRef.current.resume().catch(() => {});
+      }
+      if (remoteAudioRef.current && remoteAudioRef.current.paused) {
+        remoteAudioRef.current.play().catch(() => {});
       }
     };
-    window.addEventListener('touchstart', tryUnblock, { passive: true });
-    window.addEventListener('click', tryUnblock, { passive: true });
+    window.addEventListener('touchstart', silentUnlock, { passive: true });
+    window.addEventListener('click', silentUnlock, { passive: true });
+    window.addEventListener('keydown', silentUnlock, { passive: true });
     return () => {
-      window.removeEventListener('touchstart', tryUnblock);
-      window.removeEventListener('click', tryUnblock);
+      window.removeEventListener('touchstart', silentUnlock);
+      window.removeEventListener('click', silentUnlock);
+      window.removeEventListener('keydown', silentUnlock);
     };
   }, []);
 
@@ -134,6 +136,8 @@ const CallPage = () => {
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
   const remoteAudioRef = useRef(null);
+  const remoteAudioCtxRef = useRef(null);
+  const webAudioSourceRef = useRef(null);
   const remoteStreamRef = useRef(null);
   const callTimerRef = useRef(null);
   const durationRef = useRef(0);
@@ -337,6 +341,14 @@ const CallPage = () => {
     }
     if (remoteAudioRef.current) {
       remoteAudioRef.current.srcObject = null;
+    }
+    if (webAudioSourceRef.current) {
+      try { webAudioSourceRef.current.disconnect(); } catch (_) { }
+      webAudioSourceRef.current = null;
+    }
+    if (remoteAudioCtxRef.current) {
+      try { remoteAudioCtxRef.current.close(); } catch (_) { }
+      remoteAudioCtxRef.current = null;
     }
     if (remoteStreamRef.current) {
       remoteStreamRef.current.getTracks().forEach(track => track.stop());
@@ -744,14 +756,34 @@ const CallPage = () => {
             }
 
             if (event.track.kind === 'audio') {
+              const streamToPlay = (event.streams && event.streams[0]) ? event.streams[0] : remoteStream;
+
+              // Kênh 1: HTML5 Audio Tag
               if (remoteAudioRef.current) {
+                remoteAudioRef.current.srcObject = streamToPlay;
                 remoteAudioRef.current.muted = false;
                 remoteAudioRef.current.volume = 1.0;
-                remoteAudioRef.current.play().catch((audioErr) => {
-                  console.warn("Autoplay remote audio blocked:", audioErr);
-                  setAudioBlocked(true);
-                });
+                remoteAudioRef.current.play().catch(() => {});
               }
+
+              // Kênh 2: Web Audio API (Bypass 100% rào cản Autoplay trên Mobile Safari/Chrome, phát tiếng ngay lập tức)
+              try {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                if (AudioCtx) {
+                  if (!remoteAudioCtxRef.current || remoteAudioCtxRef.current.state === 'closed') {
+                    remoteAudioCtxRef.current = new AudioCtx();
+                  }
+                  const ctx = remoteAudioCtxRef.current;
+                  if (ctx.state === 'suspended') {
+                    ctx.resume().catch(() => {});
+                  }
+                  if (!webAudioSourceRef.current) {
+                    const src = ctx.createMediaStreamSource(streamToPlay);
+                    src.connect(ctx.destination);
+                    webAudioSourceRef.current = src;
+                  }
+                }
+              } catch (_) {}
             }
           }
 
@@ -1094,22 +1126,6 @@ const CallPage = () => {
       {/* 2. KHU VỰC LIVE CALL STAGE (GRID TẤM HÌNH / AVATAR) */}
       {/* ============================================================== */}
       <main className="flex-1 p-3 sm:p-6 overflow-hidden flex items-center justify-center relative bg-zinc-950">
-        {/* Banner thông báo chạm để bật âm thanh nếu bị Safari / Chrome chặn Autoplay */}
-        {audioBlocked && (
-          <button
-            type="button"
-            onClick={() => {
-              if (remoteAudioRef.current) {
-                remoteAudioRef.current.play().then(() => setAudioBlocked(false)).catch(() => {});
-              }
-            }}
-            className="absolute top-4 left-1/2 -translate-x-1/2 z-40 px-4 py-2 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold text-xs shadow-2xl shadow-emerald-500/30 flex items-center gap-2 animate-bounce cursor-pointer active:scale-95 transition-all"
-          >
-            <Volume2 size={16} />
-            <span>Chạm vào đây để bật âm thanh cuộc gọi</span>
-          </button>
-        )}
-
         <div ref={stageContainerRef} className="w-full max-w-4xl h-full flex items-center justify-center relative">
 
           {/* Nút bật/tắt toàn màn hình sân khấu */}
