@@ -153,7 +153,7 @@ export const deduplicateCallMessages = (msgList = []) => {
     if (!m) continue;
     if (isCall(m.message)) {
       const mTime = new Date(m.timeSend || 0).getTime();
-      const duplicateIdx = result.findIndex(r => 
+      const duplicateIdx = result.findIndex(r =>
         isCall(r.message) && Math.abs(new Date(r.timeSend || 0).getTime() - mTime) < 10000
       );
       if (duplicateIdx !== -1) {
@@ -227,9 +227,9 @@ export const DirectMessagePage = () => {
   const [friends, setFriends] = useState(() => {
     try {
       const cached = localStorage.getItem(`talovin_dm_conversations_cache_${userPrefix}`) ||
-                     localStorage.getItem('talovin_dm_conversations_cache') ||
-                     localStorage.getItem(`talovin_dm_friends_cache_${userPrefix}`) ||
-                     localStorage.getItem('talovin_dm_friends_cache');
+        localStorage.getItem('talovin_dm_conversations_cache') ||
+        localStorage.getItem(`talovin_dm_friends_cache_${userPrefix}`) ||
+        localStorage.getItem('talovin_dm_friends_cache');
       const list = cached ? JSON.parse(cached) : [];
       if (!Array.isArray(list) || list.length === 0) return [];
 
@@ -240,8 +240,8 @@ export const DirectMessagePage = () => {
 
         try {
           const localRaw = localStorage.getItem(`talovin_dm_msgs_${userPrefix}${rf.id}`) ||
-                           localStorage.getItem(`talovin_dm_msgs_${rf.id}`) ||
-                           (rf.directRoomId ? (localStorage.getItem(`talovin_dm_msgs_${userPrefix}${rf.directRoomId}`) || localStorage.getItem(`talovin_dm_msgs_${rf.directRoomId}`)) : null);
+            localStorage.getItem(`talovin_dm_msgs_${rf.id}`) ||
+            (rf.directRoomId ? (localStorage.getItem(`talovin_dm_msgs_${userPrefix}${rf.directRoomId}`) || localStorage.getItem(`talovin_dm_msgs_${rf.directRoomId}`)) : null);
           if (localRaw) {
             const parsed = JSON.parse(localRaw);
             if (Array.isArray(parsed) && parsed.length > 0) {
@@ -260,7 +260,7 @@ export const DirectMessagePage = () => {
               }
             }
           }
-        } catch (_) {}
+        } catch (_) { }
 
         return {
           ...rf,
@@ -406,7 +406,7 @@ export const DirectMessagePage = () => {
       const currentIdStr = String(currentUserId || '');
 
       const isRelated = (targetIdStr && (msgSenderStr === targetIdStr || msgTargetStr === targetIdStr)) ||
-                        (msgSenderStr === currentIdStr && msgTargetStr === targetIdStr);
+        (msgSenderStr === currentIdStr && msgTargetStr === targetIdStr);
       if (isRelated) {
         setMessages(prev => {
           if (prev.some(m => m.id === newMsg.id || (m.message === newMsg.message && Math.abs(new Date(m.timeSend || 0).getTime() - new Date(newMsg.timeSend || 0).getTime()) < 3000))) {
@@ -477,8 +477,8 @@ export const DirectMessagePage = () => {
             // Nạp thêm từ bộ nhớ tin nhắn cục bộ nếu có tin nhắn mới hơn (kiểm tra cả id người nhận và id phòng)
             try {
               const localRaw = localStorage.getItem(`talovin_dm_msgs_${userPrefix}${rf.id}`) ||
-                               localStorage.getItem(`talovin_dm_msgs_${rf.id}`) ||
-                               (rf.directRoomId ? (localStorage.getItem(`talovin_dm_msgs_${userPrefix}${rf.directRoomId}`) || localStorage.getItem(`talovin_dm_msgs_${rf.directRoomId}`)) : null);
+                localStorage.getItem(`talovin_dm_msgs_${rf.id}`) ||
+                (rf.directRoomId ? (localStorage.getItem(`talovin_dm_msgs_${userPrefix}${rf.directRoomId}`) || localStorage.getItem(`talovin_dm_msgs_${rf.directRoomId}`)) : null);
               if (localRaw) {
                 const parsed = JSON.parse(localRaw);
                 if (Array.isArray(parsed) && parsed.length > 0) {
@@ -527,7 +527,7 @@ export const DirectMessagePage = () => {
               localStorage.setItem('talovin_hidden_partner_ids', JSON.stringify(hiddenIds));
             }
             window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: freshUnreadMap }));
-          } catch (_) {}
+          } catch (_) { }
 
           // Sắp xếp CHUẨN XÁC: Người có tin nhắn/cuộc gọi mới nhất luôn lên TRÊN CÙNG
           const sortedList = sortConversationsList(currentList);
@@ -593,7 +593,7 @@ export const DirectMessagePage = () => {
     axiosClient.post('/message/read', {
       targetUserId: targetId,
       roomId: fallbackPartner?.directRoomId || undefined
-    }).catch(() => {});
+    }).catch(() => { });
 
     setUnreadMap(prev => {
       const next = { ...prev };
@@ -662,7 +662,7 @@ export const DirectMessagePage = () => {
           setActivePartner(freshPartner);
           setPartnerNotFound(false);
         }
-      }).catch(() => {});
+      }).catch(() => { });
     }
 
     let knownRoomId = effectivePartner?.directRoomId;
@@ -676,8 +676,8 @@ export const DirectMessagePage = () => {
     if (!cachedMessages) {
       try {
         const raw = localStorage.getItem(`talovin_dm_msgs_${userPrefix}${targetId}`) ||
-                    localStorage.getItem(`talovin_dm_msgs_${targetId}`) ||
-                    (knownRoomId ? (localStorage.getItem(`talovin_dm_msgs_${userPrefix}${knownRoomId}`) || localStorage.getItem(`talovin_dm_msgs_${knownRoomId}`)) : null);
+          localStorage.getItem(`talovin_dm_msgs_${targetId}`) ||
+          (knownRoomId ? (localStorage.getItem(`talovin_dm_msgs_${userPrefix}${knownRoomId}`) || localStorage.getItem(`talovin_dm_msgs_${knownRoomId}`)) : null);
         if (raw) {
           cachedMessages = JSON.parse(raw);
           if (Array.isArray(cachedMessages) && cachedMessages.length > 0) {
@@ -958,25 +958,32 @@ export const DirectMessagePage = () => {
 
           const senderId = newMsg.senderId || newMsg.userId;
           const isFromMe = String(senderId) === String(currentUserId);
-          const currentActivePartnerId = activePartnerRef.current?.id?.toString();
-          // Chỉ coi là isCurrentChat nếu người dùng THẬT SỰ đang mở hội thoại này (urlTargetUserId trùng senderId)
-          const isCurrentChat = !isFromMe && urlTargetUserId && (String(urlTargetUserId) === String(senderId)) && currentActivePartnerId && (String(currentActivePartnerId) === String(senderId));
+          const currentTargetId = urlTargetUserId ? String(urlTargetUserId) : (activePartnerRef.current?.id ? String(activePartnerRef.current.id) : null);
+          const currentRoomId = activeRoomIdRef.current ? String(activeRoomIdRef.current) : null;
+          const msgRoomId = (newMsg.user_room || newMsg.roomId) ? String(newMsg.user_room || newMsg.roomId) : null;
+
+          // Kiểm tra xem tin nhắn này có thuộc về cuộc trò chuyện đang mở trước mắt người dùng hay không
+          const isCurrentChat = Boolean(
+            (currentTargetId && !isFromMe && String(currentTargetId) === String(senderId)) ||
+            (currentRoomId && msgRoomId && currentRoomId === msgRoomId) ||
+            (isFromMe && currentTargetId && (String(newMsg.targetUserId || '') === String(currentTargetId) || (msgRoomId && currentRoomId === msgRoomId)))
+          );
 
           // Ghi nhận sender đang online tức thì
           if (senderId && markUserActive) {
             markUserActive(senderId);
           }
 
-          // Nếu đang mở cuộc trò chuyện này, cửa sổ đang active (không ẩn tab) và đối phương nhắn tới -> Tự động báo đã đọc
+          // 1. Tự động báo đã đọc nếu đang mở cuộc trò chuyện này, đối phương nhắn tới và tab đang active
           if (isCurrentChat && !isFromMe && !document.hidden) {
             axiosClient.post('/message/read', {
               roomId: activeRoomIdRef.current || undefined,
               targetUserId: senderId,
               upToMessageId: newMsg.id
-            }).catch(() => {});
+            }).catch(() => { });
           }
 
-          // 1. Nếu đang mở đúng hội thoại này hoặc là tin nhắn do chính mình gửi
+          // 2. Cập nhật tin nhắn vào khung chat nếu đang mở đúng cuộc trò chuyện hoặc do chính mình gửi
           if (isCurrentChat || isFromMe) {
             setMessages(prev => {
               // Chống trùng lặp 1: Trùng ID hệ thống
@@ -1029,7 +1036,7 @@ export const DirectMessagePage = () => {
             setTimeout(() => scrollToBottom(true), 60);
           }
 
-          // 2. Nếu là tin nhắn từ bạn bè khác (hoặc tab đang ẩn)
+          // 3. Nếu là tin nhắn từ bạn bè khác (hoặc không phải khung chat hiện tại)
           if (!isFromMe && !isCurrentChat && senderId) {
             playMessageIncoming();
 
@@ -1055,8 +1062,8 @@ export const DirectMessagePage = () => {
             }
           }
 
-          // 3. Cập nhật preview tin nhắn cuối cùng & đưa bạn bè này lên ĐẦU DANH SÁCH tức thì
-          const targetFriendIdStr = (isFromMe ? (activePartnerRef.current?.id || newMsg.partnerId) : senderId)?.toString();
+          // 4. Luôn cập nhật preview tin nhắn cuối cùng & đưa bạn bè này lên ĐẦU DANH SÁCH tức thì
+          const targetFriendIdStr = (isFromMe ? (currentTargetId || newMsg.targetUserId || newMsg.partnerId) : senderId)?.toString();
           if (targetFriendIdStr) {
             const nowTime = newMsg.timeSend || new Date().toISOString();
             const nowFmt = newMsg.formattedTime || new Date(nowTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
@@ -1084,71 +1091,71 @@ export const DirectMessagePage = () => {
             });
           }
         } catch (e) {
-          console.error('Lỗi nhận tin nhắn 1-1 realtime:', e);
+            console.error('Lỗi nhận tin nhắn 1-1 realtime:', e);
+          }
+        };
+
+        handleIncomingDirectMsgRef.current = handleIncomingDirectMsg;
+
+        client.connect(connectHeaders, () => {
+          // 1. Nhận tin nhắn 1-1 trực tiếp qua /topic/messages/{currentUserId}
+          client.subscribe(`/topic/messages/${currentUserId}`, (frame) => {
+            handleIncomingDirectMsg(frame.body);
+          });
+
+          // 2. Nhận alert tin nhắn /topic/room-alerts/{currentUserId} (Chỉ cập nhật badge unread ngoài lề, TUYỆT ĐỐI không chèn vào messages)
+          client.subscribe(`/topic/room-alerts/${currentUserId}`, (frame) => {
+            try {
+              const alert = JSON.parse(frame.body);
+              if (alert.isDirect && alert.senderId) {
+                const sid = String(alert.senderId);
+                const currentActivePartnerId = activePartnerRef.current?.id?.toString();
+                const isCurrent = currentActivePartnerId && String(currentActivePartnerId) === sid;
+                if (!isCurrent) {
+                  setUnreadMap(prev => {
+                    const next = { ...prev, [sid]: (Number(prev[sid]) || 0) + 1 };
+                    try {
+                      localStorage.setItem('talovin_dm_unread', JSON.stringify(next));
+                      window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: next }));
+                    } catch (_) { }
+                    return next;
+                  });
+                }
+              }
+            } catch (_) { }
+          });
+
+          // 3. Nhận tin nhắn riêng tư toàn cục fallback
+          client.subscribe(`/user/queue/direct-messages`, (message) => {
+            handleIncomingDirectMsg(message.body);
+          });
+
+          // 4. Đăng ký phòng DM đang mở nếu có (Duy nhất 1 subscription)
+          if (activeRoomIdRef.current) {
+            try {
+              if (roomSubRef.current) {
+                try { roomSubRef.current.unsubscribe(); } catch (_) { }
+              }
+              roomSubRef.current = client.subscribe(`/topic/room/${activeRoomIdRef.current}`, (message) => {
+                handleIncomingDirectMsg(message.body);
+              });
+            } catch (_) { }
+          }
+        });
+      } catch (e) {
+        console.error('Lỗi kết nối WebSocket tin nhắn riêng:', e);
+      }
+
+      return () => {
+        if (roomSubRef.current) {
+          try { roomSubRef.current.unsubscribe(); } catch (_) { }
+          roomSubRef.current = null;
+        }
+        if (client && client.connected) {
+          client.disconnect();
         }
       };
-
-      handleIncomingDirectMsgRef.current = handleIncomingDirectMsg;
-
-      client.connect(connectHeaders, () => {
-        // 1. Nhận tin nhắn 1-1 trực tiếp qua /topic/messages/{currentUserId}
-        client.subscribe(`/topic/messages/${currentUserId}`, (frame) => {
-          handleIncomingDirectMsg(frame.body);
-        });
-
-        // 2. Nhận alert tin nhắn /topic/room-alerts/{currentUserId} (Chỉ cập nhật badge unread ngoài lề, TUYỆT ĐỐI không chèn vào messages)
-        client.subscribe(`/topic/room-alerts/${currentUserId}`, (frame) => {
-          try {
-            const alert = JSON.parse(frame.body);
-            if (alert.isDirect && alert.senderId) {
-              const sid = String(alert.senderId);
-              const currentActivePartnerId = activePartnerRef.current?.id?.toString();
-              const isCurrent = currentActivePartnerId && String(currentActivePartnerId) === sid;
-              if (!isCurrent) {
-                setUnreadMap(prev => {
-                  const next = { ...prev, [sid]: (Number(prev[sid]) || 0) + 1 };
-                  try {
-                    localStorage.setItem('talovin_dm_unread', JSON.stringify(next));
-                    window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: next }));
-                  } catch (_) { }
-                  return next;
-                });
-              }
-            }
-          } catch (_) { }
-        });
-
-        // 3. Nhận tin nhắn riêng tư toàn cục fallback
-        client.subscribe(`/user/queue/direct-messages`, (message) => {
-          handleIncomingDirectMsg(message.body);
-        });
-
-        // 4. Đăng ký phòng DM đang mở nếu có (Duy nhất 1 subscription)
-        if (activeRoomIdRef.current) {
-          try {
-            if (roomSubRef.current) {
-              try { roomSubRef.current.unsubscribe(); } catch (_) { }
-            }
-            roomSubRef.current = client.subscribe(`/topic/room/${activeRoomIdRef.current}`, (message) => {
-              handleIncomingDirectMsg(message.body);
-            });
-          } catch (_) { }
-        }
-      });
-    } catch (e) {
-      console.error('Lỗi kết nối WebSocket tin nhắn riêng:', e);
-    }
-
-    return () => {
-      if (roomSubRef.current) {
-        try { roomSubRef.current.unsubscribe(); } catch (_) { }
-        roomSubRef.current = null;
-      }
-      if (client && client.connected) {
-        client.disconnect();
-      }
-    };
-  }, [currentUserId, scrollToBottom, markUserActive]);
+    }, [currentUserId, scrollToBottom, markUserActive]);
 
   // Đăng ký lại topic room khi chuyển sang phòng khác (Đảm bảo duy nhất 1 subscription qua roomSubRef)
   useEffect(() => {
@@ -1283,7 +1290,7 @@ export const DirectMessagePage = () => {
             if (currentMedia.type === 'IMAGE') {
               try {
                 fileToUpload = await compressImageToFile(currentMedia.file);
-              } catch (_) {}
+              } catch (_) { }
             }
 
             const formData = new FormData();
@@ -1339,13 +1346,13 @@ export const DirectMessagePage = () => {
             messagesCacheRef.current.set(String(targetIdentifier), nextList);
             try {
               localStorage.setItem(`talovin_dm_msgs_${targetIdentifier}`, JSON.stringify(nextList.slice(-50)));
-            } catch (_) {}
+            } catch (_) { }
           }
           if (targetRoom) {
             messagesCacheRef.current.set(String(targetRoom), nextList);
             try {
               localStorage.setItem(`talovin_dm_msgs_${targetRoom}`, JSON.stringify(nextList.slice(-50)));
-            } catch (_) {}
+            } catch (_) { }
           }
           return nextList;
         });
@@ -1447,10 +1454,10 @@ export const DirectMessagePage = () => {
           setHiddenPartnerIds(ids);
           try {
             localStorage.setItem('talovin_hidden_partner_ids', JSON.stringify(Array.from(ids)));
-          } catch (_) {}
+          } catch (_) { }
         }
       }
-    }).catch(() => {});
+    }).catch(() => { });
   }, []);
 
   // Đóng menu tùy chọn cuộc trò chuyện khi click ra ngoài
@@ -1474,12 +1481,12 @@ export const DirectMessagePage = () => {
               setHiddenPartnerIds(ids);
               try {
                 localStorage.setItem('talovin_hidden_partner_ids', JSON.stringify(Array.from(ids)));
-              } catch (_) {}
+              } catch (_) { }
             }
             toast.success("🔓 Đã mở khóa các cuộc trò chuyện ẩn!");
           }
         })
-        .catch(() => {});
+        .catch(() => { });
     }
   }, [searchQuery]);
 
@@ -1914,7 +1921,7 @@ export const DirectMessagePage = () => {
                     <ArrowLeft size={18} />
                   </button>
 
-                  <div 
+                  <div
                     className="flex items-center gap-2.5 min-w-0 cursor-pointer hover:opacity-90 transition-opacity"
                     onClick={() => {
                       if (activePartner?.id) {
