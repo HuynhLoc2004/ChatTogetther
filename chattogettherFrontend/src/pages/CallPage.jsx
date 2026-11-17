@@ -451,7 +451,11 @@ const CallPage = () => {
 
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
-        sendCallSignal({ type: 'ANSWER', answer, isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled) });
+        sendCallSignal({
+          type: 'ANSWER',
+          answer: { type: answer.type, sdp: answer.sdp },
+          isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled)
+        });
         localCandidatesHistoryRef.current.forEach(cand => {
           sendCallSignal({ type: 'CANDIDATE', candidate: cand });
         });
@@ -471,7 +475,11 @@ const CallPage = () => {
               offerToReceiveVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled)
             });
             await pc.setLocalDescription(offer);
-            sendCallSignal({ type: 'OFFER', offer, isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled) });
+            sendCallSignal({
+              type: 'OFFER',
+              offer: { type: offer.type, sdp: offer.sdp },
+              isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled)
+            });
             // Gửi kèm toàn bộ candidate đã thu thập sẵn
             localCandidatesHistoryRef.current.forEach(cand => {
               sendCallSignal({ type: 'CANDIDATE', candidate: cand });
@@ -629,11 +637,13 @@ const CallPage = () => {
               disconnectTimerRef.current = null;
             }
           } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
-            setCallStatusText('Đối phương đã ngắt kết nối...');
+            setCallStatusText('Đang thử kết nối lại...');
             if (!disconnectTimerRef.current) {
               disconnectTimerRef.current = setTimeout(() => {
-                endCallRef.current?.(false);
-              }, 2500);
+                if (peerConnectionRef.current && (peerConnectionRef.current.connectionState === 'disconnected' || peerConnectionRef.current.connectionState === 'failed')) {
+                  endCallRef.current?.(false);
+                }
+              }, 8000);
             }
           }
         };

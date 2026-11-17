@@ -124,23 +124,49 @@ const VIBE_TAGS = [
   { id: 'Tâm sự', label: 'Tâm sự', icon: MessageSquare, color: 'text-purple-400' },
 ];
 
-// Phân tích chuỗi chủ đề bài viết thành danh sách nhãn nguyên vẹn (không tách vỡ từ ngữ tiếng Việt như "Thư giãn")
+// Phân tích chuỗi chủ đề bài viết thành danh sách nhãn nguyên vẹn (tuyệt đối không tách vỡ từ ngữ tiếng Việt như "Thư giãn")
 const parsePostVibes = (vibeStr) => {
   if (!vibeStr || typeof vibeStr !== 'string') return [];
-  const parts = vibeStr.split(/[|,]+/).map(p => p.trim()).filter(Boolean);
+  // Phân tách theo dấu gạch đứng | hoặc dấu phẩy
+  const rawParts = vibeStr.split(/[|]+/).map(p => p.trim()).filter(Boolean);
   const result = [];
-  for (const part of parts) {
-    if (part.startsWith('#')) {
-      part.split(/\s+/).filter(Boolean).forEach(tag => {
-        const clean = tag.replace(/^[#/]+/, '').trim();
-        if (clean) result.push({ text: clean, isTag: true });
-      });
-    } else {
+
+  for (const part of rawParts) {
+    if (!part) continue;
+    // Nếu có nhiều hashtag trong cùng một đoạn (ví dụ "#chill #music")
+    if (part.includes('#')) {
+      const matches = part.match(/#[^\s#|,]+/g);
+      if (matches && matches.length > 1) {
+        matches.forEach(m => {
+          const clean = m.replace(/^[#/]+/, '').trim();
+          if (clean) result.push({ text: clean, isTag: true });
+        });
+        continue;
+      }
+      // Nếu chỉ có 1 dấu # ở đầu chuỗi (ví dụ "#Thư giãn") -> giữ nguyên cả cụm từ tiếng Việt!
       const clean = part.replace(/^[#/]+/, '').trim();
+      if (clean) result.push({ text: clean, isTag: true });
+    } else {
+      // Chuỗi văn bản bình thường (ví dụ "Thư giãn", "Lắng đọng") -> giữ nguyên vẹn
+      const clean = part.trim();
       if (clean) result.push({ text: clean, isTag: false });
     }
   }
-  return result;
+
+  // Hậu xử lý: Khắc phục dữ liệu cũ bị phân tách rời rạc từng từ (ví dụ "Thư" và "giãn")
+  const merged = [];
+  for (let i = 0; i < result.length; i++) {
+    const cur = result[i];
+    const next = result[i + 1];
+    if (cur.text.toLowerCase() === 'thư' && next && (next.text.toLowerCase() === 'giãn' || next.text.toLowerCase() === 'giản')) {
+      merged.push({ text: 'Thư giãn', isTag: cur.isTag });
+      i++; // Bỏ qua từ tiếp theo vì đã ghép
+    } else {
+      merged.push(cur);
+    }
+  }
+
+  return merged;
 };
 
 // Gợi ý mở đầu kết nối ngẫu nhiên
@@ -643,17 +669,37 @@ const Home = ({ initialTab }) => {
   const [isSendingQuickReply, setIsSendingQuickReply] = useState(false);
   const [isTypingQuickReply, setIsTypingQuickReply] = useState(false);
 
+  // Đóng modal chi tiết bài viết đồng bộ lịch sử duyệt trang (chuẩn quy tắc nút Back)
+  const handleClosePostModal = useCallback(() => {
+    if (window.history.state && window.history.state.talovinModal === 'post') {
+      window.history.back();
+    } else {
+      setSelectedThreadPost(null);
+    }
+  }, []);
+
+  // Lắng nghe phím Esc và sự kiện Back của trình duyệt / cử chỉ vuốt điện thoại
+  useEffect(() => {
+    const handlePopState = () => {
+      if (selectedThreadPost) {
+        setSelectedThreadPost(null);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [selectedThreadPost]);
+
   // Lắng nghe phím Esc để đóng Lightbox xem đa phương tiện và Modal chi tiết bài viết
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
         if (lightboxMedia) setLightboxMedia(null);
-        else if (selectedThreadPost) setSelectedThreadPost(null);
+        else if (selectedThreadPost) handleClosePostModal();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [lightboxMedia, selectedThreadPost]);
+  }, [lightboxMedia, selectedThreadPost, handleClosePostModal]);
 
   const [systemConfig, setSystemConfig] = useState({
     brand_name: 'Talovin',
@@ -1689,6 +1735,9 @@ const Home = ({ initialTab }) => {
 
     setSelectedThreadPost(post);
     fetchComments(post.id);
+    try {
+      window.history.pushState({ talovinModal: 'post', postId: post.id }, '');
+    } catch (_) {}
     if (autoFocusComment) {
       setTimeout(() => {
         const input = document.getElementById('thread-modal-reply-input') || document.getElementById('thread-mobile-reply-input');
@@ -6191,7 +6240,7 @@ const Home = ({ initialTab }) => {
       {selectedThreadPost && (
         <div
           className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center p-0 sm:p-5 bg-black/80 backdrop-blur-md modal-backdrop-smooth"
-          onClick={() => setSelectedThreadPost(null)}
+          onClick={handleClosePostModal}
         >
           {/* Khung Modal Container: Trên mobile là full màn hình cố định, trên PC là Dual-View 2 cột */}
           <div
@@ -6203,9 +6252,9 @@ const Home = ({ initialTab }) => {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setSelectedThreadPost(null)}
+                  onClick={handleClosePostModal}
                   className="p-1.5 rounded-xl hover:bg-zinc-800 text-zinc-300 hover:text-white transition-all active:scale-95 flex items-center gap-2 text-xs font-semibold"
-                  title="Quay lại sảnh"
+                  title="Quay lại"
                 >
                   <ArrowLeft size={18} />
                   <span>Chi tiết bài viết</span>
@@ -6215,7 +6264,7 @@ const Home = ({ initialTab }) => {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setSelectedThreadPost(null)}
+                  onClick={handleClosePostModal}
                   className="w-8 h-8 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center transition-colors"
                   title="Đóng"
                 >

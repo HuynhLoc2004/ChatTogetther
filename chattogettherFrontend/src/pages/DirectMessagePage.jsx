@@ -853,7 +853,13 @@ export const DirectMessagePage = () => {
   // Kích hoạt khi URL param thay đổi (Chống vòng lặp vô tận)
   const lastTargetIdRef = useRef(null);
   useEffect(() => {
-    if (!urlTargetUserId) return;
+    if (!urlTargetUserId) {
+      lastTargetIdRef.current = null;
+      activePartnerRef.current = null;
+      setActivePartner(null);
+      setMessages([]);
+      return;
+    }
     if (String(urlTargetUserId) === String(lastTargetIdRef.current) && activePartnerRef.current && String(activePartnerRef.current.id) === String(urlTargetUserId)) return;
 
     lastTargetIdRef.current = String(urlTargetUserId);
@@ -953,7 +959,8 @@ export const DirectMessagePage = () => {
           const senderId = newMsg.senderId || newMsg.userId;
           const isFromMe = String(senderId) === String(currentUserId);
           const currentActivePartnerId = activePartnerRef.current?.id?.toString();
-          const isCurrentChat = !isFromMe && currentActivePartnerId && (String(currentActivePartnerId) === String(senderId));
+          // Chỉ coi là isCurrentChat nếu người dùng THẬT SỰ đang mở hội thoại này (urlTargetUserId trùng senderId)
+          const isCurrentChat = !isFromMe && urlTargetUserId && (String(urlTargetUserId) === String(senderId)) && currentActivePartnerId && (String(currentActivePartnerId) === String(senderId));
 
           // Ghi nhận sender đang online tức thì
           if (senderId && markUserActive) {
@@ -2371,20 +2378,16 @@ export const DirectMessagePage = () => {
                                 <span>Đang gửi...</span>
                               </span>
                             ) : (msg.isRead || msg.timeRead) ? (
-                              <div
-                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-950/70 border border-emerald-500/40 text-emerald-400 text-[10px] font-mono shadow-[0_0_8px_rgba(16,185,129,0.25)] select-none transition-all hover:scale-105"
-                                title={`Đã đọc lúc ${msg.formattedTimeRead || msg.formattedTime || ''}`}
+                              <span
+                                className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-mono select-none"
+                                title={`Đã xem lúc ${msg.formattedTimeRead || msg.formattedTime || ''}`}
                               >
-                                <span className="relative flex h-1.5 w-1.5">
-                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400"></span>
-                                </span>
+                                <CheckCheck size={12} className="text-emerald-400" />
                                 <span>Đã xem</span>
-                                {msg.formattedTimeRead && <span className="opacity-80">• {msg.formattedTimeRead}</span>}
-                              </div>
+                              </span>
                             ) : (
-                              <span className="inline-flex items-center gap-0.5 text-[10px] text-zinc-400 font-mono" title="Đã chuyển đến máy chủ">
-                                <CheckCheck size={12} className="text-zinc-400" />
+                              <span className="inline-flex items-center gap-0.5 text-[10px] text-zinc-500 font-mono select-none" title="Đã chuyển đến máy chủ">
+                                <CheckCheck size={12} className="text-zinc-500" />
                                 <span>Đã gửi</span>
                               </span>
                             )

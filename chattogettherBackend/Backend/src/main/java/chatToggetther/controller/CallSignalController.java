@@ -58,10 +58,12 @@ public class CallSignalController {
         this.messagingTemplate.convertAndSend("/topic/call/" + roomId, payload);
     }
 
-    // Cuộc gọi 1-1 riêng giữa 2 thành viên
+    // Cuộc gọi 1-1 riêng giữa 2 thành viên (Sử dụng String userId để hỗ trợ linh hoạt cả ID số và username không bao giờ lỗi type)
     @MessageMapping("/call/user/{userId}")
-    public void handlePrivateCallSignal(@DestinationVariable("userId") Long userId, @Payload Map<String, Object> payload) {
-        this.messagingTemplate.convertAndSend("/topic/call/user/" + userId, payload);
+    public void handlePrivateCallSignal(@DestinationVariable("userId") String userId, @Payload Map<String, Object> payload) {
+        if (userId != null && !userId.isBlank()) {
+            this.messagingTemplate.convertAndSend("/topic/call/user/" + userId, payload);
+        }
     }
 
     // Kênh tiếp nhận ghi log kết thúc cuộc gọi trực tiếp qua WebSocket
