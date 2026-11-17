@@ -124,6 +124,25 @@ const VIBE_TAGS = [
   { id: 'Tâm sự', label: 'Tâm sự', icon: MessageSquare, color: 'text-purple-400' },
 ];
 
+// Phân tích chuỗi chủ đề bài viết thành danh sách nhãn nguyên vẹn (không tách vỡ từ ngữ tiếng Việt như "Thư giãn")
+const parsePostVibes = (vibeStr) => {
+  if (!vibeStr || typeof vibeStr !== 'string') return [];
+  const parts = vibeStr.split(/[|,]+/).map(p => p.trim()).filter(Boolean);
+  const result = [];
+  for (const part of parts) {
+    if (part.startsWith('#')) {
+      part.split(/\s+/).filter(Boolean).forEach(tag => {
+        const clean = tag.replace(/^[#/]+/, '').trim();
+        if (clean) result.push({ text: clean, isTag: true });
+      });
+    } else {
+      const clean = part.replace(/^[#/]+/, '').trim();
+      if (clean) result.push({ text: clean, isTag: false });
+    }
+  }
+  return result;
+};
+
 // Gợi ý mở đầu kết nối ngẫu nhiên
 const ICEBREAKER_PROMPTS = [
   "Nếu chỉ được chọn một bản nhạc phát lặp lại cả tuần này, bạn sẽ nghe bài nào?",
@@ -4033,22 +4052,27 @@ const Home = ({ initialTab }) => {
 
                             {post.vibe && typeof post.vibe === 'string' && (
                               <div className="post-topics-bar">
-                                {post.vibe.split(/[|\s]+/).filter(Boolean).map((token, idx) => {
-                                  const clean = token.replace(/^[#/]+/, '').trim();
-                                  if (!clean) return null;
+                                {parsePostVibes(post.vibe).map((item, idx) => {
+                                  const meta = getVibeIcon(item.text);
+                                  const IconComponent = item.isTag ? Tag : meta.icon;
+                                  const isActive = activeFilterTag === item.text;
                                   return (
                                     <button
                                       key={idx}
                                       type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        setActiveFilterTag(activeFilterTag === clean ? null : clean);
+                                        setActiveFilterTag(isActive ? null : item.text);
                                       }}
-                                      className={`post-topic-chip ${activeFilterTag === clean ? 'active' : ''}`}
-                                      title={`Lọc theo chủ đề: ${clean}`}
+                                      className={`post-topic-chip ${isActive ? 'active' : ''}`}
+                                      title={`Lọc theo chủ đề: ${item.text}`}
                                     >
-                                      <span className="topic-dot"></span>
-                                      {clean}
+                                      {item.isTag ? (
+                                        <span className="text-zinc-500 font-mono text-[10px]">#</span>
+                                      ) : (
+                                        <IconComponent size={12} className={meta.color || 'text-zinc-400'} />
+                                      )}
+                                      <span>{item.text}</span>
                                     </button>
                                   );
                                 })}
@@ -6189,9 +6213,25 @@ const Home = ({ initialTab }) => {
                   </div>
 
                   {selectedThreadPost.vibe && (
-                    <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-zinc-800/80 text-zinc-300 border border-zinc-700">
-                      {selectedThreadPost.vibe}
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {parsePostVibes(selectedThreadPost.vibe).map((item, idx) => {
+                        const meta = getVibeIcon(item.text);
+                        const IconComponent = item.isTag ? Tag : meta.icon;
+                        return (
+                          <span
+                            key={idx}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-zinc-900/90 text-zinc-300 border border-zinc-800"
+                          >
+                            {item.isTag ? (
+                              <span className="text-zinc-500 font-mono text-xs">#</span>
+                            ) : (
+                              <IconComponent size={12} className={meta.color || 'text-zinc-400'} />
+                            )}
+                            <span>{item.text}</span>
+                          </span>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
 
@@ -6411,9 +6451,25 @@ const Home = ({ initialTab }) => {
                   </div>
 
                   {selectedThreadPost.vibe && (
-                    <span className="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-zinc-800 text-zinc-300 border border-zinc-700">
-                      {selectedThreadPost.vibe}
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {parsePostVibes(selectedThreadPost.vibe).map((item, idx) => {
+                        const meta = getVibeIcon(item.text);
+                        const IconComponent = item.isTag ? Tag : meta.icon;
+                        return (
+                          <span
+                            key={idx}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-zinc-900/90 text-zinc-300 border border-zinc-800"
+                          >
+                            {item.isTag ? (
+                              <span className="text-zinc-500 font-mono text-xs">#</span>
+                            ) : (
+                              <IconComponent size={12} className={meta.color || 'text-zinc-400'} />
+                            )}
+                            <span>{item.text}</span>
+                          </span>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
 
@@ -7840,39 +7896,38 @@ const Home = ({ initialTab }) => {
         .post-topics-bar {
           display: flex;
           align-items: center;
-          gap: 5px;
+          gap: 6px;
           flex-wrap: wrap;
+          margin-top: 3px;
         }
         .post-topic-chip {
-          background: #1c2030;
-          border: 1px solid #2d344d;
-          color: #94a3b8;
-          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 11px;
-          padding: 2px 7px;
-          border-radius: 6px;
+          background: rgba(39, 39, 42, 0.7);
+          border: 1px solid rgba(63, 63, 70, 0.6);
+          color: #d4d4d8;
+          font-family: inherit;
+          font-size: 11.5px;
+          font-weight: 500;
+          padding: 2px 8px;
+          border-radius: 9999px;
           display: inline-flex;
           align-items: center;
-          gap: 4.5px;
+          gap: 5px;
           cursor: pointer;
           transition: all 0.15s ease;
+          line-height: 1.4;
         }
         .post-topic-chip:hover {
           color: #ffffff;
-          border-color: #454f73;
-          background: #252a3f;
+          border-color: #71717a;
+          background: rgba(63, 63, 70, 0.9);
+          transform: translateY(-0.5px);
         }
         .post-topic-chip.active {
           color: #ffffff;
-          border-color: #60a5fa;
-          background: #2b334d;
+          border-color: #38bdf8;
+          background: rgba(14, 165, 233, 0.2);
           font-weight: 600;
-        }
-        .topic-dot {
-          width: 5px;
-          height: 5px;
-          border-radius: 50%;
-          background: #10b981;
+          box-shadow: 0 0 8px rgba(56, 189, 248, 0.2);
         }
         .post-header-actions {
           display: flex;
