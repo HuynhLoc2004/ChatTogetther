@@ -8,6 +8,7 @@ import chatToggetther.DTO.NotificationListResponseDTO;
 import chatToggetther.ENUMS.ErrorCode;
 import chatToggetther.modelEntity.NotificationEntity;
 import chatToggetther.repository.NotificationRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
@@ -20,12 +21,13 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 public class NotificationService {
     private final NotificationRepository notificationRepository;
     private final SimpMessagingTemplate messagingTemplate;
 
-    // Cache chống spam thông báo (Anti-spam Debounce Cooldown)
+    // Cache chống spam thông báo (Anti-spam Debounce Cooldown theo actor + post)
     private final java.util.concurrent.ConcurrentHashMap<String, Long> notifCooldownMap = new java.util.concurrent.ConcurrentHashMap<>();
 
     public NotificationService(NotificationRepository notificationRepository, SimpMessagingTemplate messagingTemplate) {
@@ -41,21 +43,24 @@ public class NotificationService {
         long now = System.currentTimeMillis();
         long cooldownMillis;
 
-        if ("POST_REACT".equalsIgnoreCase(type) || "POST_LIKE".equalsIgnoreCase(type)) {
-            // Cooldown 3 phút cho cảm xúc bài viết (chống spam like/unlike/like liên tục)
-            cooldownMillis = 180_000L;
+        if ("POST_REACT".equalsIgnoreCase(type) || "POST_LIKE".equalsIgnoreCase(type) || "COMMENT_LIKE".equalsIgnoreCase(type)) {
+            // Cooldown 8 giây cho cảm xúc (chỉ chống click spam dồn dập từ CÙNG 1 người)
+            cooldownMillis = 8_000L;
         } else if ("POST_COMMENT".equalsIgnoreCase(type) || "COMMENT_REPLY".equalsIgnoreCase(type)) {
-            // Cooldown 30 giây cho bình luận dồn dập trên cùng một bài viết
-            cooldownMillis = 30_000L;
+            // Cooldown 4 giây cho bình luận dồn dập từ CÙNG 1 người
+            cooldownMillis = 4_000L;
         } else {
             return false;
         }
 
+        // Khóa định danh riêng biệt theo type + người thao tác (actorId) + bài viết (referenceId)
+        // Khi CÓ NGƯỜI MỚI (actorId khác), key sẽ khác hoàn toàn -> Thông báo phát ngay lập tức không bị nghẽn
         String key = type.toUpperCase() + ":" + actorId + ":" + referenceId;
         Long lastSent = notifCooldownMap.get(key);
 
         if (lastSent != null && (now - lastSent) < cooldownMillis) {
-            // Đã gửi thông báo tương tự trong khoảng cooldown -> Bỏ qua để tránh làm phiền
+            log.info(">>> [NOTIFICATION] Chống spam: Bỏ qua thông báo lặp từ cùng 1 người (type={}, actorId={}, refId={}, còn {}ms cooldown)",
+                    type, actorId, referenceId, cooldownMillis - (now - lastSent));
             return true;
         }
 
@@ -63,7 +68,7 @@ public class NotificationService {
 
         // Dọn dẹp cache định kỳ nếu quá 5000 key
         if (notifCooldownMap.size() > 5000) {
-            notifCooldownMap.entrySet().removeIf(entry -> (now - entry.getValue()) > 600_000L);
+            notifCooldownMap.entrySet().removeIf(entry -> (now - entry.getValue()) > 60_000L);
         }
 
         return false;
@@ -128,7 +133,13 @@ public class NotificationService {
             String content,
             String status
     ) {
-        if (recipientId == null || (actorId != null && recipientId.equals(actorId))) {
+        if (recipientId == null) {
+            log.warn(">>> [NOTIFICATION] recipientId là null, hủy gửi");
+            return null;
+        }
+
+        if (actorId != null && recipientId.equals(actorId)) {
+            log.info(">>> [NOTIFICATION] Tự tương tác: Không gửi thông báo cho chính mình (actorId == recipientId: {})", actorId);
             return null;
         }
 
@@ -161,7 +172,11 @@ public class NotificationService {
             messagingTemplate.convertAndSend("/user/" + recipientId + "/queue/notifications", dto);
             messagingTemplate.convertAndSendToUser(String.valueOf(recipientId), "/queue/notifications", dto);
             messagingTemplate.convertAndSend("/topic/user/" + recipientId, type);
-        } catch (Exception ignored) {}
+            log.info(">>> [NOTIFICATION] Đã gửi thông báo thành công: recipientId={}, actor={}, type={}, refId={}, content='{}'",
+                    recipientId, actorUsername, type, referenceId, content);
+        } catch (Exception e) {
+            log.error(">>> [NOTIFICATION] Lỗi bắn WebSocket thông báo tới recipientId {}: {}", recipientId, e.getMessage());
+        }
 
         return dto;
     }

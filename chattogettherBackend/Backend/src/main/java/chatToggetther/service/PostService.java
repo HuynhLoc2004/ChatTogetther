@@ -840,22 +840,28 @@ public class PostService {
             this.messagingTemplate.convertAndSend("/topic/post/" + postId, wsMsg);
 
             // Chỉ gửi thông báo khi thả cảm xúc (finalUserReaction != null), không gửi khi tháo
-            if (finalUserReaction != null && post.getUser() != null && !post.getUser().getId().equals(currentUser.getId())) {
-                String senderDisplayName = currentUser.getNickname() != null && !currentUser.getNickname().isEmpty() ? currentUser.getNickname() : currentUser.getAccount();
-                String content = senderDisplayName + " đã bày tỏ cảm xúc với bài viết của bạn.";
-                notificationService.createAndSendNotification(
-                        post.getUser().getId(),
-                        currentUser.getId(),
-                        currentUser.getAccount(),
-                        senderDisplayName,
-                        currentUser.getAvatar(),
-                        "POST_REACT",
-                        postId,
-                        content,
-                        "COMPLETED"
-                );
+            if (finalUserReaction != null && post.getUser() != null) {
+                if (!post.getUser().getId().equals(currentUser.getId())) {
+                    String senderDisplayName = currentUser.getNickname() != null && !currentUser.getNickname().isEmpty() ? currentUser.getNickname() : currentUser.getAccount();
+                    String content = senderDisplayName + " đã bày tỏ cảm xúc với bài viết của bạn.";
+                    notificationService.createAndSendNotification(
+                            post.getUser().getId(),
+                            currentUser.getId(),
+                            currentUser.getAccount(),
+                            senderDisplayName,
+                            currentUser.getAvatar(),
+                            "POST_REACT",
+                            postId,
+                            content,
+                            "COMPLETED"
+                    );
+                } else {
+                    log.info(">>> [POST_REACT] Chủ bài viết tự thả cảm xúc bài của mình (userId={}), không tạo thông báo tự thân.", currentUser.getId());
+                }
             }
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            log.error(">>> [POST_REACT] Lỗi xử lý gửi thông báo cảm xúc: {}", e.getMessage(), e);
+        }
 
         return new ResponseData<>(200, "Thao tác thả cảm xúc thành công", summary);
     }
@@ -920,22 +926,28 @@ public class PostService {
             this.messagingTemplate.convertAndSend("/topic/post/" + postId, wsMsg);
 
             // Chỉ gửi thông báo khi thả tim mới (isLikedNow == true), TUYỆT ĐỐI không gửi khi tháo tim
-            if (isLikedNow && post.getUser() != null && !post.getUser().getId().equals(currentUser.getId())) {
-                String senderDisplayName = currentUser.getNickname() != null && !currentUser.getNickname().isEmpty() ? currentUser.getNickname() : currentUser.getAccount();
-                String content = senderDisplayName + " đã bày tỏ cảm xúc với bài viết của bạn.";
-                notificationService.createAndSendNotification(
-                        post.getUser().getId(),
-                        currentUser.getId(),
-                        currentUser.getAccount(),
-                        senderDisplayName,
-                        currentUser.getAvatar(),
-                        "POST_REACT",
-                        postId,
-                        content,
-                        "COMPLETED"
-                );
+            if (isLikedNow && post.getUser() != null) {
+                if (!post.getUser().getId().equals(currentUser.getId())) {
+                    String senderDisplayName = currentUser.getNickname() != null && !currentUser.getNickname().isEmpty() ? currentUser.getNickname() : currentUser.getAccount();
+                    String content = senderDisplayName + " đã bày tỏ cảm xúc với bài viết của bạn.";
+                    notificationService.createAndSendNotification(
+                            post.getUser().getId(),
+                            currentUser.getId(),
+                            currentUser.getAccount(),
+                            senderDisplayName,
+                            currentUser.getAvatar(),
+                            "POST_REACT",
+                            postId,
+                            content,
+                            "COMPLETED"
+                    );
+                } else {
+                    log.info(">>> [POST_LIKE] Chủ bài viết tự thích bài của mình (userId={}), không tạo thông báo tự thân.", currentUser.getId());
+                }
             }
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            log.error(">>> [POST_LIKE] Lỗi xử lý gửi thông báo thích bài viết: {}", e.getMessage(), e);
+        }
 
         return new ResponseData<>(200, "Thao tác thả cảm xúc thành công", dto);
     }
@@ -1022,21 +1034,27 @@ public class PostService {
             }
 
             // Gửi thông báo cho tác giả bài viết nếu người bình luận khác tác giả bài
-            if (post.getUser() != null && !post.getUser().getId().equals(currentUser.getId())) {
-                String content = senderDisplayName + " đã bình luận về bài viết của bạn.";
-                notificationService.createAndSendNotification(
-                        post.getUser().getId(),
-                        currentUser.getId(),
-                        currentUser.getAccount(),
-                        senderDisplayName,
-                        currentUser.getAvatar(),
-                        "POST_COMMENT",
-                        postId,
-                        content,
-                        "COMPLETED"
-                );
+            if (post.getUser() != null) {
+                if (!post.getUser().getId().equals(currentUser.getId())) {
+                    String content = senderDisplayName + " đã bình luận về bài viết của bạn.";
+                    notificationService.createAndSendNotification(
+                            post.getUser().getId(),
+                            currentUser.getId(),
+                            currentUser.getAccount(),
+                            senderDisplayName,
+                            currentUser.getAvatar(),
+                            "POST_COMMENT",
+                            postId,
+                            content,
+                            "COMPLETED"
+                    );
+                } else {
+                    log.info(">>> [POST_COMMENT] Chủ bài viết tự bình luận bài của mình (userId={}), không tạo thông báo tự thân.", currentUser.getId());
+                }
             }
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            log.error(">>> [POST_COMMENT] Lỗi xử lý gửi thông báo bình luận: {}", e.getMessage(), e);
+        }
 
         return new ResponseData<>(200, "Bình luận thành công", mapToCommentDTO(comment));
     }

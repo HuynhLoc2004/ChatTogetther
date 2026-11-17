@@ -739,7 +739,7 @@ const Home = ({ initialTab }) => {
           return acc + (Number(cnt) || 0);
         }, 0);
       }
-    } catch (_) {}
+    } catch (_) { }
     return 0;
   });
 
@@ -750,7 +750,7 @@ const Home = ({ initialTab }) => {
       let hiddenIds = new Set();
       try {
         hiddenIds = new Set(JSON.parse(localStorage.getItem('talovin_hidden_partner_ids') || '[]').map(String));
-      } catch (_) {}
+      } catch (_) { }
       return Object.entries(data).reduce((acc, [pid, cnt]) => {
         if (hiddenIds.has(String(pid))) return acc;
         return acc + (Number(cnt) || 0);
@@ -765,7 +765,7 @@ const Home = ({ initialTab }) => {
         try {
           const parsed = JSON.parse(e.newValue || '{}');
           setUnreadDmCount(calcUnread(parsed));
-        } catch (_) {}
+        } catch (_) { }
       }
     };
     window.addEventListener('talovin_unread_change', handleUnreadChange);
@@ -806,7 +806,7 @@ const Home = ({ initialTab }) => {
           localStorage.setItem(`talovin_dm_conversations_cache_${effectiveId}_`, JSON.stringify(res.data.data));
           window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: unreadMap }));
         }
-      } catch (_) {}
+      } catch (_) { }
     };
     syncDmUnread();
     const interval = setInterval(syncDmUnread, 15000);
@@ -854,7 +854,7 @@ const Home = ({ initialTab }) => {
           localStorage.setItem(`talovin_notifs_${currentUserId}`, JSON.stringify(next));
         }
         localStorage.setItem('talovin_notifs_cache', JSON.stringify(next));
-      } catch (_) {}
+      } catch (_) { }
       return next;
     });
 
@@ -864,7 +864,7 @@ const Home = ({ initialTab }) => {
     } catch (_) {
       try {
         await axiosClient.put('/api/notifications/read-all');
-      } catch (_) {}
+      } catch (_) { }
     }
   };
 
@@ -981,12 +981,12 @@ const Home = ({ initialTab }) => {
 
       // Đánh dấu thông báo đã đọc
       if (floatingNotif.id) {
-        axiosClient.put(`/notifications/${floatingNotif.id}/read`).catch(() => {});
+        axiosClient.put(`/notifications/${floatingNotif.id}/read`).catch(() => { });
         setNotifications(prev => prev.map(item => item.id === floatingNotif.id ? { ...item, unread: false, isRead: true } : item));
       }
 
       // Đánh dấu đã đọc toàn bộ tin nhắn từ người này đổ về trước
-      axiosClient.post('/message/read', { targetUserId: partnerId }).catch(() => {});
+      axiosClient.post('/message/read', { targetUserId: partnerId }).catch(() => { });
       try {
         const curMap = JSON.parse(localStorage.getItem('talovin_dm_unread') || '{}');
         const countToClear = Number(curMap[partnerId]) || Number(curMap[String(partnerId)]) || 0;
@@ -995,7 +995,7 @@ const Home = ({ initialTab }) => {
         localStorage.setItem('talovin_dm_unread', JSON.stringify(curMap));
         setUnreadDmCount(prev => Math.max(0, prev - countToClear));
         window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: curMap }));
-      } catch (_) {}
+      } catch (_) { }
 
       toast.success('Đã gửi phản hồi tin nhắn!', { id: 'quick-reply' });
       setQuickReplyText('');
@@ -2095,7 +2095,7 @@ const Home = ({ initialTab }) => {
         try {
           const rRes = await axiosClient.get(`/message/direct/${friend.id}`);
           targetRoomId = rRes?.data?.data?.roomId;
-        } catch (_) {}
+        } catch (_) { }
       }
       if (!targetRoomId) {
         try {
@@ -2290,8 +2290,8 @@ const Home = ({ initialTab }) => {
           // Cập nhật lượt thích và cảm xúc bài viết thời gian thực (Realtime Reaction)
           if (eventType === 'POST_REACTION_UPDATED' && data.postId) {
             const pid = Number(data.postId);
-            const count = data.likesCount !== undefined 
-              ? Number(data.likesCount) 
+            const count = data.likesCount !== undefined
+              ? Number(data.likesCount)
               : (data.summary?.totalCount !== undefined ? Number(data.summary.totalCount) : null);
             const stats = data.summary || null;
             const top = data.summary?.topReactions || data.topReactions || null;
@@ -2313,7 +2313,7 @@ const Home = ({ initialTab }) => {
                 const cacheKey = currentUserId ? `talovin_cached_posts_${currentUserId}` : 'talovin_cached_posts';
                 localStorage.setItem(cacheKey, JSON.stringify(updated.slice(0, 25)));
                 localStorage.setItem('talovin_cached_posts', JSON.stringify(updated.slice(0, 25)));
-              } catch (_) {}
+              } catch (_) { }
               return updated;
             });
 
@@ -2347,7 +2347,7 @@ const Home = ({ initialTab }) => {
                 const cacheKey = currentUserId ? `talovin_cached_posts_${currentUserId}` : 'talovin_cached_posts';
                 localStorage.setItem(cacheKey, JSON.stringify(updated.slice(0, 25)));
                 localStorage.setItem('talovin_cached_posts', JSON.stringify(updated.slice(0, 25)));
-              } catch (_) {}
+              } catch (_) { }
               return updated;
             });
             if (data.comment) {
@@ -2388,7 +2388,7 @@ const Home = ({ initialTab }) => {
                 const cacheKey = currentUserId ? `talovin_cached_posts_${currentUserId}` : 'talovin_cached_posts';
                 localStorage.setItem(cacheKey, JSON.stringify(updated.slice(0, 25)));
                 localStorage.setItem('talovin_cached_posts', JSON.stringify(updated.slice(0, 25)));
-              } catch (_) {}
+              } catch (_) { }
               return updated;
             });
             if (data.commentId) {
@@ -2573,7 +2573,7 @@ const Home = ({ initialTab }) => {
                 let hiddenSet = new Set();
                 try {
                   hiddenSet = new Set(JSON.parse(localStorage.getItem('talovin_hidden_partner_ids') || '[]').map(String));
-                } catch (_) {}
+                } catch (_) { }
 
                 if (hiddenSet.has(String(senderId))) {
                   // Cuộc trò chuyện bị ẩn: TUYỆT ĐỐI không hiện banner, không âm thanh, không tăng badge
@@ -2608,9 +2608,9 @@ const Home = ({ initialTab }) => {
                   unreadMap[sid] = (Number(unreadMap[sid]) || 0) + 1;
                   localStorage.setItem('talovin_dm_unread', JSON.stringify(unreadMap));
                   window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: unreadMap }));
-                } catch (_) {}
+                } catch (_) { }
               }
-            } catch (_) {}
+            } catch (_) { }
           });
 
           // Lắng nghe cuộc gọi trực tiếp gửi đến người dùng
@@ -2781,7 +2781,7 @@ const Home = ({ initialTab }) => {
       (n.text && (n.text.toLowerCase().includes('tin nhắn') || n.text.toLowerCase().includes('cuộc gọi')));
     if (isMsgNotif && partnerId) {
       // Đánh dấu đã đọc ngay lập tức và xóa badge unread
-      axiosClient.post('/message/read', { targetUserId: partnerId }).catch(() => {});
+      axiosClient.post('/message/read', { targetUserId: partnerId }).catch(() => { });
       try {
         const curMap = JSON.parse(localStorage.getItem('talovin_dm_unread') || '{}');
         const countToClear = Number(curMap[partnerId]) || Number(curMap[String(partnerId)]) || 0;
@@ -2790,7 +2790,7 @@ const Home = ({ initialTab }) => {
         localStorage.setItem('talovin_dm_unread', JSON.stringify(curMap));
         setUnreadDmCount(prev => Math.max(0, prev - countToClear));
         window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: curMap }));
-      } catch (_) {}
+      } catch (_) { }
 
       navigate(`/messages/${partnerId}`, {
         state: { from: location.pathname + location.search }
@@ -3119,6 +3119,7 @@ const Home = ({ initialTab }) => {
               {dynamicMenu.lobby?.visible !== false && (
                 <button
                   className={`nav-item ${activeTab === 'feed' ? 'active' : ''}`}
+                  onClick={() => { setActiveTab('feed'); setActiveFilterTag(null); }}
                   onClick={() => handleSwitchTab('feed')}
                 >
                   <Compass size={15} strokeWidth={1.5} />
@@ -3151,6 +3152,7 @@ const Home = ({ initialTab }) => {
               {dynamicMenu.rooms?.visible !== false && (
                 <button
                   className={`nav-item ${activeTab === 'rooms' ? 'active' : ''}`}
+                  onClick={() => { setActiveTab('rooms'); setActiveFilterTag(null); }}
                   onClick={() => handleSwitchTab('rooms')}
                 >
                   <Radio size={15} strokeWidth={1.5} />
@@ -3161,6 +3163,7 @@ const Home = ({ initialTab }) => {
               {dynamicMenu.trending?.visible !== false && (
                 <button
                   className={`nav-item ${activeTab === 'trending' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('trending')}
                   onClick={() => handleSwitchTab('trending')}
                 >
                   <Flame size={15} strokeWidth={1.5} />
@@ -3171,6 +3174,7 @@ const Home = ({ initialTab }) => {
               {dynamicMenu.saved?.visible !== false && (
                 <button
                   className={`nav-item ${activeTab === 'saved' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('saved')}
                   onClick={() => handleSwitchTab('saved')}
                 >
                   <Bookmark size={15} strokeWidth={1.5} />
@@ -3835,6 +3839,7 @@ const Home = ({ initialTab }) => {
                         <div className="flex items-center gap-1 shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
                           <button
                             type="button"
+                            onClick={() => navigate(`/messages/${u.id}`)}
                             onClick={() => navigate(`/messages/${u.id}`, { state: { from: location.pathname + location.search } })}
                             className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors cursor-pointer"
                             title="Nhắn tin"
@@ -5663,6 +5668,7 @@ const Home = ({ initialTab }) => {
                     const partnerId = floatingNotif.actorId || floatingNotif.senderId || floatingNotif.userId;
                     setFloatingNotif(null);
                     if (partnerId) {
+                      navigate(`/messages/${partnerId}`);
                       navigate(`/messages/${partnerId}`, { state: { from: location.pathname + location.search } });
                     }
                   }}
@@ -5676,40 +5682,40 @@ const Home = ({ initialTab }) => {
 
             {/* Form trả lời nhanh tin nhắn ngay trên thanh thông báo nổi (Quick Reply) - Chỉ hiện khi là tin nhắn văn bản thông thường */}
             {!(floatingNotif.type === 'CALL_LOG' || floatingNotif.text?.includes('Cuộc gọi') || floatingNotif.text?.includes('cuộc gọi')) &&
-             (floatingNotif.type === 'MESSAGE' || floatingNotif.type === 'CHAT' || floatingNotif.type === 'DM' || (floatingNotif.title && floatingNotif.title.toLowerCase().includes('tin nhắn'))) && (
-              <form
-                onSubmit={handleQuickReplySubmit}
-                onClick={(e) => e.stopPropagation()}
-                className="flex items-center gap-2 pt-2 border-t border-zinc-800/80"
-              >
-                <input
-                  type="text"
-                  value={quickReplyText}
-                  onChange={(e) => setQuickReplyText(e.target.value)}
-                  onFocus={() => setIsTypingQuickReply(true)}
-                  onBlur={() => {
-                    if (!quickReplyText.trim()) setIsTypingQuickReply(false);
-                  }}
-                  placeholder="Trả lời nhanh tin nhắn này..."
-                  className="flex-1 bg-zinc-900/90 border border-zinc-700/70 focus:border-emerald-500/80 focus:ring-1 focus:ring-emerald-500/40 rounded-xl px-3 py-1.5 text-xs text-white placeholder-zinc-500 outline-none transition-all"
-                />
-                <button
-                  type="submit"
-                  disabled={!quickReplyText.trim() || isSendingQuickReply}
-                  className="h-7.5 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:hover:bg-emerald-500 text-zinc-950 font-semibold text-xs transition-all active:scale-95 flex items-center gap-1.5 shadow-sm shrink-0 cursor-pointer"
-                  title="Gửi câu trả lời"
+              (floatingNotif.type === 'MESSAGE' || floatingNotif.type === 'CHAT' || floatingNotif.type === 'DM' || (floatingNotif.title && floatingNotif.title.toLowerCase().includes('tin nhắn'))) && (
+                <form
+                  onSubmit={handleQuickReplySubmit}
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex items-center gap-2 pt-2 border-t border-zinc-800/80"
                 >
-                  {isSendingQuickReply ? (
-                    <Loader2 size={12} className="animate-spin" />
-                  ) : (
-                    <>
-                      <Send size={11} />
-                      <span>Gửi</span>
-                    </>
-                  )}
-                </button>
-              </form>
-            )}
+                  <input
+                    type="text"
+                    value={quickReplyText}
+                    onChange={(e) => setQuickReplyText(e.target.value)}
+                    onFocus={() => setIsTypingQuickReply(true)}
+                    onBlur={() => {
+                      if (!quickReplyText.trim()) setIsTypingQuickReply(false);
+                    }}
+                    placeholder="Trả lời nhanh tin nhắn này..."
+                    className="flex-1 bg-zinc-900/90 border border-zinc-700/70 focus:border-emerald-500/80 focus:ring-1 focus:ring-emerald-500/40 rounded-xl px-3 py-1.5 text-xs text-white placeholder-zinc-500 outline-none transition-all"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!quickReplyText.trim() || isSendingQuickReply}
+                    className="h-7.5 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:hover:bg-emerald-500 text-zinc-950 font-semibold text-xs transition-all active:scale-95 flex items-center gap-1.5 shadow-sm shrink-0 cursor-pointer"
+                    title="Gửi câu trả lời"
+                  >
+                    {isSendingQuickReply ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : (
+                      <>
+                        <Send size={11} />
+                        <span>Gửi</span>
+                      </>
+                    )}
+                  </button>
+                </form>
+              )}
           </div>
         </div>
       )}
@@ -5881,206 +5887,206 @@ const Home = ({ initialTab }) => {
                   notifications
                     .filter(n => n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM')
                     .map(n => {
-                    const isFriendReq = n.type === 'FRIEND_REQUEST';
-                    const isFriendAccepted = n.type === 'FRIEND_ACCEPTED';
-                    const targetPostId = n.targetPostId || n.postId || n.referenceId;
-                    const isPostNotif = ['POST_REACT', 'POST_COMMENT', 'COMMENT_REPLY', 'COMMENT_LIKE', 'POST_SHARE', 'REACTION', 'COMMENT', 'REPOST'].includes(n.type) || !!targetPostId;
+                      const isFriendReq = n.type === 'FRIEND_REQUEST';
+                      const isFriendAccepted = n.type === 'FRIEND_ACCEPTED';
+                      const targetPostId = n.targetPostId || n.postId || n.referenceId;
+                      const isPostNotif = ['POST_REACT', 'POST_COMMENT', 'COMMENT_REPLY', 'COMMENT_LIKE', 'POST_SHARE', 'REACTION', 'COMMENT', 'REPOST'].includes(n.type) || !!targetPostId;
 
-                    // Trích xuất thông tin người tương tác từ mọi trường có thể có
-                    const effectiveActorId = n.actorId || n.actor_id || n.senderId || n.sender_id || n.userId || n.user_id;
-                    let effectiveUsername = n.actorUsername || n.actor_username || n.actorAccount || n.senderUsername || n.username || n.account || n.actorName;
-                    const effectiveAvatar = n.actorAvatar || n.actor_avatar || n.senderAvatar || n.avatar || n.userAvatar;
-                    let effectiveDisplayName = n.actorDisplayName || n.actorName || n.actor_name || n.senderDisplayName || n.senderName || effectiveUsername;
-                    if (!effectiveUsername && (n.text || n.content || n.message)) {
-                      const txt = n.text || n.content || n.message || '';
-                      const match = txt.match(/^([^ ]+)\s+(đã\s+)/i);
-                      if (match) {
-                        effectiveUsername = match[1];
-                        if (!effectiveDisplayName || effectiveDisplayName === 'Thành viên') {
-                          effectiveDisplayName = match[1];
+                      // Trích xuất thông tin người tương tác từ mọi trường có thể có
+                      const effectiveActorId = n.actorId || n.actor_id || n.senderId || n.sender_id || n.userId || n.user_id;
+                      let effectiveUsername = n.actorUsername || n.actor_username || n.actorAccount || n.senderUsername || n.username || n.account || n.actorName;
+                      const effectiveAvatar = n.actorAvatar || n.actor_avatar || n.senderAvatar || n.avatar || n.userAvatar;
+                      let effectiveDisplayName = n.actorDisplayName || n.actorName || n.actor_name || n.senderDisplayName || n.senderName || effectiveUsername;
+                      if (!effectiveUsername && (n.text || n.content || n.message)) {
+                        const txt = n.text || n.content || n.message || '';
+                        const match = txt.match(/^([^ ]+)\s+(đã\s+)/i);
+                        if (match) {
+                          effectiveUsername = match[1];
+                          if (!effectiveDisplayName || effectiveDisplayName === 'Thành viên') {
+                            effectiveDisplayName = match[1];
+                          }
                         }
                       }
-                    }
-                    const isUserInteraction = Boolean(effectiveActorId || effectiveUsername || effectiveAvatar || (n.type && n.type !== 'SYSTEM' && n.type !== 'ANNOUNCEMENT' && n.type !== 'POST_TAKEDOWN'));
-                    const displayName = effectiveDisplayName || 'Thành viên';
+                      const isUserInteraction = Boolean(effectiveActorId || effectiveUsername || effectiveAvatar || (n.type && n.type !== 'SYSTEM' && n.type !== 'ANNOUNCEMENT' && n.type !== 'POST_TAKEDOWN'));
+                      const displayName = effectiveDisplayName || 'Thành viên';
 
-                    return (
-                      <div
-                        key={n.id}
-                        onClick={() => handleOpenNotification(n)}
-                        className={`p-3 rounded-2xl border transition-all flex items-start gap-3 cursor-pointer ${n.unread
-                          ? 'bg-zinc-900/90 border-zinc-700/80 shadow-md hover:border-zinc-500'
-                          : 'bg-zinc-950/60 border-zinc-800/60 hover:bg-zinc-900/40 text-zinc-300'
-                          }`}
-                      >
-                        {/* Left: Avatar người tương tác & Interaction Badge */}
-                        <div className="flex-shrink-0 mt-0.5">
-                          {isUserInteraction ? (
-                            <div className="relative w-10 h-10 shrink-0">
-                              <UserAvatar
-                                avatarUrl={effectiveAvatar}
-                                username={effectiveUsername}
-                                account={effectiveUsername}
-                                name={effectiveDisplayName}
-                                userId={effectiveActorId}
-                                size={40}
-                                className="w-10 h-10 rounded-full hover:opacity-90 transition-opacity"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (effectiveActorId) {
-                                    setIsNotifOpen(false);
-                                    navigateToProfile(effectiveActorId);
-                                  }
-                                }}
-                                title={`Xem trang cá nhân ${displayName}`}
-                              />
-                              {/* Huy hiệu nhỏ loại tương tác ở góc dưới phải avatar */}
-                              <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-zinc-900 border border-zinc-700/80 flex items-center justify-center text-zinc-300 shadow-sm pointer-events-none">
-                                {(n.type === 'POST_REACT' || n.type === 'REACTION' || n.type === 'COMMENT_LIKE' || n.text?.includes('cảm xúc') || n.text?.includes('thích') || n.text?.includes('tim')) ? (
-                                  <Heart size={9} className="text-rose-400 fill-rose-400" />
-                                ) : (n.type === 'POST_COMMENT' || n.type === 'COMMENT' || n.type === 'COMMENT_REPLY' || n.text?.includes('bình luận') || n.text?.includes('phản hồi')) ? (
-                                  <MessageSquare size={9} className="text-emerald-400 fill-emerald-400" />
-                                ) : (n.type === 'POST_SHARE' || n.type === 'REPOST' || n.text?.includes('chia sẻ') || n.text?.includes('đăng lại')) ? (
-                                  <Share2 size={9} className="text-sky-400" />
+                      return (
+                        <div
+                          key={n.id}
+                          onClick={() => handleOpenNotification(n)}
+                          className={`p-3 rounded-2xl border transition-all flex items-start gap-3 cursor-pointer ${n.unread
+                            ? 'bg-zinc-900/90 border-zinc-700/80 shadow-md hover:border-zinc-500'
+                            : 'bg-zinc-950/60 border-zinc-800/60 hover:bg-zinc-900/40 text-zinc-300'
+                            }`}
+                        >
+                          {/* Left: Avatar người tương tác & Interaction Badge */}
+                          <div className="flex-shrink-0 mt-0.5">
+                            {isUserInteraction ? (
+                              <div className="relative w-10 h-10 shrink-0">
+                                <UserAvatar
+                                  avatarUrl={effectiveAvatar}
+                                  username={effectiveUsername}
+                                  account={effectiveUsername}
+                                  name={effectiveDisplayName}
+                                  userId={effectiveActorId}
+                                  size={40}
+                                  className="w-10 h-10 rounded-full hover:opacity-90 transition-opacity"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (effectiveActorId) {
+                                      setIsNotifOpen(false);
+                                      navigateToProfile(effectiveActorId);
+                                    }
+                                  }}
+                                  title={`Xem trang cá nhân ${displayName}`}
+                                />
+                                {/* Huy hiệu nhỏ loại tương tác ở góc dưới phải avatar */}
+                                <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-zinc-900 border border-zinc-700/80 flex items-center justify-center text-zinc-300 shadow-sm pointer-events-none">
+                                  {(n.type === 'POST_REACT' || n.type === 'REACTION' || n.type === 'COMMENT_LIKE' || n.text?.includes('cảm xúc') || n.text?.includes('thích') || n.text?.includes('tim')) ? (
+                                    <Heart size={9} className="text-rose-400 fill-rose-400" />
+                                  ) : (n.type === 'POST_COMMENT' || n.type === 'COMMENT' || n.type === 'COMMENT_REPLY' || n.text?.includes('bình luận') || n.text?.includes('phản hồi')) ? (
+                                    <MessageSquare size={9} className="text-emerald-400 fill-emerald-400" />
+                                  ) : (n.type === 'POST_SHARE' || n.type === 'REPOST' || n.text?.includes('chia sẻ') || n.text?.includes('đăng lại')) ? (
+                                    <Share2 size={9} className="text-sky-400" />
+                                  ) : (
+                                    <UserPlus size={9} className="text-amber-400" />
+                                  )}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="w-10 h-10 rounded-full bg-zinc-800/90 border border-zinc-700 flex items-center justify-center text-zinc-300 shrink-0">
+                                {n.type === 'POST_TAKEDOWN' ? (
+                                  <AlertTriangle size={18} className="text-amber-400" />
                                 ) : (
-                                  <UserPlus size={9} className="text-amber-400" />
+                                  <Bell size={18} strokeWidth={1.8} />
                                 )}
                               </div>
-                            </div>
-                          ) : (
-                            <div className="w-10 h-10 rounded-full bg-zinc-800/90 border border-zinc-700 flex items-center justify-center text-zinc-300 shrink-0">
-                              {n.type === 'POST_TAKEDOWN' ? (
-                                <AlertTriangle size={18} className="text-amber-400" />
-                              ) : (
-                                <Bell size={18} strokeWidth={1.8} />
-                              )}
-                            </div>
-                          )}
-                        </div>
+                            )}
+                          </div>
 
-                        {/* Right: Nội dung thông báo */}
-                        <div className="flex-1 min-w-0">
-                          {isFriendReq ? (
-                            <div>
-                              <p className="text-xs text-zinc-200 leading-relaxed font-sans m-0">
-                                <span
-                                  className="font-bold text-white hover:underline cursor-pointer"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (n.actorId) {
-                                      setIsNotifOpen(false);
-                                      navigateToProfile(n.actorId);
-                                    }
-                                  }}
-                                >
-                                  {displayName}
-                                </span>
-                                {' '}đã gửi cho bạn một lời mời kết bạn.
-                              </p>
-                              <div className="flex items-center gap-2 mt-1">
-                                <span className="text-[10px] text-zinc-400 font-mono">
-                                  {n.time || 'Vừa xong'}
-                                </span>
-                                {n.unread && (
-                                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
-                                )}
-                              </div>
-
-                              {/* 2 Nút Đồng ý / Từ chối nếu PENDING */}
-                              {n.status === 'PENDING' && (
-                                <div className="grid grid-cols-2 gap-2 mt-2.5" onClick={(e) => e.stopPropagation()}>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleAcceptFriendRequest(n.actorId, n.id)}
-                                    className="h-8 rounded-lg bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs transition-all shadow-sm active:scale-95 flex items-center justify-center"
+                          {/* Right: Nội dung thông báo */}
+                          <div className="flex-1 min-w-0">
+                            {isFriendReq ? (
+                              <div>
+                                <p className="text-xs text-zinc-200 leading-relaxed font-sans m-0">
+                                  <span
+                                    className="font-bold text-white hover:underline cursor-pointer"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (n.actorId) {
+                                        setIsNotifOpen(false);
+                                        navigateToProfile(n.actorId);
+                                      }
+                                    }}
                                   >
-                                    Đồng ý
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeclineFriendRequest(n.actorId, n.id)}
-                                    className="h-8 rounded-lg bg-zinc-900 text-zinc-300 border border-zinc-800 hover:bg-zinc-800 font-semibold text-xs transition-all active:scale-95 flex items-center justify-center"
-                                  >
-                                    Từ chối
-                                  </button>
-                                </div>
-                              )}
-
-                              {n.status === 'ACCEPTED' && (
-                                <div className="mt-2 text-xs text-emerald-400 font-medium flex items-center gap-1">
-                                  <CheckCircle2 size={13} />
-                                  <span>Đã trở thành bạn bè</span>
-                                </div>
-                              )}
-
-                              {n.status === 'REJECTED' && (
-                                <div className="mt-2 text-xs text-zinc-500 font-medium">
-                                  Đã từ chối lời mời
-                                </div>
-                              )}
-                            </div>
-                          ) : isFriendAccepted ? (
-                            <div>
-                              <p className="text-xs text-zinc-200 leading-relaxed font-sans m-0">
-                                <span
-                                  className="font-bold text-white hover:underline cursor-pointer"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (n.actorId) {
-                                      setIsNotifOpen(false);
-                                      navigate(`/profile/${n.actorId}`);
-                                    }
-                                  }}
-                                >
-                                  {displayName}
-                                </span>
-                                {' '}đã đồng ý kết bạn với bạn.
-                              </p>
-                              <div className="flex items-center gap-2 mt-1">
-                                <span className="text-[10px] text-zinc-400 font-mono">
-                                  {n.time || 'Vừa xong'}
-                                </span>
-                                {n.unread && (
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                                )}
-                              </div>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setIsNotifOpen(false);
-                                  navigate(`/messages?userId=${n.actorId}`);
-                                }}
-                                className="mt-2 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-200 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
-                              >
-                                <MessageSquare size={12} />
-                                <span>Nhắn tin ngay</span>
-                              </button>
-                            </div>
-                          ) : (
-                            <div>
-                              <p className="text-xs text-zinc-100 leading-relaxed font-sans m-0">
-                                {n.text || n.content || n.message}
-                              </p>
-                              <div className="flex items-center gap-2 mt-1.5">
-                                <span className="text-[10px] text-zinc-400 font-mono">
-                                  {n.time || 'Vừa xong'}
-                                </span>
-                                {n.unread && (
-                                  <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse"></span>
-                                )}
-                                {isPostNotif && (
-                                  <span className="text-[10px] text-zinc-400 hover:text-white transition-colors">
-                                    • Chạm để xem bài viết
+                                    {displayName}
                                   </span>
+                                  {' '}đã gửi cho bạn một lời mời kết bạn.
+                                </p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-[10px] text-zinc-400 font-mono">
+                                    {n.time || 'Vừa xong'}
+                                  </span>
+                                  {n.unread && (
+                                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                                  )}
+                                </div>
+
+                                {/* 2 Nút Đồng ý / Từ chối nếu PENDING */}
+                                {n.status === 'PENDING' && (
+                                  <div className="grid grid-cols-2 gap-2 mt-2.5" onClick={(e) => e.stopPropagation()}>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAcceptFriendRequest(n.actorId, n.id)}
+                                      className="h-8 rounded-lg bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs transition-all shadow-sm active:scale-95 flex items-center justify-center"
+                                    >
+                                      Đồng ý
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeclineFriendRequest(n.actorId, n.id)}
+                                      className="h-8 rounded-lg bg-zinc-900 text-zinc-300 border border-zinc-800 hover:bg-zinc-800 font-semibold text-xs transition-all active:scale-95 flex items-center justify-center"
+                                    >
+                                      Từ chối
+                                    </button>
+                                  </div>
+                                )}
+
+                                {n.status === 'ACCEPTED' && (
+                                  <div className="mt-2 text-xs text-emerald-400 font-medium flex items-center gap-1">
+                                    <CheckCircle2 size={13} />
+                                    <span>Đã trở thành bạn bè</span>
+                                  </div>
+                                )}
+
+                                {n.status === 'REJECTED' && (
+                                  <div className="mt-2 text-xs text-zinc-500 font-medium">
+                                    Đã từ chối lời mời
+                                  </div>
                                 )}
                               </div>
-                            </div>
-                          )}
+                            ) : isFriendAccepted ? (
+                              <div>
+                                <p className="text-xs text-zinc-200 leading-relaxed font-sans m-0">
+                                  <span
+                                    className="font-bold text-white hover:underline cursor-pointer"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (n.actorId) {
+                                        setIsNotifOpen(false);
+                                        navigate(`/profile/${n.actorId}`);
+                                      }
+                                    }}
+                                  >
+                                    {displayName}
+                                  </span>
+                                  {' '}đã đồng ý kết bạn với bạn.
+                                </p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-[10px] text-zinc-400 font-mono">
+                                    {n.time || 'Vừa xong'}
+                                  </span>
+                                  {n.unread && (
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                  )}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setIsNotifOpen(false);
+                                    navigate(`/messages?userId=${n.actorId}`);
+                                  }}
+                                  className="mt-2 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-200 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+                                >
+                                  <MessageSquare size={12} />
+                                  <span>Nhắn tin ngay</span>
+                                </button>
+                              </div>
+                            ) : (
+                              <div>
+                                <p className="text-xs text-zinc-100 leading-relaxed font-sans m-0">
+                                  {n.text || n.content || n.message}
+                                </p>
+                                <div className="flex items-center gap-2 mt-1.5">
+                                  <span className="text-[10px] text-zinc-400 font-mono">
+                                    {n.time || 'Vừa xong'}
+                                  </span>
+                                  {n.unread && (
+                                    <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse"></span>
+                                  )}
+                                  {isPostNotif && (
+                                    <span className="text-[10px] text-zinc-400 hover:text-white transition-colors">
+                                      • Chạm để xem bài viết
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })
+                      );
+                    })
                 )}
               </div>
 
