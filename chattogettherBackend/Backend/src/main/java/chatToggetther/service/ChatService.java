@@ -427,8 +427,13 @@ public class ChatService {
                     try {
                         Long u1 = Long.parseLong(parts[1]);
                         Long u2 = Long.parseLong(parts[2]);
+                        if (u1.equals(u2)) {
+                            // Bỏ qua các phòng tự thân DM_x_x phát sinh do lỗi log cũ
+                            continue;
+                        }
                         if (myId.equals(u1) || myId.equals(u2)) {
                             Long partnerId = myId.equals(u1) ? u2 : u1;
+                            if (partnerId.equals(myId)) continue;
                             if (!partnerToRoomMap.containsKey(partnerId)) {
                                 partnerToRoomMap.put(partnerId, r);
                             }
@@ -436,7 +441,11 @@ public class ChatService {
 
                             // Nếu người này chưa có trong partnersMap (chưa kết bạn nhưng từng nhắn tin 1-1)
                             if (!partnersMap.containsKey(partnerId)) {
-                                userRepository.findById(partnerId).ifPresent(p -> partnersMap.put(partnerId, p));
+                                userRepository.findById(partnerId).ifPresent(p -> {
+                                    if (!p.getId().equals(myId)) {
+                                        partnersMap.put(partnerId, p);
+                                    }
+                                });
                             }
                         }
                     } catch (NumberFormatException ignored) {}
@@ -467,6 +476,9 @@ public class ChatService {
         for (Map.Entry<Long, UserEntity> entry : partnersMap.entrySet()) {
             Long partnerId = entry.getKey();
             UserEntity partner = entry.getValue();
+            if (partnerId == null || partnerId.equals(myId) || (partner != null && partner.getId().equals(myId))) {
+                continue; // Tuyệt đối không bao giờ trả về chính bản thân mình trong danh sách bạn chat
+            }
             RoomEntity room = partnerToRoomMap.get(partnerId);
 
             MessageEntity lastMsg = null;

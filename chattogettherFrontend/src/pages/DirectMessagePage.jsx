@@ -232,8 +232,11 @@ export const DirectMessagePage = () => {
         localStorage.getItem('talovin_dm_friends_cache');
       const list = cached ? JSON.parse(cached) : [];
       if (!Array.isArray(list) || list.length === 0) return [];
+      const myIdStr = currentUserId ? String(currentUserId) : null;
+      const validRaw = list.filter(rf => rf && (!myIdStr || String(rf.id) !== myIdStr));
+      if (validRaw.length === 0) return [];
 
-      const hydrated = list.map(rf => {
+      const hydrated = validRaw.map(rf => {
         let lastMsg = rf.lastMessage;
         let lastTime = rf.lastMessageTime;
         let lastFmt = rf.lastMessageFormattedTime;
@@ -362,6 +365,7 @@ export const DirectMessagePage = () => {
   const stompClient = useRef(null);
   const roomSubRef = useRef(null);
   const handleIncomingDirectMsgRef = useRef(null);
+  const pinInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const scrollContainerRef = useRef(null);
   const messagesCacheRef = useRef(new Map()); // Cache tin nhắn in-memory để chuyển đổi hội thoại 0ms tức thì
@@ -467,8 +471,10 @@ export const DirectMessagePage = () => {
           let currentList = [];
           const freshUnreadMap = {};
           const hiddenIds = [];
+          const myIdStr = currentUserId ? String(currentUserId) : null;
+          const filteredConv = convList.filter(rf => rf && (!myIdStr || String(rf.id) !== myIdStr));
 
-          currentList = convList.map(rf => {
+          currentList = filteredConv.map(rf => {
             const prevFriend = friends.find(f => String(f.id) === String(rf.id));
             let lastMsg = rf.lastMessage || prevFriend?.lastMessage;
             let lastTime = rf.lastMessageTime || prevFriend?.lastMessageTime;
@@ -1631,9 +1637,39 @@ export const DirectMessagePage = () => {
     }
   };
 
+  // Tự động dọn dẹp tài khoản của chính mình khỏi danh sách bạn bè / hội thoại (phòng trường hợp cache cũ lưu nhầm)
+  useEffect(() => {
+    if (!currentUserId) return;
+    const myIdStr = String(currentUserId);
+    setFriends(prev => {
+      const filtered = prev.filter(f => f && String(f.id) !== myIdStr);
+      if (filtered.length !== prev.length) {
+        try {
+          localStorage.setItem(`talovin_dm_conversations_cache_${userPrefix}`, JSON.stringify(filtered));
+          localStorage.setItem('talovin_dm_conversations_cache', JSON.stringify(filtered));
+          localStorage.setItem(`talovin_dm_friends_cache_${userPrefix}`, JSON.stringify(filtered));
+          localStorage.setItem('talovin_dm_friends_cache', JSON.stringify(filtered));
+        } catch (_) {}
+      }
+      return filtered;
+    });
+  }, [currentUserId, userPrefix]);
+
+  // Tự động focus ô nhập mã PIN khi mở modal
+  useEffect(() => {
+    if (pinModal.open) {
+      setTimeout(() => pinInputRef.current?.focus(), 150);
+    }
+  }, [pinModal.open, pinStep]);
+
   // Lọc danh sách hội thoại theo ô tìm kiếm và sắp xếp chuẩn
   const filteredConversations = useMemo(() => {
     let list = [...friends];
+    // Loại trừ chính mình nếu có dữ liệu sót lại
+    if (currentUserId) {
+      const myIdStr = String(currentUserId);
+      list = list.filter(f => f && String(f.id) !== myIdStr);
+    }
     // Nếu chưa mở khóa: Loại bỏ hoàn toàn các cuộc trò chuyện bị ẩn khỏi danh sách
     if (!isUnlocked) {
       list = list.filter(f => !hiddenPartnerIds.has(String(f.id)) && !f.isHidden);
@@ -1794,7 +1830,7 @@ export const DirectMessagePage = () => {
                       navigate(`/messages/${partner.id}${location.search}`, { replace: true, state: location.state });
                       openDirectChat(partner.id, partner);
                     }}
-                    className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all duration-200 ease-out active:scale-[0.98] relative group ${isSelected
+                    className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all duration-200 ease-out active:scale-[0.98] relative group ${activeMenuPartnerId === partner.id ? 'z-30' : 'z-0'} ${isSelected
                       ? 'bg-zinc-800/90 border border-zinc-700/90 text-white shadow-sm'
                       : isUnread
                         ? 'bg-zinc-900/95 border border-emerald-500/50 text-white shadow-md'
@@ -1833,34 +1869,49 @@ export const DirectMessagePage = () => {
                                 e.stopPropagation();
                                 setActiveMenuPartnerId(activeMenuPartnerId === partner.id ? null : partner.id);
                               }}
-                              className="p-1 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-colors opacity-70 group-hover:opacity-100"
+                              className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors opacity-80 group-hover:opacity-100 cursor-pointer"
                               title="Tùy chọn cuộc trò chuyện"
                             >
                               <MoreVertical size={13} />
                             </button>
 
                             {activeMenuPartnerId === partner.id && (
-                              <div className="absolute right-0 top-6 w-44 bg-zinc-900 border border-zinc-700/80 rounded-xl shadow-2xl py-1 z-30 animate-in fade-in zoom-in-95 duration-100">
-                                {!isThisHidden ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleInitiateHide(partner)}
-                                    className="w-full px-3 py-2 text-left text-xs text-zinc-300 hover:text-rose-400 hover:bg-zinc-800/80 flex items-center gap-2 transition-colors"
-                                  >
-                                    <EyeOff size={13} className="text-zinc-400" />
-                                    <span>Ẩn cuộc trò chuyện</span>
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleInitiateUnhide(partner)}
-                                    className="w-full px-3 py-2 text-left text-xs text-zinc-300 hover:text-emerald-400 hover:bg-zinc-800/80 flex items-center gap-2 transition-colors"
-                                  >
-                                    <Eye size={13} className="text-zinc-400" />
-                                    <span>Bỏ ẩn cuộc trò chuyện</span>
-                                  </button>
-                                )}
-                              </div>
+                              <>
+                                <div
+                                  className="fixed inset-0 z-40"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveMenuPartnerId(null);
+                                  }}
+                                />
+                                <div className="absolute right-0 top-full mt-1.5 w-48 bg-zinc-900/95 backdrop-blur-xl border border-zinc-800 rounded-xl shadow-2xl py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 ring-1 ring-white/5">
+                                  {!isThisHidden ? (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleInitiateHide(partner);
+                                      }}
+                                      className="w-full px-3 py-2 text-left text-xs text-zinc-300 hover:text-rose-400 hover:bg-zinc-800/80 flex items-center gap-2.5 transition-colors cursor-pointer"
+                                    >
+                                      <EyeOff size={14} className="text-zinc-400 shrink-0" />
+                                      <span className="font-medium">Ẩn cuộc trò chuyện</span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleInitiateUnhide(partner);
+                                      }}
+                                      className="w-full px-3 py-2 text-left text-xs text-zinc-300 hover:text-emerald-400 hover:bg-zinc-800/80 flex items-center gap-2.5 transition-colors cursor-pointer"
+                                    >
+                                      <Eye size={14} className="text-zinc-400 shrink-0" />
+                                      <span className="font-medium">Bỏ ẩn cuộc trò chuyện</span>
+                                    </button>
+                                  )}
+                                </div>
+                              </>
                             )}
                           </div>
                         </div>
@@ -2003,33 +2054,42 @@ export const DirectMessagePage = () => {
                     </button>
 
                     {activeMenuPartnerId === 'header' && (
-                      <div className="absolute right-0 top-10 w-48 bg-zinc-900 border border-zinc-700/80 rounded-xl shadow-2xl py-1 z-30 animate-in fade-in zoom-in-95 duration-100">
-                        {!(hiddenPartnerIds.has(String(activePartner?.id)) || activePartner?.isHidden) ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setActiveMenuPartnerId(null);
-                              handleInitiateHide(activePartner);
-                            }}
-                            className="w-full px-3 py-2 text-left text-xs text-zinc-300 hover:text-rose-400 hover:bg-zinc-800/80 flex items-center gap-2 transition-colors"
-                          >
-                            <EyeOff size={13} className="text-zinc-400" />
-                            <span>Ẩn cuộc trò chuyện</span>
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setActiveMenuPartnerId(null);
-                              handleInitiateUnhide(activePartner);
-                            }}
-                            className="w-full px-3 py-2 text-left text-xs text-zinc-300 hover:text-emerald-400 hover:bg-zinc-800/80 flex items-center gap-2 transition-colors"
-                          >
-                            <Eye size={13} className="text-zinc-400" />
-                            <span>Bỏ ẩn cuộc trò chuyện</span>
-                          </button>
-                        )}
-                      </div>
+                      <>
+                        <div
+                          className="fixed inset-0 z-40"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveMenuPartnerId(null);
+                          }}
+                        />
+                        <div className="absolute right-0 top-full mt-2 w-48 bg-zinc-900/95 backdrop-blur-xl border border-zinc-800 rounded-xl shadow-2xl py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 ring-1 ring-white/5">
+                          {!(hiddenPartnerIds.has(String(activePartner?.id)) || activePartner?.isHidden) ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveMenuPartnerId(null);
+                                handleInitiateHide(activePartner);
+                              }}
+                              className="w-full px-3 py-2 text-left text-xs text-zinc-300 hover:text-rose-400 hover:bg-zinc-800/80 flex items-center gap-2.5 transition-colors cursor-pointer"
+                            >
+                              <EyeOff size={14} className="text-zinc-400 shrink-0" />
+                              <span className="font-medium">Ẩn cuộc trò chuyện</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveMenuPartnerId(null);
+                                handleInitiateUnhide(activePartner);
+                              }}
+                              className="w-full px-3 py-2 text-left text-xs text-zinc-300 hover:text-emerald-400 hover:bg-zinc-800/80 flex items-center gap-2.5 transition-colors cursor-pointer"
+                            >
+                              <Eye size={14} className="text-zinc-400 shrink-0" />
+                              <span className="font-medium">Bỏ ẩn cuộc trò chuyện</span>
+                            </button>
+                          )}
+                        </div>
+                      </>
                     )}
                   </div>
                 </div>
@@ -2668,24 +2728,34 @@ export const DirectMessagePage = () => {
       {/* MODAL MÃ PIN 6 SỐ BẢO MẬT CUỘC TRÒ CHUYỆN ẨN (SERVER BCRYPT) */}
       {/* ============================================================== */}
       {pinModal.open && (
-        <div className="fixed inset-0 z-[999999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-[#12151d] border border-zinc-800 rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl relative animate-in zoom-in-95 duration-150">
+        <div
+          className="fixed inset-0 z-[999999] bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200"
+          onClick={() => setPinModal({ open: false, mode: 'verify', targetPartner: null })}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-zinc-900 border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-3xl max-w-sm w-full p-6 sm:p-7 space-y-4 shadow-2xl relative animate-in slide-in-from-bottom-8 sm:zoom-in-95 duration-200"
+          >
+            {/* Thanh kéo nhỏ phong cách Native App trên điện thoại */}
+            <div className="w-10 h-1 bg-zinc-700/70 rounded-full mx-auto mb-2 sm:hidden" />
+
             <button
               type="button"
               onClick={() => setPinModal({ open: false, mode: 'verify', targetPartner: null })}
-              className="absolute top-4 right-4 p-1.5 rounded-full text-zinc-400 hover:text-white hover:bg-zinc-800/80 transition-colors"
+              className="absolute top-4 right-4 p-2 rounded-full text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+              title="Đóng"
             >
               <X size={16} />
             </button>
 
-            <div className="text-center space-y-2">
-              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto shadow-inner">
+            <div className="text-center space-y-2 pt-1">
+              <div className="w-12 h-12 rounded-2xl bg-zinc-800/90 border border-zinc-700/60 text-emerald-400 flex items-center justify-center mx-auto shadow-inner">
                 {pinModal.mode === 'setup' ? <KeyRound size={22} /> : <Lock size={22} />}
               </div>
 
-              <h3 className="text-sm font-bold text-white tracking-tight">
+              <h3 className="text-base font-bold text-white tracking-tight">
                 {pinModal.mode === 'setup'
-                  ? (pinStep === 1 ? 'Cài đặt mã PIN 6 số' : 'Xác thực lại mã PIN')
+                  ? (pinStep === 1 ? 'Cài đặt mã PIN 6 số' : 'Xác nhận lại mã PIN')
                   : pinModal.mode === 'hide'
                     ? 'Ẩn cuộc trò chuyện'
                     : pinModal.mode === 'unhide'
@@ -2693,26 +2763,29 @@ export const DirectMessagePage = () => {
                       : 'Mở khóa cuộc trò chuyện ẩn'}
               </h3>
 
-              <p className="text-xs text-zinc-400 leading-relaxed">
+              <p className="text-xs text-zinc-400 leading-relaxed max-w-xs mx-auto">
                 {pinModal.mode === 'setup'
                   ? (pinStep === 1
-                    ? 'Nhập mã PIN 6 số bí mật để bảo vệ các cuộc trò chuyện riêng tư của bạn (Mã hoá bảo mật phía server).'
-                    : 'Vui lòng nhập lại chính xác 6 số bạn vừa đặt để hoàn tất xác thực.')
+                    ? 'Nhập mã PIN 6 số bí mật để bảo vệ các cuộc trò chuyện riêng tư của bạn.'
+                    : 'Vui lòng nhập lại chính xác 6 số vừa đặt để hoàn tất.')
                   : pinModal.mode === 'hide'
-                    ? `Nhập mã PIN 6 số để ẩn cuộc trò chuyện với ${pinModal.targetPartner?.nickname || pinModal.targetPartner?.account}.`
+                    ? `Nhập mã PIN để ẩn cuộc trò chuyện với ${pinModal.targetPartner?.nickname || pinModal.targetPartner?.account}.`
                     : pinModal.mode === 'unhide'
-                      ? 'Nhập mã PIN 6 số để hiển thị lại cuộc trò chuyện này trong hộp thư.'
-                      : 'Nhập mã PIN 6 số của bạn để xem và nhắn tin trong các cuộc trò chuyện đã ẩn.'}
+                      ? 'Nhập mã PIN để đưa cuộc trò chuyện này trở lại hộp thư.'
+                      : 'Nhập mã PIN để mở khóa và xem các cuộc trò chuyện đã ẩn.'}
               </p>
             </div>
 
             <form onSubmit={handlePinSubmit} className="space-y-4 pt-1">
-              <div>
+              {/* 6 ô hiển thị số bảo mật phong cách thẻ số rời chuẩn ngân hàng / Zalo */}
+              <div className="relative py-2 cursor-pointer" onClick={() => pinInputRef.current?.focus()}>
                 <input
+                  ref={pinInputRef}
                   type="password"
                   inputMode="numeric"
                   pattern="[0-9]*"
                   maxLength={6}
+                  autoFocus
                   value={pinModal.mode === 'setup' && pinStep === 2 ? pinConfirmInput : pinInput}
                   onChange={(e) => {
                     const val = e.target.value.replace(/\D/g, '').slice(0, 6);
@@ -2723,19 +2796,44 @@ export const DirectMessagePage = () => {
                     }
                     if (pinError) setPinError('');
                   }}
-                  placeholder="••••••"
-                  autoFocus
-                  className="w-full text-center text-2xl tracking-[0.6em] font-mono py-3 px-4 rounded-2xl bg-zinc-900 border border-zinc-700/80 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-400 transition-colors"
+                  className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
+                  aria-label="Nhập mã PIN 6 số"
                 />
+
+                <div className="flex items-center justify-center gap-2 sm:gap-2.5">
+                  {[0, 1, 2, 3, 4, 5].map((index) => {
+                    const currentVal = pinModal.mode === 'setup' && pinStep === 2 ? pinConfirmInput : pinInput;
+                    const char = currentVal[index];
+                    const isCurrent = index === currentVal.length;
+                    return (
+                      <div
+                        key={index}
+                        className={`w-11 h-13 sm:w-12 sm:h-14 rounded-2xl border flex items-center justify-center transition-all ${
+                          char
+                            ? 'border-emerald-500/70 bg-emerald-500/10 text-emerald-400 shadow-sm'
+                            : isCurrent
+                            ? 'border-emerald-400 bg-zinc-800/80 ring-2 ring-emerald-500/20 text-white'
+                            : 'border-zinc-800/90 bg-zinc-950 text-zinc-600'
+                        }`}
+                      >
+                        {char ? (
+                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-sm animate-in zoom-in-50 duration-150" />
+                        ) : isCurrent ? (
+                          <span className="w-0.5 h-5 bg-emerald-400 animate-pulse rounded-full" />
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
               {pinError && (
-                <div className="p-2 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs text-center font-medium">
+                <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs text-center font-medium animate-in fade-in duration-150">
                   {pinError}
                 </div>
               )}
 
-              <div className="flex items-center gap-2 pt-1">
+              <div className="flex items-center gap-2.5 pt-1">
                 <button
                   type="button"
                   onClick={() => {
@@ -2747,7 +2845,7 @@ export const DirectMessagePage = () => {
                       setPinModal({ open: false, mode: 'verify', targetPartner: null });
                     }
                   }}
-                  className="flex-1 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition-colors"
+                  className="flex-1 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition-colors cursor-pointer"
                 >
                   {pinModal.mode === 'setup' && pinStep === 2 ? 'Quay lại' : 'Hủy'}
                 </button>
@@ -2755,7 +2853,7 @@ export const DirectMessagePage = () => {
                 <button
                   type="submit"
                   disabled={pinLoading || ((pinModal.mode === 'setup' && pinStep === 2 ? pinConfirmInput : pinInput).length !== 6)}
-                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 text-xs font-bold transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
+                  className="flex-1 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold transition-all shadow-lg shadow-emerald-500/20 active:scale-95 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
                 >
                   {pinLoading
                     ? 'Đang xử lý...'
@@ -2765,7 +2863,7 @@ export const DirectMessagePage = () => {
                         ? 'Ẩn ngay'
                         : pinModal.mode === 'unhide'
                           ? 'Bỏ ẩn'
-                          : 'Xác nhận'}
+                          : 'Mở khóa'}
                 </button>
               </div>
             </form>
