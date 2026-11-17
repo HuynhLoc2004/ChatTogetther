@@ -103,8 +103,8 @@ public class ChatService {
 
             LocalDateTime now = LocalDateTime.now();
 
-            // Nếu là phòng DM và người dùng đang gửi phản hồi: Tự động đánh dấu tin nhắn đối phương gửi trước đó là ĐÃ ĐỌC
-            if (isDm && partnerId != null) {
+            // Nếu có chỉ định upToMessageId (ví dụ trả lời nhanh qua thanh thông báo): Chỉ đánh dấu đến đúng tin nhắn đó
+            if (isDm && partnerId != null && messageRequest.getUpToMessageId() != null) {
                 try {
                     Long upToId = messageRequest.getUpToMessageId();
                     this.messageRepository.markMessagesAsRead(user_room, partnerId, upToId, now);
@@ -117,7 +117,6 @@ public class ChatService {
                     readEvent.put("upToMessageId", upToId);
                     readEvent.put("timeRead", now.toString());
                     readEvent.put("formattedTimeRead", now.format(DateTimeFormatter.ofPattern("HH:mm")));
-                    this.simpMessagingTemplate.convertAndSend("/topic/room/" + user_room, readEvent);
                     this.simpMessagingTemplate.convertAndSend("/topic/messages/" + partnerId, readEvent);
                 } catch (Exception ex) {
                     log.warn("Không thể tự động đánh dấu đã đọc khi gửi tin: {}", ex.getMessage());
@@ -577,7 +576,7 @@ public class ChatService {
         if (partnerId != null) {
             messageRepository.markMessagesAsRead(effectiveRoomId, partnerId, upToMessageId, now);
 
-            // Bắn tín hiệu socket realtime cho người gửi biết tin nhắn của họ đã được đọc
+            // Bắn tín hiệu socket realtime CHỈ cho người gửi biết tin nhắn của họ đã được đọc
             Map<String, Object> readEvent = new HashMap<>();
             readEvent.put("type", "MESSAGES_READ");
             readEvent.put("roomId", effectiveRoomId);
@@ -586,7 +585,6 @@ public class ChatService {
             readEvent.put("upToMessageId", upToMessageId);
             readEvent.put("timeRead", now.toString());
             readEvent.put("formattedTimeRead", now.format(DateTimeFormatter.ofPattern("HH:mm")));
-            this.simpMessagingTemplate.convertAndSend("/topic/room/" + effectiveRoomId, readEvent);
             this.simpMessagingTemplate.convertAndSend("/topic/messages/" + partnerId, readEvent);
         }
 

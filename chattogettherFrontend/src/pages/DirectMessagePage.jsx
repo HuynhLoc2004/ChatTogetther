@@ -896,10 +896,37 @@ export const DirectMessagePage = () => {
 
           // Xử lý tín hiệu đối phương đã đọc tin nhắn realtime (Cyber Read Receipt)
           if (newMsg.type === 'MESSAGES_READ' || newMsg.type === 'READ_RECEIPT') {
-            const upToId = newMsg.upToMessageId;
+            const readerId = newMsg.readerId ? String(newMsg.readerId) : null;
+            const targetSenderId = newMsg.senderId ? String(newMsg.senderId) : null;
+            const myIdStr = String(currentUserId);
+            const activePartnerIdStr = activePartnerRef.current?.id ? String(activePartnerRef.current.id) : null;
+
+            // 1. NẾU READER LÀ CHÍNH MÌNH -> BỎ QUA NGAY LẬP TỨC!
+            // Mình vừa đọc tin nhắn của đối phương, tuyệt đối không được đánh dấu tin nhắn của mình là đối phương đã xem!
+            if (readerId && readerId === myIdStr) {
+              return;
+            }
+
+            // 2. Chỉ chấp nhận sự kiện nếu người đọc chính là người bạn đang trò chuyện (activePartner)
+            if (readerId && activePartnerIdStr && readerId !== activePartnerIdStr) {
+              return;
+            }
+
+            // 3. Người gửi tin nhắn ban đầu (senderId) phải là chính mình
+            if (targetSenderId && targetSenderId !== myIdStr) {
+              return;
+            }
+
+            const upToId = newMsg.upToMessageId ? Number(newMsg.upToMessageId) : null;
+
             setMessages(prev => prev.map(m => {
-              const isMyMsg = String(m.senderId || m.userId) === String(currentUserId);
-              if (isMyMsg && (!upToId || m.id <= upToId)) {
+              const isMyMsg = String(m.senderId || m.userId) === myIdStr;
+              if (isMyMsg) {
+                // Nếu có mốc upToId, chỉ đánh dấu những tin nhắn có id <= upToId là đã xem
+                // Những tin nhắn mới hơn (> upToId) BẮT BUỘC giữ nguyên chưa đọc!
+                if (upToId && Number(m.id) > upToId) {
+                  return m;
+                }
                 return {
                   ...m,
                   isRead: true,
@@ -933,8 +960,8 @@ export const DirectMessagePage = () => {
             markUserActive(senderId);
           }
 
-          // Nếu đang mở cuộc trò chuyện này và đối phương nhắn tới -> Tự động báo đã đọc ngay
-          if (isCurrentChat && !isFromMe) {
+          // Nếu đang mở cuộc trò chuyện này, cửa sổ đang active (không ẩn tab) và đối phương nhắn tới -> Tự động báo đã đọc
+          if (isCurrentChat && !isFromMe && !document.hidden) {
             axiosClient.post('/message/read', {
               roomId: activeRoomIdRef.current || undefined,
               targetUserId: senderId,
