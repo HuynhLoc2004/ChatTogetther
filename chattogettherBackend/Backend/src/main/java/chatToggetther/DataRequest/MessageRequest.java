@@ -22,4 +22,5 @@ public class MessageRequest {
     private Long roomId;
     private Long user_room;
     private String targetUserId;
+    private Long upToMessageId;
 }

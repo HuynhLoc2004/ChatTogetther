@@ -103,16 +103,18 @@ public class ChatService {
 
             LocalDateTime now = LocalDateTime.now();
 
-            // Nếu là phòng DM và người dùng đang gửi phản hồi: Tự động đánh dấu TẤT CẢ tin nhắn đối phương gửi trước đó là ĐÃ ĐỌC
+            // Nếu là phòng DM và người dùng đang gửi phản hồi: Tự động đánh dấu tin nhắn đối phương gửi trước đó là ĐÃ ĐỌC
             if (isDm && partnerId != null) {
                 try {
-                    this.messageRepository.markMessagesAsRead(user_room, partnerId, null, now);
+                    Long upToId = messageRequest.getUpToMessageId();
+                    this.messageRepository.markMessagesAsRead(user_room, partnerId, upToId, now);
 
                     Map<String, Object> readEvent = new HashMap<>();
                     readEvent.put("type", "MESSAGES_READ");
                     readEvent.put("roomId", user_room);
                     readEvent.put("readerId", userId);
                     readEvent.put("senderId", partnerId);
+                    readEvent.put("upToMessageId", upToId);
                     readEvent.put("timeRead", now.toString());
                     readEvent.put("formattedTimeRead", now.format(DateTimeFormatter.ofPattern("HH:mm")));
                     this.simpMessagingTemplate.convertAndSend("/topic/room/" + user_room, readEvent);
@@ -166,8 +168,10 @@ public class ChatService {
                     if (contentPreview != null && contentPreview.length() > 100) {
                         contentPreview = contentPreview.substring(0, 97) + "...";
                     }
-                    java.util.Map<String, Object> dmAlertPayload = new java.util.HashMap<>();
+                    Map<String, Object> dmAlertPayload = new HashMap<>();
                     dmAlertPayload.put("type", "MESSAGE");
+                    dmAlertPayload.put("id", messageEntity.getId());
+                    dmAlertPayload.put("messageId", messageEntity.getId());
                     dmAlertPayload.put("roomId", roomEntity.getId());
                     dmAlertPayload.put("roomName", senderNickname);
                     dmAlertPayload.put("isDirect", true);

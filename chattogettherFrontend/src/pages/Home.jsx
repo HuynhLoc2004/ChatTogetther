@@ -988,12 +988,15 @@ const Home = ({ initialTab }) => {
     }
 
     const replyMsg = quickReplyText.trim();
+    const targetMsgId = floatingNotif.messageId || null;
     setIsSendingQuickReply(true);
 
     try {
       await axiosClient.post('/message/send', {
         message: replyMsg,
-        targetUserId: partnerId
+        targetUserId: partnerId,
+        roomId: floatingNotif.roomId || undefined,
+        upToMessageId: targetMsgId || undefined
       }, {
         params: { targetUserId: partnerId }
       });
@@ -1004,16 +1007,48 @@ const Home = ({ initialTab }) => {
         setNotifications(prev => prev.map(item => item.id === floatingNotif.id ? { ...item, unread: false, isRead: true } : item));
       }
 
-      // Đánh dấu đã đọc toàn bộ tin nhắn từ người này đổ về trước
-      axiosClient.post('/message/read', { targetUserId: partnerId }).catch(() => { });
+      // Đánh dấu đã đọc chỉ đến tin nhắn này (không đánh dấu tràn sang các tin nhắn mới hơn chưa đọc)
+      if (targetMsgId) {
+        axiosClient.post('/message/read', {
+          targetUserId: partnerId,
+          roomId: floatingNotif.roomId || undefined,
+          upToMessageId: targetMsgId
+        }).catch(() => { });
+      }
+
+      // Đồng bộ lại chính xác số tin nhắn chưa đọc từ server
       try {
-        const curMap = JSON.parse(localStorage.getItem('talovin_dm_unread') || '{}');
-        const countToClear = Number(curMap[partnerId]) || Number(curMap[String(partnerId)]) || 0;
-        delete curMap[partnerId];
-        delete curMap[String(partnerId)];
-        localStorage.setItem('talovin_dm_unread', JSON.stringify(curMap));
-        setUnreadDmCount(prev => Math.max(0, prev - countToClear));
-        window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: curMap }));
+        const convRes = await axiosClient.get('/message/conversations').catch(() => null);
+        if (convRes?.data?.data && Array.isArray(convRes.data.data)) {
+          let count = 0;
+          const unreadMap = {};
+          const hiddenIds = [];
+          convRes.data.data.forEach(c => {
+            const uCount = Number(c.unreadCount) || 0;
+            if (c.isHidden) hiddenIds.push(String(c.id));
+            if (uCount > 0) {
+              unreadMap[String(c.id)] = uCount;
+              if (!c.isHidden) count += uCount;
+            }
+          });
+          setUnreadDmCount(count);
+          localStorage.setItem('talovin_dm_unread', JSON.stringify(unreadMap));
+          window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: unreadMap }));
+        } else {
+          // Fallback an toàn: chỉ giảm 1 tin nhắn vừa trả lời
+          const curMap = JSON.parse(localStorage.getItem('talovin_dm_unread') || '{}');
+          const currentCount = Number(curMap[partnerId]) || Number(curMap[String(partnerId)]) || 0;
+          if (currentCount > 1) {
+            curMap[String(partnerId)] = currentCount - 1;
+            setUnreadDmCount(prev => Math.max(0, prev - 1));
+          } else {
+            delete curMap[partnerId];
+            delete curMap[String(partnerId)];
+            setUnreadDmCount(prev => Math.max(0, prev - currentCount));
+          }
+          localStorage.setItem('talovin_dm_unread', JSON.stringify(curMap));
+          window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: curMap }));
+        }
       } catch (_) { }
 
       toast.success('Đã gửi phản hồi tin nhắn!', { id: 'quick-reply' });
@@ -2604,7 +2639,9 @@ const Home = ({ initialTab }) => {
                 const content = alert.contentPreview || alert.message || 'Đã gửi một tin nhắn';
                 const isCall = content.toLowerCase().includes('cuộc gọi');
                 const floatingMsg = {
-                  id: alert.roomId ? `msg_${alert.roomId}_${Date.now()}` : Date.now(),
+                  id: alert.id || alert.messageId || (alert.roomId ? `msg_${alert.roomId}_${Date.now()}` : Date.now()),
+                  messageId: alert.id || alert.messageId || null,
+                  roomId: alert.roomId || null,
                   notifKey: `msg_${senderId}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
                   type: isCall ? 'CALL_LOG' : 'MESSAGE',
                   title: alert.senderDisplayName || alert.senderUsername || (isCall ? 'Cuộc gọi thoại' : 'Tin nhắn mới'),
