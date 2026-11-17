@@ -410,6 +410,7 @@ const Home = ({ initialTab }) => {
   const [searchInput, setSearchInput] = useState('');
   const [activeSearchQuery, setActiveSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState(null);
+  const [searchUsers, setSearchUsers] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
   const [showMobileSearchBar, setShowMobileSearchBar] = useState(false);
@@ -1923,6 +1924,7 @@ const Home = ({ initialTab }) => {
     if (!kw) {
       setActiveSearchQuery('');
       setSearchResults(null);
+      setSearchUsers([]);
       return;
     }
 
@@ -1941,13 +1943,18 @@ const Home = ({ initialTab }) => {
     } catch { }
 
     try {
-      const res = await axiosClient.get('/posts/search', { params: { keyword: kw } });
-      setSearchResults(res.data?.data || []);
+      const [postsRes, usersRes] = await Promise.all([
+        axiosClient.get('/posts/search', { params: { keyword: kw } }).catch(() => ({ data: { data: [] } })),
+        axiosClient.get('/users/search', { params: { q: kw } }).catch(() => ({ data: { data: [] } }))
+      ]);
+      setSearchResults(postsRes.data?.data || []);
+      setSearchUsers(usersRes.data?.data || []);
       // Tải lại danh sách hot searches để cập nhật thứ hạng từ khóa
       fetchHotSearches();
     } catch (err) {
       toast.error("Không thể kết nối tìm kiếm lúc này");
       setSearchResults([]);
+      setSearchUsers([]);
     } finally {
       setIsSearching(false);
     }
@@ -1957,6 +1964,7 @@ const Home = ({ initialTab }) => {
     setSearchInput('');
     setActiveSearchQuery('');
     setSearchResults(null);
+    setSearchUsers([]);
     setActiveFilterTag(null);
     setIsSearchDropdownOpen(false);
   };
@@ -3750,7 +3758,7 @@ const Home = ({ initialTab }) => {
                     <span className="text-xs text-zinc-300 truncate">
                       Kết quả tìm kiếm: <strong className="text-white">"{activeSearchQuery}"</strong>
                       <span className="text-zinc-500 font-mono text-[11px] ml-1.5">
-                        ({isSearching ? 'Đang phân tích...' : `${searchResults?.length || 0} bài viết`})
+                        ({isSearching ? 'Đang phân tích...' : `${searchResults?.length || 0} bài viết${searchUsers?.length ? ` • ${searchUsers.length} người dùng` : ''}`})
                       </span>
                     </span>
                   </div>
@@ -3762,6 +3770,76 @@ const Home = ({ initialTab }) => {
                     <X size={12} />
                     <span>Đặt lại</span>
                   </button>
+                </div>
+              )}
+
+              {/* KHỐI NGƯỜI DÙNG PHÙ HỢP TÌM KIẾM */}
+              {activeSearchQuery && !isSearching && searchUsers && searchUsers.length > 0 && (
+                <div className="mb-4 p-3.5 rounded-2xl bg-[#141414] border border-[#222222] shadow-sm animate-fade-in space-y-2.5">
+                  <div className="flex items-center justify-between pb-1.5 border-b border-[#202020]">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-300">
+                      <Users size={14} className="text-emerald-400" />
+                      <span>Người dùng liên quan</span>
+                    </div>
+                    <span className="text-[11px] font-mono text-zinc-500">
+                      {searchUsers.length} tài khoản
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {searchUsers.slice(0, 6).map((u) => (
+                      <div
+                        key={u.id}
+                        className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-900/80 hover:bg-zinc-800/80 border border-zinc-800/60 hover:border-zinc-700/80 transition-all cursor-pointer group"
+                        onClick={() => navigateToProfile(u.id)}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="relative w-9 h-9 shrink-0">
+                            <UserAvatar
+                              avatarUrl={u.avatar}
+                              username={u.account}
+                              name={u.nickname || u.account}
+                              userId={u.id}
+                              size={36}
+                              className="w-9 h-9 rounded-full"
+                            />
+                            {u.isOnline && (
+                              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-zinc-950" />
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-semibold text-zinc-200 truncate group-hover:text-sky-300 transition-colors">
+                                {u.nickname || u.account}
+                              </span>
+                              {u.isVerified && (
+                                <span className="text-[10px] text-sky-400 shrink-0">✓</span>
+                              )}
+                            </div>
+                            <span className="text-[11px] text-zinc-500 font-mono block truncate">
+                              @{u.account}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/messages/${u.id}`)}
+                            className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+                            title="Nhắn tin"
+                          >
+                            <MessageSquare size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => navigateToProfile(u.id)}
+                            className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[11px] font-medium transition-colors cursor-pointer"
+                          >
+                            Xem
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 

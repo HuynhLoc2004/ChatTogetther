@@ -72,10 +72,11 @@ public class FriendService {
 
     @Transactional
     public ResponseData<Boolean> sendFriendRequest(JwtAuthenticationToken token, Long receiverId) {
-        Long senderId = SecurityUtils.extractUserId(token);
-        if (senderId == null) {
+        UserEntity sender = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        if (sender == null) {
             throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
         }
+        Long senderId = sender.getId();
         if (receiverId == null) {
             throw new AppException(400, "Thiếu ID người nhận lời mời", 400);
         }
@@ -83,9 +84,6 @@ public class FriendService {
             throw new AppException(400, "Bạn không thể gửi lời mời kết bạn cho chính mình", 400);
         }
 
-        UserEntity sender = userRepository.findById(senderId).orElseThrow(() ->
-            new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "Người dùng gửi không tồn tại", 404)
-        );
         UserEntity receiver = userRepository.findById(receiverId).orElseThrow(() ->
             new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "Người dùng nhận không tồn tại", 404)
         );
@@ -136,17 +134,15 @@ public class FriendService {
 
     @Transactional
     public ResponseData<Boolean> acceptFriendRequest(JwtAuthenticationToken token, Long senderId) {
-        Long receiverId = SecurityUtils.extractUserId(token);
-        if (receiverId == null) {
+        UserEntity receiver = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        if (receiver == null) {
             throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
         }
+        Long receiverId = receiver.getId();
         if (senderId == null) {
             throw new AppException(400, "Thiếu ID người gửi lời mời", 400);
         }
 
-        UserEntity receiver = userRepository.findById(receiverId).orElseThrow(() ->
-            new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "User không tồn tại", 404)
-        );
         UserEntity sender = userRepository.findById(senderId).orElseThrow(() ->
             new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "User không tồn tại", 404)
         );
@@ -188,17 +184,15 @@ public class FriendService {
 
     @Transactional
     public ResponseData<Boolean> removeFriend(JwtAuthenticationToken token, Long targetId) {
-        Long currentUserId = SecurityUtils.extractUserId(token);
-        if (currentUserId == null) {
+        UserEntity u1 = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        if (u1 == null) {
             throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
         }
+        Long currentUserId = u1.getId();
         if (targetId == null) {
             throw new AppException(400, "Thiếu ID đối tượng", 400);
         }
 
-        UserEntity u1 = userRepository.findById(currentUserId).orElseThrow(() ->
-            new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "User không tồn tại", 404)
-        );
         UserEntity u2 = userRepository.findById(targetId).orElseThrow(() ->
             new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "User không tồn tại", 404)
         );
@@ -218,14 +212,11 @@ public class FriendService {
 
     @Transactional(readOnly = true)
     public ResponseData<List<UserDTO>> getFriendsList(JwtAuthenticationToken token) {
-        Long currentUserId = SecurityUtils.extractUserId(token);
-        if (currentUserId == null) {
+        UserEntity user = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        if (user == null) {
             throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
         }
-
-        UserEntity user = userRepository.findById(currentUserId).orElseThrow(() ->
-            new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "User không tồn tại", 404)
-        );
+        Long currentUserId = user.getId();
 
         chatToggetther.controller.RoomPresenceController.recordHeartbeat(currentUserId);
 
@@ -240,14 +231,11 @@ public class FriendService {
 
     @Transactional(readOnly = true)
     public ResponseData<List<UserDTO>> getPendingRequests(JwtAuthenticationToken token) {
-        Long currentUserId = SecurityUtils.extractUserId(token);
-        if (currentUserId == null) {
+        UserEntity user = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        if (user == null) {
             throw new AppException(ErrorCode.UNAUTHENTICATED.getCode(), "Yêu cầu đăng nhập", 401);
         }
-
-        UserEntity user = userRepository.findById(currentUserId).orElseThrow(() ->
-            new AppException(ErrorCode.USER_NOT_EXISTED.getCode(), "User không tồn tại", 404)
-        );
+        Long currentUserId = user.getId();
 
         chatToggetther.controller.RoomPresenceController.recordHeartbeat(currentUserId);
 
@@ -259,14 +247,14 @@ public class FriendService {
 
     @Transactional(readOnly = true)
     public ResponseData<String> getFriendshipStatus(JwtAuthenticationToken token, Long targetId) {
-        Long currentUserId = SecurityUtils.extractUserId(token);
-        if (currentUserId == null || targetId == null || currentUserId.equals(targetId)) {
+        UserEntity u1 = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
+        if (u1 == null || targetId == null || u1.getId().equals(targetId)) {
             return new ResponseData<>(200, "Trạng thái quan hệ bạn bè", "NONE");
         }
+        Long currentUserId = u1.getId();
 
-        UserEntity u1 = userRepository.findById(currentUserId).orElse(null);
         UserEntity u2 = userRepository.findById(targetId).orElse(null);
-        if (u1 == null || u2 == null) {
+        if (u2 == null) {
             return new ResponseData<>(200, "Trạng thái quan hệ bạn bè", "NONE");
         }
 

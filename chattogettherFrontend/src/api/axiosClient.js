@@ -41,12 +41,12 @@ axiosClient.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
 
-    // Đảm bảo tất cả endpoint API luôn bắt đầu bằng /api để khớp chuẩn Nginx Reverse Proxy
+    // Chuẩn hóa URL: Bỏ tiền tố /api nếu code gọi truyền vào (ví dụ '/api/friends' -> '/friends')
+    // vì baseURL đã chứa sẵn '/api' (tránh hoàn toàn việc bị lặp thành '/api/api/...')
     if (config.url && !config.url.startsWith('http://') && !config.url.startsWith('https://')) {
-      const cleanPath = config.url.replace(/^\/+/, '');
-      if (!cleanPath.startsWith('api/') && cleanPath !== 'api') {
-        config.url = `/api/${cleanPath}`;
-      }
+      let clean = config.url.replace(/^\/?api(\/|$)/, '/');
+      if (!clean.startsWith('/')) clean = '/' + clean;
+      config.url = clean;
     }
     return config;
   },

@@ -1034,6 +1034,13 @@ public class PostService {
         }
     }
 
+    private String unaccent(String s) {
+        if (s == null) return "";
+        String temp = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD);
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\\p{InCombiningDiacriticalMarks}+");
+        return pattern.matcher(temp).replaceAll("").replace('đ', 'd').replace('Đ', 'D').toLowerCase();
+    }
+
     @Transactional
     public ResponseData<List<PostDTO>> searchPosts(JwtAuthenticationToken token, String keyword) {
         UserEntity currentUser = SecurityUtils.getAuthenticatedUser(token, this.userRepository);
@@ -1049,8 +1056,9 @@ public class PostService {
         // Lấy danh sách bài viết hợp lệ để tính điểm phân tích ngữ nghĩa (Elastic-like relevance ranking)
         List<PostEntity> allPosts = this.postRepository.findAllPostsWithDetails();
         String kwLower = kw.toLowerCase();
-        boolean isUsernameQuery = kwLower.startsWith("@");
         String cleanKw = kwLower.replaceAll("^@+", "").trim();
+        String kwUnaccent = unaccent(cleanKw);
+        boolean isUsernameQuery = kwLower.startsWith("@");
         String[] tokens = kwLower.split("\\s+");
 
         List<ScoredPost> scoredList = new ArrayList<>();
@@ -1058,52 +1066,58 @@ public class PostService {
 
         for (PostEntity post : allPosts) {
             String content = post.getContent() != null ? post.getContent().toLowerCase() : "";
+            String contentUnaccent = unaccent(content);
             String vibe = post.getVibe() != null ? post.getVibe().toLowerCase() : "";
+            String vibeUnaccent = unaccent(vibe);
             String authorNick = post.getUser() != null && post.getUser().getNickname() != null ? post.getUser().getNickname().toLowerCase() : "";
+            String authorNickUnaccent = unaccent(authorNick);
             String authorAccount = post.getUser() != null && post.getUser().getAccount() != null ? post.getUser().getAccount().toLowerCase() : "";
+            String authorAccountUnaccent = unaccent(authorAccount);
             String groupName = post.getGroupName() != null ? post.getGroupName().toLowerCase() : "";
+            String groupNameUnaccent = unaccent(groupName);
 
             double score = 0.0;
 
             String cleanAuthorAcc = authorAccount.replaceAll("^@+", "").trim();
             String cleanAuthorNick = authorNick.replaceAll("^@+", "").trim();
 
-            // 1. Khớp theo tác giả bài viết (@account hoặc nickname)
+            // 1. Khớp theo tác giả bài viết (@account hoặc nickname - hỗ trợ cả tiếng Việt có dấu và không dấu)
             if (!cleanKw.isEmpty()) {
-                if (cleanAuthorAcc.equalsIgnoreCase(cleanKw)) {
+                if (cleanAuthorAcc.equalsIgnoreCase(cleanKw) || cleanAuthorAcc.equalsIgnoreCase(kwUnaccent)) {
                     score += 350.0; // Ưu tiên số 1: Tác giả chính là username cần tìm
-                } else if (cleanAuthorAcc.contains(cleanKw)) {
-                    score += 150.0;
+                } else if (cleanAuthorAcc.contains(cleanKw) || cleanAuthorAcc.contains(kwUnaccent)) {
+                    score += 180.0;
                 }
 
-                if (cleanAuthorNick.equalsIgnoreCase(cleanKw)) {
+                if (cleanAuthorNick.equalsIgnoreCase(cleanKw) || authorNickUnaccent.equalsIgnoreCase(kwUnaccent)) {
                     score += 300.0; // Tác giả chính là nickname cần tìm
-                } else if (cleanAuthorNick.contains(cleanKw)) {
-                    score += 120.0;
+                } else if (cleanAuthorNick.contains(cleanKw) || authorNickUnaccent.contains(kwUnaccent)) {
+                    score += 150.0;
                 }
             }
 
             // 2. Khớp theo nội dung, nhắc tên (@mention), hashtag
-            if (content.contains(kwLower) || (!cleanKw.isEmpty() && content.contains("@" + cleanKw))) {
+            if (content.contains(kwLower) || (!cleanKw.isEmpty() && content.contains("@" + cleanKw)) || contentUnaccent.contains(kwUnaccent)) {
                 score += 80.0;
-                if (content.startsWith(kwLower) || (!cleanKw.isEmpty() && content.startsWith("@" + cleanKw))) {
-                    score += 20.0;
+                if (content.startsWith(kwLower) || (!cleanKw.isEmpty() && content.startsWith("@" + cleanKw)) || contentUnaccent.startsWith(kwUnaccent)) {
+                    score += 30.0;
                 }
-            } else if (!cleanKw.isEmpty() && content.contains(cleanKw)) {
+            } else if (!cleanKw.isEmpty() && (content.contains(cleanKw) || contentUnaccent.contains(kwUnaccent))) {
                 score += 40.0;
             }
 
-            if (vibe.contains(kwLower) || (!cleanKw.isEmpty() && vibe.contains(cleanKw))) score += 40.0;
-            if (groupName.contains(kwLower) || (!cleanKw.isEmpty() && groupName.contains(cleanKw))) score += 25.0;
+            if (vibe.contains(kwLower) || (!cleanKw.isEmpty() && vibe.contains(cleanKw)) || vibeUnaccent.contains(kwUnaccent)) score += 45.0;
+            if (groupName.contains(kwLower) || (!cleanKw.isEmpty() && groupName.contains(cleanKw)) || groupNameUnaccent.contains(kwUnaccent)) score += 25.0;
 
             // 3. Khớp từng từ đơn / token (Tokenized multi-field match)
             for (String t : tokens) {
                 if (t.length() < 2) continue;
                 String cleanT = t.replaceAll("^@+", "").trim();
-                if (content.contains(t) || (!cleanT.isEmpty() && content.contains(cleanT))) score += 15.0;
-                if (vibe.contains(t) || (!cleanT.isEmpty() && vibe.contains(cleanT))) score += 15.0;
-                if (!cleanT.isEmpty() && (authorNick.contains(cleanT) || authorAccount.contains(cleanT))) score += 30.0;
-                if (groupName.contains(t) || (!cleanT.isEmpty() && groupName.contains(cleanT))) score += 10.0;
+                String cleanTUnaccent = unaccent(cleanT);
+                if (content.contains(t) || (!cleanT.isEmpty() && (content.contains(cleanT) || contentUnaccent.contains(cleanTUnaccent)))) score += 15.0;
+                if (vibe.contains(t) || (!cleanT.isEmpty() && (vibe.contains(cleanT) || vibeUnaccent.contains(cleanTUnaccent)))) score += 15.0;
+                if (!cleanT.isEmpty() && (authorNick.contains(cleanT) || authorAccount.contains(cleanT) || authorNickUnaccent.contains(cleanTUnaccent) || authorAccountUnaccent.contains(cleanTUnaccent))) score += 35.0;
+                if (groupName.contains(t) || (!cleanT.isEmpty() && (groupName.contains(cleanT) || groupNameUnaccent.contains(cleanTUnaccent)))) score += 10.0;
             }
 
             // 4. Tăng điểm dựa trên mức độ tương tác cộng đồng (Engagement Signals)
@@ -1191,6 +1205,7 @@ public class PostService {
     }
 
     @Transactional
+    @org.springframework.scheduling.annotation.Async("taskExecutor")
     public void trackSearch(String keyword) {
         if (keyword == null || keyword.trim().length() < 2) return;
         String termClean = keyword.trim().toLowerCase();

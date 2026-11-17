@@ -18,53 +18,76 @@ public class FriendController {
         this.friendService = friendService;
     }
 
-    // 1. Gửi lời mời kết bạn (Hỗ trợ cả PathVariable: /friends/request/{id}, RequestParam: receiver_id, user_id)
+    private Long extractId(Long pathId, Long p1, Long p2, Long p3, java.util.Map<String, Object> body) {
+        if (pathId != null) return pathId;
+        if (p1 != null) return p1;
+        if (p2 != null) return p2;
+        if (p3 != null) return p3;
+        if (body != null) {
+            for (String key : new String[]{"receiver_id", "receiverId", "user_id", "userId", "sender_id", "senderId", "friend_id", "friendId", "targetUserId"}) {
+                Object val = body.get(key);
+                if (val instanceof Number) return ((Number) val).longValue();
+                if (val != null) {
+                    try {
+                        return Long.parseLong(val.toString().trim());
+                    } catch (Exception ignored) {}
+                }
+            }
+        }
+        return null;
+    }
+
+    // 1. Gửi lời mời kết bạn (Hỗ trợ cả PathVariable, RequestParam và RequestBody)
     @PostMapping({"/request", "/request/{userId}", "/add/{userId}"})
     public ResponseEntity<ResponseData<Boolean>> sendRequest(
             JwtAuthenticationToken token,
             @PathVariable(value = "userId", required = false) Long pathUserId,
             @RequestParam(value = "receiver_id", required = false) Long receiverIdParam,
-            @RequestParam(value = "user_id", required = false) Long userIdParam
+            @RequestParam(value = "user_id", required = false) Long userIdParam,
+            @RequestBody(required = false) java.util.Map<String, Object> body
     ) {
-        Long effectiveId = pathUserId != null ? pathUserId : (receiverIdParam != null ? receiverIdParam : userIdParam);
+        Long effectiveId = extractId(pathUserId, receiverIdParam, userIdParam, null, body);
         return ResponseEntity.ok(this.friendService.sendFriendRequest(token, effectiveId));
     }
 
-    // 2. Chấp nhận lời mời kết bạn (Hỗ trợ cả PathVariable: /friends/accept/{id}, RequestParam: sender_id, user_id)
+    // 2. Chấp nhận lời mời kết bạn (Hỗ trợ cả PathVariable, RequestParam và RequestBody)
     @PostMapping({"/accept", "/accept/{senderId}"})
     public ResponseEntity<ResponseData<Boolean>> acceptRequest(
             JwtAuthenticationToken token,
             @PathVariable(value = "senderId", required = false) Long pathSenderId,
             @RequestParam(value = "sender_id", required = false) Long senderIdParam,
-            @RequestParam(value = "user_id", required = false) Long userIdParam
+            @RequestParam(value = "user_id", required = false) Long userIdParam,
+            @RequestBody(required = false) java.util.Map<String, Object> body
     ) {
-        Long effectiveId = pathSenderId != null ? pathSenderId : (senderIdParam != null ? senderIdParam : userIdParam);
+        Long effectiveId = extractId(pathSenderId, senderIdParam, userIdParam, null, body);
         return ResponseEntity.ok(this.friendService.acceptFriendRequest(token, effectiveId));
     }
 
-    // 3. Từ chối lời mời kết bạn (Hỗ trợ cả PathVariable: /friends/reject/{id}, /friends/decline/{id})
+    // 3. Từ chối lời mời kết bạn (Hỗ trợ cả PathVariable, RequestParam và RequestBody)
     @PostMapping({"/decline", "/decline/{senderId}", "/reject/{senderId}"})
     public ResponseEntity<ResponseData<Boolean>> declineFriendRequest(
             JwtAuthenticationToken token,
             @PathVariable(value = "senderId", required = false) Long pathSenderId,
             @RequestParam(value = "sender_id", required = false) Long senderIdParam,
             @RequestParam(value = "friend_id", required = false) Long friendIdParam,
-            @RequestParam(value = "user_id", required = false) Long userIdParam
+            @RequestParam(value = "user_id", required = false) Long userIdParam,
+            @RequestBody(required = false) java.util.Map<String, Object> body
     ) {
-        Long effectiveId = pathSenderId != null ? pathSenderId : (senderIdParam != null ? senderIdParam : (friendIdParam != null ? friendIdParam : userIdParam));
+        Long effectiveId = extractId(pathSenderId, senderIdParam, friendIdParam, userIdParam, body);
         return ResponseEntity.ok(this.friendService.removeFriend(token, effectiveId));
     }
 
-    // 4. Hủy kết bạn / Hủy lời mời kết bạn đã gửi (Hỗ trợ cả /remove, /unfriend, /cancel)
+    // 4. Hủy kết bạn / Hủy lời mời kết bạn đã gửi (Hỗ trợ cả PathVariable, RequestParam và RequestBody)
     @PostMapping({"/remove", "/remove/{friendId}", "/unfriend/{friendId}", "/cancel/{friendId}"})
     public ResponseEntity<ResponseData<Boolean>> removeFriend(
             JwtAuthenticationToken token,
             @PathVariable(value = "friendId", required = false) Long pathFriendId,
             @RequestParam(value = "friend_id", required = false) Long friendIdParam,
             @RequestParam(value = "sender_id", required = false) Long senderIdParam,
-            @RequestParam(value = "user_id", required = false) Long userIdParam
+            @RequestParam(value = "user_id", required = false) Long userIdParam,
+            @RequestBody(required = false) java.util.Map<String, Object> body
     ) {
-        Long effectiveId = pathFriendId != null ? pathFriendId : (friendIdParam != null ? friendIdParam : (senderIdParam != null ? senderIdParam : userIdParam));
+        Long effectiveId = extractId(pathFriendId, friendIdParam, senderIdParam, userIdParam, body);
         return ResponseEntity.ok(this.friendService.removeFriend(token, effectiveId));
     }
 
