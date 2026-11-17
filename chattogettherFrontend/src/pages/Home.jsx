@@ -3117,7 +3117,7 @@ const Home = ({ initialTab }) => {
               {dynamicMenu.lobby?.visible !== false && (
                 <button
                   className={`nav-item ${activeTab === 'feed' ? 'active' : ''}`}
-                  onClick={() => { setActiveTab('feed'); setActiveFilterTag(null); }}
+                  onClick={() => handleSwitchTab('feed')}
                 >
                   <Compass size={15} strokeWidth={1.5} />
                   <span>{dynamicMenu.lobby?.label || "Sảnh trực tuyến"}</span>
@@ -3149,7 +3149,7 @@ const Home = ({ initialTab }) => {
               {dynamicMenu.rooms?.visible !== false && (
                 <button
                   className={`nav-item ${activeTab === 'rooms' ? 'active' : ''}`}
-                  onClick={() => { setActiveTab('rooms'); setActiveFilterTag(null); }}
+                  onClick={() => handleSwitchTab('rooms')}
                 >
                   <Radio size={15} strokeWidth={1.5} />
                   <span>{dynamicMenu.rooms?.label || "Phòng đàm thoại"}</span>
@@ -3159,7 +3159,7 @@ const Home = ({ initialTab }) => {
               {dynamicMenu.trending?.visible !== false && (
                 <button
                   className={`nav-item ${activeTab === 'trending' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('trending')}
+                  onClick={() => handleSwitchTab('trending')}
                 >
                   <Flame size={15} strokeWidth={1.5} />
                   <span>{dynamicMenu.trending?.label || "Thịnh hành"}</span>
@@ -3169,7 +3169,7 @@ const Home = ({ initialTab }) => {
               {dynamicMenu.saved?.visible !== false && (
                 <button
                   className={`nav-item ${activeTab === 'saved' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('saved')}
+                  onClick={() => handleSwitchTab('saved')}
                 >
                   <Bookmark size={15} strokeWidth={1.5} />
                   <span>{dynamicMenu.saved?.label || "Đã lưu"} ({Array.isArray(savedPostIds) ? savedPostIds.length : 0})</span>
@@ -3833,7 +3833,7 @@ const Home = ({ initialTab }) => {
                         <div className="flex items-center gap-1 shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
                           <button
                             type="button"
-                            onClick={() => navigate(`/messages/${u.id}`)}
+                            onClick={() => navigate(`/messages/${u.id}`, { state: { from: location.pathname + location.search } })}
                             className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors cursor-pointer"
                             title="Nhắn tin"
                           >
@@ -5661,7 +5661,7 @@ const Home = ({ initialTab }) => {
                     const partnerId = floatingNotif.actorId || floatingNotif.senderId || floatingNotif.userId;
                     setFloatingNotif(null);
                     if (partnerId) {
-                      navigate(`/messages/${partnerId}`);
+                      navigate(`/messages/${partnerId}`, { state: { from: location.pathname + location.search } });
                     }
                   }}
                   className="h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/70 font-semibold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"

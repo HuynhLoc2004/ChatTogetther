@@ -156,34 +156,39 @@ export const DirectMessagePage = () => {
 
   // Điều hướng 1-click quay lại đúng màn hình trước (Screen A) mà không bị kẹt lịch sử
   const handleBack = () => {
-    // 1. Kiểm tra query param ?from=...
-    const fromParam = searchParams.get('from');
-    if (fromParam) {
-      try {
-        navigate(decodeURIComponent(fromParam));
-        return;
-      } catch (_) { }
+    // 1. Chuẩn mực: Sử dụng lịch sử duyệt web để quay lại đúng màn hình trước đó
+    if (window.history.state && window.history.state.idx > 0) {
+      navigate(-1);
+      return;
     }
 
-    // 2. Kiểm tra location.state?.from
-    if (location.state?.from) {
+    // 2. Nếu có location.state?.from từ router điều hướng nội bộ
+    if (location.state?.from && location.state.from !== location.pathname) {
       navigate(location.state.from);
       return;
     }
 
-    // 3. Kiểm tra màn hình gốc Screen A được RouteTracker lưu tự động
+    // 3. Nếu có query param ?from=... hợp lệ từ router
+    const fromParam = searchParams.get('from');
+    if (fromParam) {
+      try {
+        const decoded = decodeURIComponent(fromParam);
+        if (decoded && !decoded.startsWith('/messages') && decoded !== location.pathname) {
+          navigate(decoded);
+          return;
+        }
+      } catch (_) { }
+    }
+
+    // 4. Màn hình gốc được lưu trong session (nếu có và không phải trang hiện tại)
     const originScreenA = sessionStorage.getItem('talovin_origin_screen_a');
-    if (originScreenA && !originScreenA.startsWith('/messages') && !originScreenA.startsWith('/call')) {
+    if (originScreenA && !originScreenA.startsWith('/messages') && !originScreenA.startsWith('/call') && originScreenA !== location.pathname) {
       navigate(originScreenA);
       return;
     }
 
-    // 4. Nếu có history index hợp lệ từ trang ngoài
-    if (window.history.state && window.history.state.idx > 0) {
-      navigate(-1);
-    } else {
-      navigate('/');
-    }
+    // 5. Mặc định về trang chủ nếu không có bất kỳ nguồn nào
+    navigate('/');
   };
 
   // Danh sách bạn bè / hội thoại (Nạp tức thì từ cache, tự động hydrate từ tin nhắn cục bộ và sắp xếp mới nhất từ 0ms)
@@ -811,9 +816,9 @@ export const DirectMessagePage = () => {
   const lastTargetIdRef = useRef(null);
   useEffect(() => {
     if (!urlTargetUserId) return;
-    if (urlTargetUserId === lastTargetIdRef.current && activePartnerRef.current) return;
+    if (String(urlTargetUserId) === String(lastTargetIdRef.current) && activePartnerRef.current && String(activePartnerRef.current.id) === String(urlTargetUserId)) return;
 
-    lastTargetIdRef.current = urlTargetUserId;
+    lastTargetIdRef.current = String(urlTargetUserId);
 
     // Tìm kiếm bạn bè từ cache hoặc state (phải có nickname hoặc account hợp lệ)
     let partnerToUse = friends.find(f => (f.id?.toString() === urlTargetUserId?.toString() || f.account === urlTargetUserId) && (f.nickname || f.account));
@@ -1581,7 +1586,7 @@ export const DirectMessagePage = () => {
   }, [messages, currentUserId]);
 
   return (
-    <div className="flex flex-col h-screen w-full bg-zinc-950 text-zinc-100 select-none overflow-hidden font-sans">
+    <div className="flex flex-col h-screen w-full bg-zinc-950 text-zinc-100 select-none overflow-hidden font-sans animate-in fade-in duration-200">
 
       {/* HEADER TOÀN TRANG (Topbar) - Ẩn trên mobile khi đang mở khung chat chi tiết để tránh trùng lặp 2 thanh Header */}
       <header className={`h-14 border-b border-zinc-800/80 bg-zinc-950/90 backdrop-blur px-4 items-center justify-between shrink-0 z-20 ${urlTargetUserId ? 'hidden md:flex' : 'flex'}`}>
@@ -1589,7 +1594,7 @@ export const DirectMessagePage = () => {
           <button
             type="button"
             onClick={handleBack}
-            className="p-2 -ml-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors flex items-center gap-1.5 text-xs font-medium cursor-pointer"
+            className="p-2 -ml-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors flex items-center gap-1.5 text-xs font-medium cursor-pointer active:scale-95"
             title="Quay lại"
           >
             <ArrowLeft size={16} />
@@ -1615,7 +1620,7 @@ export const DirectMessagePage = () => {
       <div className="flex-1 flex overflow-hidden">
 
         {/* CỘT TRÁI: DANH SÁCH BẠN BÈ / CUỘC TRÒ CHUYỆN */}
-        <aside className={`w-full md:w-80 lg:w-96 flex flex-col border-r border-zinc-800/80 bg-zinc-950 shrink-0 ${urlTargetUserId ? 'hidden md:flex' : 'flex animate-in fade-in duration-150'}`}>
+        <aside className={`w-full md:w-80 lg:w-96 flex flex-col border-r border-zinc-800/80 bg-zinc-950 shrink-0 transition-all duration-200 ${urlTargetUserId ? 'hidden md:flex' : 'flex animate-in fade-in duration-150'}`}>
           {/* Ô tìm kiếm bạn bè & Nút mở khóa đoạn chat ẩn */}
           <div className="p-3 border-b border-zinc-800/60 flex items-center gap-2">
             <div className="relative flex-1">
@@ -1705,10 +1710,11 @@ export const DirectMessagePage = () => {
                   <div
                     key={partner.id}
                     onClick={() => {
+                      lastTargetIdRef.current = String(partner.id);
                       navigate(`/messages/${partner.id}${location.search}`, { replace: true, state: location.state });
                       openDirectChat(partner.id, partner);
                     }}
-                    className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all duration-150 relative group ${isSelected
+                    className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all duration-200 ease-out active:scale-[0.98] relative group ${isSelected
                       ? 'bg-zinc-800/90 border border-zinc-700/90 text-white shadow-sm'
                       : isUnread
                         ? 'bg-zinc-900/95 border border-emerald-500/50 text-white shadow-md'
@@ -1806,10 +1812,10 @@ export const DirectMessagePage = () => {
         </aside>
 
         {/* CỘT PHẢI: KHUNG CHAT 1-1 CHI TIẾT */}
-        <main className={`flex-1 flex flex-col bg-zinc-950 overflow-hidden ${!urlTargetUserId ? 'hidden md:flex' : 'flex animate-in fade-in slide-in-from-right-3 duration-200'}`}>
+        <main className={`flex-1 flex flex-col bg-zinc-950 overflow-hidden transition-all duration-200 ${!urlTargetUserId ? 'hidden md:flex' : 'flex animate-in fade-in duration-200'}`}>
           {!urlTargetUserId || !activePartner ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-zinc-500">
-              <div className="w-16 h-16 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-4">
+            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-zinc-500 animate-in fade-in duration-200">
+              <div className="w-16 h-16 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-4 shadow-sm">
                 <MessageSquare size={28} className="text-zinc-600" />
               </div>
               <h3 className="text-sm font-semibold text-zinc-300 mb-1">Chưa chọn cuộc trò chuyện</h3>
