@@ -8,10 +8,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import java.io.InputStream;
@@ -32,10 +35,10 @@ public class CloudflareR2Service {
     @Value("${r2.secret_access_key:${R2_SECRET_ACCESS_KEY:0079051cc76a1e244a101d77f532b4be843405f88d5e0631c429224796f80715}}")
     private String secretAccessKey;
 
-    @Value("${r2.bucket_name:${R2_BUCKET_NAME:museum}}")
+    @Value("${r2.bucket_name:${R2_BUCKET_NAME:talovin-media}}")
     private String bucketName;
 
-    @Value("${r2.public_url:${R2_PUBLIC_URL:https://pub-bb1eeff16fd349f2abb33e4e71fe1ae7.r2.dev}}")
+    @Value("${r2.public_url:${R2_PUBLIC_URL:https://pub-9618b6a7a3a9489ab05ddd69d79a4b9b.r2.dev}}")
     private String publicUrl;
 
     private S3Client s3Client;
@@ -75,6 +78,37 @@ public class CloudflareR2Service {
     }
 
     /**
+     * Upload file lên Cloudflare R2 theo key cụ thể
+     */
+    public boolean uploadFileWithKey(MultipartFile file, String key) {
+        if (!isConfigured() || file == null || file.isEmpty() || key == null || key.isBlank()) {
+            return false;
+        }
+        try {
+            String contentType = file.getContentType();
+            if (contentType == null || contentType.isBlank()) {
+                contentType = "application/octet-stream";
+            }
+
+            PutObjectRequest putObjectRequest = PutObjectRequest.builder()
+                    .bucket(bucketName)
+                    .key(key)
+                    .contentType(contentType)
+                    .build();
+
+            try (InputStream is = file.getInputStream()) {
+                s3Client.putObject(putObjectRequest, RequestBody.fromInputStream(is, file.getSize()));
+            }
+
+            log.info(">>> Đã lưu tệp vào Cloudflare R2 thành công: {}", key);
+            return true;
+        } catch (Exception ex) {
+            log.error(">>> Thất bại khi upload file lên Cloudflare R2 (key: {}): {}", key, ex.getMessage());
+            return false;
+        }
+    }
+
+    /**
      * Upload file lên Cloudflare R2 và trả về URL công khai CDN
      */
     public String uploadFile(MultipartFile file, String folderPrefix) {
@@ -95,27 +129,37 @@ public class CloudflareR2Service {
                     : "";
             String key = String.format("%s%d_%s.%s", prefix, System.currentTimeMillis(), UUID.randomUUID().toString().substring(0, 8), extension);
 
-            String contentType = file.getContentType();
-            if (contentType == null || contentType.isBlank()) {
-                contentType = "application/octet-stream";
+            boolean success = uploadFileWithKey(file, key);
+            if (!success) {
+                return null;
             }
 
-            PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                    .bucket(bucketName)
-                    .key(key)
-                    .contentType(contentType)
-                    .build();
-
-            try (InputStream is = file.getInputStream()) {
-                s3Client.putObject(putObjectRequest, RequestBody.fromInputStream(is, file.getSize()));
+            String baseUrl = (publicUrl != null) ? publicUrl.replaceAll("/$", "") : "";
+            if (!baseUrl.isBlank()) {
+                return baseUrl + "/" + key;
             }
-
-            String baseUrl = publicUrl.replaceAll("/$", "");
-            String resultUrl = baseUrl + "/" + key;
-            log.info(">>> Đã tải tệp lên Cloudflare R2 thành công: {}", resultUrl);
-            return resultUrl;
+            return key;
         } catch (Exception ex) {
             log.error(">>> Thất bại khi upload file lên Cloudflare R2: {}", ex.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Tải luồng dữ liệu (stream) của object từ Cloudflare R2
+     */
+    public ResponseInputStream<GetObjectResponse> getObjectStream(String key) {
+        if (!isConfigured() || key == null || key.isBlank()) {
+            return null;
+        }
+        try {
+            GetObjectRequest getObjectRequest = GetObjectRequest.builder()
+                    .bucket(bucketName)
+                    .key(key)
+                    .build();
+            return s3Client.getObject(getObjectRequest);
+        } catch (Exception ex) {
+            log.warn("Không tìm thấy tệp trên Cloudflare R2 (key: {}): {}", key, ex.getMessage());
             return null;
         }
     }

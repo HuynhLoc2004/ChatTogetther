@@ -22,6 +22,13 @@ const QUICK_EMOJIS = ['❤️', '👍', '😂', '😮', '😢', '🔥'];
 // Chuẩn hóa URL tệp đa phương tiện (Ảnh / Video) với BACKEND_URL để tương thích Vercel & Production
 export const resolveMediaUrl = (url) => {
   if (!url || typeof url !== 'string') return '';
+  // Nếu URL trỏ vào domain .r2.dev cũ hoặc bị chặn truy cập công khai -> Chuyển sang proxy an toàn của máy chủ
+  if (url.includes('.r2.dev/')) {
+    const key = url.split('.r2.dev/')[1];
+    if (key) {
+      return `${BACKEND_URL || ''}/api/message/files/${key}`;
+    }
+  }
   if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:') || url.startsWith('blob:')) {
     return url;
   }
@@ -29,35 +36,59 @@ export const resolveMediaUrl = (url) => {
   return `${BACKEND_URL || ''}${cleanPath}`;
 };
 
-// Nén hình ảnh trên Canvas để gửi siêu nhẹ (tránh lỗi 413 Payload Too Large)
-const compressImage = (file, maxWidth = 1280, quality = 0.82) => {
+// Nén ảnh sang định dạng WebP chất lượng cao (giảm 85-95% dung lượng Cloud R2, sắc nét chuẩn HD, render tức thì)
+const compressImageToFile = (file, maxWidth = 1600, quality = 0.82) => {
   return new Promise((resolve) => {
-    if (!file || !file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.readAsDataURL(file);
-      return;
+    // Không nén nếu là ảnh động GIF hoặc vector SVG
+    if (!file || !file.type.startsWith('image/') || file.type === 'image/gif' || file.type === 'image/svg+xml') {
+      return resolve(file);
     }
+    // Nếu ảnh vốn đã rất nhẹ (< 120KB), không cần nén thêm
+    if (file.size <= 120 * 1024) {
+      return resolve(file);
+    }
+
     const reader = new FileReader();
     reader.onload = (e) => {
       const img = new Image();
       img.onload = () => {
         let width = img.width;
         let height = img.height;
-        if (width > maxWidth) {
-          height = Math.round((height * maxWidth) / width);
-          width = maxWidth;
+        if (width > maxWidth || height > maxWidth) {
+          if (width > height) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxWidth) / height);
+            height = maxWidth;
+          }
         }
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/webp', quality));
+
+        canvas.toBlob(
+          (blob) => {
+            if (blob && blob.size < file.size) {
+              const newFileName = file.name.replace(/\.[^/.]+$/, "") + ".webp";
+              const optimizedFile = new File([blob], newFileName, { type: 'image/webp' });
+              resolve(optimizedFile);
+            } else {
+              resolve(file);
+            }
+          },
+          'image/webp',
+          quality
+        );
       };
-      img.onerror = () => resolve(e.target.result);
+      img.onerror = () => resolve(file);
       img.src = e.target.result;
     };
+    reader.onerror = () => resolve(file);
     reader.readAsDataURL(file);
   });
 };
@@ -1203,12 +1234,19 @@ export const DirectMessagePage = () => {
           } catch (_) { }
         }
 
-        // Tải lên tệp đa phương tiện (Ảnh / Video) qua endpoint chuyên biệt
+        // Tải lên tệp đa phương tiện (Ảnh / Video) qua endpoint chuyên biệt với tối ưu nén
         let uploadedMediaUrl = null;
         if (currentMedia?.file) {
           try {
+            let fileToUpload = currentMedia.file;
+            if (currentMedia.type === 'IMAGE') {
+              try {
+                fileToUpload = await compressImageToFile(currentMedia.file);
+              } catch (_) {}
+            }
+
             const formData = new FormData();
-            formData.append('file', currentMedia.file);
+            formData.append('file', fileToUpload);
             const uploadRes = await axiosClient.post('/message/upload', formData, {
               headers: { 'Content-Type': 'multipart/form-data' },
               timeout: 120000 // Chờ đến 120 giây cho video tải lên ổn định
@@ -1216,16 +1254,10 @@ export const DirectMessagePage = () => {
             uploadedMediaUrl = uploadRes.data?.data?.url || uploadRes.data?.url;
           } catch (uploadErr) {
             console.warn("Lỗi tải tệp lên server:", uploadErr);
-            if (currentMedia.type === 'IMAGE') {
-              try {
-                uploadedMediaUrl = await compressImage(currentMedia.file);
-              } catch (_) {}
-            }
           }
 
-          // TUYỆT ĐỐI không gửi blob: URL sang người khác vì thiết bị khác không thể mở được blob của máy này
           if (!uploadedMediaUrl) {
-            toast.error("Không thể tải video/hình ảnh lên máy chủ. Vui lòng kiểm tra dung lượng hoặc kết nối mạng!");
+            toast.error("Không thể tải hình ảnh/video lên máy chủ. Vui lòng kiểm tra dung lượng hoặc kết nối mạng!");
             setMessages(prev => prev.map(m => m.id === tempId ? { ...m, failed: true, pending: false } : m));
             return;
           }
@@ -2204,7 +2236,16 @@ export const DirectMessagePage = () => {
                                   src={resolveMediaUrl(mediaObj.url)}
                                   alt="Đính kèm"
                                   loading="lazy"
+                                  decoding="async"
                                   onClick={() => setLightboxMedia(resolveMediaUrl(mediaObj.url))}
+                                  onError={(e) => {
+                                    e.currentTarget.onerror = null;
+                                    const orig = mediaObj.url;
+                                    if (orig && orig.includes('.r2.dev/')) {
+                                      const key = orig.split('.r2.dev/')[1];
+                                      if (key) e.currentTarget.src = `${BACKEND_URL || ''}/api/message/files/${key}`;
+                                    }
+                                  }}
                                   className="w-full h-full max-h-72 object-cover cursor-pointer hover:opacity-95 transition-opacity rounded-xl"
                                 />
                               )}

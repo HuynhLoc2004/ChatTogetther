@@ -6,6 +6,8 @@ import org.springframework.core.io.UrlResource;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
+import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -23,19 +25,25 @@ public class MediaStorageService {
 
     public MediaStorageService(CloudflareR2Service cloudflareR2Service) {
         this.cloudflareR2Service = cloudflareR2Service;
-        Path targetDir = Paths.get("uploads", "voice-samples").toAbsolutePath().normalize();
+        Path targetDir = Paths.get("uploads").toAbsolutePath().normalize();
         Path effectiveDir;
         try {
             Files.createDirectories(targetDir);
+            Files.createDirectories(targetDir.resolve("chat"));
+            Files.createDirectories(targetDir.resolve("voice-samples"));
+            Files.createDirectories(targetDir.resolve("tracks"));
             effectiveDir = targetDir;
         } catch (Exception e) {
             System.err.println("Không thể tạo thư mục lưu trữ mặc định: " + targetDir + ". Chuyển sang thư mục tạm: " + e.getMessage());
             try {
-                Path tmpDir = Paths.get(System.getProperty("java.io.tmpdir"), "uploads", "voice-samples").toAbsolutePath().normalize();
+                Path tmpDir = Paths.get(System.getProperty("java.io.tmpdir"), "uploads").toAbsolutePath().normalize();
                 Files.createDirectories(tmpDir);
+                Files.createDirectories(tmpDir.resolve("chat"));
+                Files.createDirectories(tmpDir.resolve("voice-samples"));
+                Files.createDirectories(tmpDir.resolve("tracks"));
                 effectiveDir = tmpDir;
             } catch (Exception ex) {
-                System.err.println("Cảnh báo: Không thể tạo thư mục lưu trữ âm thanh: " + ex.getMessage());
+                System.err.println("Cảnh báo: Không thể tạo thư mục lưu trữ tạm: " + ex.getMessage());
                 effectiveDir = Paths.get(System.getProperty("java.io.tmpdir")).toAbsolutePath().normalize();
             }
         }
@@ -59,34 +67,47 @@ public class MediaStorageService {
             extension = originalFilename.substring(dotIndex + 1).toLowerCase();
         }
 
-        // 1. Tải lên Cloudflare R2 siêu tốc nếu đã cấu hình
-        if (this.cloudflareR2Service != null && this.cloudflareR2Service.isConfigured()) {
-            String r2Url = this.cloudflareR2Service.uploadFile(file, "voice-samples");
-            if (r2Url != null) {
-                return r2Url;
-            }
-        }
-
-        // Tên file chuẩn mực, ngẫu nhiên hóa để chống ghi đè
-        String uniqueFileName = String.format("sample_user_%d_%d_%s.%s",
+        String key = String.format("voice-samples/sample_user_%d_%d_%s.%s",
                 userId != null ? userId : 0,
                 System.currentTimeMillis(),
                 UUID.randomUUID().toString().substring(0, 8),
                 extension
         );
 
+        // 1. Tải lên Cloudflare R2 siêu tốc nếu đã cấu hình
+        if (this.cloudflareR2Service != null && this.cloudflareR2Service.isConfigured()) {
+            boolean r2Success = this.cloudflareR2Service.uploadFileWithKey(file, key);
+            if (r2Success) {
+                try {
+                    Path localTarget = this.storageDirectory.resolve(key).normalize();
+                    Files.createDirectories(localTarget.getParent());
+                    Files.copy(file.getInputStream(), localTarget, StandardCopyOption.REPLACE_EXISTING);
+                } catch (Exception ignored) {}
+                return "/api/match/audio/" + key.replace("voice-samples/", "");
+            }
+        }
+
         try {
-            Path targetLocation = this.storageDirectory.resolve(uniqueFileName);
+            Path targetLocation = this.storageDirectory.resolve(key).normalize();
+            Files.createDirectories(targetLocation.getParent());
             Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
-            return "/api/match/audio/" + uniqueFileName;
+            return "/api/match/audio/" + key.replace("voice-samples/", "");
         } catch (IOException e) {
             throw new AppException(500, "Lỗi khi lưu trữ tệp âm thanh: " + e.getMessage(), 500);
         }
     }
 
     public String storeMusicFile(MultipartFile file) {
+        return storeMusicTrack(file, "music");
+    }
+
+    public String storeMusicTrack(MultipartFile file, String subFolder) {
         if (file == null || file.isEmpty()) {
             throw new AppException(400, "Tệp nhạc không được để trống", 400);
+        }
+
+        if (file.getSize() > 25 * 1024 * 1024) {
+            throw new AppException(400, "Kích thước tệp nhạc vượt quá 25MB", 400);
         }
 
         String originalFilename = StringUtils.cleanPath(file.getOriginalFilename() != null ? file.getOriginalFilename() : "track.mp3");
@@ -96,24 +117,29 @@ public class MediaStorageService {
             extension = originalFilename.substring(dotIndex + 1).toLowerCase();
         }
 
-        // 1. Tải lên Cloudflare R2 siêu tốc nếu đã cấu hình
-        if (this.cloudflareR2Service != null && this.cloudflareR2Service.isConfigured()) {
-            String r2Url = this.cloudflareR2Service.uploadFile(file, "tracks");
-            if (r2Url != null) {
-                return r2Url;
-            }
-        }
-
-        String uniqueFileName = String.format("track_%d_%s.%s",
+        String key = String.format("tracks/%d_%s.%s",
                 System.currentTimeMillis(),
                 UUID.randomUUID().toString().substring(0, 8),
                 extension
         );
 
+        if (this.cloudflareR2Service != null && this.cloudflareR2Service.isConfigured()) {
+            boolean r2Success = this.cloudflareR2Service.uploadFileWithKey(file, key);
+            if (r2Success) {
+                try {
+                    Path localTarget = this.storageDirectory.resolve(key).normalize();
+                    Files.createDirectories(localTarget.getParent());
+                    Files.copy(file.getInputStream(), localTarget, StandardCopyOption.REPLACE_EXISTING);
+                } catch (Exception ignored) {}
+                return "/api/music/files/" + key.replace("tracks/", "");
+            }
+        }
+
         try {
-            Path targetLocation = this.storageDirectory.resolve(uniqueFileName);
+            Path targetLocation = this.storageDirectory.resolve(key).normalize();
+            Files.createDirectories(targetLocation.getParent());
             Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
-            return "/api/match/audio/" + uniqueFileName;
+            return "/api/music/files/" + key.replace("tracks/", "");
         } catch (IOException e) {
             throw new AppException(500, "Lỗi khi lưu trữ tệp nhạc: " + e.getMessage(), 500);
         }
@@ -130,54 +156,91 @@ public class MediaStorageService {
             extension = originalFilename.substring(dotIndex + 1).toLowerCase();
         }
 
-        // 1. Tải lên Cloudflare R2 siêu tốc nếu đã cấu hình (CDN miễn phí băng thông)
-        if (this.cloudflareR2Service != null && this.cloudflareR2Service.isConfigured()) {
-            String r2Url = this.cloudflareR2Service.uploadFile(file, "chat");
-            if (r2Url != null) {
-                return r2Url;
-            }
-        }
-
-        String uniqueFileName = String.format("media_%d_%s.%s",
+        String key = String.format("chat/%d_%s.%s",
                 System.currentTimeMillis(),
                 UUID.randomUUID().toString().substring(0, 8),
                 extension
         );
 
+        // 1. Tải lên Cloudflare R2 (Lưu trữ Cloud 0$ băng thông, vĩnh viễn, không lo tốn dung lượng VPS)
+        if (this.cloudflareR2Service != null && this.cloudflareR2Service.isConfigured()) {
+            boolean r2Success = this.cloudflareR2Service.uploadFileWithKey(file, key);
+            if (r2Success) {
+                // Lưu bản sao cục bộ vào bộ nhớ cache nhanh trên VPS để phục vụ ngay
+                try {
+                    Path localTarget = this.storageDirectory.resolve(key).normalize();
+                    Files.createDirectories(localTarget.getParent());
+                    Files.copy(file.getInputStream(), localTarget, StandardCopyOption.REPLACE_EXISTING);
+                } catch (Exception ignored) {}
+
+                // Trả về endpoint proxy nội bộ đảm bảo 100% người dùng xem được mượt mà
+                return "/api/message/files/" + key;
+            }
+        }
+
+        // 2. Fallback lưu trữ cục bộ nếu chưa có Cloudflare R2
         try {
-            Path targetLocation = this.storageDirectory.resolve(uniqueFileName);
+            Path targetLocation = this.storageDirectory.resolve(key).normalize();
+            Files.createDirectories(targetLocation.getParent());
             Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
-            return "/api/message/files/" + uniqueFileName;
+            return "/api/message/files/" + key;
         } catch (IOException e) {
             throw new AppException(500, "Lỗi khi lưu trữ tệp media: " + e.getMessage(), 500);
         }
     }
 
-    public Resource loadChatMediaAsResource(String fileName) {
+    public Resource loadChatMediaAsResource(String relativeKey) {
+        if (relativeKey == null || relativeKey.isBlank()) {
+            throw new AppException(400, "Tên tệp không hợp lệ", 400);
+        }
+        String cleanKey = relativeKey.replaceAll("^/+", "");
         try {
-            Path filePath = this.storageDirectory.resolve(fileName).normalize();
-            Resource resource = new UrlResource(filePath.toUri());
-            if (resource.exists() && resource.isReadable()) {
-                return resource;
-            } else {
-                throw new AppException(404, "Tệp media không tồn tại hoặc không thể đọc", 404);
+            // 1. Kiểm tra cache cục bộ trên đĩa
+            Path filePath = this.storageDirectory.resolve(cleanKey).normalize();
+            if (Files.exists(filePath) && Files.isReadable(filePath)) {
+                return new UrlResource(filePath.toUri());
             }
-        } catch (MalformedURLException e) {
-            throw new AppException(404, "Đường dẫn tệp media không hợp lệ", 404);
+
+            // Kiểm tra trong thư mục con chat nếu cleanKey chưa có tiền tố
+            if (!cleanKey.startsWith("chat/")) {
+                Path chatSubPath = this.storageDirectory.resolve("chat").resolve(cleanKey).normalize();
+                if (Files.exists(chatSubPath) && Files.isReadable(chatSubPath)) {
+                    return new UrlResource(chatSubPath.toUri());
+                }
+            }
+
+            // Kiểm tra trong thư mục voice-samples (tương thích ngược)
+            Path voiceSubPath = this.storageDirectory.resolve("voice-samples").resolve(cleanKey).normalize();
+            if (Files.exists(voiceSubPath) && Files.isReadable(voiceSubPath)) {
+                return new UrlResource(voiceSubPath.toUri());
+            }
+
+            // 2. Nếu cục bộ chưa có, tải từ Cloudflare R2 về đệm cục bộ
+            if (this.cloudflareR2Service != null && this.cloudflareR2Service.isConfigured()) {
+                // Thử cả cleanKey và chat/cleanKey
+                String[] candidateKeys = cleanKey.startsWith("chat/") ? new String[]{cleanKey} : new String[]{cleanKey, "chat/" + cleanKey};
+                for (String k : candidateKeys) {
+                    try (ResponseInputStream<GetObjectResponse> r2Stream = this.cloudflareR2Service.getObjectStream(k)) {
+                        if (r2Stream != null) {
+                            Files.createDirectories(filePath.getParent());
+                            Files.copy(r2Stream, filePath, StandardCopyOption.REPLACE_EXISTING);
+                            return new UrlResource(filePath.toUri());
+                        }
+                    } catch (Exception ex) {
+                        System.err.println("Không thể đồng bộ từ Cloudflare R2 (key: " + k + "): " + ex.getMessage());
+                    }
+                }
+            }
+
+            throw new AppException(404, "Tệp media không tồn tại hoặc đã bị xóa", 404);
+        } catch (AppException ae) {
+            throw ae;
+        } catch (Exception e) {
+            throw new AppException(500, "Lỗi khi truy xuất tệp: " + e.getMessage(), 500);
         }
     }
 
     public Resource loadAudioSampleAsResource(String fileName) {
-        try {
-            Path filePath = this.storageDirectory.resolve(fileName).normalize();
-            Resource resource = new UrlResource(filePath.toUri());
-            if (resource.exists() && resource.isReadable()) {
-                return resource;
-            } else {
-                throw new AppException(404, "Tệp âm thanh không tồn tại hoặc không thể đọc", 404);
-            }
-        } catch (MalformedURLException e) {
-            throw new AppException(404, "Đường dẫn tệp âm thanh không hợp lệ", 404);
-        }
+        return loadChatMediaAsResource("voice-samples/" + fileName);
     }
 }

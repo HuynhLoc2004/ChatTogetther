@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { 
-  Mic, MicOff, Video, VideoOff, PhoneOff, Monitor, MonitorOff, 
+import {
+  Mic, MicOff, Video, VideoOff, PhoneOff, Monitor, MonitorOff,
   Users, Volume2, Shield, ArrowLeft, Radio, Sparkles, PhoneCall,
   Maximize, Minimize
 } from 'lucide-react';
@@ -40,7 +40,7 @@ const CallPage = () => {
           const payload = JSON.parse(atob(token.split('.')[1]));
           if (payload?.user_id) id = String(payload.user_id);
         }
-      } catch (_) {}
+      } catch (_) { }
     }
     return id ? String(id) : null;
   })();
@@ -62,10 +62,10 @@ const CallPage = () => {
   const toggleFullscreen = () => {
     if (!stageContainerRef.current) return;
     if (!document.fullscreenElement) {
-      stageContainerRef.current.requestFullscreen?.().catch(() => {});
+      stageContainerRef.current.requestFullscreen?.().catch(() => { });
       setIsFullscreen(true);
     } else {
-      document.exitFullscreen?.().catch(() => {});
+      document.exitFullscreen?.().catch(() => { });
       setIsFullscreen(false);
     }
   };
@@ -126,12 +126,12 @@ const CallPage = () => {
 
       if (isScreenSharing && screenStreamRef.current) {
         localVideoRef.current.srcObject = screenStreamRef.current;
-        localVideoRef.current.play().catch(() => {});
+        localVideoRef.current.play().catch(() => { });
       } else if (isVideoEnabled && localStreamRef.current) {
         const videoTrack = localStreamRef.current.getVideoTracks()[0];
         if (videoTrack && videoTrack.enabled) {
           localVideoRef.current.srcObject = localStreamRef.current;
-          localVideoRef.current.play().catch(() => {});
+          localVideoRef.current.play().catch(() => { });
         } else {
           localVideoRef.current.srcObject = null;
         }
@@ -196,19 +196,19 @@ const CallPage = () => {
         ringIntervalRef.current = null;
       }
       if (ringGainRef.current) {
-        try { ringGainRef.current.gain.setValueAtTime(0, audioContextRef.current?.currentTime || 0); } catch (_) {}
+        try { ringGainRef.current.gain.setValueAtTime(0, audioContextRef.current?.currentTime || 0); } catch (_) { }
         ringGainRef.current = null;
       }
       if (ringOscillatorRef.current) {
-        try { ringOscillatorRef.current.stop(); } catch (_) {}
-        try { ringOscillatorRef.current.disconnect(); } catch (_) {}
+        try { ringOscillatorRef.current.stop(); } catch (_) { }
+        try { ringOscillatorRef.current.disconnect(); } catch (_) { }
         ringOscillatorRef.current = null;
       }
       if (audioContextRef.current) {
-        try { audioContextRef.current.close(); } catch (_) {}
+        try { audioContextRef.current.close(); } catch (_) { }
         audioContextRef.current = null;
       }
-    } catch (e) {}
+    } catch (e) { }
   }, []);
 
   const startRingAudio = useCallback(() => {
@@ -248,9 +248,9 @@ const CallPage = () => {
         beeping = !beeping;
         try {
           gain.gain.setValueAtTime(beeping ? 0.04 : 0, ctx.currentTime);
-        } catch (_) {}
+        } catch (_) { }
       }, 1400);
-    } catch (e) {}
+    } catch (e) { }
   }, [isIncoming, isConnected, stopRingAudio]);
 
   // 4. Cleanup Call Resources (Zero-Lag + An toàn WebSocket)
@@ -275,7 +275,7 @@ const CallPage = () => {
     if (peerConnectionRef.current) {
       try {
         peerConnectionRef.current.close();
-      } catch (_) {}
+      } catch (_) { }
       peerConnectionRef.current = null;
     }
     if (remoteVideoRef.current) {
@@ -296,7 +296,7 @@ const CallPage = () => {
           if (clientToClose.connected) {
             clientToClose.disconnect();
           }
-        } catch (_) {}
+        } catch (_) { }
       }, 300);
       stompClient.current = null;
     }
@@ -388,7 +388,7 @@ const CallPage = () => {
         }
       }
       window.dispatchEvent(new CustomEvent('talovin_new_message', { detail: optimisticMsg }));
-    } catch (_) {}
+    } catch (_) { }
 
     if (shouldSendSignal) {
       // 1. Gửi tín hiệu END cho đối phương qua WebSocket (để đối phương lập tức thoát cuộc gọi)
@@ -396,8 +396,8 @@ const CallPage = () => {
 
       // 2. Gửi duy nhất 1 request lưu log cuộc gọi qua REST API đáng tin cậy
       try {
-        axiosClient.post('/call/end', callPayload).catch(() => {});
-      } catch (_) {}
+        axiosClient.post('/call/end', callPayload).catch(() => { });
+      } catch (_) { }
     }
 
     cleanupCall();
@@ -446,7 +446,7 @@ const CallPage = () => {
           const cand = iceCandidateQueueRef.current.shift();
           try {
             await pc.addIceCandidate(new RTCIceCandidate(cand));
-          } catch (_) {}
+          } catch (_) { }
         }
 
         const answer = await pc.createAnswer();
@@ -495,7 +495,7 @@ const CallPage = () => {
             const cand = iceCandidateQueueRef.current.shift();
             try {
               await pc.addIceCandidate(new RTCIceCandidate(cand));
-            } catch (_) {}
+            } catch (_) { }
           }
         }
       } catch (e) {
@@ -548,7 +548,7 @@ const CallPage = () => {
     const initCall = async () => {
       try {
         setCallStatusText('Đang mở thiết bị Mic/Camera...');
-        
+
         // Xin quyền Media an toàn (tự động fallback sang Audio-only nếu Camera không khả dụng)
         let stream;
         try {
@@ -603,7 +603,7 @@ const CallPage = () => {
           }
           if (remoteVideoRef.current && (event.track?.kind === 'video' || remoteStream.getVideoTracks().length > 0)) {
             remoteVideoRef.current.srcObject = remoteStream;
-            remoteVideoRef.current.play().catch(() => {});
+            remoteVideoRef.current.play().catch(() => { });
             setIsVideoCall(true);
           }
           if (remoteAudioRef.current) {
@@ -665,14 +665,14 @@ const CallPage = () => {
               try {
                 const msg = JSON.parse(frame.body);
                 handleCallSignalRef.current?.(msg);
-              } catch (e) {}
+              } catch (e) { }
             });
           } else if (isRoomCall && roomId) {
             stomp.subscribe(`/topic/call/${roomId}`, (frame) => {
               try {
                 const msg = JSON.parse(frame.body);
                 handleCallSignalRef.current?.(msg);
-              } catch (e) {}
+              } catch (e) { }
             });
           }
 
@@ -768,7 +768,7 @@ const CallPage = () => {
         localVideoRef.current.defaultMuted = true;
         localVideoRef.current.playsInline = true;
         localVideoRef.current.srcObject = localStreamRef.current;
-        localVideoRef.current.play().catch(() => {});
+        localVideoRef.current.play().catch(() => { });
       }
       return;
     }
@@ -802,7 +802,7 @@ const CallPage = () => {
         localVideoRef.current.defaultMuted = true;
         localVideoRef.current.playsInline = true;
         localVideoRef.current.srcObject = localStreamRef.current;
-        localVideoRef.current.play().catch(() => {});
+        localVideoRef.current.play().catch(() => { });
       }
       setCallStatusText('Đang đàm thoại');
     } catch (err) {
@@ -835,7 +835,7 @@ const CallPage = () => {
         const vTrack = localStreamRef.current.getVideoTracks()[0];
         if (vTrack) {
           localVideoRef.current.srcObject = new MediaStream([vTrack]);
-          localVideoRef.current.play().catch(() => {});
+          localVideoRef.current.play().catch(() => { });
         }
       }
     } else {
@@ -877,7 +877,7 @@ const CallPage = () => {
 
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = stream;
-          localVideoRef.current.play().catch(() => {});
+          localVideoRef.current.play().catch(() => { });
         }
       } catch (err) {
         console.error("Lỗi chia sẻ màn hình:", err);
@@ -885,17 +885,17 @@ const CallPage = () => {
     }
   };
 
-  const displayName = partnerProfile 
-    ? (partnerProfile.nickname || partnerProfile.account || partnerProfile.username || 'Thành viên') 
+  const displayName = partnerProfile
+    ? (partnerProfile.nickname || partnerProfile.account || partnerProfile.username || 'Thành viên')
     : (roomInfo?.nameroom || roomInfo?.roomName || (roomId ? `Phòng #${roomId}` : 'Cuộc gọi'));
   const displayAvatar = partnerProfile?.avatar || roomInfo?.avatar;
 
   return (
-    <div 
+    <div
       className="h-screen w-screen bg-zinc-950 text-zinc-100 flex flex-col justify-between overflow-hidden select-none font-sans"
       onClick={() => {
         if (remoteAudioRef.current && remoteAudioRef.current.paused) {
-          remoteAudioRef.current.play().catch(() => {});
+          remoteAudioRef.current.play().catch(() => { });
         }
       }}
     >
@@ -907,7 +907,7 @@ const CallPage = () => {
       {/* ============================================================== */}
       <header className="h-16 px-4 sm:px-8 border-b border-zinc-800 bg-zinc-900/90 backdrop-blur-md flex items-center justify-between shrink-0 z-20">
         <div className="flex items-center gap-3">
-          <button 
+          <button
             type="button"
             onClick={() => endCall(true)}
             className="w-9 h-9 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 flex items-center justify-center transition-colors active:scale-95"
@@ -945,7 +945,7 @@ const CallPage = () => {
       {/* ============================================================== */}
       <main className="flex-1 p-3 sm:p-6 overflow-hidden flex items-center justify-center relative bg-zinc-950">
         <div ref={stageContainerRef} className="w-full max-w-4xl h-full flex items-center justify-center relative">
-          
+
           {/* Nút bật/tắt toàn màn hình sân khấu */}
           <button
             type="button"
@@ -960,13 +960,12 @@ const CallPage = () => {
           {/* Card Remote (Đối phương / Các thành viên) */}
           <div className="w-full h-full bg-zinc-900/60 border border-zinc-800 rounded-3xl overflow-hidden relative shadow-2xl backdrop-blur-sm">
             {/* Video Remote: Luôn nằm trong DOM, dùng object-contain khi chia sẻ màn hình để không bao giờ bị cắt hình */}
-            <video 
-              ref={remoteVideoRef} 
-              autoPlay 
-              playsInline 
-              className={`absolute inset-0 w-full h-full ${
-                (isScreenSharing || isRemoteScreenSharing) ? 'object-contain bg-black' : 'object-cover sm:object-contain'
-              } transition-opacity duration-300 ${isConnected && isVideoCall ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
+            <video
+              ref={remoteVideoRef}
+              autoPlay
+              playsInline
+              className={`absolute inset-0 w-full h-full ${(isScreenSharing || isRemoteScreenSharing) ? 'object-contain bg-black' : 'object-cover sm:object-contain'
+                } transition-opacity duration-300 ${isConnected && isVideoCall ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
             />
 
             {/* Trạng thái nếu không có video hoặc đang đàm thoại Audio */}
@@ -978,12 +977,12 @@ const CallPage = () => {
                     <div className="absolute -inset-4 rounded-full border border-emerald-500/20 animate-ping pointer-events-none" />
                   )}
                   <div className={`w-28 h-28 sm:w-36 sm:h-36 rounded-full overflow-hidden border-2 border-zinc-700/80 bg-zinc-800/90 flex items-center justify-center shadow-2xl transition-all duration-300 ${isConnected ? 'ring-4 ring-emerald-500/30 ring-offset-4 ring-offset-zinc-950 scale-105' : 'scale-100'}`}>
-                    <UserAvatar 
-                      avatar={displayAvatar} 
-                      name={displayName} 
+                    <UserAvatar
+                      avatar={displayAvatar}
+                      name={displayName}
                       username={partnerProfile?.account || displayName}
-                      size={144} 
-                      className="w-full h-full object-cover rounded-full" 
+                      size={144}
+                      className="w-full h-full object-cover rounded-full"
                     />
                   </div>
                   {isConnected && (
@@ -1009,21 +1008,21 @@ const CallPage = () => {
             {/* Khung Local Video nhỏ ở góc (Picture in Picture) */}
             <div className="absolute bottom-4 right-4 w-28 h-36 sm:w-36 sm:h-48 rounded-2xl overflow-hidden border border-zinc-700/80 bg-zinc-950/95 shadow-2xl z-20 backdrop-blur-md transition-all">
               {/* Local video luôn hiện diện trong DOM để không bao giờ bị đen hình */}
-              <video 
-                ref={localVideoRef} 
-                autoPlay 
-                playsInline 
-                muted 
+              <video
+                ref={localVideoRef}
+                autoPlay
+                playsInline
+                muted
                 className={`w-full h-full ${isScreenSharing ? 'object-contain' : 'object-cover -scale-x-100'} ${!(isVideoCall && isVideoEnabled) && !isScreenSharing ? 'hidden' : 'block'}`}
               />
 
               {(!(isVideoCall && isVideoEnabled) && !isScreenSharing) && (
                 <div className="w-full h-full flex flex-col items-center justify-center gap-2 p-2 bg-zinc-900/90 text-center">
-                  <UserAvatar 
-                    avatar={currentUserAvatar} 
-                    name={currentUserName} 
+                  <UserAvatar
+                    avatar={currentUserAvatar}
+                    name={currentUserName}
                     username={currentUserName}
-                    size={40} 
+                    size={40}
                     className="w-10 h-10 rounded-full"
                   />
                   <span className="text-[10px] text-zinc-400 font-medium">Bạn</span>
@@ -1047,11 +1046,10 @@ const CallPage = () => {
         <button
           type="button"
           onClick={toggleMute}
-          className={`h-11 w-11 rounded-2xl border flex items-center justify-center transition-all active:scale-95 ${
-            isMuted 
-              ? 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20' 
+          className={`h-11 w-11 rounded-2xl border flex items-center justify-center transition-all active:scale-95 ${isMuted
+              ? 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20'
               : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
-          }`}
+            }`}
           title={isMuted ? "Bật Microphone" : "Tắt Microphone"}
         >
           {isMuted ? <MicOff size={18} /> : <Mic size={18} />}
@@ -1061,11 +1059,10 @@ const CallPage = () => {
         <button
           type="button"
           onClick={toggleVideo}
-          className={`h-11 w-11 rounded-2xl border flex items-center justify-center transition-all active:scale-95 ${
-            !isVideoEnabled 
-              ? 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20' 
+          className={`h-11 w-11 rounded-2xl border flex items-center justify-center transition-all active:scale-95 ${!isVideoEnabled
+              ? 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20'
               : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
-          }`}
+            }`}
           title={isVideoEnabled ? "Tắt Camera" : "Bật Camera"}
         >
           {isVideoEnabled ? <Video size={18} /> : <VideoOff size={18} />}
@@ -1075,11 +1072,10 @@ const CallPage = () => {
         <button
           type="button"
           onClick={toggleScreenShare}
-          className={`h-11 w-11 rounded-2xl border flex items-center justify-center transition-all active:scale-95 ${
-            isScreenSharing 
-              ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400' 
+          className={`h-11 w-11 rounded-2xl border flex items-center justify-center transition-all active:scale-95 ${isScreenSharing
+              ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
               : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
-          }`}
+            }`}
           title={isScreenSharing ? "Dừng chia sẻ màn hình" : "Chia sẻ màn hình"}
         >
           {isScreenSharing ? <MonitorOff size={18} /> : <Monitor size={18} />}

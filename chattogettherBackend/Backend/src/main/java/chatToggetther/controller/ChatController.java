@@ -187,14 +187,22 @@ public class ChatController {
         return ResponseEntity.ok(new ResponseData<>(200, "Tải lên tệp thành công", res));
     }
 
-    @GetMapping("/files/{fileName:.+}")
+    @GetMapping({"/files/**", "/files/{fileName:.+}"})
     public ResponseEntity<?> getChatMediaFile(
-            @PathVariable("fileName") String fileName,
+            jakarta.servlet.http.HttpServletRequest request,
             @RequestHeader HttpHeaders headers
     ) {
         try {
-            Resource resource = this.mediaStorageService.loadChatMediaAsResource(fileName);
-            String contentType = determineMediaContentType(fileName);
+            String requestUri = request.getRequestURI();
+            String prefix = "/files/";
+            int idx = requestUri.indexOf(prefix);
+            String relativeKey = idx >= 0 ? requestUri.substring(idx + prefix.length()) : "";
+            if (relativeKey.isEmpty()) {
+                return ResponseEntity.notFound().build();
+            }
+
+            Resource resource = this.mediaStorageService.loadChatMediaAsResource(relativeKey);
+            String contentType = determineMediaContentType(relativeKey);
             MediaType mediaType = MediaType.parseMediaType(contentType);
 
             long contentLength = resource.contentLength();
@@ -209,14 +217,16 @@ public class ChatController {
                 return ResponseEntity.status(HttpStatus.PARTIAL_CONTENT)
                         .contentType(mediaType)
                         .header(HttpHeaders.ACCEPT_RANGES, "bytes")
-                        .header(HttpHeaders.CACHE_CONTROL, "max-age=31536000, public")
+                        .header(HttpHeaders.CACHE_CONTROL, "public, max-age=31536000, immutable")
+                        .header(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "*")
                         .body(region);
             }
 
             return ResponseEntity.ok()
                     .contentType(mediaType)
                     .header(HttpHeaders.ACCEPT_RANGES, "bytes")
-                    .header(HttpHeaders.CACHE_CONTROL, "max-age=31536000, public")
+                    .header(HttpHeaders.CACHE_CONTROL, "public, max-age=31536000, immutable")
+                    .header(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "*")
                     .body(resource);
         } catch (Exception e) {
             return ResponseEntity.notFound().build();

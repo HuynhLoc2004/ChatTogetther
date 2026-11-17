@@ -84,7 +84,9 @@ public class SecurityConfig {
                                 "/public/online-users", "/api/public/online-users",
                                 "/api/presence/**", "/presence/**",
                                 "/api/message/files/**", "/message/files/**",
-                                "/api/messages/files/**", "/messages/files/**"
+                                "/api/messages/files/**", "/messages/files/**",
+                                "/api/conversations/files/**", "/conversations/files/**",
+                                "/api/media/files/**", "/media/files/**"
                         ).permitAll()
                         .requestMatchers("/ws-gs-guide", "/ws-gs-guide/**", "/ws", "/ws/**", "/ws-native", "/ws-native/**", "/ws-sockjs", "/ws-sockjs/**").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
