@@ -218,8 +218,10 @@ const buildCommentThreads = (comments) => {
   const uniqueComments = [];
   const seenIds = new Set();
   comments.forEach(c => {
-    if (!c || seenIds.has(c.id)) return;
-    seenIds.add(c.id);
+    if (!c || c.id === undefined || c.id === null) return;
+    const cidStr = String(c.id);
+    if (seenIds.has(cidStr)) return;
+    seenIds.add(cidStr);
     uniqueComments.push(c);
   });
 
@@ -231,40 +233,43 @@ const buildCommentThreads = (comments) => {
     if (!c.parentId) {
       rootComments.push({ ...c, replies: [] });
     } else {
-      if (!repliesMap.has(c.parentId)) {
-        repliesMap.set(c.parentId, []);
+      const pidStr = String(c.parentId);
+      if (!repliesMap.has(pidStr)) {
+        repliesMap.set(pidStr, []);
       }
-      repliesMap.get(c.parentId).push(c);
+      repliesMap.get(pidStr).push(c);
     }
   });
 
   // 2. Map nhanh id của comment về root thread ID
   const commentIdToRootId = new Map();
   rootComments.forEach(r => {
-    commentIdToRootId.set(r.id, r.id);
+    commentIdToRootId.set(String(r.id), String(r.id));
   });
 
   // Đăng ký các direct replies của root
   rootComments.forEach(root => {
-    const directReplies = repliesMap.get(root.id) || [];
+    const directReplies = repliesMap.get(String(root.id)) || [];
     directReplies.forEach(dr => {
-      commentIdToRootId.set(dr.id, root.id);
+      commentIdToRootId.set(String(dr.id), String(root.id));
     });
   });
 
-  // 3. Ghép replies vào root thread tương ứng
-  comments.forEach(c => {
+  // 3. Ghép replies vào root thread tương ứng (dùng uniqueComments để triệt tiêu x2)
+  uniqueComments.forEach(c => {
     if (c.parentId) {
-      const targetRootId = commentIdToRootId.get(c.parentId) || c.parentId;
-      const root = rootComments.find(r => r.id === targetRootId);
+      const targetRootId = commentIdToRootId.get(String(c.parentId)) || String(c.parentId);
+      const root = rootComments.find(r => String(r.id) === targetRootId);
       if (root) {
-        if (!root.replies.some(existing => existing.id === c.id)) {
+        if (!root.replies.some(existing => String(existing.id) === String(c.id))) {
           root.replies.push(c);
         }
       } else {
-        // Fallback: nếu không tìm thấy root, coi như 1 root comment mới
-        rootComments.push({ ...c, replies: [] });
-        commentIdToRootId.set(c.id, c.id);
+        // Fallback: nếu không tìm thấy root, coi như 1 root comment mới nếu chưa tồn tại
+        if (!rootComments.some(r => String(r.id) === String(c.id))) {
+          rootComments.push({ ...c, replies: [] });
+          commentIdToRootId.set(String(c.id), String(c.id));
+        }
       }
     }
   });
@@ -1696,7 +1701,18 @@ const Home = ({ initialTab }) => {
     try {
       const res = await axiosClient.get(`/posts/${postId}/comments`);
       if (res.data && res.data.data) {
-        setCommentsMap(prev => ({ ...prev, [postId]: res.data.data }));
+        const rawList = Array.isArray(res.data.data) ? res.data.data : [];
+        const seen = new Set();
+        const deduplicated = [];
+        rawList.forEach(c => {
+          if (!c || c.id === undefined || c.id === null) return;
+          const cidStr = String(c.id);
+          if (!seen.has(cidStr)) {
+            seen.add(cidStr);
+            deduplicated.push(c);
+          }
+        });
+        setCommentsMap(prev => ({ ...prev, [postId]: deduplicated }));
       }
     } catch (err) {
       console.warn("Lỗi lấy bình luận:", err);
@@ -1865,7 +1881,7 @@ const Home = ({ initialTab }) => {
         const newCmt = res.data.data;
         setCommentsMap(prev => {
           const currentList = prev[postId] || [];
-          if (currentList.some(c => c.id === newCmt.id)) {
+          if (currentList.some(c => String(c.id) === String(newCmt.id))) {
             return prev;
           }
           return {
@@ -2407,7 +2423,7 @@ const Home = ({ initialTab }) => {
             if (data.comment) {
               setCommentsMap(prev => {
                 const existing = prev[pid] || [];
-                if (existing.some(c => c.id === data.comment.id)) return prev;
+                if (existing.some(c => String(c.id) === String(data.comment.id))) return prev;
                 return {
                   ...prev,
                   [pid]: [...existing, data.comment]

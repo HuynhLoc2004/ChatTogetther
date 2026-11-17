@@ -12,7 +12,16 @@ const PresenceContext = createContext({
 });
 
 export const PresenceProvider = ({ children }) => {
-  const [onlineUserIds, setOnlineUserIds] = useState(new Set());
+  // Khởi tạo ngay lập tức từ cache để 0ms chờ khi tải trang
+  const [onlineUserIds, setOnlineUserIds] = useState(() => {
+    try {
+      const saved = localStorage.getItem('talovin_online_users_cache');
+      return saved ? new Set(JSON.parse(saved).map(String)) : new Set();
+    } catch (_) {
+      return new Set();
+    }
+  });
+
   const stompClientRef = useRef(null);
   const lastSeenMapRef = useRef(new Map());
 
@@ -61,34 +70,57 @@ export const PresenceProvider = ({ children }) => {
     } catch (_) {}
   }, [getCurrentUserId]);
 
-  // 1. Nạp danh sách trực tuyến từ server REST API
+  // 1. Nạp danh sách trực tuyến từ server REST API (Đồng bộ triệt để cả người online và offline)
   const fetchOnlineUsers = useCallback(async () => {
+    const currentUserId = getCurrentUserId();
     try {
       const res = await axiosClient.get('/users/online-ids');
       if (res.data?.data && Array.isArray(res.data.data)) {
         const serverIds = res.data.data.map(String);
-        serverIds.forEach(id => lastSeenMapRef.current.set(id, Date.now()));
-        setOnlineUserIds(prev => {
-          const next = new Set(prev);
-          serverIds.forEach(id => next.add(id));
-          return next;
+        const serverSet = new Set(serverIds);
+        if (currentUserId) serverSet.add(String(currentUserId));
+
+        const now = Date.now();
+        serverIds.forEach(id => lastSeenMapRef.current.set(id, now));
+
+        // Loại bỏ ngay lập tức những user không còn trong danh sách online của server
+        lastSeenMapRef.current.forEach((ts, uid) => {
+          if (uid !== String(currentUserId) && !serverSet.has(uid)) {
+            lastSeenMapRef.current.delete(uid);
+          }
         });
+
+        setOnlineUserIds(serverSet);
+        try {
+          localStorage.setItem('talovin_online_users_cache', JSON.stringify(Array.from(serverSet)));
+        } catch (_) {}
+        return;
       }
-    } catch (_) {
-      try {
-        const fallbackRes = await axiosClient.get('/public/online-users');
-        if (fallbackRes.data?.data && Array.isArray(fallbackRes.data.data)) {
-          const serverIds = fallbackRes.data.data.map(String);
-          serverIds.forEach(id => lastSeenMapRef.current.set(id, Date.now()));
-          setOnlineUserIds(prev => {
-            const next = new Set(prev);
-            serverIds.forEach(id => next.add(id));
-            return next;
-          });
-        }
-      } catch (_) {}
-    }
-  }, []);
+    } catch (_) {}
+
+    try {
+      const fallbackRes = await axiosClient.get('/public/online-users');
+      if (fallbackRes.data?.data && Array.isArray(fallbackRes.data.data)) {
+        const serverIds = fallbackRes.data.data.map(String);
+        const serverSet = new Set(serverIds);
+        if (currentUserId) serverSet.add(String(currentUserId));
+
+        const now = Date.now();
+        serverIds.forEach(id => lastSeenMapRef.current.set(id, now));
+
+        lastSeenMapRef.current.forEach((ts, uid) => {
+          if (uid !== String(currentUserId) && !serverSet.has(uid)) {
+            lastSeenMapRef.current.delete(uid);
+          }
+        });
+
+        setOnlineUserIds(serverSet);
+        try {
+          localStorage.setItem('talovin_online_users_cache', JSON.stringify(Array.from(serverSet)));
+        } catch (_) {}
+      }
+    } catch (_) {}
+  }, [getCurrentUserId]);
 
   // 2. Gửi heartbeat và kết nối WebSocket STOMP
   useEffect(() => {
@@ -111,22 +143,30 @@ export const PresenceProvider = ({ children }) => {
             isOnline,
             timestamp: Date.now()
           });
-          // Gửi vào topic presence để toàn bộ các tab / thiết bị khác nhận được tức thì
           client.send('/topic/presence', {}, payload);
-          // Gửi tới server message broker để ghi nhận session
           client.send('/app/presence/heartbeat', {}, payload);
         }
       } catch (_) {}
-      // Heartbeat qua REST API
+
+      // Gửi tín hiệu REST API
       if (isOnline) {
         axiosClient.post('/presence/heartbeat', { userId: Number(currentUserId) }).catch(() => {});
+      } else {
+        // Rời trang: gửi beacon báo offline lập tức
+        try {
+          if (navigator.sendBeacon) {
+            navigator.sendBeacon('/api/presence/offline', new Blob([JSON.stringify({ userId: Number(currentUserId) })], { type: 'application/json' }));
+          } else {
+            axiosClient.post('/presence/offline', { userId: Number(currentUserId) }).catch(() => {});
+          }
+        } catch (_) {}
       }
     };
 
     client.connect(connectHeaders, () => {
       if (!isMounted) return;
 
-      // Mình luôn luôn trực tuyến trên thiết bị của mình
+      // Bản thân luôn trực tuyến
       markUserActive(currentUserId);
 
       // Đăng ký nhận tín hiệu presence toàn cục
@@ -156,7 +196,7 @@ export const PresenceProvider = ({ children }) => {
 
           if (data.userId) {
             const uid = String(data.userId);
-            if (data.isOnline !== false) {
+            if (data.isOnline !== false && data.type !== 'PRESENCE_OFFLINE') {
               lastSeenMapRef.current.set(uid, data.timestamp || Date.now());
               setOnlineUserIds(prev => {
                 if (prev.has(uid)) return prev;
@@ -165,6 +205,7 @@ export const PresenceProvider = ({ children }) => {
                 return next;
               });
             } else {
+              // Đối phương đã ngoại tuyến: gỡ bỏ tức khắc
               lastSeenMapRef.current.delete(uid);
               setOnlineUserIds(prev => {
                 if (!prev.has(uid)) return prev;
@@ -190,17 +231,17 @@ export const PresenceProvider = ({ children }) => {
       } catch (_) {}
     }, () => {});
 
-    // Định kỳ gửi nhịp tim mỗi 10 giây (rất nhẹ, phản ứng tức thì)
+    // Định kỳ gửi nhịp tim mỗi 8 giây
     const heartbeatInterval = setInterval(() => {
       broadcastMyPresence(true);
-    }, 10000);
+    }, 8000);
 
-    // Quét loại bỏ người dùng hết hạn tín hiệu (> 25s) mỗi 5 giây
+    // Quét loại bỏ người dùng quá hạn tín hiệu (> 15s) mỗi 4 giây
     const pruneInterval = setInterval(() => {
       const now = Date.now();
       const expired = [];
       lastSeenMapRef.current.forEach((ts, uid) => {
-        if (uid !== String(currentUserId) && now - ts > 25000) {
+        if (uid !== String(currentUserId) && now - ts > 15000) {
           expired.push(uid);
         }
       });
@@ -212,15 +253,15 @@ export const PresenceProvider = ({ children }) => {
           return next;
         });
       }
-    }, 5000);
+    }, 4000);
 
-    // Nạp danh sách ban đầu từ server
+    // Nạp danh sách ban đầu từ server ngay lập tức
     fetchOnlineUsers();
 
-    // Định kỳ đồng bộ danh sách online từ server mỗi 5 giây (đảm bảo cập nhật chính xác 100%)
+    // Định kỳ đồng bộ danh sách online từ server mỗi 4 giây
     const pollInterval = setInterval(() => {
       fetchOnlineUsers();
-    }, 5000);
+    }, 4000);
 
     // Bắt sự kiện khi tab được mở lại để đồng bộ tức thì
     const handleVisibilityChange = () => {
@@ -231,11 +272,12 @@ export const PresenceProvider = ({ children }) => {
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // Bắt sự kiện tắt tab / rời trang để cập nhật ngoại tuyến (dùng pagehide thay vì beforeunload để tránh Permission Violation)
+    // Bắt sự kiện tắt tab / rời trang để cập nhật ngoại tuyến
     const handlePageHide = () => {
       broadcastMyPresence(false);
     };
     window.addEventListener('pagehide', handlePageHide);
+    window.addEventListener('beforeunload', handlePageHide);
 
     // Lắng nghe sự kiện đăng xuất chủ động
     const handleExplicitOffline = (e) => {
@@ -257,6 +299,7 @@ export const PresenceProvider = ({ children }) => {
       clearInterval(pollInterval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pagehide', handlePageHide);
+      window.removeEventListener('beforeunload', handlePageHide);
       window.removeEventListener('talovin_presence_offline', handleExplicitOffline);
       broadcastMyPresence(false);
       if (stompClientRef.current) {
@@ -267,25 +310,35 @@ export const PresenceProvider = ({ children }) => {
     };
   }, [getCurrentUserId, fetchOnlineUsers, markUserActive]);
 
-  // Helper kiểm tra một user có online không
-  const isUserOnline = useCallback((userId) => {
+  // Helper kiểm tra một user có online không với hỗ trợ fallback ban đầu khi vừa render
+  const isUserOnline = useCallback((userId, fallbackIsOnline = undefined) => {
     if (!userId) return false;
     const uid = String(userId);
     const myId = getCurrentUserId();
-    if (myId && uid === String(myId)) return true; // Chính mình luôn trực tuyến
+    if (myId && uid === String(myId)) return true; // Bản thân luôn trực tuyến
 
-    // Kiểm tra timestamp gần nhất từ peer broadcast hoặc tương tác (25 giây)
+    // 1. Kiểm tra timestamp gần nhất từ peer broadcast hoặc tương tác (15 giây)
     const lastSeen = lastSeenMapRef.current.get(uid);
-    if (lastSeen && (Date.now() - lastSeen < 25000)) {
+    if (lastSeen && (Date.now() - lastSeen < 15000)) {
       return true;
     }
 
-    return onlineUserIds.has(uid);
+    // 2. Nếu đã có dữ liệu online từ socket/REST API
+    if (onlineUserIds.has(uid)) {
+      return true;
+    }
+
+    // 3. Fallback giá trị ban đầu từ API hội thoại khi trang vừa tải xong
+    if (fallbackIsOnline !== undefined && fallbackIsOnline !== null) {
+      return Boolean(fallbackIsOnline);
+    }
+
+    return false;
   }, [onlineUserIds, getCurrentUserId]);
 
   // Helper định dạng chữ trạng thái hoạt động
-  const getUserStatusText = useCallback((userId, lastActiveAt) => {
-    if (isUserOnline(userId)) {
+  const getUserStatusText = useCallback((userId, lastActiveAt, fallbackIsOnline = undefined) => {
+    if (isUserOnline(userId, fallbackIsOnline)) {
       return 'Trực tuyến';
     }
     if (!lastActiveAt) {

@@ -539,6 +539,13 @@ export const DirectMessagePage = () => {
             localStorage.setItem('talovin_dm_friends_cache', JSON.stringify(sortedList));
           } catch (_) { }
 
+          // Kích hoạt ngay trạng thái online vào bộ nhớ PresenceContext từ API hội thoại
+          sortedList.forEach(item => {
+            if (item.isOnline) {
+              markUserActive(item.id);
+            }
+          });
+
           setFriends(sortedList);
         }
       } catch (e) {
@@ -1735,8 +1742,8 @@ export const DirectMessagePage = () => {
                 const isUnread = !isSelected && unreadCount > 0;
                 const isThisHidden = hiddenPartnerIds.has(String(partner.id)) || partner.isHidden;
 
-                // Trạng thái online: Nhanh nhạy & chuẩn xác theo thời gian thực
-                const isPartnerOnline = isUserOnline(partner.id);
+                // Trạng thái online: Nhanh nhạy & chuẩn xác tức thì từ 0ms (kết hợp cache/server fallback)
+                const isPartnerOnline = isUserOnline(partner.id, partner.isOnline);
 
                 return (
                   <div
@@ -1884,7 +1891,7 @@ export const DirectMessagePage = () => {
                   >
                     <div className="relative shrink-0">
                       <UserAvatar avatarUrl={activePartner?.avatar} username={activePartner?.account} name={activePartner?.nickname || activePartner?.account || 'Người dùng'} size={36} />
-                      <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-zinc-950 ${isUserOnline(activePartner?.id) ? 'bg-emerald-500 ring-2 ring-emerald-500/20' : 'bg-zinc-600'
+                      <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-zinc-950 ${isUserOnline(activePartner?.id, activePartner?.isOnline) ? 'bg-emerald-500 ring-2 ring-emerald-500/20' : 'bg-zinc-600'
                         }`} />
                     </div>
 
@@ -1892,7 +1899,7 @@ export const DirectMessagePage = () => {
                       <h3 className="text-xs sm:text-sm font-bold text-white truncate">
                         {activePartner?.nickname || activePartner?.account || 'Người dùng'}
                       </h3>
-                      {isUserOnline(activePartner.id) ? (
+                      {isUserOnline(activePartner?.id, activePartner?.isOnline) ? (
                         <span className="font-sans text-xs text-zinc-400 flex items-center gap-1.5 font-normal">
                           <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
                           Trực tuyến
@@ -1900,7 +1907,7 @@ export const DirectMessagePage = () => {
                       ) : (
                         <span className="font-sans text-xs text-zinc-400 flex items-center gap-1.5 font-normal">
                           <span className="w-2 h-2 rounded-full bg-zinc-600 shrink-0"></span>
-                          {getUserStatusText(activePartner.id)}
+                          {getUserStatusText(activePartner?.id, activePartner?.lastActiveAt, activePartner?.isOnline)}
                         </span>
                       )}
                     </div>
