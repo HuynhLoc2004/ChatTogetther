@@ -25,24 +25,37 @@ const CallPage = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const userId = pathUserId || searchParams.get('userId') || searchParams.get('user_id') || searchParams.get('targetId');
+  const rawUserId = pathUserId || searchParams.get('callerId') || searchParams.get('userId') || searchParams.get('user_id') || searchParams.get('targetId') || searchParams.get('senderId') || searchParams.get('partnerId');
+  const [partnerId, setPartnerId] = useState(rawUserId ? String(rawUserId).trim() : null);
+  const partnerIdRef = useRef(partnerId);
+  partnerIdRef.current = partnerId;
+
   const isVideoParam = searchParams.get('type') === 'video' || searchParams.get('video') === 'true';
   const isIncoming = searchParams.get('incoming') === 'true' || searchParams.get('autoAnswer') === 'true';
-  const isDirectCall = Boolean(userId);
   const isRoomCall = Boolean(roomId);
+  const isDirectCall = Boolean(partnerId || !roomId);
 
   const currentUserId = (() => {
     let id = localStorage.getItem('user_id');
-    if (!id) {
-      try {
-        const token = localStorage.getItem('accesstoken');
-        if (token) {
-          const payload = JSON.parse(atob(token.split('.')[1]));
-          if (payload?.user_id) id = String(payload.user_id);
-        }
-      } catch (_) { }
-    }
-    return id ? String(id) : null;
+    if (id) return String(id);
+    try {
+      const prof = JSON.parse(localStorage.getItem('user_profile') || '{}');
+      if (prof?.id || prof?.userId) return String(prof.id || prof.userId);
+    } catch (_) {}
+    try {
+      const u = JSON.parse(localStorage.getItem('user') || '{}');
+      if (u?.id || u?.userId) return String(u.id || u.userId);
+    } catch (_) {}
+    try {
+      const token = localStorage.getItem('accesstoken');
+      if (token) {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (payload?.user_id) return String(payload.user_id);
+        if (payload?.userId) return String(payload.userId);
+        if (payload?.id) return String(payload.id);
+      }
+    } catch (_) {}
+    return null;
   })();
   const currentUserName = localStorage.getItem('nickname') || localStorage.getItem('username') || 'Tôi';
   const currentUserAvatar = localStorage.getItem('user_avatar') || localStorage.getItem('avatar') || '';
@@ -149,10 +162,11 @@ const CallPage = () => {
     let isMounted = true;
     const fetchTargetMeta = async () => {
       try {
-        if (isDirectCall && userId) {
+        const currentTargetId = partnerId || rawUserId;
+        if (currentTargetId) {
           const [profRes, directRoomRes] = await Promise.allSettled([
-            axiosClient.get('/users/profile', { params: { user_id: userId } }),
-            axiosClient.get(`/message/direct/${userId}`)
+            axiosClient.get('/users/profile', { params: { user_id: currentTargetId } }),
+            axiosClient.get(`/message/direct/${currentTargetId}`)
           ]);
 
           if (profRes.status === 'fulfilled' && profRes.value.data?.data && isMounted) {
@@ -173,16 +187,20 @@ const CallPage = () => {
     };
     fetchTargetMeta();
     return () => { isMounted = false; };
-  }, [isDirectCall, isRoomCall, userId, roomId]);
+  }, [partnerId, isRoomCall, roomId, rawUserId]);
 
-  // Kiểm tra an toàn: Nếu không có người nhận hoặc phòng cuộc gọi
+  // Kiểm tra an toàn: Nếu không có người nhận hoặc phòng cuộc gọi sau 6 giây
   useEffect(() => {
-    if (!userId && !roomId) {
-      toast.error("Không tìm thấy thông tin đối phương hoặc phòng gọi!");
-      const t = setTimeout(() => navigate('/messages'), 1800);
+    if (!partnerId && !roomId) {
+      const t = setTimeout(() => {
+        if (!partnerIdRef.current && !roomId) {
+          toast.error("Không tìm thấy thông tin đối phương hoặc phòng gọi!");
+          navigate('/messages');
+        }
+      }, 6000);
       return () => clearTimeout(t);
     }
-  }, [userId, roomId, navigate]);
+  }, [partnerId, roomId, navigate]);
 
   // 2. Format Call Duration
   const formatTime = (secs) => {
@@ -319,12 +337,13 @@ const CallPage = () => {
       timestamp: Date.now()
     };
 
-    if (isDirectCall && userId) {
-      stompClient.current.send(`/app/call/user/${userId}`, {}, JSON.stringify(baseData));
+    const targetPartner = partnerIdRef.current || partnerId;
+    if (targetPartner) {
+      stompClient.current.send(`/app/call/user/${targetPartner}`, {}, JSON.stringify(baseData));
     } else if (isRoomCall && roomId) {
       stompClient.current.send(`/app/call/${roomId}`, {}, JSON.stringify(baseData));
     }
-  }, [currentUserId, currentUserName, currentUserAvatar, isDirectCall, isRoomCall, userId, roomId]);
+  }, [currentUserId, currentUserName, currentUserAvatar, partnerId, isRoomCall, roomId]);
 
   // 6. End Call Handler & Zero-Lag Instant Exit (0ms Delay)
   const endCall = useCallback((shouldSendSignal = true) => {
@@ -340,8 +359,9 @@ const CallPage = () => {
     const isVideo = Boolean(isVideoParam || isVideoCall);
 
     // Xác định đúng người gọi gốc (Side A) và người nhận (Side B)
-    const trueCallerId = isIncoming ? userId : currentUserId;
-    const trueTargetId = isIncoming ? currentUserId : userId;
+    const effectivePartner = partnerIdRef.current || partnerId;
+    const trueCallerId = isIncoming ? effectivePartner : currentUserId;
+    const trueTargetId = isIncoming ? currentUserId : effectivePartner;
     const resolvedRoomId = dmRoomIdRef.current || roomId;
 
     const callPayload = {
@@ -378,7 +398,7 @@ const CallPage = () => {
         pending: false
       };
 
-      const partnerKey = String(userId);
+      const partnerKey = String(effectivePartner || '');
       const userPrefix = currentUserId ? `${currentUserId}_` : '';
       const storageKey = `talovin_dm_msgs_${userPrefix}${partnerKey}`;
       const existingRaw = localStorage.getItem(storageKey);
@@ -412,15 +432,15 @@ const CallPage = () => {
         navigate(decodeURIComponent(fromParam), { replace: true });
       } else if (window.history.length > 2) {
         navigate(-1);
-      } else if (isDirectCall && userId) {
-        navigate(`/messages/${userId}`, { replace: true });
+      } else if (effectivePartner) {
+        navigate(`/messages/${effectivePartner}`, { replace: true });
       } else if (isRoomCall && roomId) {
         navigate(`/room/${roomId}`, { replace: true });
       } else {
         navigate('/', { replace: true });
       }
     }, 120);
-  }, [sendCallSignal, cleanupCall, stopRingAudio, isVideoParam, isVideoCall, isDirectCall, isRoomCall, userId, roomId, searchParams, navigate, currentUserId, isIncoming]);
+  }, [sendCallSignal, cleanupCall, stopRingAudio, isVideoParam, isVideoCall, partnerId, isRoomCall, roomId, searchParams, navigate, currentUserId, isIncoming]);
 
   // 7. Handle Signal Incoming
   const handleCallSignal = useCallback(async (msg) => {
@@ -430,7 +450,22 @@ const CallPage = () => {
     if (actualSender && String(actualSender) === String(currentUserId)) return;
     if (!actualSender && msg.type !== 'DECLINE' && msg.type !== 'CANCEL' && msg.type !== 'END' && String(msg.callerId) === String(currentUserId)) return;
 
-    if (msg.type === 'OFFER') {
+    // Bắt và cập nhật partnerId động từ gói tin nhận được nếu chưa có
+    const partnerCandidate = msg.callerId || msg.senderId || msg.endedBy || msg.userId;
+    if (partnerCandidate && String(partnerCandidate) !== String(currentUserId)) {
+      const candStr = String(partnerCandidate).trim();
+      if (!partnerIdRef.current || partnerIdRef.current !== candStr) {
+        setPartnerId(candStr);
+        partnerIdRef.current = candStr;
+      }
+    }
+
+    if (msg.type === 'RINGING') {
+      if (isIncoming) {
+        // Đối phương đang đổ chuông, gửi ngay ACCEPT để bắt đầu đàm thoại
+        sendCallSignal({ type: 'ACCEPT' });
+      }
+    } else if (msg.type === 'OFFER') {
       try {
         stopRingAudio();
         if (acceptRetryTimerRef.current) {
@@ -689,15 +724,16 @@ const CallPage = () => {
         stomp.connect(connHeaders, async () => {
           if (!isActive) return;
 
-          // Subscribe topic nhận tín hiệu
-          if (isDirectCall && currentUserId) {
+          // Subscribe topic nhận tín hiệu cá nhân (Direct call)
+          if (currentUserId) {
             stomp.subscribe(`/topic/call/user/${currentUserId}`, (frame) => {
               try {
                 const msg = JSON.parse(frame.body);
                 handleCallSignalRef.current?.(msg);
               } catch (e) { }
             });
-          } else if (isRoomCall && roomId) {
+          }
+          if (roomId) {
             stomp.subscribe(`/topic/call/${roomId}`, (frame) => {
               try {
                 const msg = JSON.parse(frame.body);
@@ -711,12 +747,12 @@ const CallPage = () => {
             setCallStatusText('Đang thiết lập kênh đàm thoại...');
             sendCallSignalRef.current?.({ type: 'ACCEPT' });
 
-            // Gửi lặp lại ACCEPT sau mỗi 1.2s (tối đa 4 lần) phòng ngừa trường hợp gói tin đầu bị lỡ khi bên gọi đang mount
+            // Gửi lặp lại ACCEPT sau mỗi 1.2s (tối đa 6 lần) phòng ngừa trường hợp gói tin đầu bị lỡ khi bên gọi đang mount
             let acceptTries = 0;
             if (acceptRetryTimerRef.current) clearInterval(acceptRetryTimerRef.current);
             acceptRetryTimerRef.current = setInterval(() => {
               acceptTries++;
-              if (acceptTries > 4 || isConnected || (peerConnectionRef.current && peerConnectionRef.current.remoteDescription)) {
+              if (acceptTries > 6 || isConnected || (peerConnectionRef.current && peerConnectionRef.current.remoteDescription)) {
                 if (acceptRetryTimerRef.current) {
                   clearInterval(acceptRetryTimerRef.current);
                   acceptRetryTimerRef.current = null;
@@ -755,7 +791,7 @@ const CallPage = () => {
       isActive = false;
       cleanupCall();
     };
-  }, [userId, roomId, isIncoming, isVideoParam, isDirectCall, isRoomCall, currentUserId, cleanupCall, startRingAudio, stopRingAudio]);
+  }, [roomId, isIncoming, isVideoParam, currentUserId, cleanupCall, startRingAudio, stopRingAudio]);
 
   // Khởi động đồng hồ đếm thời gian CHỈ KHI cuộc gọi đã thực sự kết nối (đối phương đã nhấc máy)
   useEffect(() => {

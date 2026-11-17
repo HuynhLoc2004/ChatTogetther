@@ -17,12 +17,45 @@ const GlobalCallBanner = () => {
   const ringInterval = useRef(null);
   const autoDismissTimer = useRef(null);
 
-  const [effectiveUserId, setEffectiveUserId] = useState(() => localStorage.getItem('user_id'));
+  const getStoredUserId = useCallback(() => {
+    let uid = localStorage.getItem('user_id');
+    if (uid) return String(uid);
+    try {
+      const prof = JSON.parse(localStorage.getItem('user_profile') || '{}');
+      if (prof?.id || prof?.userId) return String(prof.id || prof.userId);
+    } catch (_) {}
+    try {
+      const u = JSON.parse(localStorage.getItem('user') || '{}');
+      if (u?.id || u?.userId) return String(u.id || u.userId);
+    } catch (_) {}
+    try {
+      const token = localStorage.getItem('accesstoken');
+      if (token) {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (payload?.user_id) return String(payload.user_id);
+        if (payload?.userId) return String(payload.userId);
+      }
+    } catch (_) {}
+    return null;
+  }, []);
+
+  const [effectiveUserId, setEffectiveUserId] = useState(() => {
+    let uid = localStorage.getItem('user_id');
+    if (uid) return String(uid);
+    try {
+      const token = localStorage.getItem('accesstoken');
+      if (token) {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (payload?.user_id) return String(payload.user_id);
+      }
+    } catch (_) {}
+    return null;
+  });
 
   // Đồng bộ reactive user_id khi đăng nhập hoặc thay đổi tài khoản
   useEffect(() => {
     const checkUserId = () => {
-      const uid = localStorage.getItem('user_id');
+      const uid = getStoredUserId();
       if (uid && uid !== effectiveUserId) {
         setEffectiveUserId(uid);
       }
@@ -34,7 +67,7 @@ const GlobalCallBanner = () => {
       window.removeEventListener('storage', checkUserId);
       clearInterval(interval);
     };
-  }, [effectiveUserId]);
+  }, [effectiveUserId, getStoredUserId]);
 
   // 1. Play Synthesized Ringtone
   const startRingingSound = useCallback(() => {
@@ -180,7 +213,7 @@ const GlobalCallBanner = () => {
   const handleAccept = () => {
     if (!incomingCall) return;
     const isVid = Boolean(incomingCall.isVideo);
-    const callerId = incomingCall.callerId;
+    const callerId = incomingCall.callerId || incomingCall.senderId || incomingCall.userId || incomingCall.fromUserId;
     const roomId = incomingCall.roomId;
 
     stopRingingSound();
@@ -192,14 +225,17 @@ const GlobalCallBanner = () => {
     if (roomId) {
       navigate(`/call/room/${roomId}?type=${isVid ? 'video' : 'audio'}&autoAnswer=true${callIdParam}&from=${currentFrom}`);
     } else if (callerId) {
-      navigate(`/call/direct/${callerId}?type=${isVid ? 'video' : 'audio'}&autoAnswer=true${callIdParam}&from=${currentFrom}`);
+      navigate(`/call/direct/${callerId}?callerId=${callerId}&userId=${callerId}&type=${isVid ? 'video' : 'audio'}&autoAnswer=true${callIdParam}&from=${currentFrom}`);
+    } else {
+      // Fallback an toàn nếu callerId bị thiếu trong gói tin
+      navigate(`/call/direct?type=${isVid ? 'video' : 'audio'}&autoAnswer=true${callIdParam}&from=${currentFrom}`);
     }
   };
 
   // 5. Decline Call
   const handleDecline = () => {
     if (!incomingCall) return;
-    const callerId = incomingCall.callerId;
+    const callerId = incomingCall.callerId || incomingCall.senderId || incomingCall.userId || incomingCall.fromUserId;
     const roomId = incomingCall.roomId;
     const isVid = Boolean(incomingCall.isVideo);
     const callId = incomingCall.callId;
