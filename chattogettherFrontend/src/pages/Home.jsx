@@ -1487,10 +1487,11 @@ const Home = ({ initialTab }) => {
     // 1. Cập nhật Optimistic 0ms trên danh sách bài viết ngoài Sảnh
     setPosts(prev => prev.map(p => {
       if (String(p.id) !== strPostId) return p;
-      const wasLiked = p.isLikedByMe;
-      const sameType = p.myReaction === targetType;
+      const wasLiked = Boolean(p.isLikedByMe);
+      const currentReaction = (p.myReaction || (wasLiked ? 'HEART' : null))?.toUpperCase();
+      const sameType = wasLiked && (currentReaction === targetType);
 
-      if (wasLiked && sameType) {
+      if (sameType) {
         nextIsLiked = false;
         nextReaction = null;
         return {
@@ -1514,10 +1515,11 @@ const Home = ({ initialTab }) => {
     // 2. Cập nhật Optimistic 0ms cho modal bài viết chi tiết nếu đang mở
     setSelectedThreadPost(prev => {
       if (!prev || String(prev.id) !== strPostId) return prev;
-      const wasLiked = prev.isLikedByMe;
-      const sameType = prev.myReaction === targetType;
+      const wasLiked = Boolean(prev.isLikedByMe);
+      const currentReaction = (prev.myReaction || (wasLiked ? 'HEART' : null))?.toUpperCase();
+      const sameType = wasLiked && (currentReaction === targetType);
 
-      if (wasLiked && sameType) {
+      if (sameType) {
         return {
           ...prev,
           isLikedByMe: false,
@@ -1552,16 +1554,16 @@ const Home = ({ initialTab }) => {
       if (!desired) return;
 
       try {
-        const sendType = desired.reactionType || targetType;
+        const sendType = desired.isLiked ? (desired.reactionType || targetType || 'HEART') : 'UNLIKE';
         let res;
         try {
           res = await axiosClient.post(`/posts/${postId}/react`, null, {
-            params: { type: sendType || 'HEART' }
+            params: { type: sendType }
           });
         } catch (apiErr) {
           if (apiErr.response?.status === 404) {
             res = await axiosClient.post(`/posts/${postId}/like`, null, {
-              params: { type: sendType || 'HEART' }
+              params: { type: sendType }
             });
           } else {
             throw apiErr;

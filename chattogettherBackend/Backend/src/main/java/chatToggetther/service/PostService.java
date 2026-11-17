@@ -794,6 +794,7 @@ public class PostService {
                 ? reactionType.trim().toUpperCase() 
                 : "HEART";
 
+        boolean isExplicitUnlike = "UNLIKE".equalsIgnoreCase(desiredReaction);
         String finalUserReaction = null;
         List<PostLikeEntity> existingLikes = this.postLikeRepository.findAllByPostAndUser(post, currentUser);
         if (!existingLikes.isEmpty()) {
@@ -803,7 +804,8 @@ public class PostService {
                     this.postLikeRepository.delete(existingLikes.get(i));
                 }
             }
-            if (desiredReaction.equalsIgnoreCase(like.getReactionType())) {
+            String currentType = like.getReactionType() != null ? like.getReactionType() : "HEART";
+            if (isExplicitUnlike || desiredReaction.equalsIgnoreCase(currentType)) {
                 this.postLikeRepository.delete(like);
                 finalUserReaction = null;
             } else {
@@ -812,7 +814,7 @@ public class PostService {
                 this.postLikeRepository.save(like);
                 finalUserReaction = desiredReaction;
             }
-        } else {
+        } else if (!isExplicitUnlike) {
             PostLikeEntity like = new PostLikeEntity();
             like.setPost(post);
             like.setUser(currentUser);
@@ -873,6 +875,7 @@ public class PostService {
                 ? reactionType.trim().toUpperCase() 
                 : "HEART";
 
+        boolean isExplicitUnlike = "UNLIKE".equalsIgnoreCase(desiredReaction);
         boolean isLikedNow = false;
         List<PostLikeEntity> existingLikes = this.postLikeRepository.findAllByPostAndUser(post, currentUser);
         if (!existingLikes.isEmpty()) {
@@ -882,7 +885,8 @@ public class PostService {
                     this.postLikeRepository.delete(existingLikes.get(i));
                 }
             }
-            if (desiredReaction.equalsIgnoreCase(like.getReactionType())) {
+            String currentType = like.getReactionType() != null ? like.getReactionType() : "HEART";
+            if (isExplicitUnlike || desiredReaction.equalsIgnoreCase(currentType)) {
                 this.postLikeRepository.delete(like);
                 isLikedNow = false; // Đã tháo tim
             } else {
@@ -891,7 +895,7 @@ public class PostService {
                 this.postLikeRepository.save(like);
                 isLikedNow = true;
             }
-        } else {
+        } else if (!isExplicitUnlike) {
             PostLikeEntity like = new PostLikeEntity();
             like.setPost(post);
             like.setUser(currentUser);
