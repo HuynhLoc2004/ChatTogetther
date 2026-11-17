@@ -476,12 +476,25 @@ const CallPage = () => {
 
     // Giữ trễ nhỏ 120ms để browser kịp flush dữ liệu socket ra ngoài trước khi chuyển route
     setTimeout(() => {
+      // 1. Ưu tiên pop lịch sử để loại bỏ /call khỏi stack mà không sinh bản sao lịch sử
+      if (window.history.state && window.history.state.idx > 0) {
+        navigate(-1);
+        return;
+      }
+
+      // 2. Fallback nếu không có lịch sử trước đó (mở link trực tiếp hoặc refresh trang gọi)
       const fromParam = searchParams.get('from');
       if (fromParam) {
-        navigate(decodeURIComponent(fromParam), { replace: true });
-      } else if (window.history.length > 2) {
-        navigate(-1);
-      } else if (effectivePartner) {
+        try {
+          const decoded = decodeURIComponent(fromParam);
+          if (decoded && decoded !== window.location.pathname) {
+            navigate(decoded, { replace: true });
+            return;
+          }
+        } catch (_) { }
+      }
+
+      if (effectivePartner) {
         navigate(`/messages/${effectivePartner}`, { replace: true });
       } else if (isRoomCall && roomId) {
         navigate(`/room/${roomId}`, { replace: true });

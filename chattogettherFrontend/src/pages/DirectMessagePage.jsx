@@ -217,41 +217,60 @@ export const DirectMessagePage = () => {
   }, [refreshPresence]);
 
   // Điều hướng 1-click quay lại đúng màn hình trước (Screen A) mà không bị kẹt lịch sử
-  const handleBack = () => {
-    // 1. Chuẩn mực: Sử dụng lịch sử duyệt web để quay lại đúng màn hình trước đó
-    if (window.history.state && window.history.state.idx > 0) {
-      navigate(-1);
-      return;
-    }
-
-    // 2. Nếu có location.state?.from từ router điều hướng nội bộ
-    if (location.state?.from && location.state.from !== location.pathname) {
+  const handleBack = useCallback(() => {
+    // 1. Nếu có location.state?.from từ router điều hướng nội bộ (và không phải /messages hay /call)
+    if (location.state?.from && !location.state.from.startsWith('/messages') && !location.state.from.startsWith('/call') && location.state.from !== location.pathname) {
       navigate(location.state.from);
       return;
     }
 
-    // 3. Nếu có query param ?from=... hợp lệ từ router
+    // 2. Nếu có query param ?from=... hợp lệ từ router (và không phải /messages hay /call)
     const fromParam = searchParams.get('from');
     if (fromParam) {
       try {
         const decoded = decodeURIComponent(fromParam);
-        if (decoded && !decoded.startsWith('/messages') && decoded !== location.pathname) {
+        if (decoded && !decoded.startsWith('/messages') && !decoded.startsWith('/call') && decoded !== location.pathname) {
           navigate(decoded);
           return;
         }
       } catch (_) { }
     }
 
-    // 4. Màn hình gốc được lưu trong session (nếu có và không phải trang hiện tại)
+    // 3. Màn hình gốc được lưu trong session (nếu có và không phải trang tin nhắn/cuộc gọi)
     const originScreenA = sessionStorage.getItem('talovin_origin_screen_a');
     if (originScreenA && !originScreenA.startsWith('/messages') && !originScreenA.startsWith('/call') && originScreenA !== location.pathname) {
       navigate(originScreenA);
       return;
     }
 
-    // 5. Mặc định về trang chủ nếu không có bất kỳ nguồn nào
+    // 4. Mặc định luôn thoát về trang chủ Sảnh '/'
     navigate('/');
-  };
+  }, [location, searchParams, navigate]);
+
+  // Xử lý nút Back trong header khung chat (đặc biệt trên màn hình mobile)
+  const handleChatBack = useCallback(() => {
+    // 1. Nếu người dùng vào thẳng đoạn chat này từ màn hình ngoài (Trang cá nhân, Sảnh bài viết, etc.)
+    const fromParam = searchParams.get('from');
+    if (fromParam) {
+      try {
+        const decoded = decodeURIComponent(fromParam);
+        if (decoded && !decoded.startsWith('/messages') && !decoded.startsWith('/call') && decoded !== location.pathname) {
+          navigate(decoded);
+          return;
+        }
+      } catch (_) { }
+    }
+
+    if (location.state?.from && !location.state.from.startsWith('/messages') && !location.state.from.startsWith('/call') && location.state.from !== location.pathname) {
+      navigate(location.state.from);
+      return;
+    }
+
+    // 2. Mặc định trên mobile: quay về danh sách hội thoại /messages
+    setActivePartner(null);
+    lastTargetIdRef.current = null;
+    navigate('/messages', { replace: true });
+  }, [searchParams, location, navigate]);
 
   // Danh sách bạn bè / hội thoại (Nạp tức thì từ cache, tự động hydrate từ tin nhắn cục bộ và sắp xếp mới nhất từ 0ms)
   const userPrefix = currentUserId ? `${currentUserId}_` : '';
@@ -1875,7 +1894,7 @@ export const DirectMessagePage = () => {
                     key={partner.id}
                     onClick={() => {
                       lastTargetIdRef.current = String(partner.id);
-                      navigate(`/messages/${partner.id}${location.search}`, { replace: true, state: location.state });
+                      navigate(`/messages/${partner.id}`, { replace: true });
                       openDirectChat(partner.id, partner);
                     }}
                     className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all duration-200 ease-out active:scale-[0.98] relative group ${activeMenuPartnerId === partner.id ? 'z-30' : 'z-0'} ${isSelected
@@ -2010,12 +2029,9 @@ export const DirectMessagePage = () => {
                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                   <button
                     type="button"
-                    onClick={() => {
-                      navigate('/messages', { replace: true });
-                      setActivePartner(null);
-                    }}
+                    onClick={handleChatBack}
                     className="md:hidden p-2 -ml-1 text-zinc-400 hover:text-white rounded-xl hover:bg-zinc-900 transition-colors cursor-pointer active:scale-95 shrink-0"
-                    title="Trở về Hộp thư tin nhắn"
+                    title="Quay lại"
                   >
                     <ArrowLeft size={18} />
                   </button>
