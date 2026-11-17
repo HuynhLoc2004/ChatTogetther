@@ -208,7 +208,7 @@ const GlobalCallBanner = () => {
       callId: callId,
       type: 'DECLINE',
       callerId: callerId, // Người gọi gốc Side A
-      targetUserId: callerId, // Đối phương cần ngắt là người gọi A
+      targetUserId: effectiveUserId, // Người nhận cuộc gọi Side B
       endedBy: effectiveUserId, // Người thực hiện bấm từ chối là B
       roomId: roomId,
       duration: 0,

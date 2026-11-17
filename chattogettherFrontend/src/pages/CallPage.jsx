@@ -100,6 +100,9 @@ const CallPage = () => {
   const isCallEndedRef = useRef(false);
   const iceCandidateQueueRef = useRef([]);
   const localCandidatesHistoryRef = useRef([]);
+  const lastOfferRef = useRef(null);
+  const lastAnswerRef = useRef(null);
+  const hasHandledDeclineRef = useRef(false);
   const disconnectTimerRef = useRef(null);
   const connectTimeoutRef = useRef(null);
   const acceptRetryTimerRef = useRef(null);
@@ -439,6 +442,17 @@ const CallPage = () => {
         if (msg.isVideo) setIsVideoCall(true);
         if (!peerConnectionRef.current) return;
         const pc = peerConnectionRef.current;
+
+        // Nếu đã phản hồi và đang ở trạng thái stable, gửi lại answer phòng khi bên gọi chưa nhận được
+        if (pc.signalingState === 'stable' && lastAnswerRef.current) {
+          sendCallSignal({
+            type: 'ANSWER',
+            answer: lastAnswerRef.current,
+            isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled)
+          });
+          return;
+        }
+
         await pc.setRemoteDescription(new RTCSessionDescription(msg.offer));
 
         // Đổ toàn bộ ICE candidate đã lưu trong hàng đợi
@@ -451,13 +465,12 @@ const CallPage = () => {
 
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
+        const answerPayload = { type: answer.type, sdp: answer.sdp };
+        lastAnswerRef.current = answerPayload;
         sendCallSignal({
           type: 'ANSWER',
-          answer: { type: answer.type, sdp: answer.sdp },
+          answer: answerPayload,
           isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled)
-        });
-        localCandidatesHistoryRef.current.forEach(cand => {
-          sendCallSignal({ type: 'CANDIDATE', candidate: cand });
         });
       } catch (e) {
         console.error("Lỗi xử lý OFFER:", e);
@@ -475,14 +488,19 @@ const CallPage = () => {
               offerToReceiveVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled)
             });
             await pc.setLocalDescription(offer);
+            const offerPayload = { type: offer.type, sdp: offer.sdp };
+            lastOfferRef.current = offerPayload;
             sendCallSignal({
               type: 'OFFER',
-              offer: { type: offer.type, sdp: offer.sdp },
+              offer: offerPayload,
               isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled)
             });
-            // Gửi kèm toàn bộ candidate đã thu thập sẵn
-            localCandidatesHistoryRef.current.forEach(cand => {
-              sendCallSignal({ type: 'CANDIDATE', candidate: cand });
+          } else if (pc.signalingState === 'have-local-offer' && lastOfferRef.current) {
+            // Bên nhận thử gửi lại ACCEPT (retry), gửi lại ngay bản OFFER đã tạo
+            sendCallSignal({
+              type: 'OFFER',
+              offer: lastOfferRef.current,
+              isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled)
             });
           }
         }
@@ -530,9 +548,11 @@ const CallPage = () => {
         }
       }
     } else if (msg.type === 'BUSY' || msg.type === 'DECLINE') {
+      if (hasHandledDeclineRef.current) return;
+      hasHandledDeclineRef.current = true;
       stopRingAudio();
       setCallStatusText('Đối phương hiện đang bận hoặc từ chối');
-      toast.error('Đối phương hiện đang bận hoặc không thể bắt máy!');
+      toast.error('Đối phương hiện đang bận hoặc không thể bắt máy!', { id: 'call_busy_toast' });
       setTimeout(() => endCall(false), 300);
     } else if (msg.type === 'END' || msg.type === 'CANCEL') {
       stopRingAudio();

@@ -2288,10 +2288,13 @@ export const DirectMessagePage = () => {
                                   onClick={() => setLightboxMedia(resolveMediaUrl(mediaObj.url))}
                                   onError={(e) => {
                                     e.currentTarget.onerror = null;
-                                    const orig = mediaObj.url;
-                                    if (orig && orig.includes('.r2.dev/')) {
+                                    const orig = mediaObj.url || '';
+                                    if (orig.includes('.r2.dev/')) {
                                       const key = orig.split('.r2.dev/')[1];
                                       if (key) e.currentTarget.src = `${BACKEND_URL || ''}/api/message/files/${key}`;
+                                    } else if (orig.includes('/api/message/files/')) {
+                                      const key = orig.split('/api/message/files/')[1];
+                                      if (key) e.currentTarget.src = `https://pub-9618b6a7a3a9489ab05ddd69d79a4b9b.r2.dev/${key}`;
                                     }
                                   }}
                                   className="w-full h-full max-h-72 object-cover cursor-pointer hover:opacity-95 transition-opacity rounded-xl"
@@ -2380,22 +2383,19 @@ export const DirectMessagePage = () => {
 
                           {isMe && (
                             msg.pending ? (
-                              <span className="inline-flex items-center gap-1 text-[10px] text-amber-400 font-mono animate-pulse">
+                              <span className="inline-flex items-center gap-1 text-[10px] text-amber-400 font-mono animate-pulse" title="Đang gửi...">
                                 <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
-                                <span>Đang gửi...</span>
                               </span>
                             ) : (msg.isRead || msg.timeRead) ? (
                               <span
-                                className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-mono select-none"
-                                title={`Đã xem lúc ${msg.formattedTimeRead || msg.formattedTime || ''}`}
+                                className="inline-flex items-center text-emerald-400 select-none"
+                                title={`Đã xem ${msg.formattedTimeRead ? `lúc ${msg.formattedTimeRead}` : ''}`}
                               >
-                                <CheckCheck size={12} className="text-emerald-400" />
-                                <span>Đã xem</span>
+                                <CheckCheck size={13} className="text-emerald-400" />
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-0.5 text-[10px] text-zinc-500 font-mono select-none" title="Đã chuyển đến máy chủ">
-                                <CheckCheck size={12} className="text-zinc-500" />
-                                <span>Đã gửi</span>
+                              <span className="inline-flex items-center text-zinc-500 select-none" title="Đã gửi đến máy chủ">
+                                <Check size={13} className="text-zinc-500" />
                               </span>
                             )
                           )}

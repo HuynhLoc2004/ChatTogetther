@@ -110,11 +110,23 @@ public class CallSignalController {
             } catch (Exception ignored) {}
         }
 
-        // Bắn tín hiệu kết thúc/từ chối qua WebSocket tới cả 2 phía để bên kia thoát ngay lập tức nếu đang treo
-        if (targetUserId != null) {
+        Long endedBy = null;
+        if (payload.get("endedBy") != null) {
+            try {
+                endedBy = Long.valueOf(String.valueOf(payload.get("endedBy")));
+            } catch (Exception ignored) {}
+        }
+
+        // Nếu targetUserId bị truyền nhầm thành callerId, tự động sửa lại theo endedBy (người nhận/từ chối)
+        if ((targetUserId == null || (callerId != null && callerId.equals(targetUserId))) && endedBy != null && !endedBy.equals(callerId)) {
+            targetUserId = endedBy;
+        }
+
+        // Bắn tín hiệu kết thúc/từ chối qua WebSocket tới phía đối diện (không bắn ngược lại người vừa ấn nút kết thúc)
+        if (targetUserId != null && (endedBy == null || !targetUserId.equals(endedBy))) {
             this.messagingTemplate.convertAndSend("/topic/call/user/" + targetUserId, payload);
         }
-        if (callerId != null && !callerId.equals(targetUserId)) {
+        if (callerId != null && !callerId.equals(targetUserId) && (endedBy == null || !callerId.equals(endedBy))) {
             this.messagingTemplate.convertAndSend("/topic/call/user/" + callerId, payload);
         }
         if (roomId != null) {
@@ -149,6 +161,15 @@ public class CallSignalController {
                 try {
                     targetUserId = Long.valueOf(String.valueOf(payload.get("targetUserId")));
                 } catch (Exception ignored) {}
+            }
+            Long endedBy = null;
+            if (payload.get("endedBy") != null) {
+                try {
+                    endedBy = Long.valueOf(String.valueOf(payload.get("endedBy")));
+                } catch (Exception ignored) {}
+            }
+            if ((targetUserId == null || (callerId != null && callerId.equals(targetUserId))) && endedBy != null && !endedBy.equals(callerId)) {
+                targetUserId = endedBy;
             }
             if (callerId == null) return;
 
