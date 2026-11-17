@@ -17,7 +17,9 @@ const Login = () => {
 
   // Khởi động làm ấm máy chủ ngay khi người dùng mở trang Đăng Nhập
   useEffect(() => {
-    // Gửi request nhẹ không yêu cầu xác thực để đánh thức Render trong lúc người dùng đang nhập tài khoản
+    // Đảm bảo không còn token cũ từ phiên trước gây nhiễu
+    localStorage.removeItem('accesstoken');
+    // Gửi request nhẹ không yêu cầu xác thực để đánh thức máy chủ trong lúc người dùng đang nhập tài khoản
     axiosClient.get('/ping').catch(() => {});
   }, []);
 

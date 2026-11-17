@@ -33,12 +33,28 @@ const processQueue = (error, token = null) => {
   failedQueue = [];
 };
 
+// Danh sách các endpoint auth/public không bao giờ gửi kèm Authorization token và không refresh
+const isPublicAuthUrl = (url = '') => {
+  return (
+    url.includes('/auth/login') ||
+    url.includes('/auth/register') ||
+    url.includes('/users/create') ||
+    url.includes('/auth/refresh_token') ||
+    url.includes('/ping')
+  );
+};
+
 // Add a request interceptor
 axiosClient.interceptors.request.use(
   function (config) {
+    const isPublicAuth = isPublicAuthUrl(config.url);
     const token = localStorage.getItem('accesstoken');
-    if (token) {
+
+    // Chỉ đính kèm Authorization header nếu không phải endpoint đăng ký / đăng nhập
+    if (token && !isPublicAuth) {
       config.headers.Authorization = `Bearer ${token}`;
+    } else if (isPublicAuth && config.headers) {
+      delete config.headers.Authorization;
     }
 
     // Chuẩn hóa URL: Bỏ tiền tố /api nếu code gọi truyền vào (ví dụ '/api/friends' -> '/friends')
@@ -62,14 +78,16 @@ axiosClient.interceptors.response.use(
   },
   async function (error) {
     const originalRequest = error.config;
+    const isPublicAuth = isPublicAuthUrl(originalRequest?.url);
+    const storedRefreshToken = localStorage.getItem('refreshToken');
 
-    // Nếu lỗi 401 và không phải là request refresh token
+    // Nếu lỗi 401: chỉ thử refresh token nếu KHÔNG PHẢI auth endpoint VÀ CÓ refresh token khả dụng
     if (
       error.response &&
       error.response.status === 401 &&
       !originalRequest._retry &&
-      !originalRequest.url.includes('/auth/refresh_token') &&
-      !originalRequest.url.includes('/auth/login')
+      !isPublicAuth &&
+      storedRefreshToken
     ) {
       if (isRefreshing) {
         return new Promise(function (resolve, reject) {
@@ -89,17 +107,18 @@ axiosClient.interceptors.response.use(
 
       try {
         const refreshEndpoint = BACKEND_URL ? `${BACKEND_URL}/api/auth/refresh_token` : '/api/auth/refresh_token';
-        const storedRefreshToken = localStorage.getItem('refreshToken');
         
         const response = await axios.get(refreshEndpoint, {
           withCredentials: true,
           headers: {
-            Authorization: undefined,
-            'x-refresh-token': storedRefreshToken || undefined,
+            'x-refresh-token': storedRefreshToken,
           },
         });
         
-        const newAccessToken = response.data.data;
+        const newAccessToken = response.data?.data;
+        if (!newAccessToken) {
+          throw new Error("Không nhận được access token mới");
+        }
         localStorage.setItem('accesstoken', newAccessToken);
 
         // Đảm bảo user_id luôn tồn tại
@@ -122,11 +141,17 @@ axiosClient.interceptors.response.use(
         processQueue(refreshError, null);
         isRefreshing = false;
         
-        console.error("Refresh token failed:", refreshError);
+        console.warn("Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.");
         localStorage.removeItem('accesstoken');
-        // window.location.href = '/login';
-        return Promise.reject(refreshError);
+        localStorage.removeItem('refreshToken');
+        return Promise.reject(error); // Giữ nguyên lỗi gốc của request thay vì ghi đè bằng lỗi refresh token
       }
+    }
+
+    // Nếu lỗi 401 mà không có refresh token (hoặc là request thông thường hết hạn), xóa token rác
+    if (error.response && error.response.status === 401 && !isPublicAuth) {
+      localStorage.removeItem('accesstoken');
+      localStorage.removeItem('refreshToken');
     }
 
     if (!error.response) {

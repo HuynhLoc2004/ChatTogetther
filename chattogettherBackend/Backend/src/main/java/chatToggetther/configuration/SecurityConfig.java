@@ -53,8 +53,39 @@ public class SecurityConfig {
                         .httpStrictTransportSecurity(hsts -> hsts.includeSubDomains(true).maxAgeInSeconds(31536000))
                 )
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.POST, "/api/users/create", "/api/auth/login", "/api/challenges", "/api/posts/track-search", "/api/public/**", "/api/presence/**", "/presence/**", "/api/call/**", "/call/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/rooms/info-rooms", "/api/rooms/my-active-room", "/api/rooms/active", "/api/rooms/*/online-users", "/api/groups", "/api/groups/**", "/api/communities", "/api/communities/**", "/api/auth/refresh_token", "/api/ping", "/api/posts", "/api/posts/**", "/api/tracks", "/api/tracks/**", "/api/challenges", "/api/challenges/**", "/api/system/**", "/api/match/config", "/api/match/stations", "/api/match/audio/**", "/api/public/**", "/api/notifications", "/api/notifications/**", "/api/users/online-ids", "/users/online-ids", "/public/online-users", "/api/public/online-users", "/api/presence/**", "/presence/**", "/api/message/files/**", "/api/messages/files/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, 
+                                "/api/users/create", "/users/create",
+                                "/api/auth/**", "/auth/**",
+                                "/api/challenges", "/challenges",
+                                "/api/posts/track-search", "/posts/track-search",
+                                "/api/public/**", "/public/**",
+                                "/api/presence/**", "/presence/**",
+                                "/api/call/**", "/call/**"
+                        ).permitAll()
+                        .requestMatchers(HttpMethod.GET, 
+                                "/api/rooms/info-rooms", "/rooms/info-rooms",
+                                "/api/rooms/my-active-room", "/rooms/my-active-room",
+                                "/api/rooms/active", "/rooms/active",
+                                "/api/rooms/*/online-users", "/rooms/*/online-users",
+                                "/api/groups", "/groups", "/api/groups/**", "/groups/**",
+                                "/api/communities", "/communities", "/api/communities/**", "/communities/**",
+                                "/api/auth/refresh_token", "/auth/refresh_token",
+                                "/api/ping", "/ping",
+                                "/api/posts", "/posts", "/api/posts/**", "/posts/**",
+                                "/api/tracks", "/tracks", "/api/tracks/**", "/tracks/**",
+                                "/api/challenges", "/challenges", "/api/challenges/**", "/challenges/**",
+                                "/api/system/**", "/system/**",
+                                "/api/match/config", "/match/config",
+                                "/api/match/stations", "/match/stations",
+                                "/api/match/audio/**", "/match/audio/**",
+                                "/api/public/**", "/public/**",
+                                "/api/notifications", "/notifications", "/api/notifications/**", "/notifications/**",
+                                "/api/users/online-ids", "/users/online-ids",
+                                "/public/online-users", "/api/public/online-users",
+                                "/api/presence/**", "/presence/**",
+                                "/api/message/files/**", "/message/files/**",
+                                "/api/messages/files/**", "/messages/files/**"
+                        ).permitAll()
                         .requestMatchers("/ws-gs-guide", "/ws-gs-guide/**", "/ws", "/ws/**", "/ws-native", "/ws-native/**", "/ws-sockjs", "/ws-sockjs/**").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .anyRequest().authenticated()
@@ -114,6 +145,16 @@ public class SecurityConfig {
     @Bean
     public BearerTokenResolver bearerTokenResolver() {
         return request -> {
+            String path = request.getRequestURI();
+            if (path != null && (
+                    path.contains("/auth/login") ||
+                    path.contains("/auth/register") ||
+                    path.contains("/users/create") ||
+                    path.contains("/ping")
+            )) {
+                return null;
+            }
+
             DefaultBearerTokenResolver defaultResolver = new DefaultBearerTokenResolver();
             String token = defaultResolver.resolve(request);
 

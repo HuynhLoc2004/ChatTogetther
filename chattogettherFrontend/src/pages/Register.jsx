@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import axiosClient from '../api/axiosClient';
@@ -11,6 +11,11 @@ const Register = () => {
   const [submitting, setSubmitting] = useState(false);
   const [slowMessage, setSlowMessage] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    // Đảm bảo không còn token cũ từ phiên trước gây nhiễu
+    localStorage.removeItem('accesstoken');
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

@@ -210,7 +210,7 @@ public class UserService {
 
     public ResponseData<Boolean> create_user(UserRequest userRequest){
          if(this.userRepository.existsByAccount(userRequest.getAccount())){
-             throw new AppException(ErrorCode.USER_EXISTED.getCode() , ErrorCode.USER_EXISTED.getMessage() , ErrorCode.USER_EXISTED.getStatusCode().value());
+             throw new AppException(ErrorCode.USER_EXISTED.getCode() , "Tài khoản này đã tồn tại, vui lòng chọn tài khoản khác!" , ErrorCode.USER_EXISTED.getStatusCode().value());
          }else{
              UserEntity userEntity = new UserEntity();
              userEntity.setAccount(userRequest.getAccount());
