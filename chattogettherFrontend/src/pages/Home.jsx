@@ -4854,10 +4854,10 @@ const Home = ({ initialTab }) => {
                               )}
                             </div>
 
-                            {/* Thanh Tương Tác Đối Thoại Sảnh (KHÔNG DÙNG HÀNG 3 ICON THREADS) */}
-                            <div className="pt-3 border-t border-white/[0.06] flex items-center justify-between gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
-                              {/* Cụm 1: Thả cảm xúc & Nút thảo luận */}
-                              <div className="flex items-center gap-2">
+                            {/* Thanh Tương Tác Dưới Đáy Thẻ Bài Viết (1 hàng ngang tinh gọn) */}
+                            <div className="flex items-center justify-between pt-3 border-t border-white/[0.05]" onClick={(e) => e.stopPropagation()}>
+                              {/* Cụm bên trái: Thả cảm xúc & Bình luận */}
+                              <div className="flex items-center gap-5">
                                 <PostReactionDock
                                   post={post}
                                   onReact={handleReactPost}
@@ -4871,58 +4871,26 @@ const Home = ({ initialTab }) => {
                                     e.stopPropagation();
                                     handlePostCardClick(e, post, true);
                                   }}
-                                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 hover:text-white transition-colors cursor-pointer text-xs font-medium border border-white/[0.05] ${selectedThreadPost?.id === post.id ? 'text-white bg-white/10' : ''}`}
+                                  className={`flex items-center gap-1.5 text-zinc-400 hover:text-white transition-colors cursor-pointer text-xs font-medium group ${selectedThreadPost?.id === post.id ? 'text-white' : ''}`}
                                   title="Xem thảo luận"
                                 >
-                                  <MessageSquare size={13} strokeWidth={1.5} />
-                                  <span className="font-mono text-[11px]">{post.commentsCount || 0}</span>
+                                  <MessageSquare size={16} strokeWidth={1.7} className="transition-transform group-hover:scale-110" />
+                                  <span className="font-mono text-xs">{post.commentsCount || 0}</span>
                                 </button>
                               </div>
 
-                              {/* Cụm 2: Nhắn riêng & Gửi voice & Chia sẻ */}
-                              <div className="flex items-center gap-1.5">
-                                {!isMe && (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        navigate(`/messages/${post.authorId || post.userId}`, { state: { from: location.pathname + location.search } });
-                                      }}
-                                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-zinc-300 hover:text-white border border-white/[0.08] text-xs font-medium transition-all cursor-pointer active:scale-95"
-                                      title="Nhắn riêng cho tác giả"
-                                    >
-                                      <Send size={12} className="text-sky-400" />
-                                      <span>Nhắn riêng</span>
-                                    </button>
-
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        navigate(`/messages/${post.authorId || post.userId}`, { state: { from: location.pathname + location.search, autoRecordVoice: true } });
-                                      }}
-                                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 text-xs font-medium transition-all cursor-pointer active:scale-95"
-                                      title="Gửi voice trực tiếp cho tác giả"
-                                    >
-                                      <Mic size={12} className="text-emerald-400" />
-                                      <span>Gửi voice</span>
-                                    </button>
-                                  </>
-                                )}
-
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSharePost(post);
-                                  }}
-                                  className="p-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 hover:text-white transition-colors cursor-pointer border border-white/[0.05]"
-                                  title="Chia sẻ bài viết"
-                                >
-                                  <Share2 size={13} strokeWidth={1.5} />
-                                </button>
-                              </div>
+                              {/* Cụm bên phải: Chia sẻ */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSharePost(post);
+                                }}
+                                className="flex items-center justify-center p-1.5 text-zinc-400 hover:text-white transition-colors cursor-pointer group"
+                                title="Chia sẻ bài viết"
+                              >
+                                <Share2 size={16} strokeWidth={1.7} className="transition-transform group-hover:scale-110" />
+                              </button>
                             </div>
 
                             {/* Khu vực bình luận: Chỉ mở khi người dùng click */}
