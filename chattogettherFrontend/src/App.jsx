@@ -10,7 +10,6 @@ import ProfilePage from './pages/ProfilePage';
 import DirectMessagePage from './pages/DirectMessagePage';
 import CallPage from './pages/CallPage';
 import GlobalCallBanner from './components/GlobalCallBanner';
-import OnboardingIntro from './components/OnboardingIntro';
 import { AuthProvider } from './context/AuthContext';
 import { PresenceProvider } from './context/PresenceContext';
 import './App.css';
@@ -196,7 +195,6 @@ function App() {
           <Router>
           <RouteTracker />
           <div className="app-root">
-          <OnboardingIntro />
           <Toaster 
             position="top-center" 
             reverseOrder={false}
