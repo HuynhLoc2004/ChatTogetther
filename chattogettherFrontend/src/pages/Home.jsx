@@ -3049,6 +3049,60 @@ const Home = ({ initialTab }) => {
   const safeFriends = Array.isArray(friends) ? friends.filter(Boolean) : [];
   // Các phòng đàm thoại người dùng có quyền nhìn thấy: Phòng đã tham gia HOẶC phòng công khai
   const userAccessibleRooms = safeRooms.filter(r => isUserInRoom(r) || (!r.hasPassword && !r.isPrivate));
+  const publicRooms = safeRooms.filter(r => !isUserInRoom(r) && !r.hasPassword && !r.isPrivate);
+  const myRooms = safeRooms.filter(r => isUserInRoom(r));
+
+  const QUICK_CHALLENGES = [
+    "Nếu chỉ được nghe duy nhất 1 bài hát trong 1 năm tới, bạn chọn bài nào?",
+    "Điều gì khiến bạn mỉm cười bất giác hôm nay?",
+    "Một thói quen nhỏ đã làm thay đổi hoàn toàn năng suất của bạn?",
+    "Địa điểm nào bạn luôn muốn quay lại mỗi khi cảm thấy quá tải?",
+    "Lời khuyên đắt giá nhất bạn từng nhận được từ một người lạ?",
+    "Nếu có thể gửi một lời nhắn cho chính mình của 5 năm trước, bạn sẽ viết gì?"
+  ];
+  const [quickChallengeIdx, setQuickChallengeIdx] = useState(0);
+
+  const activeLoungeUsers = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+    if (currentUserId) seen.add(String(currentUserId));
+
+    if (Array.isArray(safeFriends)) {
+      safeFriends.forEach(f => {
+        const fid = f.id || f.userId;
+        if (fid && !seen.has(String(fid))) {
+          seen.add(String(fid));
+          list.push({
+            id: fid,
+            name: f.nickname || f.displayName || f.name || f.account || 'Bạn bè',
+            account: f.account || f.username || 'user',
+            avatar: f.avatar || f.avatarUrl,
+            isOnline: f.isOnline ?? true,
+            statusText: f.statusText || 'Đang lắng nghe'
+          });
+        }
+      });
+    }
+
+    if (Array.isArray(safePosts) && list.length < 8) {
+      safePosts.forEach(p => {
+        const aid = p.authorId;
+        if (aid && !seen.has(String(aid))) {
+          seen.add(String(aid));
+          list.push({
+            id: aid,
+            name: p.authorNickname || p.authorName || p.author || 'Thành viên',
+            account: p.authorAccount || 'user',
+            avatar: p.authorAvatar,
+            isOnline: true,
+            statusText: p.vibe || 'Trong sảnh'
+          });
+        }
+      });
+    }
+
+    return list.slice(0, 10);
+  }, [safeFriends, safePosts, currentUserId]);
 
   // Điều hướng và mở trực tiếp nội dung tương ứng khi click thông báo
   const handleOpenNotification = useCallback(async (n) => {
@@ -3366,14 +3420,13 @@ const Home = ({ initialTab }) => {
         </div>
       )}
 
-      {/* KHUNG CĂN GIỮA TOÀN BỘ ỨNG DỤNG - CANVAS #090A0F */}
-      <div className="min-h-screen w-full bg-[#090A0F] text-[#F3F4F6] flex justify-center selection:bg-white/20 select-none">
-        <div className="flex w-full max-w-[940px] justify-between relative">
+      {/* KHUNG TOÀN MÀN HÌNH (FULL-BLEED APP SHELL) - CANVAS #090A0F */}
+      <div className="min-h-[100dvh] w-full bg-[#090A0F] text-[#F3F4F6] flex selection:bg-white/20 select-none">
 
-          {/* ============================================================== */}
-          {/* THANH ĐIỀU HƯỚNG BÊN TRÁI (220px) - CỐ ĐỊNH, KHÔNG BỊ TRỐNG TRẢI */}
-          {/* ============================================================== */}
-          <aside className="w-[220px] min-w-[220px] h-screen sticky top-0 hidden lg:flex flex-col justify-between py-5 px-3 z-30 select-none border-r border-white/[0.07] bg-[#090A0F]">
+        {/* ============================================================== */}
+        {/* CỘT 1: THANH ĐIỀU HƯỚNG BÊN TRÁI (240px) - CỐ ĐỊNH SÁT MÉP TRÁI */}
+        {/* ============================================================== */}
+        <aside className="w-[240px] shrink-0 sticky top-0 h-[100dvh] hidden lg:flex flex-col justify-between py-5 px-3.5 z-30 select-none border-r border-white/[0.06] bg-[#090A0F] overflow-y-auto [scrollbar-width:none]">
             <div>
               {/* Logo Talovin ở trên cùng (có cả Icon T và Tên Talovin) */}
               <div 
@@ -3561,14 +3614,14 @@ const Home = ({ initialTab }) => {
           </aside>
 
           {/* ============================================================== */}
-          {/* CỘT 2: KHUNG NỘI DUNG CHÍNH Ở GIỮA (max-w-[680px], bg-[#111319]) */}
+          {/* CỘT 2: KHU VỰC SẢNH CHÍNH Ở GIỮA (flex-1 min-w-0, bg-[#0D0F14]) */}
           {/* ============================================================== */}
-          <main className="w-full max-w-[680px] min-h-screen bg-[#111319] border-x border-t border-white/[0.07] lg:rounded-t-2xl flex flex-col relative pb-28 lg:pb-12">
+          <main className="flex-1 min-w-0 min-h-[100dvh] bg-[#0D0F14] border-r border-white/[0.06] flex flex-col relative pb-28 lg:pb-12 overflow-x-hidden">
 
             {/* ============================================================== */}
             {/* THANH HEADER DÍNH TRÊN CÙNG (STICKY HEADER)                     */}
             {/* ============================================================== */}
-            <header className="sticky top-0 z-30 h-14 w-full bg-[#111319]/80 backdrop-blur-md border-b border-white/[0.06] px-4 sm:px-6 flex items-center justify-between select-none lg:rounded-t-2xl">
+            <header className="sticky top-0 z-30 h-14 w-full bg-[#0D0F14]/90 backdrop-blur-md border-b border-white/[0.06] px-4 sm:px-8 flex items-center justify-between select-none">
               {/* Bên trái: Logo trên mobile / Tiêu đề "Sảnh trực tuyến" trên desktop */}
               <div className="flex items-center gap-3">
                 <div className="lg:hidden flex items-center cursor-pointer" onClick={handleLogoRefresh}>
@@ -4135,7 +4188,7 @@ const Home = ({ initialTab }) => {
           {/* TAB: DANH SÁCH BÀI VIẾT (Chỉ ở Sảnh trực tuyến, Thịnh hành hoặc Đã lưu) */}
           {/* ============================================================== */}
           {(activeTab === 'feed' || activeTab === 'trending' || activeTab === 'saved') && (
-            <div className="posts-stream-container">
+            <div className="posts-stream-container w-full max-w-[760px] mx-auto px-0 sm:px-6">
               {/* BANNER KẾT QUẢ TÌM KIẾM THÔNG MINH */}
               {activeSearchQuery && (
                 <div className="search-status-banner flex items-center justify-between p-3.5 mb-3 rounded-2xl bg-[#141414] border border-[#222222] shadow-sm animate-fade-in">
@@ -4911,41 +4964,45 @@ const Home = ({ initialTab }) => {
           {/* TAB: CỘNG ĐỒNG & NHÓM THẢO LUẬN */}
           {/* ============================================================== */}
           {activeTab === 'groups' && (
-            <SectionErrorBoundary>
-              <CommunitySection
-                currentUserId={currentUserId}
-                currentUserName={currentUserName}
-                currentUserAvatar={currentUserAvatar}
-                posts={safePosts}
-                setPosts={setPosts}
-                rooms={safeRooms}
-                friends={safeFriends}
-                navigate={navigate}
-                onSelectUser={(uid) => navigateToProfile(uid)}
-                onStartPrivateCall={handleStartPrivateCall}
-                onNavigateFeed={() => setActiveTab('feed')}
-                onReactPost={handleReactPost}
-                onPostCardClick={handlePostCardClick}
-                onToggleSavePost={handleToggleSavePost}
-                savedPostIds={savedPostIds}
-                onSharePost={(p) => setSharePost(p)}
-              />
-            </SectionErrorBoundary>
+            <div className="w-full max-w-[760px] mx-auto px-4 sm:px-6">
+              <SectionErrorBoundary>
+                <CommunitySection
+                  currentUserId={currentUserId}
+                  currentUserName={currentUserName}
+                  currentUserAvatar={currentUserAvatar}
+                  posts={safePosts}
+                  setPosts={setPosts}
+                  rooms={safeRooms}
+                  friends={safeFriends}
+                  navigate={navigate}
+                  onSelectUser={(uid) => navigateToProfile(uid)}
+                  onStartPrivateCall={handleStartPrivateCall}
+                  onNavigateFeed={() => setActiveTab('feed')}
+                  onReactPost={handleReactPost}
+                  onPostCardClick={handlePostCardClick}
+                  onToggleSavePost={handleToggleSavePost}
+                  savedPostIds={savedPostIds}
+                  onSharePost={(p) => setSharePost(p)}
+                />
+              </SectionErrorBoundary>
+            </div>
           )}
 
           {/* ============================================================== */}
           {/* TAB: BẠN BÈ & KẾT NỐI (HIỂN THỊ NGUYÊN BẢN TRỌN MÀN HÌNH)     */}
           {/* ============================================================== */}
           {activeTab === 'friends' && (
-            <SectionErrorBoundary>
-              <FriendsSection
-                currentUserId={currentUserId}
-                currentUserName={currentUserName}
-                currentUserAvatar={currentUserAvatar}
-                navigate={navigate}
-                onStartPrivateCall={handleStartPrivateCall}
-              />
-            </SectionErrorBoundary>
+            <div className="w-full max-w-[760px] mx-auto px-4 sm:px-6">
+              <SectionErrorBoundary>
+                <FriendsSection
+                  currentUserId={currentUserId}
+                  currentUserName={currentUserName}
+                  currentUserAvatar={currentUserAvatar}
+                  navigate={navigate}
+                  onStartPrivateCall={handleStartPrivateCall}
+                />
+              </SectionErrorBoundary>
+            </div>
           )}
 
           {/* ============================================================== */}
@@ -4954,11 +5011,6 @@ const Home = ({ initialTab }) => {
           {/* TAB 2: DANH SÁCH PHÒNG ĐÀM THOẠI TRỰC TIẾP                    */}
           {/* ============================================================== */}
           {activeTab === 'rooms' && (() => {
-            // Phòng đàm thoại của bạn: Chỉ những phòng mà tài khoản hiện tại THỰC SỰ là thành viên / đã tham gia
-            const myRooms = safeRooms.filter(r => isUserInRoom(r));
-            // Phòng công khai đang mở: Phòng không có mật khẩu, không riêng tư, và bạn chưa tham gia
-            const publicRooms = safeRooms.filter(r => !isUserInRoom(r) && !r.hasPassword && !r.isPrivate);
-
             const renderRoomCard = (room, isJoined) => (
               <div
                 key={room.id}
@@ -5129,7 +5181,211 @@ const Home = ({ initialTab }) => {
             );
           })()}
         </main>
-        </div>
+
+        {/* ============================================================== */}
+        {/* CỘT 3: BẢNG TRỰC TUYẾN SẢNH (340px) - NEO CỐ ĐỊNH BÊN PHẢI   */}
+        {/* ============================================================== */}
+        <aside className="w-[340px] shrink-0 hidden xl:flex flex-col sticky top-0 h-[100dvh] p-5 gap-5 bg-[#090A0F] border-l border-white/[0.06] overflow-y-auto [scrollbar-width:none] select-none">
+          {/* KHỐI 1: ĐANG HOẠT ĐỘNG TRONG SẢNH */}
+          <div className="p-4 rounded-2xl bg-[#111319] border border-white/[0.06] flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <h3 className="text-xs font-bold text-[#F3F4F6] uppercase tracking-wider font-sans">
+                  Đang trong Sảnh ({activeLoungeUsers.length})
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleSwitchTab('friends')}
+                className="text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
+              >
+                Xem tất cả
+              </button>
+            </div>
+
+            {activeLoungeUsers.length === 0 ? (
+              <p className="text-xs text-zinc-500 py-2">Hiện chưa có thành viên nào khác trong sảnh.</p>
+            ) : (
+              <div className="grid grid-cols-5 gap-2.5 pt-1">
+                {activeLoungeUsers.map((u) => (
+                  <div
+                    key={u.id}
+                    onClick={() => navigate(`/messages/${u.id}`, { state: { from: location.pathname + location.search } })}
+                    className="group relative flex flex-col items-center gap-1 cursor-pointer"
+                    title={`${u.name} (@${u.account}) - Bấm để nhắn tin`}
+                  >
+                    <div className="relative">
+                      <UserAvatar
+                        avatarUrl={u.avatar}
+                        username={u.account}
+                        name={u.name}
+                        userId={u.id}
+                        size={40}
+                        className="group-hover:ring-2 group-hover:ring-white/30 transition-all rounded-full"
+                      />
+                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-[#111319]" />
+                    </div>
+                    <span className="text-[10px] text-zinc-400 truncate max-w-[50px] group-hover:text-white transition-colors">
+                      {u.name.split(' ')[0]}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* KHỐI 2: SÓNG FM & THẺ BÀI NHANH */}
+          <div className="p-4 rounded-2xl bg-[#111319] border border-white/[0.06] flex flex-col gap-3.5">
+            {/* Sóng FM 1-chạm */}
+            <div className="flex flex-col gap-2 pb-3 border-b border-white/[0.06]">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Radio size={14} className="text-emerald-400" />
+                  <span className="text-xs font-bold text-[#F3F4F6] uppercase tracking-wider font-sans">
+                    Sóng FM Trực Tuyến
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsSpeedMatchOpen(true)}
+                  className="text-[11px] text-emerald-400 hover:text-emerald-300 font-medium transition-colors cursor-pointer"
+                >
+                  Dò sóng →
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.05]">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                    <Radio size={15} className={isPlayingRadio ? "animate-pulse" : ""} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold text-[#F3F4F6] truncate">
+                      {currentTrack ? (currentTrack.title || currentTrack.name) : "Tần số Talovin FM"}
+                    </p>
+                    <p className="text-[10.5px] text-zinc-500 font-mono">
+                      {isPlayingRadio ? '96.4 MHz • Đang phát' : '96.4 MHz • Sẵn sàng'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={togglePlayRadio}
+                  className="w-8 h-8 rounded-full bg-white text-zinc-950 hover:bg-zinc-200 active:scale-95 flex items-center justify-center transition-all shrink-0 cursor-pointer shadow-sm"
+                  title={isPlayingRadio ? "Tạm dừng" : "Phát sóng"}
+                >
+                  {isPlayingRadio ? <Pause size={13} className="fill-zinc-950" /> : <Play size={13} className="fill-zinc-950 ml-0.5" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Thẻ bài gợi ý nhanh */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Dices size={14} className="text-amber-400" />
+                  <span className="text-xs font-bold text-[#F3F4F6] uppercase tracking-wider font-sans">
+                    Thẻ Bài Ngẫu Nhiên
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsPartyWheelOpen(true)}
+                  className="text-[11px] text-amber-400 hover:text-amber-300 font-medium transition-colors cursor-pointer"
+                >
+                  Mở bộ bài →
+                </button>
+              </div>
+
+              <div className="p-3 rounded-xl bg-amber-500/[0.04] border border-amber-500/15 flex flex-col gap-2.5">
+                <p className="text-xs text-zinc-300 leading-relaxed italic">
+                  "{QUICK_CHALLENGES[quickChallengeIdx]}"
+                </p>
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setQuickChallengeIdx((prev) => (prev + 1) % QUICK_CHALLENGES.length)}
+                    className="flex-1 py-1.5 px-2.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-zinc-300 text-[11px] font-medium transition-colors cursor-pointer text-center"
+                  >
+                    Đổi thẻ khác
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewPostContent(`[Thử thách]: "${QUICK_CHALLENGES[quickChallengeIdx]}"\n\n`);
+                      setIsComposerModalOpen(true);
+                    }}
+                    className="flex-1 py-1.5 px-2.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[11px] font-semibold transition-colors cursor-pointer text-center"
+                  >
+                    Bàn luận
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* KHỐI 3: PHÒNG ĐÀM THOẠI ĐANG MỞ */}
+          <div className="p-4 rounded-2xl bg-[#111319] border border-white/[0.06] flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Radio size={14} className="text-sky-400" />
+                <h3 className="text-xs font-bold text-[#F3F4F6] uppercase tracking-wider font-sans">
+                  Phòng Đàm Thoại ({publicRooms.length})
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleSwitchTab('rooms')}
+                className="text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
+              >
+                Xem tất cả
+              </button>
+            </div>
+
+            {publicRooms.length === 0 ? (
+              <div className="py-3 text-center flex flex-col items-center gap-2">
+                <p className="text-xs text-zinc-500">Chưa có phòng voice công khai nào.</p>
+                <button
+                  type="button"
+                  onClick={() => setIsCreateModalOpen(true)}
+                  className="px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-zinc-200 text-xs font-medium border border-white/10 transition-colors cursor-pointer"
+                >
+                  + Tạo phòng mới
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {publicRooms.slice(0, 3).map((room) => (
+                  <div
+                    key={room.id}
+                    onClick={() => onRoomCardClick(room)}
+                    className="p-2.5 rounded-xl bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.05] transition-all cursor-pointer flex items-center justify-between group"
+                  >
+                    <div className="min-w-0 flex-1 pr-2">
+                      <p className="text-xs font-semibold text-zinc-200 group-hover:text-white truncate">
+                        #{room.nameroom || room.roomName || room.name || `Phòng ${room.id}`}
+                      </p>
+                      <p className="text-[10.5px] text-zinc-500 font-mono">
+                        {room.soluong || 1} người đang nghe
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRoomCardClick(room);
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white text-zinc-300 hover:text-zinc-950 font-semibold text-[11px] transition-all cursor-pointer"
+                    >
+                      Vào
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </aside>
       </div>
 
       {/* NÚT TẠO BÀI VIẾT NỔI (+ ĐĂNG) TRÊN MOBILE */}
