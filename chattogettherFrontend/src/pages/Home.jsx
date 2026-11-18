@@ -3763,6 +3763,30 @@ const Home = ({ initialTab }) => {
 
               <button
                 type="button"
+                onClick={() => handleSwitchTab('trending')}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium shrink-0 transition-all cursor-pointer ${
+                  activeTab === 'trending'
+                    ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                    : 'bg-white/[0.04] text-zinc-400 hover:text-zinc-200 border border-white/[0.06]'
+                }`}
+              >
+                Thịnh hành
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSwitchTab('saved')}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium shrink-0 transition-all cursor-pointer ${
+                  activeTab === 'saved'
+                    ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                    : 'bg-white/[0.04] text-zinc-400 hover:text-zinc-200 border border-white/[0.06]'
+                }`}
+              >
+                Đã lưu
+              </button>
+
+              <button
+                type="button"
                 onClick={() => {
                   if (activeTab !== 'feed') handleSwitchTab('feed');
                   setQuickFilter('challenge');
@@ -9164,79 +9188,6 @@ const Home = ({ initialTab }) => {
           color: #09090b;
           border-color: #f4f4f5;
           font-weight: 600;
-        }
-
-        /* ================= MOBILE BOTTOM NAV ================= */
-        .mobile-bottom-nav {
-          display: none;
-          position: fixed;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          height: 60px;
-          background: rgba(9, 9, 11, 0.96);
-          backdrop-filter: blur(16px);
-          border-top: 1px solid rgba(255, 255, 255, 0.08);
-          grid-template-columns: repeat(5, 1fr);
-          align-items: center;
-          justify-items: center;
-          z-index: 80;
-          padding: 0 4px;
-        }
-        .b-nav-item {
-          width: 100%;
-          height: 100%;
-          background: transparent;
-          border: none;
-          color: #71717a;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 3px;
-          font-size: 10px;
-          font-weight: 500;
-          cursor: pointer;
-          padding: 4px 0;
-          transition: color 0.15s ease;
-          user-select: none;
-        }
-        .b-nav-item.active { 
-          color: #f4f4f5; 
-          font-weight: 600;
-        }
-        .b-nav-item span {
-          display: block;
-          max-width: 100%;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          line-height: 1.1;
-        }
-        .b-nav-cell {
-          width: 100%;
-          height: 100%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .b-nav-create-center {
-          width: 38px;
-          height: 38px;
-          border-radius: 50%;
-          background: #f4f4f5;
-          color: #09090b;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
-          margin: 0 auto;
-          cursor: pointer;
-          transition: transform 0.15s ease;
-          border: none;
-        }
-        .b-nav-create-center:active {
-          transform: scale(0.92);
         }
 
         /* ================= MODALS COMMON ================= */
