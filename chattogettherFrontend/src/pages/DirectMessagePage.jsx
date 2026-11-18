@@ -941,281 +941,281 @@ export const DirectMessagePage = () => {
         const connectHeaders = { userId: String(currentUserId) };
         if (token) connectHeaders['Authorization'] = `Bearer ${token}`;
 
-      // Xử lý thống nhất mọi tin nhắn 1-1 realtime (Loại bỏ triệt để tin nhắn trùng lặp)
-      const handleIncomingDirectMsg = (rawPayload) => {
-        try {
-          const newMsg = typeof rawPayload === 'string' ? JSON.parse(rawPayload) : rawPayload;
-          if (!newMsg) return;
+        // Xử lý thống nhất mọi tin nhắn 1-1 realtime (Loại bỏ triệt để tin nhắn trùng lặp)
+        const handleIncomingDirectMsg = (rawPayload) => {
+          try {
+            const newMsg = typeof rawPayload === 'string' ? JSON.parse(rawPayload) : rawPayload;
+            if (!newMsg) return;
 
-          // Xử lý tín hiệu đối phương đã đọc tin nhắn realtime (Cyber Read Receipt)
-          if (newMsg.type === 'MESSAGES_READ' || newMsg.type === 'READ_RECEIPT') {
-            const readerId = newMsg.readerId ? String(newMsg.readerId) : null;
-            const targetSenderId = newMsg.senderId ? String(newMsg.senderId) : null;
-            const myIdStr = String(currentUserId);
-            const activePartnerIdStr = activePartnerRef.current?.id ? String(activePartnerRef.current.id) : null;
+            // Xử lý tín hiệu đối phương đã đọc tin nhắn realtime (Cyber Read Receipt)
+            if (newMsg.type === 'MESSAGES_READ' || newMsg.type === 'READ_RECEIPT') {
+              const readerId = newMsg.readerId ? String(newMsg.readerId) : null;
+              const targetSenderId = newMsg.senderId ? String(newMsg.senderId) : null;
+              const myIdStr = String(currentUserId);
+              const activePartnerIdStr = activePartnerRef.current?.id ? String(activePartnerRef.current.id) : null;
 
-            // 1. NẾU READER LÀ CHÍNH MÌNH -> BỎ QUA NGAY LẬP TỨC!
-            // Mình vừa đọc tin nhắn của đối phương, tuyệt đối không được đánh dấu tin nhắn của mình là đối phương đã xem!
-            if (readerId && readerId === myIdStr) {
+              // 1. NẾU READER LÀ CHÍNH MÌNH -> BỎ QUA NGAY LẬP TỨC!
+              // Mình vừa đọc tin nhắn của đối phương, tuyệt đối không được đánh dấu tin nhắn của mình là đối phương đã xem!
+              if (readerId && readerId === myIdStr) {
+                return;
+              }
+
+              // 2. Chỉ chấp nhận sự kiện nếu người đọc chính là người bạn đang trò chuyện (activePartner)
+              if (readerId && activePartnerIdStr && readerId !== activePartnerIdStr) {
+                return;
+              }
+
+              // 3. Người gửi tin nhắn ban đầu (senderId) phải là chính mình
+              if (targetSenderId && targetSenderId !== myIdStr) {
+                return;
+              }
+
+              const upToId = newMsg.upToMessageId ? Number(newMsg.upToMessageId) : null;
+
+              setMessages(prev => prev.map(m => {
+                const isMyMsg = String(m.senderId || m.userId) === myIdStr;
+                if (isMyMsg) {
+                  // Nếu có mốc upToId, chỉ đánh dấu những tin nhắn có id <= upToId là đã xem
+                  // Những tin nhắn mới hơn (> upToId) BẮT BUỘC giữ nguyên chưa đọc!
+                  if (upToId && Number(m.id) > upToId) {
+                    return m;
+                  }
+                  return {
+                    ...m,
+                    isRead: true,
+                    timeRead: newMsg.timeRead || new Date().toISOString(),
+                    formattedTimeRead: newMsg.formattedTimeRead || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+                  };
+                }
+                return m;
+              }));
               return;
             }
 
-            // 2. Chỉ chấp nhận sự kiện nếu người đọc chính là người bạn đang trò chuyện (activePartner)
-            if (readerId && activePartnerIdStr && readerId !== activePartnerIdStr) {
-              return;
+            // Chống trùng lặp sớm: Nếu ID tin nhắn này đã được render rồi thì bỏ qua ngay lập tức
+            if (newMsg.id) {
+              const msgIdStr = String(newMsg.id);
+              if (seenMsgIdsRef.current.has(msgIdStr)) return;
+              seenMsgIdsRef.current.add(msgIdStr);
+              if (seenMsgIdsRef.current.size > 500) {
+                const firstVal = seenMsgIdsRef.current.values().next().value;
+                seenMsgIdsRef.current.delete(firstVal);
+              }
             }
 
-            // 3. Người gửi tin nhắn ban đầu (senderId) phải là chính mình
-            if (targetSenderId && targetSenderId !== myIdStr) {
-              return;
+            const senderId = newMsg.senderId || newMsg.userId;
+            const isFromMe = String(senderId) === String(currentUserId);
+            const currentTargetId = urlTargetUserId ? String(urlTargetUserId) : (activePartnerRef.current?.id ? String(activePartnerRef.current.id) : null);
+            const currentRoomId = activeRoomIdRef.current ? String(activeRoomIdRef.current) : null;
+            const msgRoomId = (newMsg.user_room || newMsg.roomId) ? String(newMsg.user_room || newMsg.roomId) : null;
+
+            // Kiểm tra xem tin nhắn này có thuộc về cuộc trò chuyện đang mở trước mắt người dùng hay không
+            const isCurrentChat = Boolean(
+              (currentTargetId && !isFromMe && String(currentTargetId) === String(senderId)) ||
+              (currentRoomId && msgRoomId && currentRoomId === msgRoomId) ||
+              (isFromMe && currentTargetId && (String(newMsg.targetUserId || '') === String(currentTargetId) || (msgRoomId && currentRoomId === msgRoomId)))
+            );
+
+            // Ghi nhận sender đang online tức thì
+            if (senderId && markUserActive) {
+              markUserActive(senderId);
             }
 
-            const upToId = newMsg.upToMessageId ? Number(newMsg.upToMessageId) : null;
-
-            setMessages(prev => prev.map(m => {
-              const isMyMsg = String(m.senderId || m.userId) === myIdStr;
-              if (isMyMsg) {
-                // Nếu có mốc upToId, chỉ đánh dấu những tin nhắn có id <= upToId là đã xem
-                // Những tin nhắn mới hơn (> upToId) BẮT BUỘC giữ nguyên chưa đọc!
-                if (upToId && Number(m.id) > upToId) {
-                  return m;
-                }
-                return {
-                  ...m,
-                  isRead: true,
-                  timeRead: newMsg.timeRead || new Date().toISOString(),
-                  formattedTimeRead: newMsg.formattedTimeRead || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-                };
-              }
-              return m;
-            }));
-            return;
-          }
-
-          // Chống trùng lặp sớm: Nếu ID tin nhắn này đã được render rồi thì bỏ qua ngay lập tức
-          if (newMsg.id) {
-            const msgIdStr = String(newMsg.id);
-            if (seenMsgIdsRef.current.has(msgIdStr)) return;
-            seenMsgIdsRef.current.add(msgIdStr);
-            if (seenMsgIdsRef.current.size > 500) {
-              const firstVal = seenMsgIdsRef.current.values().next().value;
-              seenMsgIdsRef.current.delete(firstVal);
+            // 1. Tự động báo đã đọc nếu đang mở cuộc trò chuyện này, đối phương nhắn tới và tab đang active
+            if (isCurrentChat && !isFromMe && !document.hidden) {
+              axiosClient.post('/message/read', {
+                roomId: activeRoomIdRef.current || undefined,
+                targetUserId: senderId,
+                upToMessageId: newMsg.id
+              }).catch(() => { });
             }
-          }
 
-          const senderId = newMsg.senderId || newMsg.userId;
-          const isFromMe = String(senderId) === String(currentUserId);
-          const currentTargetId = urlTargetUserId ? String(urlTargetUserId) : (activePartnerRef.current?.id ? String(activePartnerRef.current.id) : null);
-          const currentRoomId = activeRoomIdRef.current ? String(activeRoomIdRef.current) : null;
-          const msgRoomId = (newMsg.user_room || newMsg.roomId) ? String(newMsg.user_room || newMsg.roomId) : null;
+            // 2. Cập nhật tin nhắn vào khung chat nếu đang mở đúng cuộc trò chuyện hoặc do chính mình gửi
+            if (isCurrentChat || isFromMe) {
+              setMessages(prev => {
+                // Chống trùng lặp 1: Trùng ID hệ thống
+                if (newMsg.id && prev.some(m => String(m.id) === String(newMsg.id))) {
+                  return prev;
+                }
 
-          // Kiểm tra xem tin nhắn này có thuộc về cuộc trò chuyện đang mở trước mắt người dùng hay không
-          const isCurrentChat = Boolean(
-            (currentTargetId && !isFromMe && String(currentTargetId) === String(senderId)) ||
-            (currentRoomId && msgRoomId && currentRoomId === msgRoomId) ||
-            (isFromMe && currentTargetId && (String(newMsg.targetUserId || '') === String(currentTargetId) || (msgRoomId && currentRoomId === msgRoomId)))
-          );
+                // Đồng bộ và thay thế tin nhắn đang gửi (Optimistic Message)
+                const pendingIdx = prev.findIndex(m => m.pending && (
+                  (newMsg.clientTempId && (String(m.clientTempId) === String(newMsg.clientTempId) || String(m.id) === String(newMsg.clientTempId))) ||
+                  (m.message && newMsg.message && m.message === newMsg.message) ||
+                  (m.mediaType && newMsg.message && newMsg.message.includes(`[MEDIA:${m.mediaType}`))
+                ));
 
-          // Ghi nhận sender đang online tức thì
-          if (senderId && markUserActive) {
-            markUserActive(senderId);
-          }
+                let nextList;
+                if (pendingIdx !== -1) {
+                  nextList = [...prev];
+                  nextList[pendingIdx] = { ...newMsg, pending: false };
+                } else {
+                  // Chống trùng lặp nội dung từ cùng người gửi trong vòng 5 giây
+                  const isDuplicate = prev.some(m =>
+                    !m.pending &&
+                    String(m.senderId || m.userId) === String(senderId) &&
+                    m.message === newMsg.message &&
+                    Math.abs(new Date(m.timeSend || 0).getTime() - new Date(newMsg.timeSend || 0).getTime()) < 5000
+                  );
+                  if (isDuplicate) return prev;
+                  nextList = deduplicateCallMessages([...prev, newMsg]);
+                }
 
-          // 1. Tự động báo đã đọc nếu đang mở cuộc trò chuyện này, đối phương nhắn tới và tab đang active
-          if (isCurrentChat && !isFromMe && !document.hidden) {
-            axiosClient.post('/message/read', {
-              roomId: activeRoomIdRef.current || undefined,
-              targetUserId: senderId,
-              upToMessageId: newMsg.id
-            }).catch(() => { });
-          }
+                if (activeRoomIdRef.current) messagesCacheRef.current.set(String(activeRoomIdRef.current), nextList);
+                if (activePartnerRef.current?.id) messagesCacheRef.current.set(String(activePartnerRef.current.id), nextList);
+                try {
+                  if (activePartnerRef.current?.id) {
+                    localStorage.setItem(`talovin_dm_msgs_${userPrefix}${activePartnerRef.current.id}`, JSON.stringify(nextList.slice(-50)));
+                    localStorage.setItem(`talovin_dm_msgs_${activePartnerRef.current.id}`, JSON.stringify(nextList.slice(-50)));
+                  }
+                  if (activeRoomIdRef.current) {
+                    localStorage.setItem(`talovin_dm_msgs_${userPrefix}${activeRoomIdRef.current}`, JSON.stringify(nextList.slice(-50)));
+                    localStorage.setItem(`talovin_dm_msgs_${activeRoomIdRef.current}`, JSON.stringify(nextList.slice(-50)));
+                  }
+                } catch (_) { }
+                return nextList;
+              });
 
-          // 2. Cập nhật tin nhắn vào khung chat nếu đang mở đúng cuộc trò chuyện hoặc do chính mình gửi
-          if (isCurrentChat || isFromMe) {
-            setMessages(prev => {
-              // Chống trùng lặp 1: Trùng ID hệ thống
-              if (newMsg.id && prev.some(m => String(m.id) === String(newMsg.id))) {
-                return prev;
+              if (!isFromMe) {
+                playMessageIncoming();
               }
 
-              // Đồng bộ và thay thế tin nhắn đang gửi (Optimistic Message)
-              const pendingIdx = prev.findIndex(m => m.pending && (
-                (newMsg.clientTempId && (String(m.clientTempId) === String(newMsg.clientTempId) || String(m.id) === String(newMsg.clientTempId))) ||
-                (m.message && newMsg.message && m.message === newMsg.message) ||
-                (m.mediaType && newMsg.message && newMsg.message.includes(`[MEDIA:${m.mediaType}`))
-              ));
+              setTimeout(() => scrollToBottom(true), 60);
+            }
 
-              let nextList;
-              if (pendingIdx !== -1) {
-                nextList = [...prev];
-                nextList[pendingIdx] = { ...newMsg, pending: false };
-              } else {
-                // Chống trùng lặp nội dung từ cùng người gửi trong vòng 5 giây
-                const isDuplicate = prev.some(m =>
-                  !m.pending &&
-                  String(m.senderId || m.userId) === String(senderId) &&
-                  m.message === newMsg.message &&
-                  Math.abs(new Date(m.timeSend || 0).getTime() - new Date(newMsg.timeSend || 0).getTime()) < 5000
-                );
-                if (isDuplicate) return prev;
-                nextList = deduplicateCallMessages([...prev, newMsg]);
-              }
-
-              if (activeRoomIdRef.current) messagesCacheRef.current.set(String(activeRoomIdRef.current), nextList);
-              if (activePartnerRef.current?.id) messagesCacheRef.current.set(String(activePartnerRef.current.id), nextList);
-              try {
-                if (activePartnerRef.current?.id) {
-                  localStorage.setItem(`talovin_dm_msgs_${userPrefix}${activePartnerRef.current.id}`, JSON.stringify(nextList.slice(-50)));
-                  localStorage.setItem(`talovin_dm_msgs_${activePartnerRef.current.id}`, JSON.stringify(nextList.slice(-50)));
-                }
-                if (activeRoomIdRef.current) {
-                  localStorage.setItem(`talovin_dm_msgs_${userPrefix}${activeRoomIdRef.current}`, JSON.stringify(nextList.slice(-50)));
-                  localStorage.setItem(`talovin_dm_msgs_${activeRoomIdRef.current}`, JSON.stringify(nextList.slice(-50)));
-                }
-              } catch (_) { }
-              return nextList;
-            });
-
-            if (!isFromMe) {
+            // 3. Nếu là tin nhắn từ bạn bè khác (hoặc không phải khung chat hiện tại)
+            if (!isFromMe && !isCurrentChat && senderId) {
               playMessageIncoming();
-            }
 
-            setTimeout(() => scrollToBottom(true), 60);
-          }
+              setUnreadMap(prev => {
+                const sid = String(senderId);
+                const next = { ...prev, [sid]: (Number(prev[sid]) || 0) + 1 };
+                try {
+                  localStorage.setItem(`talovin_dm_unread_${userPrefix}`, JSON.stringify(next));
+                  localStorage.setItem('talovin_dm_unread', JSON.stringify(next));
+                  window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: next }));
+                } catch (_) { }
+                return next;
+              });
 
-          // 3. Nếu là tin nhắn từ bạn bè khác (hoặc không phải khung chat hiện tại)
-          if (!isFromMe && !isCurrentChat && senderId) {
-            playMessageIncoming();
-
-            setUnreadMap(prev => {
-              const sid = String(senderId);
-              const next = { ...prev, [sid]: (Number(prev[sid]) || 0) + 1 };
-              try {
-                localStorage.setItem(`talovin_dm_unread_${userPrefix}`, JSON.stringify(next));
-                localStorage.setItem('talovin_dm_unread', JSON.stringify(next));
-                window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: next }));
-              } catch (_) { }
-              return next;
-            });
-
-            if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted' && (document.hidden || !isCurrentChat)) {
-              try {
-                new Notification(newMsg.nickname || newMsg.senderUsername || 'Tin nhắn mới', {
-                  body: newMsg.message || (newMsg.mediaType === 'IMAGE' ? '[Hình ảnh]' : '[Tệp tin]'),
-                  icon: newMsg.senderAvatar || newMsg.avatar || '/favicon.ico',
-                  tag: `dm-${senderId}`
-                });
-              } catch (_) { }
-            }
-          }
-
-          // 4. Luôn cập nhật preview tin nhắn cuối cùng & đưa bạn bè này lên ĐẦU DANH SÁCH tức thì
-          const targetFriendIdStr = (isFromMe ? (currentTargetId || newMsg.targetUserId || newMsg.partnerId) : senderId)?.toString();
-          if (targetFriendIdStr) {
-            const nowTime = newMsg.timeSend || new Date().toISOString();
-            const nowFmt = newMsg.formattedTime || new Date(nowTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-
-            setFriends(prev => {
-              const targetFriend = prev.find(f => f.id?.toString() === targetFriendIdStr);
-              const updatedFriend = targetFriend ? {
-                ...targetFriend,
-                lastMessage: newMsg.message || (newMsg.mediaType === 'IMAGE' ? '[Hình ảnh]' : '[Video]'),
-                lastMessageTime: nowTime,
-                lastMessageFormattedTime: nowFmt,
-                hasUnread: !isFromMe && !isCurrentChat
-              } : null;
-
-              const rest = prev.filter(f => f.id?.toString() !== targetFriendIdStr);
-              const nextList = updatedFriend ? [updatedFriend, ...rest] : prev;
-              const sorted = sortConversationsList(nextList);
-              try {
-                localStorage.setItem(`talovin_dm_conversations_cache_${userPrefix}`, JSON.stringify(sorted));
-                localStorage.setItem('talovin_dm_conversations_cache', JSON.stringify(sorted));
-                localStorage.setItem(`talovin_dm_friends_cache_${userPrefix}`, JSON.stringify(sorted));
-                localStorage.setItem('talovin_dm_friends_cache', JSON.stringify(sorted));
-              } catch (_) { }
-              return sorted;
-            });
-          }
-        } catch (e) {
-          console.error('Lỗi nhận tin nhắn 1-1 realtime:', e);
-        }
-      };
-
-      handleIncomingDirectMsgRef.current = handleIncomingDirectMsg;
-
-      client.connect(connectHeaders, () => {
-        // 1. Nhận tin nhắn 1-1 trực tiếp qua /topic/messages/{currentUserId}
-        client.subscribe(`/topic/messages/${currentUserId}`, (frame) => {
-          handleIncomingDirectMsg(frame.body);
-        });
-
-        // 2. Nhận alert tin nhắn /topic/room-alerts/{currentUserId} (Chỉ cập nhật badge unread ngoài lề, TUYỆT ĐỐI không chèn vào messages)
-        client.subscribe(`/topic/room-alerts/${currentUserId}`, (frame) => {
-          try {
-            const alert = JSON.parse(frame.body);
-            if (alert.isDirect && alert.senderId) {
-              const sid = String(alert.senderId);
-              if (isSelfUser(sid)) return;
-              const currentActivePartnerId = activePartnerRef.current?.id?.toString();
-              const isCurrent = currentActivePartnerId && String(currentActivePartnerId) === sid;
-              if (!isCurrent) {
-                setUnreadMap(prev => {
-                  const next = { ...prev, [sid]: (Number(prev[sid]) || 0) + 1 };
-                  try {
-                    localStorage.setItem('talovin_dm_unread', JSON.stringify(next));
-                    window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: next }));
-                  } catch (_) { }
-                  return next;
-                });
+              if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted' && (document.hidden || !isCurrentChat)) {
+                try {
+                  new Notification(newMsg.nickname || newMsg.senderUsername || 'Tin nhắn mới', {
+                    body: newMsg.message || (newMsg.mediaType === 'IMAGE' ? '[Hình ảnh]' : '[Tệp tin]'),
+                    icon: newMsg.senderAvatar || newMsg.avatar || '/favicon.ico',
+                    tag: `dm-${senderId}`
+                  });
+                } catch (_) { }
               }
             }
-          } catch (_) { }
-        });
 
-        // 3. Nhận tin nhắn riêng tư toàn cục fallback
-        client.subscribe(`/user/queue/direct-messages`, (message) => {
-          handleIncomingDirectMsg(message.body);
-        });
+            // 4. Luôn cập nhật preview tin nhắn cuối cùng & đưa bạn bè này lên ĐẦU DANH SÁCH tức thì
+            const targetFriendIdStr = (isFromMe ? (currentTargetId || newMsg.targetUserId || newMsg.partnerId) : senderId)?.toString();
+            if (targetFriendIdStr) {
+              const nowTime = newMsg.timeSend || new Date().toISOString();
+              const nowFmt = newMsg.formattedTime || new Date(nowTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 
-        // 4. Đăng ký phòng DM đang mở nếu có (Duy nhất 1 subscription)
-        if (activeRoomIdRef.current) {
-          try {
-            if (roomSubRef.current) {
-              try { roomSubRef.current.unsubscribe(); } catch (_) { }
+              setFriends(prev => {
+                const targetFriend = prev.find(f => f.id?.toString() === targetFriendIdStr);
+                const updatedFriend = targetFriend ? {
+                  ...targetFriend,
+                  lastMessage: newMsg.message || (newMsg.mediaType === 'IMAGE' ? '[Hình ảnh]' : '[Video]'),
+                  lastMessageTime: nowTime,
+                  lastMessageFormattedTime: nowFmt,
+                  hasUnread: !isFromMe && !isCurrentChat
+                } : null;
+
+                const rest = prev.filter(f => f.id?.toString() !== targetFriendIdStr);
+                const nextList = updatedFriend ? [updatedFriend, ...rest] : prev;
+                const sorted = sortConversationsList(nextList);
+                try {
+                  localStorage.setItem(`talovin_dm_conversations_cache_${userPrefix}`, JSON.stringify(sorted));
+                  localStorage.setItem('talovin_dm_conversations_cache', JSON.stringify(sorted));
+                  localStorage.setItem(`talovin_dm_friends_cache_${userPrefix}`, JSON.stringify(sorted));
+                  localStorage.setItem('talovin_dm_friends_cache', JSON.stringify(sorted));
+                } catch (_) { }
+                return sorted;
+              });
             }
-            roomSubRef.current = client.subscribe(`/topic/room/${activeRoomIdRef.current}`, (message) => {
-              handleIncomingDirectMsg(message.body);
-            });
-          } catch (_) { }
-        }
-      }, (err) => {
-        console.warn("DirectMessagePage socket mất kết nối, tự động kết nối lại sau 2.5s...", err);
+          } catch (e) {
+            console.error('Lỗi nhận tin nhắn 1-1 realtime:', e);
+          }
+        };
+
+        handleIncomingDirectMsgRef.current = handleIncomingDirectMsg;
+
+        client.connect(connectHeaders, () => {
+          // 1. Nhận tin nhắn 1-1 trực tiếp qua /topic/messages/{currentUserId}
+          client.subscribe(`/topic/messages/${currentUserId}`, (frame) => {
+            handleIncomingDirectMsg(frame.body);
+          });
+
+          // 2. Nhận alert tin nhắn /topic/room-alerts/{currentUserId} (Chỉ cập nhật badge unread ngoài lề, TUYỆT ĐỐI không chèn vào messages)
+          client.subscribe(`/topic/room-alerts/${currentUserId}`, (frame) => {
+            try {
+              const alert = JSON.parse(frame.body);
+              if (alert.isDirect && alert.senderId) {
+                const sid = String(alert.senderId);
+                if (isSelfUser(sid)) return;
+                const currentActivePartnerId = activePartnerRef.current?.id?.toString();
+                const isCurrent = currentActivePartnerId && String(currentActivePartnerId) === sid;
+                if (!isCurrent) {
+                  setUnreadMap(prev => {
+                    const next = { ...prev, [sid]: (Number(prev[sid]) || 0) + 1 };
+                    try {
+                      localStorage.setItem('talovin_dm_unread', JSON.stringify(next));
+                      window.dispatchEvent(new CustomEvent('talovin_unread_change', { detail: next }));
+                    } catch (_) { }
+                    return next;
+                  });
+                }
+              }
+            } catch (_) { }
+          });
+
+          // 3. Nhận tin nhắn riêng tư toàn cục fallback
+          client.subscribe(`/user/queue/direct-messages`, (message) => {
+            handleIncomingDirectMsg(message.body);
+          });
+
+          // 4. Đăng ký phòng DM đang mở nếu có (Duy nhất 1 subscription)
+          if (activeRoomIdRef.current) {
+            try {
+              if (roomSubRef.current) {
+                try { roomSubRef.current.unsubscribe(); } catch (_) { }
+              }
+              roomSubRef.current = client.subscribe(`/topic/room/${activeRoomIdRef.current}`, (message) => {
+                handleIncomingDirectMsg(message.body);
+              });
+            } catch (_) { }
+          }
+        }, (err) => {
+          console.warn("DirectMessagePage socket mất kết nối, tự động kết nối lại sau 2.5s...", err);
+          if (isMounted) {
+            reconnectTimer = setTimeout(connectDirectSocket, 2500);
+          }
+        });
+      } catch (e) {
+        console.error('Lỗi kết nối WebSocket tin nhắn riêng:', e);
         if (isMounted) {
           reconnectTimer = setTimeout(connectDirectSocket, 2500);
         }
-      });
-    } catch (e) {
-      console.error('Lỗi kết nối WebSocket tin nhắn riêng:', e);
-      if (isMounted) {
-        reconnectTimer = setTimeout(connectDirectSocket, 2500);
       }
-    }
-  };
+    };
 
-  connectDirectSocket();
+    connectDirectSocket();
 
-  return () => {
-    isMounted = false;
-    if (reconnectTimer) clearTimeout(reconnectTimer);
-    if (roomSubRef.current) {
-      try { roomSubRef.current.unsubscribe(); } catch (_) { }
-      roomSubRef.current = null;
-    }
-    if (client && client.connected) {
-      try { client.disconnect(); } catch (_) { }
-    }
-  };
+    return () => {
+      isMounted = false;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (roomSubRef.current) {
+        try { roomSubRef.current.unsubscribe(); } catch (_) { }
+        roomSubRef.current = null;
+      }
+      if (client && client.connected) {
+        try { client.disconnect(); } catch (_) { }
+      }
+    };
   }, [currentUserId, scrollToBottom, markUserActive]);
 
   // Đăng ký lại topic room khi chuyển sang phòng khác (Đảm bảo duy nhất 1 subscription qua roomSubRef)
@@ -1758,9 +1758,9 @@ export const DirectMessagePage = () => {
       <aside className="w-[220px] min-w-[220px] h-[100dvh] sticky top-0 hidden lg:flex flex-col justify-between py-5 px-3 z-30 select-none border-r border-white/[0.07] bg-[#090A0F] shrink-0">
         <div>
           {/* Logo Talovin ở trên cùng */}
-          <div 
+          <div
             className="cursor-pointer hover:opacity-90 active:scale-95 transition-all px-2 mb-6"
-            onClick={() => navigate('/')} 
+            onClick={() => navigate('/')}
             title="Talovin - Về trang chủ"
           >
             <TalovinLogo size={28} showText={true} />
@@ -1859,869 +1859,868 @@ export const DirectMessagePage = () => {
         <div className="flex-1 flex overflow-hidden">
           {/* CỘT TRÁI: DANH SÁCH BẠN BÈ / CUỘC TRÒ CHUYỆN */}
           <aside className={`w-full md:w-80 lg:w-[320px] xl:w-[360px] flex flex-col border-r border-white/[0.07] bg-[#111319] shrink-0 transition-all duration-200 ${urlTargetUserId ? 'hidden md:flex' : 'flex animate-in fade-in duration-150'}`}>
-          {/* Ô tìm kiếm bạn bè & Nút mở khóa đoạn chat ẩn */}
-          <div className="p-3 border-b border-zinc-800/60 flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Tìm kiếm hoặc gõ PIN 6 số..."
-                className="w-full pl-9 pr-4 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-700 transition-colors font-sans"
-              />
+            {/* Ô tìm kiếm bạn bè & Nút mở khóa đoạn chat ẩn */}
+            <div className="p-3 border-b border-zinc-800/60 flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Tìm kiếm hoặc gõ PIN 6 số..."
+                  className="w-full pl-9 pr-4 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-700 transition-colors font-sans"
+                />
+              </div>
+
+              {/* Nút Khóa / Mở khóa đoạn chat ẩn */}
+              {!isUnlocked ? (
+                <button
+                  type="button"
+                  onClick={handleOpenUnlockModal}
+                  className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-400 hover:text-amber-400 hover:border-amber-500/40 transition-all flex items-center gap-1 shrink-0"
+                  title={hasServerPin ? "Mở khóa đoạn chat ẩn (Mã PIN 6 số)" : "Cài đặt mã PIN 6 số cho đoạn chat ẩn"}
+                >
+                  <Lock size={15} />
+                  {hiddenPartnerIds.size > 0 && (
+                    <span className="text-[10px] font-mono px-1 rounded-full bg-zinc-800 text-amber-400 font-bold">
+                      {hiddenPartnerIds.size}
+                    </span>
+                  )}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsUnlocked(false);
+                    toast("🔒 Đã khóa lại các cuộc trò chuyện ẩn");
+                  }}
+                  className="p-2 rounded-xl bg-emerald-950/80 border border-emerald-500/50 text-emerald-400 hover:bg-emerald-900/80 transition-all flex items-center gap-1 shrink-0"
+                  title="Đang hiện cuộc trò chuyện ẩn - Bấm để khóa lại"
+                >
+                  <Unlock size={15} />
+                  <span className="text-[10px] font-semibold hidden sm:inline">Khóa</span>
+                </button>
+              )}
             </div>
 
-            {/* Nút Khóa / Mở khóa đoạn chat ẩn */}
-            {!isUnlocked ? (
-              <button
-                type="button"
-                onClick={handleOpenUnlockModal}
-                className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-400 hover:text-amber-400 hover:border-amber-500/40 transition-all flex items-center gap-1 shrink-0"
-                title={hasServerPin ? "Mở khóa đoạn chat ẩn (Mã PIN 6 số)" : "Cài đặt mã PIN 6 số cho đoạn chat ẩn"}
-              >
-                <Lock size={15} />
-                {hiddenPartnerIds.size > 0 && (
-                  <span className="text-[10px] font-mono px-1 rounded-full bg-zinc-800 text-amber-400 font-bold">
-                    {hiddenPartnerIds.size}
-                  </span>
-                )}
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  setIsUnlocked(false);
-                  toast("🔒 Đã khóa lại các cuộc trò chuyện ẩn");
-                }}
-                className="p-2 rounded-xl bg-emerald-950/80 border border-emerald-500/50 text-emerald-400 hover:bg-emerald-900/80 transition-all flex items-center gap-1 shrink-0"
-                title="Đang hiện cuộc trò chuyện ẩn - Bấm để khóa lại"
-              >
-                <Unlock size={15} />
-                <span className="text-[10px] font-semibold hidden sm:inline">Khóa</span>
-              </button>
-            )}
-          </div>
+            <div className="px-3 pt-3 pb-1 text-[11px] font-bold text-zinc-500 uppercase tracking-wider flex items-center justify-between">
+              <span>Cuộc trò chuyện gần đây ({filteredConversations.length})</span>
+              {isUnlocked && (
+                <span className="text-[10px] text-emerald-400 font-mono font-medium lowercase">
+                  chế độ đã mở khóa
+                </span>
+              )}
+            </div>
 
-          <div className="px-3 pt-3 pb-1 text-[11px] font-bold text-zinc-500 uppercase tracking-wider flex items-center justify-between">
-            <span>Cuộc trò chuyện gần đây ({filteredConversations.length})</span>
-            {isUnlocked && (
-              <span className="text-[10px] text-emerald-400 font-mono font-medium lowercase">
-                chế độ đã mở khóa
-              </span>
-            )}
-          </div>
-
-          {/* Danh sách người dùng */}
-          <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
-            {loadingFriends && friends.length === 0 ? (
-              <div className="p-1 space-y-2 animate-pulse">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className="flex items-center gap-3 p-3 rounded-2xl bg-zinc-900/40 border border-zinc-850/50">
-                    <div className="w-10.5 h-10.5 rounded-full bg-zinc-800/80 shrink-0" />
-                    <div className="flex-1 min-w-0 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="h-3 w-28 bg-zinc-800/80 rounded" />
-                        <div className="h-2 w-10 bg-zinc-800/50 rounded" />
+            {/* Danh sách người dùng */}
+            <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+              {loadingFriends && friends.length === 0 ? (
+                <div className="p-1 space-y-2 animate-pulse">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <div key={i} className="flex items-center gap-3 p-3 rounded-2xl bg-zinc-900/40 border border-zinc-850/50">
+                      <div className="w-10.5 h-10.5 rounded-full bg-zinc-800/80 shrink-0" />
+                      <div className="flex-1 min-w-0 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="h-3 w-28 bg-zinc-800/80 rounded" />
+                          <div className="h-2 w-10 bg-zinc-800/50 rounded" />
+                        </div>
+                        <div className="h-2.5 w-36 bg-zinc-800/50 rounded" />
                       </div>
-                      <div className="h-2.5 w-36 bg-zinc-800/50 rounded" />
                     </div>
-                  </div>
-                ))}
-              </div>
-            ) : filteredConversations.length === 0 ? (
-              <div className="py-12 px-4 text-center text-zinc-500 text-xs">
-                Chưa có cuộc trò chuyện nào. Hãy chọn bạn bè để bắt đầu nhắn tin!
-              </div>
-            ) : (
-              filteredConversations.map((partner) => {
-                const partnerIdStr = partner.id?.toString();
-                const isSelected = activePartner?.id?.toString() === partnerIdStr;
-                const unreadCount = Number(unreadMap[partner.id]) || Number(unreadMap[partnerIdStr]) || (Number(partner.unreadCount) && !isSelected ? Number(partner.unreadCount) : 0);
-                const isUnread = !isSelected && unreadCount > 0;
-                const isThisHidden = hiddenPartnerIds.has(String(partner.id)) || partner.isHidden;
+                  ))}
+                </div>
+              ) : filteredConversations.length === 0 ? (
+                <div className="py-12 px-4 text-center text-zinc-500 text-xs">
+                  Chưa có cuộc trò chuyện nào. Hãy chọn bạn bè để bắt đầu nhắn tin!
+                </div>
+              ) : (
+                filteredConversations.map((partner) => {
+                  const partnerIdStr = partner.id?.toString();
+                  const isSelected = activePartner?.id?.toString() === partnerIdStr;
+                  const unreadCount = Number(unreadMap[partner.id]) || Number(unreadMap[partnerIdStr]) || (Number(partner.unreadCount) && !isSelected ? Number(partner.unreadCount) : 0);
+                  const isUnread = !isSelected && unreadCount > 0;
+                  const isThisHidden = hiddenPartnerIds.has(String(partner.id)) || partner.isHidden;
 
-                // Trạng thái online: Nhanh nhạy & chuẩn xác tức thì từ 0ms (kết hợp cache/server fallback)
-                const isPartnerOnline = isUserOnline(partner.id, partner.isOnline);
+                  // Trạng thái online: Nhanh nhạy & chuẩn xác tức thì từ 0ms (kết hợp cache/server fallback)
+                  const isPartnerOnline = isUserOnline(partner.id, partner.isOnline);
 
-                return (
-                  <div
-                    key={partner.id}
-                    onClick={() => {
-                      lastTargetIdRef.current = String(partner.id);
-                      navigate(`/messages/${partner.id}`, { replace: true });
-                      openDirectChat(partner.id, partner);
-                    }}
-                    className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all duration-200 ease-out active:scale-[0.98] relative group ${activeMenuPartnerId === partner.id ? 'z-30' : 'z-0'} ${isSelected
-                      ? 'bg-zinc-800/90 border border-zinc-700/90 text-white shadow-sm'
-                      : isUnread
-                        ? 'bg-zinc-900/95 border border-emerald-500/50 text-white shadow-md'
-                        : 'hover:bg-zinc-900/60 text-zinc-300 border border-transparent'
-                      }`}
-                  >
-                    <div className="relative shrink-0">
-                      <UserAvatar avatarUrl={partner.avatar} username={partner.account} name={partner.nickname || partner.account || 'Người dùng'} size={42} />
-                      <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-zinc-950 ${isPartnerOnline ? 'bg-emerald-500 ring-2 ring-emerald-500/20' : 'bg-zinc-600'
-                        }`} />
-                    </div>
+                  return (
+                    <div
+                      key={partner.id}
+                      onClick={() => {
+                        lastTargetIdRef.current = String(partner.id);
+                        navigate(`/messages/${partner.id}`, { replace: true });
+                        openDirectChat(partner.id, partner);
+                      }}
+                      className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all duration-200 ease-out active:scale-[0.98] relative group ${activeMenuPartnerId === partner.id ? 'z-30' : 'z-0'} ${isSelected
+                        ? 'bg-zinc-800/90 border border-zinc-700/90 text-white shadow-sm'
+                        : isUnread
+                          ? 'bg-zinc-900/95 border border-emerald-500/50 text-white shadow-md'
+                          : 'hover:bg-zinc-900/60 text-zinc-300 border border-transparent'
+                        }`}
+                    >
+                      <div className="relative shrink-0">
+                        <UserAvatar avatarUrl={partner.avatar} username={partner.account} name={partner.nickname || partner.account || 'Người dùng'} size={42} />
+                        <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-zinc-950 ${isPartnerOnline ? 'bg-emerald-500 ring-2 ring-emerald-500/20' : 'bg-zinc-600'
+                          }`} />
+                      </div>
 
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between mb-0.5">
-                        <div className="flex items-center gap-1 min-w-0">
-                          <h4 className={`text-xs truncate ${isUnread ? 'font-bold text-white' : 'font-semibold text-zinc-200'}`}>
-                            {partner.nickname || partner.account || 'Người dùng'}
-                          </h4>
-                          {isThisHidden && (
-                            <span className="shrink-0 text-amber-400" title="Đoạn chat đã ẩn">
-                              <Lock size={11} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between mb-0.5">
+                          <div className="flex items-center gap-1 min-w-0">
+                            <h4 className={`text-xs truncate ${isUnread ? 'font-bold text-white' : 'font-semibold text-zinc-200'}`}>
+                              {partner.nickname || partner.account || 'Người dùng'}
+                            </h4>
+                            {isThisHidden && (
+                              <span className="shrink-0 text-amber-400" title="Đoạn chat đã ẩn">
+                                <Lock size={11} />
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1 shrink-0 ml-1">
+                            <span className={`text-[10px] font-mono ${isUnread ? 'text-emerald-400 font-semibold' : 'text-zinc-500'}`}>
+                              {partner.lastMessageFormattedTime || (partner.lastMessageTime ? new Date(partner.lastMessageTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '')}
+                            </span>
+
+                            {/* Menu 3 chấm trên từng cuộc trò chuyện */}
+                            <div className="relative" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveMenuPartnerId(activeMenuPartnerId === partner.id ? null : partner.id);
+                                }}
+                                className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors opacity-80 group-hover:opacity-100 cursor-pointer"
+                                title="Tùy chọn cuộc trò chuyện"
+                              >
+                                <MoreVertical size={13} />
+                              </button>
+
+                              {activeMenuPartnerId === partner.id && (
+                                <>
+                                  <div
+                                    className="fixed inset-0 z-40"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActiveMenuPartnerId(null);
+                                    }}
+                                  />
+                                  <div className="absolute right-0 top-full mt-1.5 w-48 bg-zinc-900/95 backdrop-blur-xl border border-zinc-800 rounded-xl shadow-2xl py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 ring-1 ring-white/5">
+                                    {!isThisHidden ? (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleInitiateHide(partner);
+                                        }}
+                                        className="w-full px-3 py-2 text-left text-xs text-zinc-300 hover:text-rose-400 hover:bg-zinc-800/80 flex items-center gap-2.5 transition-colors cursor-pointer"
+                                      >
+                                        <EyeOff size={14} className="text-zinc-400 shrink-0" />
+                                        <span className="font-medium">Ẩn cuộc trò chuyện</span>
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleInitiateUnhide(partner);
+                                        }}
+                                        className="w-full px-3 py-2 text-left text-xs text-zinc-300 hover:text-emerald-400 hover:bg-zinc-800/80 flex items-center gap-2.5 transition-colors cursor-pointer"
+                                      >
+                                        <Eye size={14} className="text-zinc-400 shrink-0" />
+                                        <span className="font-medium">Bỏ ẩn cuộc trò chuyện</span>
+                                      </button>
+                                    )}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-1">
+                          <p className={`text-[11px] truncate ${isUnread ? 'font-medium text-emerald-400' : 'text-zinc-400'}`}>
+                            {formatPreviewText(partner.lastMessage) || (isPartnerOnline ? 'Đang trực tuyến' : 'Ngoại tuyến')}
+                          </p>
+
+                          {/* Badge số lượng tin nhắn chưa đọc */}
+                          {isUnread && (
+                            <span className="shrink-0 px-1.5 py-0.5 bg-rose-500 text-white font-bold text-[10px] rounded-full min-w-[18px] text-center leading-none shadow-sm animate-pulse">
+                              {unreadCount > 99 ? '99+' : unreadCount}
                             </span>
                           )}
                         </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
 
-                        <div className="flex items-center gap-1 shrink-0 ml-1">
-                          <span className={`text-[10px] font-mono ${isUnread ? 'text-emerald-400 font-semibold' : 'text-zinc-500'}`}>
-                            {partner.lastMessageFormattedTime || (partner.lastMessageTime ? new Date(partner.lastMessageTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '')}
-                          </span>
+            {/* Dưới cùng mobile nav */}
+            <div className="block md:hidden border-t border-zinc-800/80">
+              <MobileBottomNav activeTab="messages" />
+            </div>
+          </aside>
 
-                          {/* Menu 3 chấm trên từng cuộc trò chuyện */}
-                          <div className="relative" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setActiveMenuPartnerId(activeMenuPartnerId === partner.id ? null : partner.id);
-                              }}
-                              className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors opacity-80 group-hover:opacity-100 cursor-pointer"
-                              title="Tùy chọn cuộc trò chuyện"
-                            >
-                              <MoreVertical size={13} />
-                            </button>
+          {/* CỘT PHẢI: KHUNG CHAT 1-1 CHI TIẾT */}
+          <main className={`flex-1 flex flex-col bg-zinc-950 overflow-hidden transition-all duration-200 ${!urlTargetUserId ? 'hidden md:flex' : 'flex animate-in fade-in duration-200'}`}>
+            {!urlTargetUserId || !activePartner ? (
+              <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-zinc-500 animate-in fade-in duration-200">
+                <div className="w-16 h-16 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-4 shadow-sm">
+                  <MessageSquare size={28} className="text-zinc-600" />
+                </div>
+                <h3 className="text-sm font-semibold text-zinc-300 mb-1">Chưa chọn cuộc trò chuyện</h3>
+                <p className="text-xs text-zinc-500 max-w-xs leading-relaxed">
+                  Chọn một người bạn ở danh sách bên trái hoặc ghé Sảnh để bắt đầu trò chuyện trực tiếp.
+                </p>
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col h-full overflow-hidden">
 
-                            {activeMenuPartnerId === partner.id && (
-                              <>
-                                <div
-                                  className="fixed inset-0 z-40"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setActiveMenuPartnerId(null);
-                                  }}
-                                />
-                                <div className="absolute right-0 top-full mt-1.5 w-48 bg-zinc-900/95 backdrop-blur-xl border border-zinc-800 rounded-xl shadow-2xl py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 ring-1 ring-white/5">
-                                  {!isThisHidden ? (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleInitiateHide(partner);
-                                      }}
-                                      className="w-full px-3 py-2 text-left text-xs text-zinc-300 hover:text-rose-400 hover:bg-zinc-800/80 flex items-center gap-2.5 transition-colors cursor-pointer"
-                                    >
-                                      <EyeOff size={14} className="text-zinc-400 shrink-0" />
-                                      <span className="font-medium">Ẩn cuộc trò chuyện</span>
-                                    </button>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleInitiateUnhide(partner);
-                                      }}
-                                      className="w-full px-3 py-2 text-left text-xs text-zinc-300 hover:text-emerald-400 hover:bg-zinc-800/80 flex items-center gap-2.5 transition-colors cursor-pointer"
-                                    >
-                                      <Eye size={14} className="text-zinc-400 shrink-0" />
-                                      <span className="font-medium">Bỏ ẩn cuộc trò chuyện</span>
-                                    </button>
-                                  )}
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        </div>
+                {/* TOPBAR CỦA KHUNG CHAT (SAFE-AREA TOP) */}
+                <div
+                  style={{ paddingTop: 'calc(10px + env(safe-area-inset-top, 0px))', paddingBottom: '10px' }}
+                  className="min-h-14 px-3 sm:px-4 border-b border-zinc-800/80 bg-zinc-950/95 backdrop-blur flex items-center justify-between shrink-0 z-10"
+                >
+                  <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                    <button
+                      type="button"
+                      onClick={handleChatBack}
+                      className="md:hidden p-2 -ml-1 text-zinc-400 hover:text-white rounded-xl hover:bg-zinc-900 transition-colors cursor-pointer active:scale-95 shrink-0"
+                      title="Quay lại"
+                    >
+                      <ArrowLeft size={18} />
+                    </button>
+
+                    <div
+                      className="flex items-center gap-2.5 min-w-0 cursor-pointer hover:opacity-90 transition-opacity"
+                      onClick={() => {
+                        if (activePartner?.id) {
+                          navigate(`/profile/${activePartner.id}`);
+                        }
+                      }}
+                      title="Xem trang cá nhân"
+                    >
+                      <div className="relative shrink-0">
+                        <UserAvatar avatarUrl={activePartner?.avatar} username={activePartner?.account} name={activePartner?.nickname || activePartner?.account || 'Người dùng'} size={36} />
+                        <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-zinc-950 ${isUserOnline(activePartner?.id, activePartner?.isOnline) ? 'bg-emerald-500 ring-2 ring-emerald-500/20' : 'bg-zinc-600'
+                          }`} />
                       </div>
 
-                      <div className="flex items-center justify-between gap-1">
-                        <p className={`text-[11px] truncate ${isUnread ? 'font-medium text-emerald-400' : 'text-zinc-400'}`}>
-                          {formatPreviewText(partner.lastMessage) || (isPartnerOnline ? 'Đang trực tuyến' : 'Ngoại tuyến')}
-                        </p>
-
-                        {/* Badge số lượng tin nhắn chưa đọc */}
-                        {isUnread && (
-                          <span className="shrink-0 px-1.5 py-0.5 bg-rose-500 text-white font-bold text-[10px] rounded-full min-w-[18px] text-center leading-none shadow-sm animate-pulse">
-                            {unreadCount > 99 ? '99+' : unreadCount}
+                      <div className="min-w-0">
+                        <h3 className="text-xs sm:text-sm font-bold text-white truncate">
+                          {activePartner?.nickname || activePartner?.account || 'Người dùng'}
+                        </h3>
+                        {isUserOnline(activePartner?.id, activePartner?.isOnline) ? (
+                          <span className="font-sans text-xs text-zinc-400 flex items-center gap-1.5 font-normal">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+                            Trực tuyến
+                          </span>
+                        ) : (
+                          <span className="font-sans text-xs text-zinc-400 flex items-center gap-1.5 font-normal">
+                            <span className="w-2 h-2 rounded-full bg-zinc-600 shrink-0"></span>
+                            {getUserStatusText(activePartner?.id, activePartner?.lastActiveAt, activePartner?.isOnline)}
                           </span>
                         )}
                       </div>
                     </div>
                   </div>
-                );
-              })
-            )}
-          </div>
 
-          {/* Dưới cùng mobile nav */}
-          <div className="block md:hidden border-t border-zinc-800/80">
-            <MobileBottomNav activeTab="messages" />
-          </div>
-        </aside>
+                  {/* Nút hành động Gọi thoại & Gọi video */}
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!safeCallTargetId) {
+                          toast.error("Không tìm thấy thông tin đối phương để gọi!");
+                          return;
+                        }
+                        const currentFrom = encodeURIComponent(location.pathname + (location.search || ''));
+                        const nameParam = activePartner?.nickname || activePartner?.account ? `&name=${encodeURIComponent(activePartner.nickname || activePartner.account)}` : '';
+                        const avatarParam = activePartner?.avatar ? `&avatar=${encodeURIComponent(activePartner.avatar)}` : '';
+                        navigate(`/call/direct/${safeCallTargetId}?type=audio&from=${currentFrom}${nameParam}${avatarParam}`);
+                      }}
+                      className="h-8.5 sm:h-9 px-2.5 sm:px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-medium flex items-center gap-1.5 transition-all active:scale-[0.98] cursor-pointer"
+                      title="Gọi thoại"
+                    >
+                      <Phone size={13} className="text-zinc-300" />
+                      <span className="hidden sm:inline">Gọi thoại</span>
+                    </button>
 
-        {/* CỘT PHẢI: KHUNG CHAT 1-1 CHI TIẾT */}
-        <main className={`flex-1 flex flex-col bg-zinc-950 overflow-hidden transition-all duration-200 ${!urlTargetUserId ? 'hidden md:flex' : 'flex animate-in fade-in duration-200'}`}>
-          {!urlTargetUserId || !activePartner ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-zinc-500 animate-in fade-in duration-200">
-              <div className="w-16 h-16 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-4 shadow-sm">
-                <MessageSquare size={28} className="text-zinc-600" />
-              </div>
-              <h3 className="text-sm font-semibold text-zinc-300 mb-1">Chưa chọn cuộc trò chuyện</h3>
-              <p className="text-xs text-zinc-500 max-w-xs leading-relaxed">
-                Chọn một người bạn ở danh sách bên trái hoặc ghé Sảnh để bắt đầu trò chuyện trực tiếp.
-              </p>
-            </div>
-          ) : (
-            <div className="flex-1 flex flex-col h-full overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!safeCallTargetId) {
+                          toast.error("Không tìm thấy thông tin đối phương để gọi!");
+                          return;
+                        }
+                        const currentFrom = encodeURIComponent(location.pathname + (location.search || ''));
+                        const nameParam = activePartner?.nickname || activePartner?.account ? `&name=${encodeURIComponent(activePartner.nickname || activePartner.account)}` : '';
+                        const avatarParam = activePartner?.avatar ? `&avatar=${encodeURIComponent(activePartner.avatar)}` : '';
+                        navigate(`/call/direct/${safeCallTargetId}?type=video&from=${currentFrom}${nameParam}${avatarParam}`);
+                      }}
+                      className="h-8.5 sm:h-9 px-2.5 sm:px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-medium flex items-center gap-1.5 transition-all active:scale-[0.98] cursor-pointer"
+                      title="Gọi video"
+                    >
+                      <Video size={13} className="text-zinc-300" />
+                      <span className="hidden sm:inline">Gọi Video</span>
+                    </button>
 
-              {/* TOPBAR CỦA KHUNG CHAT (SAFE-AREA TOP) */}
-              <div 
-                style={{ paddingTop: 'calc(10px + env(safe-area-inset-top, 0px))', paddingBottom: '10px' }}
-                className="min-h-14 px-3 sm:px-4 border-b border-zinc-800/80 bg-zinc-950/95 backdrop-blur flex items-center justify-between shrink-0 z-10"
-              >
-                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                  <button
-                    type="button"
-                    onClick={handleChatBack}
-                    className="md:hidden p-2 -ml-1 text-zinc-400 hover:text-white rounded-xl hover:bg-zinc-900 transition-colors cursor-pointer active:scale-95 shrink-0"
-                    title="Quay lại"
-                  >
-                    <ArrowLeft size={18} />
-                  </button>
+                    {/* Menu tùy chọn trong Header đoạn chat */}
+                    <div className="relative" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={() => setActiveMenuPartnerId(activeMenuPartnerId === 'header' ? null : 'header')}
+                        className="h-8.5 sm:h-9 w-8.5 sm:w-9 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 flex items-center justify-center transition-all cursor-pointer"
+                        title="Tùy chọn cuộc trò chuyện"
+                      >
+                        <MoreVertical size={14} />
+                      </button>
 
-                  <div
-                    className="flex items-center gap-2.5 min-w-0 cursor-pointer hover:opacity-90 transition-opacity"
-                    onClick={() => {
-                      if (activePartner?.id) {
-                        navigate(`/profile/${activePartner.id}`);
-                      }
-                    }}
-                    title="Xem trang cá nhân"
-                  >
-                    <div className="relative shrink-0">
-                      <UserAvatar avatarUrl={activePartner?.avatar} username={activePartner?.account} name={activePartner?.nickname || activePartner?.account || 'Người dùng'} size={36} />
-                      <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-zinc-950 ${isUserOnline(activePartner?.id, activePartner?.isOnline) ? 'bg-emerald-500 ring-2 ring-emerald-500/20' : 'bg-zinc-600'
-                        }`} />
-                    </div>
-
-                    <div className="min-w-0">
-                      <h3 className="text-xs sm:text-sm font-bold text-white truncate">
-                        {activePartner?.nickname || activePartner?.account || 'Người dùng'}
-                      </h3>
-                      {isUserOnline(activePartner?.id, activePartner?.isOnline) ? (
-                        <span className="font-sans text-xs text-zinc-400 flex items-center gap-1.5 font-normal">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
-                          Trực tuyến
-                        </span>
-                      ) : (
-                        <span className="font-sans text-xs text-zinc-400 flex items-center gap-1.5 font-normal">
-                          <span className="w-2 h-2 rounded-full bg-zinc-600 shrink-0"></span>
-                          {getUserStatusText(activePartner?.id, activePartner?.lastActiveAt, activePartner?.isOnline)}
-                        </span>
+                      {activeMenuPartnerId === 'header' && (
+                        <>
+                          <div
+                            className="fixed inset-0 z-40"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveMenuPartnerId(null);
+                            }}
+                          />
+                          <div className="absolute right-0 top-full mt-2 w-48 bg-zinc-900/95 backdrop-blur-xl border border-zinc-800 rounded-xl shadow-2xl py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 ring-1 ring-white/5">
+                            {!(hiddenPartnerIds.has(String(activePartner?.id)) || activePartner?.isHidden) ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveMenuPartnerId(null);
+                                  handleInitiateHide(activePartner);
+                                }}
+                                className="w-full px-3 py-2 text-left text-xs text-zinc-300 hover:text-rose-400 hover:bg-zinc-800/80 flex items-center gap-2.5 transition-colors cursor-pointer"
+                              >
+                                <EyeOff size={14} className="text-zinc-400 shrink-0" />
+                                <span className="font-medium">Ẩn cuộc trò chuyện</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveMenuPartnerId(null);
+                                  handleInitiateUnhide(activePartner);
+                                }}
+                                className="w-full px-3 py-2 text-left text-xs text-zinc-300 hover:text-emerald-400 hover:bg-zinc-800/80 flex items-center gap-2.5 transition-colors cursor-pointer"
+                              >
+                                <Eye size={14} className="text-zinc-400 shrink-0" />
+                                <span className="font-medium">Bỏ ẩn cuộc trò chuyện</span>
+                              </button>
+                            )}
+                          </div>
+                        </>
                       )}
                     </div>
                   </div>
                 </div>
 
-                {/* Nút hành động Gọi thoại & Gọi video */}
-                <div className="flex items-center gap-1.5 sm:gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!safeCallTargetId) {
-                        toast.error("Không tìm thấy thông tin đối phương để gọi!");
-                        return;
-                      }
-                      const currentFrom = encodeURIComponent(location.pathname + (location.search || ''));
-                      const nameParam = activePartner?.nickname || activePartner?.account ? `&name=${encodeURIComponent(activePartner.nickname || activePartner.account)}` : '';
-                      const avatarParam = activePartner?.avatar ? `&avatar=${encodeURIComponent(activePartner.avatar)}` : '';
-                      navigate(`/call/direct/${safeCallTargetId}?type=audio&from=${currentFrom}${nameParam}${avatarParam}`);
-                    }}
-                    className="h-8.5 sm:h-9 px-2.5 sm:px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-medium flex items-center gap-1.5 transition-all active:scale-[0.98] cursor-pointer"
-                    title="Gọi thoại"
-                  >
-                    <Phone size={13} className="text-zinc-300" />
-                    <span className="hidden sm:inline">Gọi thoại</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!safeCallTargetId) {
-                        toast.error("Không tìm thấy thông tin đối phương để gọi!");
-                        return;
-                      }
-                      const currentFrom = encodeURIComponent(location.pathname + (location.search || ''));
-                      const nameParam = activePartner?.nickname || activePartner?.account ? `&name=${encodeURIComponent(activePartner.nickname || activePartner.account)}` : '';
-                      const avatarParam = activePartner?.avatar ? `&avatar=${encodeURIComponent(activePartner.avatar)}` : '';
-                      navigate(`/call/direct/${safeCallTargetId}?type=video&from=${currentFrom}${nameParam}${avatarParam}`);
-                    }}
-                    className="h-8.5 sm:h-9 px-2.5 sm:px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-medium flex items-center gap-1.5 transition-all active:scale-[0.98] cursor-pointer"
-                    title="Gọi video"
-                  >
-                    <Video size={13} className="text-zinc-300" />
-                    <span className="hidden sm:inline">Gọi Video</span>
-                  </button>
-
-                  {/* Menu tùy chọn trong Header đoạn chat */}
-                  <div className="relative" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      type="button"
-                      onClick={() => setActiveMenuPartnerId(activeMenuPartnerId === 'header' ? null : 'header')}
-                      className="h-8.5 sm:h-9 w-8.5 sm:w-9 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 flex items-center justify-center transition-all cursor-pointer"
-                      title="Tùy chọn cuộc trò chuyện"
-                    >
-                      <MoreVertical size={14} />
-                    </button>
-
-                    {activeMenuPartnerId === 'header' && (
-                      <>
-                        <div
-                          className="fixed inset-0 z-40"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveMenuPartnerId(null);
-                          }}
-                        />
-                        <div className="absolute right-0 top-full mt-2 w-48 bg-zinc-900/95 backdrop-blur-xl border border-zinc-800 rounded-xl shadow-2xl py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 ring-1 ring-white/5">
-                          {!(hiddenPartnerIds.has(String(activePartner?.id)) || activePartner?.isHidden) ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setActiveMenuPartnerId(null);
-                                handleInitiateHide(activePartner);
-                              }}
-                              className="w-full px-3 py-2 text-left text-xs text-zinc-300 hover:text-rose-400 hover:bg-zinc-800/80 flex items-center gap-2.5 transition-colors cursor-pointer"
-                            >
-                              <EyeOff size={14} className="text-zinc-400 shrink-0" />
-                              <span className="font-medium">Ẩn cuộc trò chuyện</span>
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setActiveMenuPartnerId(null);
-                                handleInitiateUnhide(activePartner);
-                              }}
-                              className="w-full px-3 py-2 text-left text-xs text-zinc-300 hover:text-emerald-400 hover:bg-zinc-800/80 flex items-center gap-2.5 transition-colors cursor-pointer"
-                            >
-                              <Eye size={14} className="text-zinc-400 shrink-0" />
-                              <span className="font-medium">Bỏ ẩn cuộc trò chuyện</span>
-                            </button>
-                          )}
+                {/* VÙNG HIỂN THỊ NỘI DUNG TIN NHẮN */}
+                <div
+                  ref={scrollContainerRef}
+                  className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar"
+                >
+                  {loadingMessages && messages.length === 0 ? (
+                    <div className="py-6 space-y-5 animate-pulse max-w-2xl mx-auto">
+                      <div className="flex items-start gap-2.5">
+                        <div className="w-8 h-8 rounded-full bg-zinc-800/80 shrink-0" />
+                        <div className="space-y-1.5 max-w-[65%]">
+                          <div className="h-10 w-52 bg-zinc-800/80 rounded-2xl rounded-tl-sm border border-zinc-700/20" />
+                          <div className="h-2 w-12 bg-zinc-800/40 rounded" />
                         </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
+                      </div>
+                      <div className="flex items-start justify-end gap-2.5">
+                        <div className="space-y-1.5 max-w-[65%] flex flex-col items-end">
+                          <div className="h-11 w-60 bg-zinc-800/70 rounded-2xl rounded-tr-sm border border-zinc-700/30" />
+                          <div className="h-2 w-12 bg-zinc-800/40 rounded" />
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2.5">
+                        <div className="w-8 h-8 rounded-full bg-zinc-800/80 shrink-0" />
+                        <div className="space-y-1.5 max-w-[65%]">
+                          <div className="h-12 w-48 bg-zinc-800/80 rounded-2xl rounded-tl-sm border border-zinc-700/20" />
+                          <div className="h-2 w-12 bg-zinc-800/40 rounded" />
+                        </div>
+                      </div>
+                      <div className="flex items-start justify-end gap-2.5">
+                        <div className="space-y-1.5 max-w-[65%] flex flex-col items-end">
+                          <div className="h-9 w-40 bg-zinc-800/70 rounded-2xl rounded-tr-sm border border-zinc-700/30" />
+                          <div className="h-2 w-12 bg-zinc-800/40 rounded" />
+                        </div>
+                      </div>
+                    </div>
+                  ) : partnerNotFound ? (
+                    <div className="py-16 text-center text-zinc-500 space-y-2">
+                      <p className="text-xs font-semibold text-rose-400">Không tìm thấy người dùng này</p>
+                      <p className="text-[11px] text-zinc-500">Tài khoản này có thể chưa tồn tại hoặc đã bị khóa.</p>
+                    </div>
+                  ) : messages.length === 0 ? (
+                    <div className="py-16 text-center text-zinc-500 space-y-2">
+                      <Sparkles size={24} className="mx-auto text-zinc-600 opacity-60" />
+                      <p className="text-xs font-medium text-zinc-400">Chưa có tin nhắn nào trong cuộc trò chuyện này</p>
+                      <p className="text-[11px] text-zinc-500">Gửi lời chào đầu tiên để bắt đầu kết nối!</p>
+                    </div>
+                  ) : (
+                    messages.map((msg, index) => {
+                      const isMe = (msg.userId ?? msg.senderId)?.toString() === currentUserId?.toString();
+                      const rawText = msg.message || '';
+                      const isCallLog = rawText.includes('Cuộc gọi') || rawText.startsWith('📞') || rawText.startsWith('📹');
+                      const isMissed = isCallLog && (rawText.includes('nhỡ') || rawText.includes('từ chối'));
+                      const isVideo = isCallLog && (rawText.includes('video') || rawText.startsWith('📹'));
 
-              {/* VÙNG HIỂN THỊ NỘI DUNG TIN NHẮN */}
-              <div
-                ref={scrollContainerRef}
-                className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar"
-              >
-                {loadingMessages && messages.length === 0 ? (
-                  <div className="py-6 space-y-5 animate-pulse max-w-2xl mx-auto">
-                    <div className="flex items-start gap-2.5">
-                      <div className="w-8 h-8 rounded-full bg-zinc-800/80 shrink-0" />
-                      <div className="space-y-1.5 max-w-[65%]">
-                        <div className="h-10 w-52 bg-zinc-800/80 rounded-2xl rounded-tl-sm border border-zinc-700/20" />
-                        <div className="h-2 w-12 bg-zinc-800/40 rounded" />
-                      </div>
-                    </div>
-                    <div className="flex items-start justify-end gap-2.5">
-                      <div className="space-y-1.5 max-w-[65%] flex flex-col items-end">
-                        <div className="h-11 w-60 bg-zinc-800/70 rounded-2xl rounded-tr-sm border border-zinc-700/30" />
-                        <div className="h-2 w-12 bg-zinc-800/40 rounded" />
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-2.5">
-                      <div className="w-8 h-8 rounded-full bg-zinc-800/80 shrink-0" />
-                      <div className="space-y-1.5 max-w-[65%]">
-                        <div className="h-12 w-48 bg-zinc-800/80 rounded-2xl rounded-tl-sm border border-zinc-700/20" />
-                        <div className="h-2 w-12 bg-zinc-800/40 rounded" />
-                      </div>
-                    </div>
-                    <div className="flex items-start justify-end gap-2.5">
-                      <div className="space-y-1.5 max-w-[65%] flex flex-col items-end">
-                        <div className="h-9 w-40 bg-zinc-800/70 rounded-2xl rounded-tr-sm border border-zinc-700/30" />
-                        <div className="h-2 w-12 bg-zinc-800/40 rounded" />
-                      </div>
-                    </div>
-                  </div>
-                ) : partnerNotFound ? (
-                  <div className="py-16 text-center text-zinc-500 space-y-2">
-                    <p className="text-xs font-semibold text-rose-400">Không tìm thấy người dùng này</p>
-                    <p className="text-[11px] text-zinc-500">Tài khoản này có thể chưa tồn tại hoặc đã bị khóa.</p>
-                  </div>
-                ) : messages.length === 0 ? (
-                  <div className="py-16 text-center text-zinc-500 space-y-2">
-                    <Sparkles size={24} className="mx-auto text-zinc-600 opacity-60" />
-                    <p className="text-xs font-medium text-zinc-400">Chưa có tin nhắn nào trong cuộc trò chuyện này</p>
-                    <p className="text-[11px] text-zinc-500">Gửi lời chào đầu tiên để bắt đầu kết nối!</p>
-                  </div>
-                ) : (
-                  messages.map((msg, index) => {
-                    const isMe = (msg.userId ?? msg.senderId)?.toString() === currentUserId?.toString();
-                    const rawText = msg.message || '';
-                    const isCallLog = rawText.includes('Cuộc gọi') || rawText.startsWith('📞') || rawText.startsWith('📹');
-                    const isMissed = isCallLog && (rawText.includes('nhỡ') || rawText.includes('từ chối'));
-                    const isVideo = isCallLog && (rawText.includes('video') || rawText.startsWith('📹'));
-
-                    // Tách thông tin Reply nếu có format [REPLY:id|sender]: content
-                    let replyInfo = msg.replyTo;
-                    let displayContent = rawText;
-                    const replyMatch = rawText.match(/^\[REPLY:(\d+)\|([^\]]+)\]:\s*([\s\S]*)$/);
-                    if (replyMatch) {
-                      replyInfo = { id: replyMatch[1], senderName: replyMatch[2] };
-                      displayContent = replyMatch[3];
-                    }
-
-                    // Tách thông tin Media nếu có format [MEDIA:TYPE|URL]
-                    let mediaObj = null;
-                    if (msg.mediaUrl) {
-                      mediaObj = { url: msg.mediaUrl, type: msg.mediaType || 'IMAGE' };
-                    } else {
-                      const mediaMatch = displayContent.match(/\[MEDIA:(IMAGE|VIDEO)\|([^\]]+)\]/);
-                      if (mediaMatch) {
-                        mediaObj = { type: mediaMatch[1], url: mediaMatch[2] };
-                        displayContent = displayContent.replace(/\[MEDIA:[^\]]+\]/, '').trim();
+                      // Tách thông tin Reply nếu có format [REPLY:id|sender]: content
+                      let replyInfo = msg.replyTo;
+                      let displayContent = rawText;
+                      const replyMatch = rawText.match(/^\[REPLY:(\d+)\|([^\]]+)\]:\s*([\s\S]*)$/);
+                      if (replyMatch) {
+                        replyInfo = { id: replyMatch[1], senderName: replyMatch[2] };
+                        displayContent = replyMatch[3];
                       }
-                    }
 
-                    // Cảm xúc của tin nhắn này
-                    const msgReactions = reactionsMap[msg.id] || {};
-                    const reactionEntries = Object.entries(msgReactions).filter(([_, count]) => count > 0);
+                      // Tách thông tin Media nếu có format [MEDIA:TYPE|URL]
+                      let mediaObj = null;
+                      if (msg.mediaUrl) {
+                        mediaObj = { url: msg.mediaUrl, type: msg.mediaType || 'IMAGE' };
+                      } else {
+                        const mediaMatch = displayContent.match(/\[MEDIA:(IMAGE|VIDEO)\|([^\]]+)\]/);
+                        if (mediaMatch) {
+                          mediaObj = { type: mediaMatch[1], url: mediaMatch[2] };
+                          displayContent = displayContent.replace(/\[MEDIA:[^\]]+\]/, '').trim();
+                        }
+                      }
 
-                    // Phân tích nếu là Tin nhắn Chia sẻ Bài viết JSON
-                    let sharedPostObj = null;
-                    if (typeof displayContent === 'string' && (displayContent.includes('shared_post') || displayContent.includes('"type":"shared_post"'))) {
-                      try {
-                        let unescaped = displayContent.trim();
-                        if (unescaped.startsWith('"') && unescaped.endsWith('"')) {
-                          try { unescaped = JSON.parse(unescaped); } catch (_) { }
-                        }
-                        if (typeof unescaped === 'string' && unescaped.includes('&quot;')) {
-                          unescaped = unescaped.replace(/&quot;/g, '"');
-                        }
-                        const jsonMatch = typeof unescaped === 'string' ? unescaped.match(/\{[\s\S]*"type"\s*:\s*"shared_post"[\s\S]*\}/) : null;
-                        const targetStr = jsonMatch ? jsonMatch[0] : unescaped;
-                        const parsed = typeof targetStr === 'string' ? JSON.parse(targetStr) : targetStr;
-                        if (parsed && (parsed.type === 'shared_post' || parsed.postId)) {
-                          sharedPostObj = parsed;
-                        }
-                      } catch (_) { }
-                    }
+                      // Cảm xúc của tin nhắn này
+                      const msgReactions = reactionsMap[msg.id] || {};
+                      const reactionEntries = Object.entries(msgReactions).filter(([_, count]) => count > 0);
 
-                    if (isCallLog) {
-                      const cleanCallText = rawText
-                        .replace(/^[📞📹\uFFFD\?🔹⯁\s]+/g, '')
-                        .trim() || (isVideo ? 'Cuộc gọi video' : 'Cuộc gọi thoại');
-                      const durationMatch = rawText.match(/\((\d{2}:\d{2}(?::\d{2})?)\)/);
-                      const durationStr = durationMatch ? durationMatch[1] : (isMissed ? '00:00' : null);
-                      const timeStr = msg.formattedTime || (msg.timeSend ? new Date(msg.timeSend).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '');
+                      // Phân tích nếu là Tin nhắn Chia sẻ Bài viết JSON
+                      let sharedPostObj = null;
+                      if (typeof displayContent === 'string' && (displayContent.includes('shared_post') || displayContent.includes('"type":"shared_post"'))) {
+                        try {
+                          let unescaped = displayContent.trim();
+                          if (unescaped.startsWith('"') && unescaped.endsWith('"')) {
+                            try { unescaped = JSON.parse(unescaped); } catch (_) { }
+                          }
+                          if (typeof unescaped === 'string' && unescaped.includes('&quot;')) {
+                            unescaped = unescaped.replace(/&quot;/g, '"');
+                          }
+                          const jsonMatch = typeof unescaped === 'string' ? unescaped.match(/\{[\s\S]*"type"\s*:\s*"shared_post"[\s\S]*\}/) : null;
+                          const targetStr = jsonMatch ? jsonMatch[0] : unescaped;
+                          const parsed = typeof targetStr === 'string' ? JSON.parse(targetStr) : targetStr;
+                          if (parsed && (parsed.type === 'shared_post' || parsed.postId)) {
+                            sharedPostObj = parsed;
+                          }
+                        } catch (_) { }
+                      }
+
+                      if (isCallLog) {
+                        const cleanCallText = rawText
+                          .replace(/^[📞📹\uFFFD\?🔹⯁\s]+/g, '')
+                          .trim() || (isVideo ? 'Cuộc gọi video' : 'Cuộc gọi thoại');
+                        const durationMatch = rawText.match(/\((\d{2}:\d{2}(?::\d{2})?)\)/);
+                        const durationStr = durationMatch ? durationMatch[1] : (isMissed ? '00:00' : null);
+                        const timeStr = msg.formattedTime || (msg.timeSend ? new Date(msg.timeSend).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '');
+
+                        return (
+                          <div
+                            className={`w-full max-w-[280px] rounded-2xl p-3.5 shadow-sm border bg-zinc-900 border-zinc-800 ${isMe ? 'rounded-tr-sm' : 'rounded-tl-sm'}`}
+                          >
+                            <div
+                              className={`w-72 rounded-2xl p-3.5 shadow-sm border bg-zinc-900 border-zinc-800 ${isMe ? 'rounded-tr-sm' : 'rounded-tl-sm'}`}
+                            >
+                              {/* Tiêu đề & Icon loại cuộc gọi */}
+                              <div className="flex items-center justify-between gap-2 mb-2.5 pb-2.5 border-b border-zinc-800/80">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-zinc-800">
+                                    {isMissed ? (
+                                      <PhoneMissed size={15} className="text-rose-400" />
+                                    ) : isVideo ? (
+                                      <Video size={15} className="text-emerald-400" />
+                                    ) : (
+                                      <PhoneCall size={15} className="text-emerald-400" />
+                                    )}
+                                  </div>
+                                  <div className="flex flex-col">
+                                    <span className="font-semibold text-xs text-zinc-100 font-sans">
+                                      {isVideo ? 'Cuộc gọi video' : 'Cuộc gọi thoại'}
+                                    </span>
+                                    <span className={`text-[11px] font-sans ${isMissed ? 'text-rose-400 font-medium' : 'text-zinc-400'}`}>
+                                      {isMissed
+                                        ? (isMe ? 'Đối phương nhỡ' : 'Cuộc gọi nhỡ')
+                                        : (isMe ? 'Cuộc gọi đi' : 'Cuộc gọi đến')}
+                                    </span>
+                                  </div>
+                                </div>
+                                {timeStr && (
+                                  <span className="text-[10px] text-zinc-500 font-sans shrink-0">
+                                    {timeStr}
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Thời lượng đàm thoại & Nút gọi lại */}
+                              <div className="flex items-center justify-between pt-0.5">
+                                <div className="flex items-center gap-1.5 text-xs text-zinc-400 font-sans">
+                                  <Clock size={12} className="text-zinc-500" />
+                                  <span className="text-[11px]">Thời lượng:</span>
+                                  <span className="font-mono text-[11px] text-zinc-300">
+                                    {durationStr || (isMissed ? '00:00' : 'Đã kết thúc')}
+                                  </span>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const safeTargetId = activePartner?.id || urlTargetUserId;
+                                    if (safeTargetId) {
+                                      const currentFrom = encodeURIComponent(location.pathname + (location.search || ''));
+                                      const nameParam = activePartner?.nickname || activePartner?.account ? `&name=${encodeURIComponent(activePartner.nickname || activePartner.account)}` : '';
+                                      const avatarParam = activePartner?.avatar ? `&avatar=${encodeURIComponent(activePartner.avatar)}` : '';
+                                      navigate(`/call/direct/${safeTargetId}?type=${isVideo ? 'video' : 'audio'}&from=${currentFrom}${nameParam}${avatarParam}`);
+                                    }
+                                  }}
+                                  className="bg-zinc-800 hover:bg-zinc-700 text-white font-sans text-xs font-medium px-3 h-8 rounded-lg flex items-center gap-1.5 transition-colors border border-zinc-700/60"
+                                >
+                                  {isVideo ? <Video size={12} /> : <PhoneCall size={12} />}
+                                  <span>Gọi lại</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
 
                       return (
                         <div
                           key={msg.id || index}
-                          className={`w-full flex ${isMe ? 'justify-end' : 'justify-start'} my-2`}
+                          className={`flex flex-col group relative ${isMe ? 'items-end' : 'items-start'} space-y-1 ${msg.pending ? 'opacity-70' : ''}`}
                         >
-                          <div
-                            className={`w-full max-w-[280px] rounded-2xl p-3.5 shadow-sm border bg-zinc-900 border-zinc-800 ${isMe ? 'rounded-tr-sm' : 'rounded-tl-sm'}`}
-                          >
-                            {/* Tiêu đề & Icon loại cuộc gọi */}
-                            <div className="flex items-center justify-between gap-2 mb-2.5 pb-2.5 border-b border-zinc-800/80">
-                              <div className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-zinc-800">
-                                  {isMissed ? (
-                                    <PhoneMissed size={15} className="text-rose-400" />
-                                  ) : isVideo ? (
-                                    <Video size={15} className="text-emerald-400" />
-                                  ) : (
-                                    <PhoneCall size={15} className="text-emerald-400" />
-                                  )}
-                                </div>
-                                <div className="flex flex-col">
-                                  <span className="font-semibold text-xs text-zinc-100 font-sans">
-                                    {isVideo ? 'Cuộc gọi video' : 'Cuộc gọi thoại'}
-                                  </span>
-                                  <span className={`text-[11px] font-sans ${isMissed ? 'text-rose-400 font-medium' : 'text-zinc-400'}`}>
-                                    {isMissed
-                                      ? (isMe ? 'Đối phương nhỡ' : 'Cuộc gọi nhỡ')
-                                      : (isMe ? 'Cuộc gọi đi' : 'Cuộc gọi đến')}
-                                  </span>
-                                </div>
-                              </div>
-                              {timeStr && (
-                                <span className="text-[10px] text-zinc-500 font-sans shrink-0">
-                                  {timeStr}
-                                </span>
-                              )}
-                            </div>
-
-                            {/* Thời lượng đàm thoại & Nút gọi lại */}
-                            <div className="flex items-center justify-between pt-0.5">
-                              <div className="flex items-center gap-1.5 text-xs text-zinc-400 font-sans">
-                                <Clock size={12} className="text-zinc-500" />
-                                <span className="text-[11px]">Thời lượng:</span>
-                                <span className="font-mono text-[11px] text-zinc-300">
-                                  {durationStr || (isMissed ? '00:00' : 'Đã kết thúc')}
-                                </span>
-                              </div>
-
+                          {/* Reaction Dock & Action Buttons (xuất hiện khi hover hoặc click) */}
+                          <div className={`opacity-0 group-hover:opacity-100 focus-within:opacity-100 flex items-center gap-1 bg-zinc-900/95 border border-zinc-800 rounded-full px-2 py-1 shadow-lg absolute -top-8 ${isMe ? 'right-0' : 'left-0'} z-10 transition-opacity duration-150`}>
+                            {QUICK_EMOJIS.map(emoji => (
                               <button
+                                key={emoji}
                                 type="button"
+                                onClick={() => handleToggleReaction(msg.id, emoji)}
+                                className="w-6 h-6 flex items-center justify-center hover:scale-125 transition-transform text-xs"
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                            <div className="w-[1px] h-3.5 bg-zinc-800 mx-0.5" />
+                            <button
+                              type="button"
+                              onClick={() => setReplyingTo({
+                                id: msg.id,
+                                senderName: isMe ? 'Bạn' : (activePartner.nickname || activePartner.account),
+                                message: displayContent || (mediaObj ? '[Tệp đính kèm]' : '')
+                              })}
+                              className="p-1 hover:text-white text-zinc-400 rounded-md transition-colors"
+                              title="Trả lời tin nhắn"
+                            >
+                              <Reply size={12} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setForwardingMsg(msg)}
+                              className="p-1 hover:text-white text-zinc-400 rounded-md transition-colors"
+                              title="Chuyển tiếp tin nhắn"
+                            >
+                              <Forward size={12} />
+                            </button>
+                          </div>
+
+                          {/* Bubble Chat */}
+                          <div
+                            className={`max-w-[85%] sm:max-w-[70%] px-4 py-2.5 rounded-2xl text-xs leading-relaxed break-words relative shadow-sm ${isMe
+                              ? 'bg-zinc-800 text-zinc-100 rounded-tr-sm border border-zinc-700/60'
+                              : 'bg-zinc-900 text-zinc-200 rounded-tl-sm border border-zinc-800/80'
+                              }`}
+                          >
+                            {/* Trích dẫn nội dung Reply nếu có */}
+                            {replyInfo && (
+                              <div className="mb-2 px-2.5 py-1.5 rounded-lg bg-zinc-950/70 border-l-2 border-emerald-400 text-[11px] text-zinc-300">
+                                <span className="font-bold text-emerald-400 block mb-0.5">
+                                  ↳ {replyInfo.senderName || 'Người dùng'}
+                                </span>
+                                <p className="truncate line-clamp-1 italic text-zinc-400">
+                                  {replyInfo.message || 'Tin nhắn gốc'}
+                                </p>
+                              </div>
+                            )}
+
+                            {/* Media: Hình ảnh / Video */}
+                            {mediaObj && (
+                              <div className="mb-2 rounded-xl overflow-hidden border border-zinc-800/80 max-w-sm aspect-video bg-black flex items-center justify-center">
+                                {mediaObj.type === 'VIDEO' ? (
+                                  <video
+                                    src={resolveMediaUrl(mediaObj.url)}
+                                    controls
+                                    preload="metadata"
+                                    playsInline
+                                    className="w-full h-full max-h-72 object-cover rounded-xl bg-black"
+                                  />
+                                ) : (
+                                  <img
+                                    src={resolveMediaUrl(mediaObj.url)}
+                                    alt="Đính kèm"
+                                    loading="lazy"
+                                    decoding="async"
+                                    onClick={() => setLightboxMedia(resolveMediaUrl(mediaObj.url))}
+                                    onError={(e) => {
+                                      e.currentTarget.onerror = null;
+                                      const orig = mediaObj.url || '';
+                                      if (orig.includes('.r2.dev/')) {
+                                        const key = orig.split('.r2.dev/')[1];
+                                        if (key) e.currentTarget.src = `${BACKEND_URL || ''}/api/message/files/${key}`;
+                                      } else if (orig.includes('/api/message/files/')) {
+                                        const key = orig.split('/api/message/files/')[1];
+                                        if (key) e.currentTarget.src = `https://pub-9618b6a7a3a9489ab05ddd69d79a4b9b.r2.dev/${key}`;
+                                      }
+                                    }}
+                                    className="w-full h-full max-h-72 object-cover cursor-pointer hover:opacity-95 transition-opacity rounded-xl"
+                                  />
+                                )}
+                              </div>
+                            )}
+
+                            {/* Nội dung tin nhắn: Bài viết chia sẻ hoặc Văn bản thông thường */}
+                            {sharedPostObj ? (
+                              <div
                                 onClick={() => {
-                                  const safeTargetId = activePartner?.id || urlTargetUserId;
-                                  if (safeTargetId) {
-                                    const currentFrom = encodeURIComponent(location.pathname + (location.search || ''));
-                                    const nameParam = activePartner?.nickname || activePartner?.account ? `&name=${encodeURIComponent(activePartner.nickname || activePartner.account)}` : '';
-                                    const avatarParam = activePartner?.avatar ? `&avatar=${encodeURIComponent(activePartner.avatar)}` : '';
-                                    navigate(`/call/direct/${safeTargetId}?type=${isVideo ? 'video' : 'audio'}&from=${currentFrom}${nameParam}${avatarParam}`);
+                                  if (sharedPostObj.postId) {
+                                    navigate(`/#post-${sharedPostObj.postId}`);
                                   }
                                 }}
-                                className="bg-zinc-800 hover:bg-zinc-700 text-white font-sans text-xs font-medium px-3 h-8 rounded-lg flex items-center gap-1.5 transition-colors border border-zinc-700/60"
+                                className="rounded-xl overflow-hidden border border-zinc-700/60 bg-zinc-950/80 hover:border-emerald-500/50 transition-all cursor-pointer p-3 space-y-2.5 max-w-sm group text-left"
                               >
-                                {isVideo ? <Video size={12} /> : <PhoneCall size={12} />}
-                                <span>Gọi lại</span>
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <div
-                        key={msg.id || index}
-                        className={`flex flex-col group relative ${isMe ? 'items-end' : 'items-start'} space-y-1 ${msg.pending ? 'opacity-70' : ''}`}
-                      >
-                        {/* Reaction Dock & Action Buttons (xuất hiện khi hover hoặc click) */}
-                        <div className={`opacity-0 group-hover:opacity-100 focus-within:opacity-100 flex items-center gap-1 bg-zinc-900/95 border border-zinc-800 rounded-full px-2 py-1 shadow-lg absolute -top-8 ${isMe ? 'right-0' : 'left-0'} z-10 transition-opacity duration-150`}>
-                          {QUICK_EMOJIS.map(emoji => (
-                            <button
-                              key={emoji}
-                              type="button"
-                              onClick={() => handleToggleReaction(msg.id, emoji)}
-                              className="w-6 h-6 flex items-center justify-center hover:scale-125 transition-transform text-xs"
-                            >
-                              {emoji}
-                            </button>
-                          ))}
-                          <div className="w-[1px] h-3.5 bg-zinc-800 mx-0.5" />
-                          <button
-                            type="button"
-                            onClick={() => setReplyingTo({
-                              id: msg.id,
-                              senderName: isMe ? 'Bạn' : (activePartner.nickname || activePartner.account),
-                              message: displayContent || (mediaObj ? '[Tệp đính kèm]' : '')
-                            })}
-                            className="p-1 hover:text-white text-zinc-400 rounded-md transition-colors"
-                            title="Trả lời tin nhắn"
-                          >
-                            <Reply size={12} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setForwardingMsg(msg)}
-                            className="p-1 hover:text-white text-zinc-400 rounded-md transition-colors"
-                            title="Chuyển tiếp tin nhắn"
-                          >
-                            <Forward size={12} />
-                          </button>
-                        </div>
-
-                        {/* Bubble Chat */}
-                        <div
-                          className={`max-w-[85%] sm:max-w-[70%] px-4 py-2.5 rounded-2xl text-xs leading-relaxed break-words relative shadow-sm ${isMe
-                            ? 'bg-zinc-800 text-zinc-100 rounded-tr-sm border border-zinc-700/60'
-                            : 'bg-zinc-900 text-zinc-200 rounded-tl-sm border border-zinc-800/80'
-                            }`}
-                        >
-                          {/* Trích dẫn nội dung Reply nếu có */}
-                          {replyInfo && (
-                            <div className="mb-2 px-2.5 py-1.5 rounded-lg bg-zinc-950/70 border-l-2 border-emerald-400 text-[11px] text-zinc-300">
-                              <span className="font-bold text-emerald-400 block mb-0.5">
-                                ↳ {replyInfo.senderName || 'Người dùng'}
-                              </span>
-                              <p className="truncate line-clamp-1 italic text-zinc-400">
-                                {replyInfo.message || 'Tin nhắn gốc'}
-                              </p>
-                            </div>
-                          )}
-
-                          {/* Media: Hình ảnh / Video */}
-                          {mediaObj && (
-                            <div className="mb-2 rounded-xl overflow-hidden border border-zinc-800/80 max-w-sm aspect-video bg-black flex items-center justify-center">
-                              {mediaObj.type === 'VIDEO' ? (
-                                <video
-                                  src={resolveMediaUrl(mediaObj.url)}
-                                  controls
-                                  preload="metadata"
-                                  playsInline
-                                  className="w-full h-full max-h-72 object-cover rounded-xl bg-black"
-                                />
-                              ) : (
-                                <img
-                                  src={resolveMediaUrl(mediaObj.url)}
-                                  alt="Đính kèm"
-                                  loading="lazy"
-                                  decoding="async"
-                                  onClick={() => setLightboxMedia(resolveMediaUrl(mediaObj.url))}
-                                  onError={(e) => {
-                                    e.currentTarget.onerror = null;
-                                    const orig = mediaObj.url || '';
-                                    if (orig.includes('.r2.dev/')) {
-                                      const key = orig.split('.r2.dev/')[1];
-                                      if (key) e.currentTarget.src = `${BACKEND_URL || ''}/api/message/files/${key}`;
-                                    } else if (orig.includes('/api/message/files/')) {
-                                      const key = orig.split('/api/message/files/')[1];
-                                      if (key) e.currentTarget.src = `https://pub-9618b6a7a3a9489ab05ddd69d79a4b9b.r2.dev/${key}`;
-                                    }
-                                  }}
-                                  className="w-full h-full max-h-72 object-cover cursor-pointer hover:opacity-95 transition-opacity rounded-xl"
-                                />
-                              )}
-                            </div>
-                          )}
-
-                          {/* Nội dung tin nhắn: Bài viết chia sẻ hoặc Văn bản thông thường */}
-                          {sharedPostObj ? (
-                            <div
-                              onClick={() => {
-                                if (sharedPostObj.postId) {
-                                  navigate(`/#post-${sharedPostObj.postId}`);
-                                }
-                              }}
-                              className="rounded-xl overflow-hidden border border-zinc-700/60 bg-zinc-950/80 hover:border-emerald-500/50 transition-all cursor-pointer p-3 space-y-2.5 max-w-sm group text-left"
-                            >
-                              <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-6 h-6 rounded-full overflow-hidden bg-zinc-800 shrink-0">
-                                    {sharedPostObj.authorAvatar ? (
-                                      <img src={sharedPostObj.authorAvatar} alt="" className="w-full h-full object-cover" />
-                                    ) : (
-                                      <span className="w-full h-full flex items-center justify-center text-[10px] font-bold text-zinc-300">
-                                        {(sharedPostObj.author || 'U').charAt(0).toUpperCase()}
-                                      </span>
-                                    )}
+                                <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-6 h-6 rounded-full overflow-hidden bg-zinc-800 shrink-0">
+                                      {sharedPostObj.authorAvatar ? (
+                                        <img src={sharedPostObj.authorAvatar} alt="" className="w-full h-full object-cover" />
+                                      ) : (
+                                        <span className="w-full h-full flex items-center justify-center text-[10px] font-bold text-zinc-300">
+                                          {(sharedPostObj.author || 'U').charAt(0).toUpperCase()}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <span className="text-xs font-semibold text-zinc-200">
+                                      {sharedPostObj.author || 'Thành viên'}
+                                    </span>
                                   </div>
-                                  <span className="text-xs font-semibold text-zinc-200">
-                                    {sharedPostObj.author || 'Thành viên'}
+                                  <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+                                    <Share2 size={11} /> Bài viết chia sẻ
                                   </span>
                                 </div>
-                                <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
-                                  <Share2 size={11} /> Bài viết chia sẻ
-                                </span>
-                              </div>
 
-                              {sharedPostObj.imageUrl && (
-                                <div className="rounded-lg overflow-hidden border border-zinc-800/80 max-h-52 bg-black">
-                                  <img
-                                    src={sharedPostObj.imageUrl}
-                                    alt="Ảnh bài viết"
-                                    className="w-full h-full object-cover"
-                                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                  />
+                                {sharedPostObj.imageUrl && (
+                                  <div className="rounded-lg overflow-hidden border border-zinc-800/80 max-h-52 bg-black">
+                                    <img
+                                      src={sharedPostObj.imageUrl}
+                                      alt="Ảnh bài viết"
+                                      className="w-full h-full object-cover"
+                                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                    />
+                                  </div>
+                                )}
+
+                                {sharedPostObj.content && (
+                                  <p className="text-xs text-zinc-300 line-clamp-3 leading-relaxed whitespace-pre-wrap">
+                                    {sharedPostObj.content}
+                                  </p>
+                                )}
+
+                                <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between text-[11px] text-zinc-400 group-hover:text-emerald-400 transition-colors">
+                                  <span>Xem chi tiết trên Sảnh</span>
+                                  <ExternalLink size={12} />
                                 </div>
-                              )}
-
-                              {sharedPostObj.content && (
-                                <p className="text-xs text-zinc-300 line-clamp-3 leading-relaxed whitespace-pre-wrap">
-                                  {sharedPostObj.content}
-                                </p>
-                              )}
-
-                              <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between text-[11px] text-zinc-400 group-hover:text-emerald-400 transition-colors">
-                                <span>Xem chi tiết trên Sảnh</span>
-                                <ExternalLink size={12} />
                               </div>
-                            </div>
-                          ) : displayContent ? (
-                            <div className="whitespace-pre-wrap">{displayContent}</div>
-                          ) : null}
+                            ) : displayContent ? (
+                              <div className="whitespace-pre-wrap">{displayContent}</div>
+                            ) : null}
 
-                          {/* Badge hiển thị cảm xúc đã thả */}
-                          {reactionEntries.length > 0 && (
-                            <div className="flex items-center gap-1 mt-1.5 flex-wrap">
-                              {reactionEntries.map(([emoji, count]) => (
-                                <span
-                                  key={emoji}
-                                  onClick={() => handleToggleReaction(msg.id, emoji)}
-                                  className="px-1.5 py-0.5 bg-black/40 border border-zinc-700/60 rounded-full text-[10px] cursor-pointer hover:bg-black/60 transition-colors"
-                                >
-                                  {emoji} {count > 1 ? count : ''}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Trạng thái gửi & Đã đọc công nghệ cao (Cyber Seen Radar) */}
-                        <div className={`flex items-center gap-1.5 px-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
-                          <span className="text-[10px] font-mono text-zinc-500">
-                            {msg.formattedTime || (msg.timeSend ? new Date(msg.timeSend).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '')}
-                          </span>
-
-                          {isMe && (
-                            msg.pending ? (
-                              <span className="inline-flex items-center gap-1 text-[10px] text-amber-400 font-mono animate-pulse" title="Đang gửi...">
-                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
-                                <span>Đang gửi...</span>
-                              </span>
-                            ) : (msg.isRead || msg.timeRead) ? (
-                              <span
-                                className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-mono select-none"
-                                title={`Đã xem lúc ${msg.formattedTimeRead || msg.formattedTime || ''}`}
-                              >
-                                <CheckCheck size={12} className="text-emerald-400" />
-                                <span>Đã xem</span>
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-0.5 text-[10px] text-zinc-500 font-mono select-none" title="Đã chuyển đến máy chủ">
-                                <Check size={12} className="text-zinc-500" />
-                                <span>Đã gửi</span>
-                              </span>
-                            )
-                          )}
-                        </div>
-
-                        {/* Cyber Seen Stamp cho tin nhắn đọc sau cùng */}
-                        {isMe && msg.id === lastReadMyMsgId && (
-                          <div className="flex items-center gap-1.5 pt-1 text-[10px] text-emerald-400 select-none animate-in fade-in zoom-in-95 duration-200">
-                            <div className="relative flex items-center justify-center">
-                              <UserAvatar
-                                avatarUrl={activePartner?.avatar}
-                                username={activePartner?.account}
-                                name={activePartner?.nickname || activePartner?.account}
-                                size={16}
-                                className="ring-1 ring-emerald-400/60"
-                              />
-                              <span className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-400 ring-1 ring-zinc-950 animate-pulse" />
-                            </div>
-                            <span className="font-mono text-[10px] text-emerald-400/90 font-medium">
-                              {activePartner?.nickname || activePartner?.account || 'Đối phương'} đã xem {msg.formattedTimeRead ? `lúc ${msg.formattedTimeRead}` : ''}
-                            </span>
+                            {/* Badge hiển thị cảm xúc đã thả */}
+                            {reactionEntries.length > 0 && (
+                              <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                                {reactionEntries.map(([emoji, count]) => (
+                                  <span
+                                    key={emoji}
+                                    onClick={() => handleToggleReaction(msg.id, emoji)}
+                                    className="px-1.5 py-0.5 bg-black/40 border border-zinc-700/60 rounded-full text-[10px] cursor-pointer hover:bg-black/60 transition-colors"
+                                  >
+                                    {emoji} {count > 1 ? count : ''}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-                <div ref={messagesEndRef} />
-              </div>
 
-              {/* THANH XEM TRƯỚC TRẢ LỜI TIN NHẮN (REPLY BAR) */}
-              {replyingTo && (
-                <div className="px-4 py-2 bg-zinc-900/90 border-t border-zinc-800 flex items-center justify-between text-xs animate-in slide-in-from-bottom-2 duration-150">
-                  <div className="flex items-center gap-2 truncate">
-                    <CornerUpLeft size={14} className="text-emerald-400 shrink-0" />
-                    <span className="text-zinc-400">Đang trả lời <strong className="text-zinc-200">{replyingTo.senderName}</strong>:</span>
-                    <span className="truncate italic text-zinc-300 max-w-xs">{replyingTo.message}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setReplyingTo(null)}
-                    className="p-1 hover:text-white text-zinc-400 rounded-md transition-colors"
-                  >
-                    <X size={14} />
-                  </button>
+                          {/* Trạng thái gửi & Đã đọc công nghệ cao (Cyber Seen Radar) */}
+                          <div className={`flex items-center gap-1.5 px-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                            <span className="text-[10px] font-mono text-zinc-500">
+                              {msg.formattedTime || (msg.timeSend ? new Date(msg.timeSend).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '')}
+                            </span>
+
+                            {isMe && (
+                              msg.pending ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] text-amber-400 font-mono animate-pulse" title="Đang gửi...">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
+                                  <span>Đang gửi...</span>
+                                </span>
+                              ) : (msg.isRead || msg.timeRead) ? (
+                                <span
+                                  className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-mono select-none"
+                                  title={`Đã xem lúc ${msg.formattedTimeRead || msg.formattedTime || ''}`}
+                                >
+                                  <CheckCheck size={12} className="text-emerald-400" />
+                                  <span>Đã xem</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-0.5 text-[10px] text-zinc-500 font-mono select-none" title="Đã chuyển đến máy chủ">
+                                  <Check size={12} className="text-zinc-500" />
+                                  <span>Đã gửi</span>
+                                </span>
+                              )
+                            )}
+                          </div>
+
+                          {/* Cyber Seen Stamp cho tin nhắn đọc sau cùng */}
+                          {isMe && msg.id === lastReadMyMsgId && (
+                            <div className="flex items-center gap-1.5 pt-1 text-[10px] text-emerald-400 select-none animate-in fade-in zoom-in-95 duration-200">
+                              <div className="relative flex items-center justify-center">
+                                <UserAvatar
+                                  avatarUrl={activePartner?.avatar}
+                                  username={activePartner?.account}
+                                  name={activePartner?.nickname || activePartner?.account}
+                                  size={16}
+                                  className="ring-1 ring-emerald-400/60"
+                                />
+                                <span className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-400 ring-1 ring-zinc-950 animate-pulse" />
+                              </div>
+                              <span className="font-mono text-[10px] text-emerald-400/90 font-medium">
+                                {activePartner?.nickname || activePartner?.account || 'Đối phương'} đã xem {msg.formattedTimeRead ? `lúc ${msg.formattedTimeRead}` : ''}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                  <div ref={messagesEndRef} />
                 </div>
-              )}
 
-              {/* THANH XEM TRƯỚC MEDIA TRƯỚC KHI GỬI */}
-              {selectedMedia && (
-                <div className="px-4 py-2.5 bg-zinc-900 border-t border-zinc-800 flex items-center justify-between animate-in slide-in-from-bottom-2 duration-150">
-                  <div className="flex items-center gap-3">
-                    {selectedMedia.type === 'VIDEO' ? (
-                      <div className="w-12 h-12 bg-black rounded-lg flex items-center justify-center text-white border border-zinc-700">
-                        <Play size={18} />
-                      </div>
-                    ) : (
-                      <img
-                        src={selectedMedia.previewUrl}
-                        alt="Preview"
-                        className="w-12 h-12 object-cover rounded-lg border border-zinc-700"
-                      />
-                    )}
-                    <div className="text-xs">
-                      <p className="font-medium text-white truncate max-w-xs">{selectedMedia.name}</p>
-                      <span className="text-[10px] text-zinc-400 uppercase font-mono">
-                        {selectedMedia.type === 'VIDEO' ? 'Tệp Video' : 'Hình ảnh'}
-                      </span>
+                {/* THANH XEM TRƯỚC TRẢ LỜI TIN NHẮN (REPLY BAR) */}
+                {replyingTo && (
+                  <div className="px-4 py-2 bg-zinc-900/90 border-t border-zinc-800 flex items-center justify-between text-xs animate-in slide-in-from-bottom-2 duration-150">
+                    <div className="flex items-center gap-2 truncate">
+                      <CornerUpLeft size={14} className="text-emerald-400 shrink-0" />
+                      <span className="text-zinc-400">Đang trả lời <strong className="text-zinc-200">{replyingTo.senderName}</strong>:</span>
+                      <span className="truncate italic text-zinc-300 max-w-xs">{replyingTo.message}</span>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setReplyingTo(null)}
+                      className="p-1 hover:text-white text-zinc-400 rounded-md transition-colors"
+                    >
+                      <X size={14} />
+                    </button>
                   </div>
+                )}
 
+                {/* THANH XEM TRƯỚC MEDIA TRƯỚC KHI GỬI */}
+                {selectedMedia && (
+                  <div className="px-4 py-2.5 bg-zinc-900 border-t border-zinc-800 flex items-center justify-between animate-in slide-in-from-bottom-2 duration-150">
+                    <div className="flex items-center gap-3">
+                      {selectedMedia.type === 'VIDEO' ? (
+                        <div className="w-12 h-12 bg-black rounded-lg flex items-center justify-center text-white border border-zinc-700">
+                          <Play size={18} />
+                        </div>
+                      ) : (
+                        <img
+                          src={selectedMedia.previewUrl}
+                          alt="Preview"
+                          className="w-12 h-12 object-cover rounded-lg border border-zinc-700"
+                        />
+                      )}
+                      <div className="text-xs">
+                        <p className="font-medium text-white truncate max-w-xs">{selectedMedia.name}</p>
+                        <span className="text-[10px] text-zinc-400 uppercase font-mono">
+                          {selectedMedia.type === 'VIDEO' ? 'Tệp Video' : 'Hình ảnh'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleRemoveMedia}
+                      className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors"
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+                )}
+
+                {/* KHUNG NHẬP LIỆU DƯỚI ĐÁY */}
+                <form
+                  onSubmit={handleSendMessage}
+                  style={{ paddingBottom: 'calc(12px + env(safe-area-inset-bottom, 0px))' }}
+                  className="shrink-0 p-3 sm:p-4 border-t border-zinc-800/80 bg-zinc-950 flex items-center gap-2"
+                >
+                  {/* Input chọn file ẩn */}
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleSelectMedia}
+                    accept="image/*,video/*"
+                    className="hidden"
+                  />
+
+                  {/* Nút icon Tải ảnh / Video */}
                   <button
                     type="button"
-                    onClick={handleRemoveMedia}
-                    className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="p-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white border border-zinc-800 transition-colors shrink-0"
+                    title="Gửi hình ảnh hoặc video"
                   >
-                    <X size={15} />
+                    <ImageIcon size={16} />
                   </button>
-                </div>
-              )}
 
-              {/* KHUNG NHẬP LIỆU DƯỚI ĐÁY */}
-              <form
-                onSubmit={handleSendMessage}
-                style={{ paddingBottom: 'calc(12px + env(safe-area-inset-bottom, 0px))' }}
-                className="shrink-0 p-3 sm:p-4 border-t border-zinc-800/80 bg-zinc-950 flex items-center gap-2"
-              >
-                {/* Input chọn file ẩn */}
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleSelectMedia}
-                  accept="image/*,video/*"
-                  className="hidden"
-                />
+                  <input
+                    type="text"
+                    value={textInput}
+                    disabled={partnerNotFound}
+                    onChange={(e) => setTextInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage(e);
+                      }
+                    }}
+                    placeholder={partnerNotFound ? "Không thể nhắn tin cho người dùng này..." : `Nhắn tin cho ${activePartner?.nickname || activePartner?.account || 'đối phương'}...`}
+                    className="flex-1 px-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-700 font-sans disabled:opacity-50"
+                  />
 
-                {/* Nút icon Tải ảnh / Video */}
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="p-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white border border-zinc-800 transition-colors shrink-0"
-                  title="Gửi hình ảnh hoặc video"
-                >
-                  <ImageIcon size={16} />
-                </button>
+                  <button
+                    type="submit"
+                    disabled={(!textInput.trim() && !selectedMedia) || partnerNotFound}
+                    className="px-4 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1.5 shrink-0"
+                  >
+                    <Send size={13} />
+                    <span className="hidden sm:inline">Gửi</span>
+                  </button>
+                </form>
 
-                <input
-                  type="text"
-                  value={textInput}
-                  disabled={partnerNotFound}
-                  onChange={(e) => setTextInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage(e);
-                    }
-                  }}
-                  placeholder={partnerNotFound ? "Không thể nhắn tin cho người dùng này..." : `Nhắn tin cho ${activePartner?.nickname || activePartner?.account || 'đối phương'}...`}
-                  className="flex-1 px-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-700 font-sans disabled:opacity-50"
-                />
-
-                <button
-                  type="submit"
-                  disabled={(!textInput.trim() && !selectedMedia) || partnerNotFound}
-                  className="px-4 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1.5 shrink-0"
-                >
-                  <Send size={13} />
-                  <span className="hidden sm:inline">Gửi</span>
-                </button>
-              </form>
-
-            </div>
-          )
-          }
-        </main>
+              </div>
+            )
+            }
+          </main>
         </div>
       </div>
 

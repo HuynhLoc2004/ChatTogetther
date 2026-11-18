@@ -3687,28 +3687,6 @@ const Home = ({ initialTab }) => {
                   <Music size={15} strokeWidth={1.75} />
                 </button>
 
-                {/* Nút mở nhanh "Dò sóng FM" trên desktop */}
-                <button
-                  type="button"
-                  onClick={() => setIsSpeedMatchOpen(true)}
-                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.05] hover:bg-white/[0.1] text-zinc-300 border border-white/[0.08] text-xs font-medium transition-colors cursor-pointer"
-                  title="Dò sóng FM"
-                >
-                  <Radio size={13} strokeWidth={1.75} />
-                  <span>Dò sóng FM</span>
-                </button>
-
-                {/* Nút "Bốc thẻ bài" trên desktop */}
-                <button
-                  type="button"
-                  onClick={() => setIsPartyWheelOpen(true)}
-                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.05] hover:bg-white/[0.1] text-zinc-300 border border-white/[0.08] text-xs font-medium transition-colors cursor-pointer"
-                  title="Bốc thẻ bài"
-                >
-                  <Dices size={13} strokeWidth={1.75} />
-                  <span>Bốc thẻ bài</span>
-                </button>
-
                 {/* Icon Tìm kiếm */}
                 <button
                   type="button"
@@ -5123,27 +5101,27 @@ const Home = ({ initialTab }) => {
         {/* ============================================================== */}
         {/* CỘT 3: BẢNG TRỰC TUYẾN SẢNH (340px) - NEO CỐ ĐỊNH BÊN PHẢI   */}
         {/* ============================================================== */}
-        <aside className="w-[340px] shrink-0 hidden xl:flex flex-col sticky top-0 h-[100dvh] p-5 gap-5 bg-[#090A0F] border-l border-white/[0.06] overflow-y-auto [scrollbar-width:none] select-none">
-          {/* KHỐI 1: ĐANG HOẠT ĐỘNG TRONG SẢNH */}
-          <div className="p-4 rounded-2xl bg-[#111319] border border-white/[0.06] flex flex-col gap-3">
+        <aside className="w-[340px] shrink-0 hidden xl:flex flex-col sticky top-0 h-[100dvh] p-5 gap-4 bg-[#090A0F] border-l border-white/[0.06] overflow-y-auto [scrollbar-width:none] select-none">
+          {/* KHỐI 1: ĐANG TRONG SẢNH */}
+          <div className="p-4 rounded-2xl bg-[#12151D] border border-white/[0.06] flex flex-col gap-3 shadow-sm">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <h3 className="text-xs font-bold text-[#F3F4F6] uppercase tracking-wider font-sans">
-                  Đang trong Sảnh ({activeLoungeUsers.length})
+                <h3 className="text-xs font-semibold text-[#F3F4F6] font-sans">
+                  Đang trong sảnh ({activeLoungeUsers.length})
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => handleSwitchTab('friends')}
-                className="text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
+                className="text-[11px] text-[#8E929F] hover:text-[#F3F4F6] transition-colors cursor-pointer"
               >
                 Xem tất cả
               </button>
             </div>
 
             {activeLoungeUsers.length === 0 ? (
-              <p className="text-xs text-zinc-500 py-2">Hiện chưa có thành viên nào khác trong sảnh.</p>
+              <p className="text-xs text-[#8E929F] py-2">Hiện chưa có thành viên nào khác trong sảnh.</p>
             ) : (
               <div className="grid grid-cols-5 gap-2.5 pt-1">
                 {activeLoungeUsers.map((u) => (
@@ -5162,9 +5140,9 @@ const Home = ({ initialTab }) => {
                         size={40}
                         className="group-hover:ring-2 group-hover:ring-white/30 transition-all rounded-full"
                       />
-                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-[#111319]" />
+                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-[#12151D]" />
                     </div>
-                    <span className="text-[10px] text-zinc-400 truncate max-w-[50px] group-hover:text-white transition-colors">
+                    <span className="text-[10px] text-[#8E929F] truncate max-w-[50px] group-hover:text-white transition-colors">
                       {u.name.split(' ')[0]}
                     </span>
                   </div>
@@ -5173,109 +5151,107 @@ const Home = ({ initialTab }) => {
             )}
           </div>
 
-          {/* KHỐI 2: SÓNG FM & THẺ BÀI NHANH */}
-          <div className="p-4 rounded-2xl bg-[#111319] border border-white/[0.06] flex flex-col gap-3.5">
-            {/* Sóng FM 1-chạm */}
-            <div className="flex flex-col gap-2 pb-3 border-b border-white/[0.06]">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Radio size={14} className="text-emerald-400" />
-                  <span className="text-xs font-bold text-[#F3F4F6] uppercase tracking-wider font-sans">
-                    Sóng FM Trực Tuyến
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsSpeedMatchOpen(true)}
-                  className="text-[11px] text-emerald-400 hover:text-emerald-300 font-medium transition-colors cursor-pointer"
-                >
-                  Dò sóng →
-                </button>
+          {/* KHỐI 2: SÓNG FM 5 GIÂY (CHUYÊN BIỆT CHO VOICE, KHÔNG LẶP NHẠC NỀN) */}
+          <div className="p-4 rounded-2xl bg-[#12151D] border border-white/[0.06] flex flex-col gap-3 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Radio size={14} className="text-zinc-400" />
+                <h3 className="text-xs font-semibold text-[#F3F4F6] font-sans">
+                  Sóng FM 5 giây
+                </h3>
               </div>
-
-              <div className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.05]">
-                <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
-                    <Radio size={15} className={isPlayingRadio ? "animate-pulse" : ""} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold text-[#F3F4F6] truncate">
-                      {currentTrack ? (currentTrack.title || currentTrack.name) : "Tần số Talovin FM"}
-                    </p>
-                    <p className="text-[10.5px] text-zinc-500 font-mono">
-                      {isPlayingRadio ? '96.4 MHz • Đang phát' : '96.4 MHz • Sẵn sàng'}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={togglePlayRadio}
-                  className="w-8 h-8 rounded-full bg-white text-zinc-950 hover:bg-zinc-200 active:scale-95 flex items-center justify-center transition-all shrink-0 cursor-pointer shadow-sm"
-                  title={isPlayingRadio ? "Tạm dừng" : "Phát sóng"}
-                >
-                  {isPlayingRadio ? <Pause size={13} className="fill-zinc-950" /> : <Play size={13} className="fill-zinc-950 ml-0.5" />}
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setIsSpeedMatchOpen(true)}
+                className="text-[11px] text-zinc-400 hover:text-white transition-colors cursor-pointer"
+              >
+                Dò sóng →
+              </button>
             </div>
 
-            {/* Thẻ bài gợi ý nhanh */}
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Dices size={14} className="text-amber-400" />
-                  <span className="text-xs font-bold text-[#F3F4F6] uppercase tracking-wider font-sans">
-                    Thẻ Bài Ngẫu Nhiên
-                  </span>
-                </div>
+            <p className="text-xs text-[#8E929F] leading-relaxed">
+              Lắng nghe voice 5 giây ngẫu nhiên từ người dùng khác hoặc gửi đoạn ghi âm ngắn của bạn.
+            </p>
+
+            <div className="grid grid-cols-2 gap-2 pt-0.5">
+              <button
+                type="button"
+                onClick={() => setIsSpeedMatchOpen(true)}
+                className="py-2 px-2.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.12] text-[#F3F4F6] border border-white/[0.1] text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-98"
+                title="Dò sóng ngẫu nhiên"
+              >
+                <Radio size={13} className="text-emerald-400" />
+                <span>Dò sóng</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsComposerModalOpen(true)}
+                className="py-2 px-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 hover:text-white border border-white/[0.06] text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-98"
+                title="Thu âm 5s gửi sảnh"
+              >
+                <Mic size={13} className="text-zinc-400" />
+                <span>Thu âm 5s</span>
+              </button>
+            </div>
+          </div>
+
+          {/* KHỐI 3: THẺ BÀI HÔM NAY */}
+          <div className="p-4 rounded-2xl bg-[#12151D] border border-white/[0.06] flex flex-col gap-3 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Dices size={14} className="text-zinc-400" />
+                <h3 className="text-xs font-semibold text-[#F3F4F6] font-sans">
+                  Thẻ bài hôm nay
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPartyWheelOpen(true)}
+                className="text-[11px] text-zinc-400 hover:text-white transition-colors cursor-pointer"
+              >
+                Mở bộ bài →
+              </button>
+            </div>
+
+            <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] flex flex-col gap-2.5">
+              <p className="text-xs text-[#E5E7EB] leading-relaxed italic">
+                "{QUICK_CHALLENGES[quickChallengeIdx]}"
+              </p>
+              <div className="flex items-center gap-2 pt-1">
                 <button
                   type="button"
-                  onClick={() => setIsPartyWheelOpen(true)}
-                  className="text-[11px] text-amber-400 hover:text-amber-300 font-medium transition-colors cursor-pointer"
+                  onClick={() => setQuickChallengeIdx((prev) => (prev + 1) % QUICK_CHALLENGES.length)}
+                  className="flex-1 py-1.5 px-2.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 hover:text-white border border-white/[0.06] text-[11px] font-medium transition-colors cursor-pointer text-center"
                 >
-                  Mở bộ bài →
+                  Đổi thẻ khác
                 </button>
-              </div>
-
-              <div className="p-3 rounded-xl bg-amber-500/[0.04] border border-amber-500/15 flex flex-col gap-2.5">
-                <p className="text-xs text-zinc-300 leading-relaxed italic">
-                  "{QUICK_CHALLENGES[quickChallengeIdx]}"
-                </p>
-                <div className="flex items-center gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setQuickChallengeIdx((prev) => (prev + 1) % QUICK_CHALLENGES.length)}
-                    className="flex-1 py-1.5 px-2.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-zinc-300 text-[11px] font-medium transition-colors cursor-pointer text-center"
-                  >
-                    Đổi thẻ khác
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNewPostContent(`[Thử thách]: "${QUICK_CHALLENGES[quickChallengeIdx]}"\n\n`);
-                      setIsComposerModalOpen(true);
-                    }}
-                    className="flex-1 py-1.5 px-2.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[11px] font-semibold transition-colors cursor-pointer text-center"
-                  >
-                    Bàn luận
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewPostContent(`[Thử thách]: "${QUICK_CHALLENGES[quickChallengeIdx]}"\n\n`);
+                    setIsComposerModalOpen(true);
+                  }}
+                  className="flex-1 py-1.5 px-2.5 rounded-lg bg-[#F3F4F6] hover:bg-white text-[#090A0F] text-[11px] font-semibold transition-colors cursor-pointer text-center shadow-sm"
+                >
+                  Bàn luận
+                </button>
               </div>
             </div>
           </div>
 
-          {/* KHỐI 3: PHÒNG ĐÀM THOẠI ĐANG MỞ */}
-          <div className="p-4 rounded-2xl bg-[#111319] border border-white/[0.06] flex flex-col gap-3">
+          {/* KHỐI 4: PHÒNG ĐÀM THOẠI */}
+          <div className="p-4 rounded-2xl bg-[#12151D] border border-white/[0.06] flex flex-col gap-3 shadow-sm">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Radio size={14} className="text-sky-400" />
-                <h3 className="text-xs font-bold text-[#F3F4F6] uppercase tracking-wider font-sans">
-                  Phòng Đàm Thoại ({publicRooms.length})
+                <Radio size={14} className="text-zinc-400" />
+                <h3 className="text-xs font-semibold text-[#F3F4F6] font-sans">
+                  Phòng đàm thoại ({publicRooms.length})
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => handleSwitchTab('rooms')}
-                className="text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
+                className="text-[11px] text-[#8E929F] hover:text-[#F3F4F6] transition-colors cursor-pointer"
               >
                 Xem tất cả
               </button>
@@ -5283,7 +5259,7 @@ const Home = ({ initialTab }) => {
 
             {publicRooms.length === 0 ? (
               <div className="py-3 text-center flex flex-col items-center gap-2">
-                <p className="text-xs text-zinc-500">Chưa có phòng voice công khai nào.</p>
+                <p className="text-xs text-[#8E929F]">Chưa có phòng voice công khai nào.</p>
                 <button
                   type="button"
                   onClick={() => setIsCreateModalOpen(true)}
@@ -5304,7 +5280,7 @@ const Home = ({ initialTab }) => {
                       <p className="text-xs font-semibold text-zinc-200 group-hover:text-white truncate">
                         #{room.nameroom || room.roomName || room.name || `Phòng ${room.id}`}
                       </p>
-                      <p className="text-[10.5px] text-zinc-500 font-mono">
+                      <p className="text-[10.5px] text-[#8E929F] font-mono">
                         {room.soluong || 1} người đang nghe
                       </p>
                     </div>
