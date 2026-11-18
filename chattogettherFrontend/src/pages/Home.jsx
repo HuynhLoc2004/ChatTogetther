@@ -4225,7 +4225,189 @@ const Home = ({ initialTab }) => {
               )}
 
               {/* ============================================================== */}
-              {/* BẢNG KHOẢNH KHẮC CỘNG ĐỒNG (MASONRY 2 CỘT TỰ NHIÊN)           */}
+              {/* LIVE SOCIAL LOUNGE DECK: THANH TƯƠNG TÁC SẢNH RỘNG MỞ          */}
+              {/* ============================================================== */}
+              {!activeSearchQuery && (
+                <div className="mb-6 space-y-4">
+                  {/* HÀNG 1: 2 THẺ TƯƠNG TÁC SẢNH (ĐANG TRỰC TUYẾN & THẺ BÀI HÔM NAY) */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* THẺ 1: THÀNH VIÊN TRỰC TUYẾN */}
+                    <div className="p-4 rounded-2xl bg-[#12151D] border border-white/[0.07] flex flex-col justify-between gap-3 shadow-sm">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-xl bg-white/[0.06] border border-white/[0.08] flex items-center justify-center text-zinc-300 shrink-0">
+                            <Users size={14} />
+                          </div>
+                          <div>
+                            <h3 className="text-xs font-semibold text-zinc-200">
+                              Thành viên trong sảnh
+                            </h3>
+                            <p className="text-[10px] text-zinc-400 font-mono">
+                              {activeLoungeUsers.length} người đang trực tuyến • {publicRooms.length} phòng mở
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleSwitchTab('rooms')}
+                          className="text-[11px] text-zinc-400 hover:text-white font-medium transition-colors cursor-pointer"
+                        >
+                          Tất cả phòng →
+                        </button>
+                      </div>
+
+                      {/* Danh sách người online 1-chạm nhắn tin */}
+                      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+                        {activeLoungeUsers.length === 0 ? (
+                          <p className="text-xs text-zinc-500 italic py-1">Chưa có thành viên nào khác online</p>
+                        ) : (
+                          activeLoungeUsers.map((u) => (
+                            <div
+                              key={u.id}
+                              onClick={() => navigate(`/messages/${u.id}`, { state: { from: location.pathname + location.search } })}
+                              className="relative cursor-pointer group shrink-0"
+                              title={`${u.name} (@${u.account}) - Bấm để nhắn tin`}
+                            >
+                              <div className="w-9 h-9 rounded-full ring-1 ring-white/10 group-hover:ring-white/40 transition-all overflow-hidden">
+                                <UserAvatar
+                                  avatarUrl={u.avatar}
+                                  username={u.account}
+                                  name={u.name}
+                                  userId={u.id}
+                                  size={36}
+                                />
+                              </div>
+                              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-[#12151D]" />
+                            </div>
+                          ))
+                        )}
+                      </div>
+
+                      {/* Phòng thảo luận nổi bật hoặc nút tạo phòng */}
+                      <div className="pt-2 border-t border-white/[0.04]">
+                        {publicRooms.length > 0 ? (
+                          <div
+                            onClick={() => onRoomCardClick(publicRooms[0])}
+                            className="p-2.5 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] transition-all cursor-pointer flex items-center justify-between"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className="w-6 h-6 rounded-lg bg-white/[0.06] text-zinc-300 flex items-center justify-center shrink-0">
+                                <Radio size={12} />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-medium text-zinc-200 truncate max-w-[160px] sm:max-w-[220px]">
+                                  #{publicRooms[0].nameroom || publicRooms[0].name || "Phòng thảo luận"}
+                                </p>
+                                <p className="text-[10px] text-zinc-400 font-mono">
+                                  {publicRooms[0].soluong || 1} người đang nghe
+                                </p>
+                              </div>
+                            </div>
+                            <span className="text-[11px] font-medium text-zinc-400 hover:text-white shrink-0">Vào phòng →</span>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setIsCreateModalOpen(true)}
+                            className="w-full py-2 px-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-200 border border-white/[0.06] text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                          >
+                            <Plus size={13} className="text-zinc-400" />
+                            <span>+ Mở phòng mới</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* THẺ 2: THẺ BÀI HÔM NAY (CÂU HỎI MỞ) */}
+                    <div className="p-4 rounded-2xl bg-[#12151D] border border-white/[0.07] flex flex-col justify-between gap-3 shadow-sm">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-xl bg-white/[0.06] border border-white/[0.08] flex items-center justify-center text-zinc-300 shrink-0">
+                            <Dices size={14} />
+                          </div>
+                          <div>
+                            <h3 className="text-xs font-semibold text-zinc-200">
+                              Thẻ bài hôm nay
+                            </h3>
+                            <p className="text-[10px] text-zinc-400 font-mono">
+                              Phá tan khoảng cách
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setQuickChallengeIdx((prev) => (prev + 1) % QUICK_CHALLENGES.length)}
+                          className="text-[11px] text-zinc-400 hover:text-white transition-colors flex items-center gap-1 cursor-pointer bg-white/[0.04] px-2 py-1 rounded-lg border border-white/[0.06]"
+                          title="Đổi thẻ câu hỏi khác"
+                        >
+                          <RotateCcw size={11} />
+                          <span>Đổi thẻ</span>
+                        </button>
+                      </div>
+
+                      <div className="p-2.5 rounded-xl bg-black/30 border border-white/[0.04] flex items-center min-h-[46px]">
+                        <p className="text-xs text-zinc-200 font-medium leading-relaxed italic line-clamp-2">
+                          "{QUICK_CHALLENGES[quickChallengeIdx]}"
+                        </p>
+                      </div>
+
+                      {/* Ô nhập câu trả lời nhanh & Nút Gửi trắng ngà */}
+                      <form onSubmit={handleQuickChallengeAnswer} className="flex items-center gap-1.5 pt-1 border-t border-white/[0.04]">
+                        <input
+                          type="text"
+                          placeholder="Viết góc nhìn của bạn..."
+                          value={quickChallengeAnswer}
+                          onChange={(e) => setQuickChallengeAnswer(e.target.value)}
+                          className="flex-1 min-w-0 bg-white/[0.05] border border-white/[0.08] focus:border-white/20 rounded-xl px-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none transition-colors"
+                        />
+                        <button
+                          type="submit"
+                          disabled={isSubmittingQuickAnswer}
+                          className="py-1.5 px-3.5 rounded-xl bg-[#F4F4F5] hover:bg-white text-[#090A0F] font-semibold text-xs transition-all shrink-0 cursor-pointer shadow-sm active:scale-95 disabled:opacity-50"
+                        >
+                          {isSubmittingQuickAnswer ? (
+                            <Loader2 size={13} className="animate-spin" />
+                          ) : (
+                            "Chia sẻ"
+                          )}
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+
+                  {/* HÀNG 2: BỘ LỌC CHỦ ĐỀ NHANH (TẤT CẢ, THỬ THÁCH, TÂM SỰ, ÂM THANH) */}
+                  <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+                    {[
+                      { id: 'all', label: 'Tất cả' },
+                      { id: 'challenge', label: 'Thử thách' },
+                      { id: 'tamsu', label: 'Tâm sự' },
+                      { id: 'audio', label: 'Âm thanh' }
+                    ].map((tab) => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => {
+                          setQuickFilter(tab.id);
+                          if (tab.id === 'challenge') setActiveFilterTag('thuthach');
+                          else if (tab.id === 'tamsu') setActiveFilterTag('tamsu');
+                          else if (tab.id === 'audio') setActiveFilterTag('amthanh');
+                          else setActiveFilterTag(null);
+                        }}
+                        className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer shrink-0 ${
+                          quickFilter === tab.id
+                            ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                            : 'bg-white/[0.04] text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.08] border border-white/[0.06]'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ============================================================== */}
+              {/* BẢNG KHOẢNH KHẮC CỘNG ĐỒNG (MASONRY ĐA CỘT TỰ NHIÊN)           */}
               {/* ============================================================== */}
               {!activeSearchQuery && (
                 <div className="flex items-center justify-between mb-4 px-1">
@@ -4246,8 +4428,8 @@ const Home = ({ initialTab }) => {
                   <p className="text-[11px] text-zinc-600 mt-1">Áp dụng thuật toán đối soát ngữ nghĩa & xếp hạng tương tác</p>
                 </div>
               ) : (loadingPosts && posts.length === 0) ? (
-                /* SKELETON MASONRY 2 CỘT */
-                <div className="columns-1 lg:columns-2 gap-5 space-y-5 w-full">
+                /* SKELETON MASONRY ĐA CỘT */
+                <div className="columns-1 md:columns-2 xl:columns-3 gap-5 space-y-5 w-full">
                   {[1, 2, 3, 4].map((i) => (
                     <div key={`skel-init-${i}`} className="break-inside-avoid mb-5 p-5 rounded-2xl bg-[#12151D] border border-white/[0.06] animate-pulse space-y-3.5">
                       <div className="flex items-center gap-3">
@@ -4287,7 +4469,7 @@ const Home = ({ initialTab }) => {
                 </div>
               ) : (
                 <div className="w-full">
-                  <div className="columns-1 lg:columns-2 gap-5 space-y-5 w-full">
+                  <div className="columns-1 md:columns-2 xl:columns-3 gap-5 space-y-5 w-full">
                   {displayedPosts.map((post) => {
                     const currentReaction = REACTION_EMOJIS.find(e => e.type === post.myReaction);
                     const isSaved = Array.isArray(savedPostIds) && savedPostIds.includes(post.id);
@@ -4870,7 +5052,7 @@ const Home = ({ initialTab }) => {
 
                   {/* SKELETON KHI ĐANG TẢI THÊM BÀI VIẾT (INFINITE SCROLL) */}
                   {isFetchingMore && (
-                    <div className="columns-1 lg:columns-2 gap-5 space-y-5 w-full mt-4">
+                    <div className="columns-1 md:columns-2 xl:columns-3 gap-5 space-y-5 w-full mt-4">
                       {[1, 2].map((i) => (
                         <div key={`skel-more-${i}`} className="break-inside-avoid mb-5 p-5 rounded-2xl bg-[#12151D] border border-white/[0.06] animate-pulse space-y-3">
                           <div className="flex items-center gap-3">
@@ -5130,154 +5312,6 @@ const Home = ({ initialTab }) => {
             );
           })()}
         </main>
-
-        {/* ============================================================== */}
-        {/* CỘT PHẢI DESKTOP: 2 KHỐI ĐƠN SẮC GỌN GÀNG (hidden xl:flex)     */}
-        {/* ============================================================== */}
-        <aside className="hidden xl:flex w-[320px] shrink-0 sticky top-0 h-[100dvh] border-l border-white/[0.06] bg-[#090A0F] p-4 flex-col gap-4 overflow-y-auto custom-dark-scrollbar select-none z-10">
-          {/* KHỐI 1: ĐANG TRỰC TUYẾN */}
-          <div className="p-4 rounded-2xl bg-[#12151D] border border-white/[0.07] shadow-sm flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-xl bg-white/[0.06] border border-white/[0.08] flex items-center justify-center text-zinc-300 shrink-0">
-                  <Users size={14} />
-                </div>
-                <div>
-                  <h3 className="text-xs font-semibold text-zinc-200">
-                    Đang trực tuyến
-                  </h3>
-                  <p className="text-[10px] text-zinc-400 font-mono">
-                    {activeLoungeUsers.length} người • {publicRooms.length} phòng mở
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleSwitchTab('rooms')}
-                className="text-[11px] text-zinc-400 hover:text-white font-medium transition-colors cursor-pointer"
-              >
-                Tất cả →
-              </button>
-            </div>
-
-            {/* Danh sách người online 1-chạm nhắn tin */}
-            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
-              {activeLoungeUsers.length === 0 ? (
-                <p className="text-xs text-zinc-500 italic py-1">Chưa có thành viên khác online</p>
-              ) : (
-                activeLoungeUsers.slice(0, 6).map((u) => (
-                  <div
-                    key={u.id}
-                    onClick={() => navigate(`/messages/${u.id}`, { state: { from: location.pathname + location.search } })}
-                    className="relative cursor-pointer group shrink-0"
-                    title={`${u.name} (@${u.account}) - Bấm để nhắn tin`}
-                  >
-                    <div className="w-8 h-8 rounded-full ring-1 ring-white/10 group-hover:ring-white/40 transition-all overflow-hidden">
-                      <UserAvatar
-                        avatarUrl={u.avatar}
-                        username={u.account}
-                        name={u.name}
-                        userId={u.id}
-                        size={32}
-                      />
-                    </div>
-                    <span className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-[#12151D]" />
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* Phòng thảo luận nổi bật hoặc nút tạo phòng */}
-            <div className="pt-1 border-t border-white/[0.04]">
-              {publicRooms.length > 0 ? (
-                <div
-                  onClick={() => onRoomCardClick(publicRooms[0])}
-                  className="p-2.5 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] transition-all cursor-pointer flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-6 h-6 rounded-lg bg-white/[0.06] text-zinc-300 flex items-center justify-center shrink-0">
-                      <Radio size={12} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-medium text-zinc-200 truncate max-w-[150px]">
-                        #{publicRooms[0].nameroom || publicRooms[0].name || "Phòng thảo luận"}
-                      </p>
-                      <p className="text-[10px] text-zinc-400 font-mono">
-                        {publicRooms[0].soluong || 1} người đang nghe
-                      </p>
-                    </div>
-                  </div>
-                  <span className="text-[11px] font-medium text-zinc-400 hover:text-white shrink-0">Vào →</span>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setIsCreateModalOpen(true)}
-                  className="w-full py-2 px-3 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-zinc-200 border border-white/10 text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
-                >
-                  <Plus size={13} className="text-zinc-400" />
-                  <span>+ Mở phòng mới</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* KHỐI 2: THẺ BÀI HÔM NAY */}
-          <div className="p-4 rounded-2xl bg-[#12151D] border border-white/[0.07] shadow-sm flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-xl bg-white/[0.06] border border-white/[0.08] flex items-center justify-center text-zinc-300 shrink-0">
-                  <Dices size={14} />
-                </div>
-                <div>
-                  <h3 className="text-xs font-semibold text-zinc-200">
-                    Thẻ bài hôm nay
-                  </h3>
-                  <p className="text-[10px] text-zinc-400 font-mono">
-                    Phá tan khoảng cách
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setQuickChallengeIdx((prev) => (prev + 1) % QUICK_CHALLENGES.length)}
-                className="text-[11px] text-zinc-400 hover:text-white transition-colors flex items-center gap-1 cursor-pointer bg-white/[0.04] px-2 py-1 rounded-lg border border-white/[0.06]"
-                title="Đổi thẻ câu hỏi khác"
-              >
-                <RotateCcw size={11} />
-                <span>Đổi thẻ</span>
-              </button>
-            </div>
-
-            <div className="p-3 rounded-xl bg-black/40 border border-white/[0.06] min-h-[60px] flex items-center">
-              <p className="text-xs text-zinc-200 font-medium leading-relaxed italic line-clamp-3">
-                "{QUICK_CHALLENGES[quickChallengeIdx]}"
-              </p>
-            </div>
-
-            {/* Ô nhập câu trả lời nhanh & Nút Gửi trắng ngà */}
-            <form onSubmit={handleQuickChallengeAnswer} className="flex items-center gap-1.5 pt-1 border-t border-white/[0.04]">
-              <input
-                type="text"
-                placeholder="Nhập nhanh góc nhìn..."
-                value={quickChallengeAnswer}
-                onChange={(e) => setQuickChallengeAnswer(e.target.value)}
-                className="flex-1 min-w-0 bg-white/[0.05] border border-white/[0.08] focus:border-white/20 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none transition-colors"
-              />
-              <button
-                type="submit"
-                disabled={isSubmittingQuickAnswer}
-                className="py-2 px-3.5 rounded-xl bg-[#F4F4F5] hover:bg-white text-[#090A0F] font-medium text-xs transition-all shrink-0 cursor-pointer shadow-sm active:scale-95 disabled:opacity-50"
-              >
-                {isSubmittingQuickAnswer ? (
-                  <Loader2 size={13} className="animate-spin" />
-                ) : (
-                  "Gửi"
-                )}
-              </button>
-            </form>
-          </div>
-        </aside>
       </div>
 
       {/* NÚT TẠO BÀI VIẾT NỔI (+ ĐĂNG) TRÊN MOBILE - CHỈ HIỂN THỊ KHI Ở TAB SẢNH (feed) */}
@@ -6391,43 +6425,47 @@ const Home = ({ initialTab }) => {
       )}
 
       {/* ============================================================== */}
-      {/* NOTIFICATION DRAWER / MODAL (Mobile Bottom Sheet / Desktop Slide-Over) */}
+      {/* NOTIFICATION SLIDE-OVER DRAWER (CẠNH PHẢI MƯỢT MÀ 60/120FPS)  */}
       {/* ============================================================== */}
       <AnimatePresence>
         {isNotifOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-[120] flex justify-center md:justify-end items-start md:items-stretch bg-black/70 backdrop-blur-sm p-3 md:p-0"
-            onClick={() => setIsNotifOpen(false)}
-          >
+          <div className="fixed inset-0 z-[120] flex justify-end select-none">
+            {/* Backdrop làm mờ nhẹ phía sau */}
             <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="fixed md:static inset-x-3 md:inset-x-auto top-16 md:top-0 w-auto md:w-[420px] max-w-full max-h-[70dvh] md:max-h-full h-auto md:h-full bg-[#13161E] md:bg-zinc-950 border border-white/10 md:border-l md:border-t-0 md:border-r-0 md:border-b-0 md:border-zinc-800 rounded-2xl md:rounded-none shadow-2xl flex flex-col overflow-hidden z-50 select-none"
+              className="fixed inset-0 bg-black/50 backdrop-blur-[2px]"
+              onClick={() => setIsNotifOpen(false)}
+            />
+
+            {/* Ngăn kéo trượt từ phải sang trái */}
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'tween', duration: 0.28, ease: [0.25, 1, 0.5, 1] }}
+              drag="x"
+              dragConstraints={{ left: 0, right: 0 }}
+              dragElastic={0.2}
+              onDragEnd={(e, { offset, velocity }) => {
+                if (offset.x > 80 || velocity.x > 300) {
+                  setIsNotifOpen(false);
+                }
+              }}
+              className="relative fixed inset-y-0 right-0 z-50 w-[86vw] max-w-[380px] bg-[#0D0F14] border-l border-white/[0.08] shadow-2xl flex flex-col h-full overflow-hidden"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Header Drawer / Modal */}
-              <div className="flex items-center justify-between px-4 py-3.5 border-b border-white/[0.06] md:border-zinc-800 bg-[#13161E] md:bg-zinc-900 flex-shrink-0">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-zinc-800/80 border border-zinc-700/60 flex items-center justify-center text-zinc-200">
-                    <Bell size={16} strokeWidth={1.8} />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-white tracking-tight">Thông báo sảnh</span>
-                      {notifications.filter(n => n.unread && n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM').length > 0 && (
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-200 border border-zinc-700">
-                          {notifications.filter(n => n.unread && n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM').length > 99 ? '99+' : notifications.filter(n => n.unread && n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM').length} mới
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-zinc-400 m-0">Tương tác và cập nhật theo thời gian thực</p>
-                  </div>
+              {/* Header ngăn kéo: Tiêu đề "Thông báo", "Đọc tất cả" & X */}
+              <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between shrink-0 bg-[#0D0F14]">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-white tracking-tight">Thông báo</h3>
+                  {notifications.filter(n => n.unread && n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM').length > 0 && (
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/[0.08] text-zinc-300 border border-white/[0.08]">
+                      {notifications.filter(n => n.unread && n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM').length > 99 ? '99+' : notifications.filter(n => n.unread && n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM').length} mới
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -6435,32 +6473,32 @@ const Home = ({ initialTab }) => {
                     <button
                       type="button"
                       onClick={handleMarkAllNotificationsRead}
-                      className="text-xs text-zinc-300 hover:text-white px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] transition-colors"
+                      className="text-xs text-zinc-400 hover:text-white px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] transition-colors cursor-pointer"
                     >
-                      Đánh dấu đã đọc
+                      Đọc tất cả
                     </button>
                   )}
                   <button
                     type="button"
                     onClick={() => setIsNotifOpen(false)}
-                    className="w-8 h-8 rounded-xl hover:bg-white/10 text-zinc-400 hover:text-white flex items-center justify-center transition-colors"
+                    className="w-7 h-7 rounded-lg hover:bg-white/[0.06] text-zinc-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
                     title="Đóng"
                   >
-                    <X size={18} />
+                    <X size={16} />
                   </button>
                 </div>
               </div>
 
-              {/* Body: Danh sách thông báo (Mới nhất ở trên xuống dưới - loại trừ tin nhắn chat) */}
-              <div className="flex-1 overflow-y-auto p-3 space-y-2.5 custom-dark-scrollbar">
+              {/* Danh sách thông báo phẳng, liền mạch (BỎ ĐÓNG HỘP TỪNG DÒNG) */}
+              <div className="flex-1 overflow-y-auto divide-y divide-white/[0.05] custom-dark-scrollbar">
                 {notifications.filter(n => n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM').length === 0 ? (
                   <div className="py-24 text-center px-4 text-zinc-400">
-                    <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mx-auto mb-3 text-zinc-500">
-                      <Bell size={22} className="opacity-60" />
+                    <div className="w-11 h-11 rounded-2xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center mx-auto mb-3 text-zinc-400">
+                      <Bell size={20} className="opacity-60" />
                     </div>
-                    <p className="text-sm font-semibold text-zinc-200">Chưa có thông báo nào</p>
+                    <p className="text-sm font-medium text-zinc-200">Chưa có thông báo nào</p>
                     <p className="text-xs text-zinc-400 mt-1 max-w-xs mx-auto leading-relaxed">
-                      Các lượt kết bạn, tương tác bài viết và thông báo hệ thống sẽ hiển thị ở đây.
+                      Các tương tác và cập nhật bạn bè sẽ hiển thị ở đây.
                     </p>
                   </div>
                 ) : (
@@ -6472,7 +6510,6 @@ const Home = ({ initialTab }) => {
                       const targetPostId = n.targetPostId || n.postId || n.referenceId;
                       const isPostNotif = ['POST_REACT', 'POST_COMMENT', 'COMMENT_REPLY', 'COMMENT_LIKE', 'POST_SHARE', 'REACTION', 'COMMENT', 'REPOST'].includes(n.type) || !!targetPostId;
 
-                      // Trích xuất thông tin người tương tác từ mọi trường có thể có
                       const effectiveActorId = n.actorId || n.actor_id || n.senderId || n.sender_id || n.userId || n.user_id;
                       let effectiveUsername = n.actorUsername || n.actor_username || n.actorAccount || n.senderUsername || n.username || n.account || n.actorName;
                       const effectiveAvatar = n.actorAvatar || n.actor_avatar || n.senderAvatar || n.avatar || n.userAvatar;
@@ -6494,23 +6531,20 @@ const Home = ({ initialTab }) => {
                         <div
                           key={n.id}
                           onClick={() => handleOpenNotification(n)}
-                          className={`p-3 rounded-2xl border transition-all flex items-start gap-3 cursor-pointer ${n.unread
-                            ? 'bg-zinc-900/90 border-zinc-700/80 shadow-md hover:border-zinc-500'
-                            : 'bg-zinc-950/60 border-zinc-800/60 hover:bg-zinc-900/40 text-zinc-300'
-                            }`}
+                          className={`px-5 py-3.5 hover:bg-white/[0.03] transition-colors flex items-start gap-3 cursor-pointer ${n.unread ? 'bg-white/[0.02]' : ''}`}
                         >
-                          {/* Left: Avatar người tương tác & Interaction Badge */}
+                          {/* Left: Avatar tròn */}
                           <div className="flex-shrink-0 mt-0.5">
                             {isUserInteraction ? (
-                              <div className="relative w-10 h-10 shrink-0">
+                              <div className="relative w-9 h-9 shrink-0">
                                 <UserAvatar
                                   avatarUrl={effectiveAvatar}
                                   username={effectiveUsername}
                                   account={effectiveUsername}
                                   name={effectiveDisplayName}
                                   userId={effectiveActorId}
-                                  size={40}
-                                  className="w-10 h-10 rounded-full hover:opacity-90 transition-opacity"
+                                  size={36}
+                                  className="w-9 h-9 rounded-full hover:opacity-90 transition-opacity"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     if (effectiveActorId) {
@@ -6520,37 +6554,37 @@ const Home = ({ initialTab }) => {
                                   }}
                                   title={`Xem trang cá nhân ${displayName}`}
                                 />
-                                {/* Huy hiệu nhỏ loại tương tác ở góc dưới phải avatar */}
-                                <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-zinc-900 border border-zinc-700/80 flex items-center justify-center text-zinc-300 shadow-sm pointer-events-none">
+                                {/* Huy hiệu nhỏ loại tương tác ở góc dưới phải avatar (màu trung tính tối giản) */}
+                                <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[#0D0F14] border border-white/[0.1] flex items-center justify-center text-zinc-300 shadow-sm pointer-events-none">
                                   {(n.type === 'POST_REACT' || n.type === 'REACTION' || n.type === 'COMMENT_LIKE' || n.text?.includes('cảm xúc') || n.text?.includes('thích') || n.text?.includes('tim')) ? (
-                                    <Heart size={9} className="text-rose-400 fill-rose-400" />
+                                    <Heart size={8} className="text-rose-400 fill-rose-400" />
                                   ) : (n.type === 'POST_COMMENT' || n.type === 'COMMENT' || n.type === 'COMMENT_REPLY' || n.text?.includes('bình luận') || n.text?.includes('phản hồi')) ? (
-                                    <MessageSquare size={9} className="text-emerald-400 fill-emerald-400" />
+                                    <MessageSquare size={8} className="text-zinc-300" />
                                   ) : (n.type === 'POST_SHARE' || n.type === 'REPOST' || n.text?.includes('chia sẻ') || n.text?.includes('đăng lại')) ? (
-                                    <Share2 size={9} className="text-sky-400" />
+                                    <Share2 size={8} className="text-zinc-300" />
                                   ) : (
-                                    <UserPlus size={9} className="text-amber-400" />
+                                    <UserPlus size={8} className="text-zinc-300" />
                                   )}
                                 </div>
                               </div>
                             ) : (
-                              <div className="w-10 h-10 rounded-full bg-zinc-800/90 border border-zinc-700 flex items-center justify-center text-zinc-300 shrink-0">
+                              <div className="w-9 h-9 rounded-full bg-white/[0.05] border border-white/[0.08] flex items-center justify-center text-zinc-300 shrink-0">
                                 {n.type === 'POST_TAKEDOWN' ? (
-                                  <AlertTriangle size={18} className="text-amber-400" />
+                                  <AlertTriangle size={15} className="text-amber-400" />
                                 ) : (
-                                  <Bell size={18} strokeWidth={1.8} />
+                                  <Bell size={15} strokeWidth={1.8} />
                                 )}
                               </div>
                             )}
                           </div>
 
-                          {/* Right: Nội dung thông báo */}
+                          {/* Center: Nội dung thông báo + thời gian */}
                           <div className="flex-1 min-w-0">
                             {isFriendReq ? (
                               <div>
-                                <p className="text-xs text-zinc-200 leading-relaxed font-sans m-0">
+                                <p className="text-xs text-zinc-200 leading-snug font-sans m-0">
                                   <span
-                                    className="font-bold text-white hover:underline cursor-pointer"
+                                    className="font-semibold text-white hover:underline cursor-pointer"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       if (n.actorId) {
@@ -6561,31 +6595,26 @@ const Home = ({ initialTab }) => {
                                   >
                                     {displayName}
                                   </span>
-                                  {' '}đã gửi cho bạn một lời mời kết bạn.
+                                  {' '}đã gửi lời mời kết bạn.
                                 </p>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <span className="text-[10px] text-zinc-400 font-mono">
-                                    {n.time || 'Vừa xong'}
-                                  </span>
-                                  {n.unread && (
-                                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
-                                  )}
-                                </div>
+                                <span className="text-[10px] text-zinc-400 font-mono mt-1 block">
+                                  {n.time || 'Vừa xong'}
+                                </span>
 
-                                {/* 2 Nút Đồng ý / Từ chối nếu PENDING */}
+                                {/* 2 Nút Đồng ý / Từ chối nếu PENDING (Đơn sắc trung tính) */}
                                 {n.status === 'PENDING' && (
-                                  <div className="grid grid-cols-2 gap-2 mt-2.5" onClick={(e) => e.stopPropagation()}>
+                                  <div className="grid grid-cols-2 gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
                                     <button
                                       type="button"
                                       onClick={() => handleAcceptFriendRequest(n.actorId, n.id)}
-                                      className="h-8 rounded-lg bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs transition-all shadow-sm active:scale-95 flex items-center justify-center"
+                                      className="h-7 rounded-lg bg-[#F4F4F5] hover:bg-white text-[#090A0F] font-semibold text-xs transition-all shadow-sm active:scale-95 flex items-center justify-center cursor-pointer"
                                     >
                                       Đồng ý
                                     </button>
                                     <button
                                       type="button"
                                       onClick={() => handleDeclineFriendRequest(n.actorId, n.id)}
-                                      className="h-8 rounded-lg bg-zinc-900 text-zinc-300 border border-zinc-800 hover:bg-zinc-800 font-semibold text-xs transition-all active:scale-95 flex items-center justify-center"
+                                      className="h-7 rounded-lg bg-white/[0.05] text-zinc-300 border border-white/[0.08] hover:bg-white/[0.1] font-medium text-xs transition-all active:scale-95 flex items-center justify-center cursor-pointer"
                                     >
                                       Từ chối
                                     </button>
@@ -6593,23 +6622,23 @@ const Home = ({ initialTab }) => {
                                 )}
 
                                 {n.status === 'ACCEPTED' && (
-                                  <div className="mt-2 text-xs text-emerald-400 font-medium flex items-center gap-1">
-                                    <CheckCircle2 size={13} />
+                                  <div className="mt-1.5 text-xs text-zinc-400 font-medium flex items-center gap-1">
+                                    <CheckCircle2 size={12} className="text-zinc-300" />
                                     <span>Đã trở thành bạn bè</span>
                                   </div>
                                 )}
 
                                 {n.status === 'REJECTED' && (
-                                  <div className="mt-2 text-xs text-zinc-500 font-medium">
+                                  <div className="mt-1.5 text-xs text-zinc-400 font-medium">
                                     Đã từ chối lời mời
                                   </div>
                                 )}
                               </div>
                             ) : isFriendAccepted ? (
                               <div>
-                                <p className="text-xs text-zinc-200 leading-relaxed font-sans m-0">
+                                <p className="text-xs text-zinc-200 leading-snug font-sans m-0">
                                   <span
-                                    className="font-bold text-white hover:underline cursor-pointer"
+                                    className="font-semibold text-white hover:underline cursor-pointer"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       if (n.actorId) {
@@ -6620,16 +6649,11 @@ const Home = ({ initialTab }) => {
                                   >
                                     {displayName}
                                   </span>
-                                  {' '}đã đồng ý kết bạn với bạn.
+                                  {' '}đã đồng ý kết bạn.
                                 </p>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <span className="text-[10px] text-zinc-400 font-mono">
-                                    {n.time || 'Vừa xong'}
-                                  </span>
-                                  {n.unread && (
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                                  )}
-                                </div>
+                                <span className="text-[10px] text-zinc-400 font-mono mt-1 block">
+                                  {n.time || 'Vừa xong'}
+                                </span>
                                 <button
                                   type="button"
                                   onClick={(e) => {
@@ -6637,33 +6661,35 @@ const Home = ({ initialTab }) => {
                                     setIsNotifOpen(false);
                                     navigate(`/messages?userId=${n.actorId}`);
                                   }}
-                                  className="mt-2 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-200 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+                                  className="mt-2 px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.08] text-zinc-200 text-xs font-medium flex items-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer"
                                 >
                                   <MessageSquare size={12} />
-                                  <span>Nhắn tin ngay</span>
+                                  <span>Nhắn tin</span>
                                 </button>
                               </div>
                             ) : (
                               <div>
-                                <p className="text-xs text-zinc-100 leading-relaxed font-sans m-0">
+                                <p className="text-xs text-zinc-200 leading-snug font-sans m-0">
                                   {n.text || n.content || n.message}
                                 </p>
-                                <div className="flex items-center gap-2 mt-1.5">
+                                <div className="flex items-center gap-2 mt-1">
                                   <span className="text-[10px] text-zinc-400 font-mono">
                                     {n.time || 'Vừa xong'}
                                   </span>
-                                  {n.unread && (
-                                    <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse"></span>
-                                  )}
                                   {isPostNotif && (
                                     <span className="text-[10px] text-zinc-400 hover:text-white transition-colors">
-                                      • Chạm để xem bài viết
+                                      • Chạm để xem bài
                                     </span>
                                   )}
                                 </div>
                               </div>
                             )}
                           </div>
+
+                          {/* Right: Chấm tròn sáng nhỏ ở mép phải nếu chưa đọc */}
+                          {n.unread && (
+                            <span className="w-2 h-2 rounded-full bg-white shrink-0 mt-1.5" />
+                          )}
                         </div>
                       );
                     })
@@ -6671,20 +6697,20 @@ const Home = ({ initialTab }) => {
               </div>
 
               {/* Footer Drawer */}
-              <div className="p-3 border-t border-zinc-800/80 bg-[#09090b] flex items-center justify-between text-xs text-zinc-400 flex-shrink-0">
-                <span className="text-[11px] text-zinc-500">Thông báo tự động lưu trữ</span>
+              <div className="px-5 py-3 border-t border-white/[0.06] bg-[#0D0F14] flex items-center justify-between text-xs text-zinc-400 shrink-0">
+                <span className="text-[11px] text-zinc-400 font-mono">Lưu trữ tự động</span>
                 {notifications.length > 0 && (
                   <button
                     type="button"
                     onClick={handleClearAllNotifications}
-                    className="text-zinc-400 hover:text-rose-400 transition-colors text-xs font-medium px-2 py-1 rounded-lg hover:bg-zinc-900"
+                    className="text-zinc-400 hover:text-white transition-colors text-xs font-medium px-2 py-1 rounded-lg hover:bg-white/[0.04] cursor-pointer"
                   >
                     Xóa toàn bộ
                   </button>
                 )}
               </div>
             </motion.div>
-          </motion.div>
+          </div>
         )}
       </AnimatePresence>
 
