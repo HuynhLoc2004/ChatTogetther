@@ -160,6 +160,7 @@ const CallPage = () => {
   const ringGainRef = useRef(null);
   const ringIntervalRef = useRef(null);
   const isCallEndedRef = useRef(false);
+  const isCallConnectedRef = useRef(false);
   const iceCandidateQueueRef = useRef([]);
   const localCandidatesHistoryRef = useRef([]);
   const lastOfferRef = useRef(null);
@@ -173,9 +174,21 @@ const CallPage = () => {
   const callIdRef = useRef(searchParams.get('callId') || (`call_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`));
 
   // Mutable refs to prevent useEffect from re-triggering and tearing down WebRTC
+  const isIncomingRef = useRef(isIncoming);
+  isIncomingRef.current = isIncoming;
+  const isVideoParamRef = useRef(isVideoParam);
+  isVideoParamRef.current = isVideoParam;
+  const roomIdRef = useRef(roomId);
+  roomIdRef.current = roomId;
+  const currentUserIdRef = useRef(currentUserId);
+  currentUserIdRef.current = currentUserId;
+
   const handleCallSignalRef = useRef(null);
   const sendCallSignalRef = useRef(null);
   const endCallRef = useRef(null);
+  const startRingAudioRef = useRef(null);
+  const stopRingAudioRef = useRef(null);
+  const cleanupCallRef = useRef(null);
 
   // Sync duration ref
   useEffect(() => {
@@ -304,7 +317,7 @@ const CallPage = () => {
   }, []);
 
   const startRingAudio = useCallback(() => {
-    if (isIncoming || isConnected) return;
+    if (isIncomingRef.current || isConnected || isCallConnectedRef.current) return;
     try {
       // Dọn dẹp phiên âm thanh cũ nếu còn
       stopRingAudio();
@@ -345,7 +358,7 @@ const CallPage = () => {
         } catch (_) { }
       }, 1400);
     } catch (e) { }
-  }, [isIncoming, isConnected, stopRingAudio]);
+  }, [isConnected, stopRingAudio]);
 
   // 4. Cleanup Call Resources (Zero-Lag + An toàn WebSocket)
   const cleanupCall = useCallback(() => {
@@ -510,15 +523,9 @@ const CallPage = () => {
 
     cleanupCall();
 
-    // Giữ trễ nhỏ 120ms để browser kịp flush dữ liệu socket ra ngoài trước khi chuyển route
+    // Giữ trễ nhỏ 100ms để browser kịp flush dữ liệu socket ra ngoài trước khi chuyển route
     setTimeout(() => {
-      // 1. Ưu tiên pop lịch sử để loại bỏ /call khỏi stack mà không sinh bản sao lịch sử
-      if (window.history.state && window.history.state.idx > 0) {
-        navigate(-1);
-        return;
-      }
-
-      // 2. Fallback nếu không có lịch sử trước đó (mở link trực tiếp hoặc refresh trang gọi)
+      // 1. Ưu tiên tuyệt đối fromParam để quay về đúng màn hình ban đầu và THAY THẾ (replace) route /call khỏi lịch sử
       const fromParam = searchParams.get('from');
       if (fromParam) {
         try {
@@ -530,6 +537,13 @@ const CallPage = () => {
         } catch (_) { }
       }
 
+      // 2. Nếu có lịch sử router trước đó
+      if (window.history.state && window.history.state.idx > 0) {
+        navigate(-1);
+        return;
+      }
+
+      // 3. Fallback an toàn
       if (effectivePartner) {
         navigate(`/messages/${effectivePartner}`, { replace: true });
       } else if (isRoomCall && roomId) {
@@ -537,8 +551,8 @@ const CallPage = () => {
       } else {
         navigate('/', { replace: true });
       }
-    }, 120);
-  }, [sendCallSignal, cleanupCall, stopRingAudio, isVideoParam, isVideoCall, partnerId, isRoomCall, roomId, searchParams, navigate, currentUserId, isIncoming]);
+    }, 100);
+  }, [sendCallSignal, cleanupCall, stopRingAudio, isVideoParam, isVideoCall, partnerId, isRoomCall, roomId, searchParams, navigate, currentUserId]);
 
   // 7. Handle Signal Incoming
   const handleCallSignal = useCallback(async (msg) => {
@@ -626,15 +640,17 @@ const CallPage = () => {
         // 4. Chỉ tạo và gán Answer nếu pc đang ở đúng trạng thái have-remote-offer
         if (pc.signalingState === 'have-remote-offer') {
           const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          const answerPayload = { type: answer.type, sdp: answer.sdp };
-          lastAnswerRef.current = answerPayload;
-          sendCallSignal({
-            type: 'ANSWER',
-            answer: answerPayload,
-            isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled),
-            isVideoEnabled: Boolean(isVideoEnabled)
-          });
+          if (pc.signalingState === 'have-remote-offer') {
+            await pc.setLocalDescription(answer);
+            const answerPayload = { type: answer.type, sdp: answer.sdp };
+            lastAnswerRef.current = answerPayload;
+            sendCallSignal({
+              type: 'ANSWER',
+              answer: answerPayload,
+              isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled),
+              isVideoEnabled: Boolean(isVideoEnabled)
+            });
+          }
         }
       } catch (e) {
         console.error("Lỗi xử lý OFFER:", e);
@@ -668,15 +684,17 @@ const CallPage = () => {
 
         if (pc.signalingState === 'stable') {
           const offer = await pc.createOffer();
-          await pc.setLocalDescription(offer);
-          const offerPayload = { type: offer.type, sdp: offer.sdp };
-          lastOfferRef.current = offerPayload;
-          sendCallSignal({
-            type: 'OFFER',
-            offer: offerPayload,
-            isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled),
-            isVideoEnabled: Boolean(isVideoEnabled)
-          });
+          if (pc.signalingState === 'stable') {
+            await pc.setLocalDescription(offer);
+            const offerPayload = { type: offer.type, sdp: offer.sdp };
+            lastOfferRef.current = offerPayload;
+            sendCallSignal({
+              type: 'OFFER',
+              offer: offerPayload,
+              isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled),
+              isVideoEnabled: Boolean(isVideoEnabled)
+            });
+          }
         }
       } catch (e) {
         console.error("Lỗi gửi OFFER sau ACCEPT:", e);
@@ -759,6 +777,9 @@ const CallPage = () => {
     handleCallSignalRef.current = handleCallSignal;
     sendCallSignalRef.current = sendCallSignal;
     endCallRef.current = endCall;
+    startRingAudioRef.current = startRingAudio;
+    stopRingAudioRef.current = stopRingAudio;
+    cleanupCallRef.current = cleanupCall;
   });
 
   // 8. Initialize WebRTC Media & STOMP Socket (Chỉ mount 1 lần duy nhất)
@@ -767,8 +788,8 @@ const CallPage = () => {
 
     // Ngay khi mount CallPage, dập tắt toàn bộ chuông reo từ banner hoặc component khác
     window.dispatchEvent(new CustomEvent('talovin_stop_all_ring_audio'));
-    if (isIncoming) {
-      stopRingAudio();
+    if (isIncomingRef.current) {
+      stopRingAudioRef.current?.();
     }
 
     const initCall = async () => {
@@ -986,7 +1007,7 @@ const CallPage = () => {
               });
             }
 
-            if (isIncoming) {
+            if (isIncomingRef.current) {
               // Là người nhận máy: gửi tín hiệu ACCEPT để người gọi biết và gửi OFFER
               setCallStatusText('Đang thiết lập kênh đàm thoại...');
               sendCallSignalRef.current?.({ type: 'ACCEPT' });
@@ -1008,9 +1029,9 @@ const CallPage = () => {
               }, 1200);
             } else {
               // Là người khởi tạo cuộc gọi: bắt đầu đổ chuông và gửi tín hiệu RINGING
-              startRingAudio();
+              startRingAudioRef.current?.();
               setCallStatusText('Đang đổ chuông...');
-              sendCallSignalRef.current?.({ type: 'RINGING', isVideo: isVideoParam });
+              sendCallSignalRef.current?.({ type: 'RINGING', isVideo: isVideoParamRef.current });
 
               // Tự động ngắt sau 45s nếu đối phương không bắt máy
               if (!connectTimeoutRef.current) {
@@ -1042,9 +1063,9 @@ const CallPage = () => {
 
     return () => {
       isActive = false;
-      cleanupCall();
+      cleanupCallRef.current?.();
     };
-  }, [roomId, isIncoming, isVideoParam, currentUserId, cleanupCall, startRingAudio, stopRingAudio]);
+  }, []); // Chỉ mount 1 lần duy nhất, tuyệt đối không re-run WebRTC khiến đổ chuông ngược lại
 
   // Khởi động đồng hồ đếm thời gian CHỈ KHI cuộc gọi đã thực sự kết nối (đối phương đã nhấc máy)
   useEffect(() => {

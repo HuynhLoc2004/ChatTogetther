@@ -6,7 +6,8 @@ import {
   Clock, CheckCircle2, ChevronDown, Volume2, Shield, Share2, Sparkles,
   PhoneCall, PhoneMissed, Reply, CornerUpLeft, Forward, X, Play, Heart,
   ThumbsUp, Flame, Check, CheckCheck, Users, ExternalLink, Eye, EyeOff,
-  Lock, Unlock, KeyRound, ShieldCheck, ShieldAlert
+  Lock, Unlock, KeyRound, ShieldCheck, ShieldAlert,
+  Compass, Radio, Bookmark
 } from 'lucide-react';
 import axiosClient, { BACKEND_URL } from '../api/axiosClient';
 import toast from 'react-hot-toast';
@@ -220,7 +221,7 @@ export const DirectMessagePage = () => {
   const handleBack = useCallback(() => {
     // 1. Nếu có location.state?.from từ router điều hướng nội bộ (và không phải /messages hay /call)
     if (location.state?.from && !location.state.from.startsWith('/messages') && !location.state.from.startsWith('/call') && location.state.from !== location.pathname) {
-      navigate(location.state.from);
+      navigate(location.state.from, { replace: true });
       return;
     }
 
@@ -230,7 +231,7 @@ export const DirectMessagePage = () => {
       try {
         const decoded = decodeURIComponent(fromParam);
         if (decoded && !decoded.startsWith('/messages') && !decoded.startsWith('/call') && decoded !== location.pathname) {
-          navigate(decoded);
+          navigate(decoded, { replace: true });
           return;
         }
       } catch (_) { }
@@ -239,12 +240,12 @@ export const DirectMessagePage = () => {
     // 3. Màn hình gốc được lưu trong session (nếu có và không phải trang tin nhắn/cuộc gọi)
     const originScreenA = sessionStorage.getItem('talovin_origin_screen_a');
     if (originScreenA && !originScreenA.startsWith('/messages') && !originScreenA.startsWith('/call') && originScreenA !== location.pathname) {
-      navigate(originScreenA);
+      navigate(originScreenA, { replace: true });
       return;
     }
 
     // 4. Mặc định luôn thoát về trang chủ Sảnh '/'
-    navigate('/');
+    navigate('/', { replace: true });
   }, [location, searchParams, navigate]);
 
   // Xử lý nút Back trong header khung chat (đặc biệt trên màn hình mobile)
@@ -255,18 +256,18 @@ export const DirectMessagePage = () => {
       try {
         const decoded = decodeURIComponent(fromParam);
         if (decoded && !decoded.startsWith('/messages') && !decoded.startsWith('/call') && decoded !== location.pathname) {
-          navigate(decoded);
+          navigate(decoded, { replace: true });
           return;
         }
       } catch (_) { }
     }
 
     if (location.state?.from && !location.state.from.startsWith('/messages') && !location.state.from.startsWith('/call') && location.state.from !== location.pathname) {
-      navigate(location.state.from);
+      navigate(location.state.from, { replace: true });
       return;
     }
 
-    // 2. Mặc định trên mobile: quay về danh sách hội thoại /messages
+    // 2. Mặc định trên mobile: quay về danh sách hội thoại /messages (replace: true để triệt tiêu việc chồng chất lịch sử)
     setActivePartner(null);
     lastTargetIdRef.current = null;
     navigate('/messages', { replace: true });
@@ -1769,44 +1770,113 @@ export const DirectMessagePage = () => {
   }, [messages, currentUserId]);
 
   return (
-    <div className="flex flex-col h-screen w-full bg-zinc-950 text-zinc-100 select-none overflow-hidden font-sans animate-in fade-in duration-200">
+    <div className="flex h-screen w-full bg-[#090A0F] text-[#F3F4F6] select-none overflow-hidden font-sans animate-in fade-in duration-200">
 
-      {/* HEADER TOÀN TRANG (Topbar) - Ẩn trên mobile khi đang mở khung chat chi tiết để tránh trùng lặp 2 thanh Header */}
-      <header 
-        style={{ paddingTop: 'calc(10px + env(safe-area-inset-top, 0px))', paddingBottom: '10px' }}
-        className={`min-h-14 border-b border-zinc-800/80 bg-zinc-950/90 backdrop-blur px-4 items-center justify-between shrink-0 z-20 ${urlTargetUserId ? 'hidden md:flex' : 'flex'}`}
-      >
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={handleBack}
-            className="p-2 -ml-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors flex items-center gap-1.5 text-xs font-medium cursor-pointer active:scale-95"
-            title="Quay lại"
+      {/* THANH ĐIỀU HƯỚNG BÊN TRÁI (220px) CỐ ĐỊNH TRÊN DESKTOP - ĐỒNG BỘ 100% VỚI SẢNH */}
+      <aside className="w-[220px] min-w-[220px] h-screen sticky top-0 hidden lg:flex flex-col justify-between py-5 px-3 z-30 select-none border-r border-white/[0.07] bg-[#090A0F] shrink-0">
+        <div>
+          {/* Logo Talovin ở trên cùng */}
+          <div 
+            className="cursor-pointer hover:opacity-90 active:scale-95 transition-all px-2 mb-6"
+            onClick={() => navigate('/')} 
+            title="Talovin - Về trang chủ"
           >
-            <ArrowLeft size={16} />
-            <span className="hidden sm:inline">Quay lại</span>
-          </button>
+            <TalovinLogo size={28} showText={true} />
+          </div>
 
-          <div className="h-4 w-[1px] bg-zinc-800" />
+          {/* Các mục điều hướng */}
+          <nav className="flex flex-col gap-1 w-full">
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              className="flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer w-full text-left text-[#9CA3AF] hover:text-[#F3F4F6] hover:bg-white/[0.04]"
+            >
+              <Compass size={19} strokeWidth={1.75} />
+              <span>Sảnh trực tuyến</span>
+            </button>
 
-          <div className="flex items-center gap-2">
-            <MessageSquare size={16} className="text-emerald-400" />
-            <span className="font-bold text-sm tracking-wide text-zinc-100">Hộp thư Tin nhắn</span>
+            <button
+              type="button"
+              onClick={() => navigate('/communities')}
+              className="flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer w-full text-left text-[#9CA3AF] hover:text-[#F3F4F6] hover:bg-white/[0.04]"
+            >
+              <Users size={19} strokeWidth={1.75} />
+              <span>Cộng đồng</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              className="flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer w-full text-left text-[#9CA3AF] hover:text-[#F3F4F6] hover:bg-white/[0.04]"
+            >
+              <Radio size={19} strokeWidth={1.75} />
+              <span>Phòng đàm thoại</span>
+            </button>
+
+            {/* Mục Tin nhắn: Active */}
+            <button
+              type="button"
+              className="flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold cursor-pointer w-full text-left bg-white/[0.08] text-[#F3F4F6]"
+            >
+              <MessageSquare size={19} strokeWidth={1.75} />
+              <span className="flex-1">Tin nhắn</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate('/', { state: { tab: 'saved' } })}
+              className="flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer w-full text-left text-[#9CA3AF] hover:text-[#F3F4F6] hover:bg-white/[0.04]"
+            >
+              <Bookmark size={19} strokeWidth={1.75} />
+              <span>Đã lưu</span>
+            </button>
+          </nav>
+        </div>
+
+        {/* Chân Sidebar: Hồ sơ tài khoản */}
+        <div className="flex flex-col gap-2.5 w-full pt-4 border-t border-white/[0.06]">
+          <div
+            onClick={() => navigate('/profile')}
+            className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-white/[0.04] transition-colors cursor-pointer w-full"
+          >
+            <div className="relative">
+              <UserAvatar username={currentUserName} size={34} />
+              <span className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-[#090A0F]" />
+            </div>
+            <div className="min-w-0 flex-1 text-left">
+              <p className="text-xs font-semibold text-[#F3F4F6] truncate">{currentUserName}</p>
+              <p className="text-[11px] text-zinc-500 font-mono truncate">@{currentUserName}</p>
+            </div>
           </div>
         </div>
+      </aside>
 
-        {/* User profile góc phải */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-zinc-400 hidden sm:inline">{currentUserName}</span>
+      {/* PHẦN KHÔNG GIAN BÊN PHẢI (CHIA 2 CỘT): DANH SÁCH CUỘC TRÒ CHUYỆN + KHUNG CHAT CHI TIẾT */}
+      <div className="flex-1 flex flex-col overflow-hidden bg-[#111319]">
+
+        {/* Header trên Mobile khi ở danh sách tin nhắn */}
+        <div className={`lg:hidden border-b border-white/[0.06] bg-[#111319] px-4 py-3 items-center justify-between shrink-0 ${urlTargetUserId ? 'hidden' : 'flex'}`}>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleBack}
+              className="p-1.5 -ml-1 text-zinc-400 hover:text-white rounded-lg hover:bg-white/[0.06] transition-colors cursor-pointer active:scale-95 flex items-center justify-center"
+              title="Về Sảnh"
+            >
+              <ArrowLeft size={18} />
+            </button>
+            <div className="flex items-center gap-2 cursor-pointer" onClick={handleBack} title="Về Sảnh">
+              <TalovinLogo size={24} showText={true} />
+              <span className="text-xs text-zinc-400 font-medium">· Tin nhắn</span>
+            </div>
+          </div>
           <UserAvatar username={currentUserName} size={28} />
         </div>
-      </header>
 
-      {/* BODY CHÍNH */}
-      <div className="flex-1 flex overflow-hidden">
-
-        {/* CỘT TRÁI: DANH SÁCH BẠN BÈ / CUỘC TRÒ CHUYỆN */}
-        <aside className={`w-full md:w-80 lg:w-96 flex flex-col border-r border-zinc-800/80 bg-zinc-950 shrink-0 transition-all duration-200 ${urlTargetUserId ? 'hidden md:flex' : 'flex animate-in fade-in duration-150'}`}>
+        {/* Khung chia 2 cột */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* CỘT TRÁI: DANH SÁCH BẠN BÈ / CUỘC TRÒ CHUYỆN */}
+          <aside className={`w-full md:w-80 lg:w-[320px] xl:w-[360px] flex flex-col border-r border-white/[0.07] bg-[#111319] shrink-0 transition-all duration-200 ${urlTargetUserId ? 'hidden md:flex' : 'flex animate-in fade-in duration-150'}`}>
           {/* Ô tìm kiếm bạn bè & Nút mở khóa đoạn chat ẩn */}
           <div className="p-3 border-b border-zinc-800/60 flex items-center gap-2">
             <div className="relative flex-1">
@@ -2670,6 +2740,7 @@ export const DirectMessagePage = () => {
           )
           }
         </main>
+        </div>
       </div>
 
       {/* MODAL CHUYỂN TIẾP TIN NHẮN (FORWARD MODAL: BẠN BÈ & NHÓM CHAT) */}

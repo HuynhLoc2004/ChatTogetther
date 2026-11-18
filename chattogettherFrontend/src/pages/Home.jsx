@@ -3960,7 +3960,6 @@ const Home = ({ initialTab }) => {
                         <div className="flex items-center gap-1 shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
                           <button
                             type="button"
-                            onClick={() => navigate(`/messages/${u.id}`)}
                             onClick={() => navigate(`/messages/${u.id}`, { state: { from: location.pathname + location.search } })}
                             className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors cursor-pointer"
                             title="Nhắn tin"
@@ -5597,7 +5596,6 @@ const Home = ({ initialTab }) => {
                     const partnerId = floatingNotif.actorId || floatingNotif.senderId || floatingNotif.userId;
                     setFloatingNotif(null);
                     if (partnerId) {
-                      navigate(`/messages/${partnerId}`);
                       navigate(`/messages/${partnerId}`, { state: { from: location.pathname + location.search } });
                     }
                   }}
