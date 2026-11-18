@@ -468,6 +468,13 @@ const Home = ({ initialTab }) => {
       return false;
     }
   });
+
+  // Phân trang tự động Infinite Scroll (Lướt tới đâu tải tới đó)
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
+  const loadMoreRef = useRef(null);
+  const isFetchingMoreRef = useRef(false);
   const [newPostContent, setNewPostContent] = useState('');
   const [selectedVibe, setSelectedVibe] = useState(null);
   const [postImageUrl, setPostImageUrl] = useState('');
@@ -1265,6 +1272,7 @@ const Home = ({ initialTab }) => {
   };
 
   // ====================== BẢNG TIN / POSTS ======================
+  // Tải danh sách bài viết ban đầu (chỉ tải 10 bài đầu tiên: page = 0, size = 10)
   const fetchPosts = useCallback(async (isSilent = false) => {
     try {
       if (!isSilent) {
@@ -1274,15 +1282,28 @@ const Home = ({ initialTab }) => {
         });
       }
       const response = await axiosClient.get('/posts', {
-        params: { page: 0, size: 25 }
+        params: { page: 0, size: 10 }
       });
       if (response.data && response.data.data) {
         const freshPosts = response.data.data;
-        setPosts(freshPosts);
+        if (isSilent) {
+          setPosts(prev => {
+            if (prev.length <= 10) return freshPosts;
+            const freshMap = new Map(freshPosts.map(p => [p.id, p]));
+            const updated = prev.map(p => freshMap.get(p.id) || p);
+            const existingIds = new Set(prev.map(p => p.id));
+            const brandNew = freshPosts.filter(p => !existingIds.has(p.id));
+            return [...brandNew, ...updated];
+          });
+        } else {
+          setPosts(freshPosts);
+          setPage(0);
+          setHasMore(freshPosts.length === 10);
+        }
         try {
           const cacheKey = currentUserId ? `talovin_cached_posts_${currentUserId}` : 'talovin_cached_posts';
-          localStorage.setItem(cacheKey, JSON.stringify(freshPosts.slice(0, 25)));
-          localStorage.setItem('talovin_cached_posts', JSON.stringify(freshPosts.slice(0, 25)));
+          localStorage.setItem(cacheKey, JSON.stringify(freshPosts));
+          localStorage.setItem('talovin_cached_posts', JSON.stringify(freshPosts));
         } catch (e) { }
       }
     } catch (err) {
@@ -1291,6 +1312,73 @@ const Home = ({ initialTab }) => {
       setLoadingPosts(false);
     }
   }, [currentUserId]);
+
+  // Phân trang tự động lướt tới đâu tải tới đó (Infinite Scroll - tải tiếp 10 bài kế tiếp)
+  const fetchMorePosts = useCallback(async () => {
+    if (!hasMore || isFetchingMoreRef.current || loadingPosts || activeSearchQuery) return;
+    try {
+      isFetchingMoreRef.current = true;
+      setIsFetchingMore(true);
+      const nextPage = page + 1;
+      const response = await axiosClient.get('/posts', {
+        params: { page: nextPage, size: 10 }
+      });
+      if (response.data && Array.isArray(response.data.data)) {
+        const newPosts = response.data.data;
+        if (newPosts.length === 0) {
+          setHasMore(false);
+        } else {
+          setPosts(prev => {
+            const existingIds = new Set(prev.map(p => p.id));
+            const uniqueNewPosts = newPosts.filter(p => !existingIds.has(p.id));
+            const combined = [...prev, ...uniqueNewPosts];
+            try {
+              const cacheKey = currentUserId ? `talovin_cached_posts_${currentUserId}` : 'talovin_cached_posts';
+              localStorage.setItem(cacheKey, JSON.stringify(combined.slice(0, 30)));
+            } catch (e) { }
+            return combined;
+          });
+          setPage(nextPage);
+          if (newPosts.length < 10) {
+            setHasMore(false);
+          }
+        }
+      } else {
+        setHasMore(false);
+      }
+    } catch (err) {
+      console.error("Lỗi khi tải thêm bài viết:", err);
+    } finally {
+      setIsFetchingMore(false);
+      isFetchingMoreRef.current = false;
+    }
+  }, [hasMore, page, loadingPosts, activeSearchQuery, currentUserId]);
+
+  // Observer theo dõi khi người dùng cuộn gần tới cuối danh sách (cách 250px)
+  useEffect(() => {
+    if (!loadMoreRef.current || !hasMore || isFetchingMore || loadingPosts || activeSearchQuery) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && hasMore && !isFetchingMoreRef.current) {
+          fetchMorePosts();
+        }
+      },
+      {
+        root: null,
+        rootMargin: '250px',
+        threshold: 0.1,
+      }
+    );
+
+    const currentEl = loadMoreRef.current;
+    observer.observe(currentEl);
+
+    return () => {
+      if (currentEl) observer.unobserve(currentEl);
+      observer.disconnect();
+    };
+  }, [fetchMorePosts, hasMore, isFetchingMore, loadingPosts, activeSearchQuery]);
 
   // Xử lý nén file ảnh bằng Canvas sang WebP nhẹ, hoặc video ngắn
   const handleFileSelect = (e) => {
@@ -1945,8 +2033,10 @@ const Home = ({ initialTab }) => {
     setActiveTab('feed');
     window.scrollTo({ top: 0, behavior: 'smooth' });
     setIsTopRefreshing(true);
+    setPage(0);
+    setHasMore(true);
     try {
-      await fetchPosts(true);
+      await fetchPosts(false);
       fetchRooms(true);
       fetchFriends();
     } catch (e) {
@@ -3262,6 +3352,7 @@ const Home = ({ initialTab }) => {
       {/* Audio element ẩn để phát voice note của các bài viết */}
       <audio
         ref={cardVoiceAudioRef}
+        preload="none"
         onEnded={() => setPlayingVoicePostId(null)}
       />
 
@@ -4145,36 +4236,34 @@ const Home = ({ initialTab }) => {
                   <p className="text-xs text-zinc-300">Đang tìm kiếm & phân tích chủ đề liên quan...</p>
                   <p className="text-[11px] text-zinc-600 mt-1">Áp dụng thuật toán đối soát ngữ nghĩa & xếp hạng tương tác</p>
                 </div>
-              ) : loadingPosts ? (
-                <div className="space-y-4 animate-pulse">
+              ) : (loadingPosts && posts.length === 0) ? (
+                <div className="flex flex-col w-full divide-y divide-white/[0.06]">
                   {[1, 2, 3].map((i) => (
-                    <div key={i} className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-4">
-                      {/* Author Header */}
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-zinc-800/80 shrink-0" />
-                        <div className="space-y-1.5 flex-1">
-                          <div className="h-3.5 w-32 bg-zinc-800/80 rounded" />
-                          <div className="h-2.5 w-20 bg-zinc-800/50 rounded" />
+                    <div key={`skel-init-${i}`} className="px-4 sm:px-6 py-5 animate-pulse">
+                      <div className="flex items-start gap-3.5">
+                        {/* Hình tròn avatar */}
+                        <div className="w-10 h-10 rounded-full bg-white/[0.04] shrink-0" />
+                        <div className="flex-1 space-y-3 pt-1">
+                          {/* 2 thanh chữ giả */}
+                          <div className="flex items-center gap-2">
+                            <div className="h-3.5 w-28 bg-white/[0.06] rounded-md" />
+                            <div className="h-3 w-16 bg-white/[0.03] rounded-md" />
+                          </div>
+                          <div className="space-y-2">
+                            <div className="h-3 w-full bg-white/[0.04] rounded-md" />
+                            <div className="h-3 w-5/6 bg-white/[0.03] rounded-md" />
+                            <div className="h-3 w-2/3 bg-white/[0.03] rounded-md" />
+                          </div>
+                          {/* Khung nội dung mờ */}
+                          {i === 2 && (
+                            <div className="h-44 w-full bg-white/[0.03] rounded-xl border border-white/[0.04]" />
+                          )}
+                          <div className="pt-2 flex items-center gap-6">
+                            <div className="h-4 w-12 bg-white/[0.04] rounded-md" />
+                            <div className="h-4 w-12 bg-white/[0.04] rounded-md" />
+                            <div className="h-4 w-12 bg-white/[0.04] rounded-md" />
+                          </div>
                         </div>
-                      </div>
-                      {/* Body Content */}
-                      <div className="space-y-2 pt-1">
-                        <div className="h-3 w-full bg-zinc-800/60 rounded" />
-                        <div className="h-3 w-4/5 bg-zinc-800/50 rounded" />
-                        <div className="h-3 w-2/3 bg-zinc-800/40 rounded" />
-                      </div>
-                      {/* Media Placeholder on alternate cards */}
-                      {i === 2 && (
-                        <div className="h-44 w-full bg-zinc-800/40 rounded-xl" />
-                      )}
-                      {/* Post Actions Footer */}
-                      <div className="pt-2 flex items-center justify-between border-t border-zinc-800/40">
-                        <div className="flex items-center gap-4">
-                          <div className="h-4 w-12 bg-zinc-800/50 rounded" />
-                          <div className="h-4 w-12 bg-zinc-800/50 rounded" />
-                          <div className="h-4 w-12 bg-zinc-800/50 rounded" />
-                        </div>
-                        <div className="h-4 w-6 bg-zinc-800/40 rounded" />
                       </div>
                     </div>
                   ))}
@@ -4417,7 +4506,9 @@ const Home = ({ initialTab }) => {
                                         loop
                                         muted={!unmutedVideoPosts[post.id]}
                                         playsInline
-                                        className="max-h-[440px] w-auto object-cover rounded-xl"
+                                        preload="none"
+                                        className="max-h-[440px] w-auto max-w-full object-cover rounded-xl"
+                                        style={{ aspectRatio: '16 / 10', minHeight: '160px', backgroundColor: '#14161F' }}
                                       />
                                       <div className="absolute bottom-2.5 left-2.5 flex items-center gap-2 z-10">
                                         <button
@@ -4445,8 +4536,10 @@ const Home = ({ initialTab }) => {
                                       src={parsedMedia.mediaUrl}
                                       alt="Ảnh bài viết"
                                       loading="lazy"
+                                      decoding="async"
                                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                      className="max-h-[440px] w-auto object-cover rounded-xl"
+                                      className="max-h-[440px] w-auto max-w-full object-cover rounded-xl"
+                                      style={{ aspectRatio: '16 / 10', minHeight: '160px', backgroundColor: '#14161F' }}
                                     />
                                   )}
                                 </div>
@@ -4770,6 +4863,43 @@ const Home = ({ initialTab }) => {
                       </article>
                   );
                 })}
+
+                {/* SKELETON KHI ĐANG TẢI THÊM BÀI VIẾT (INFINITE SCROLL) */}
+                {isFetchingMore && (
+                  <div className="divide-y divide-white/[0.06] border-t border-white/[0.06]">
+                    {[1, 2].map((i) => (
+                      <div key={`skel-more-${i}`} className="px-4 sm:px-6 py-5 animate-pulse">
+                        <div className="flex items-start gap-3.5">
+                          {/* Hình tròn avatar */}
+                          <div className="w-10 h-10 rounded-full bg-white/[0.04] shrink-0" />
+                          <div className="flex-1 space-y-2.5 pt-1">
+                            {/* 2 thanh chữ giả */}
+                            <div className="flex items-center gap-2">
+                              <div className="h-3.5 w-28 bg-white/[0.06] rounded-md" />
+                              <div className="h-3 w-16 bg-white/[0.03] rounded-md" />
+                            </div>
+                            <div className="space-y-1.5">
+                              <div className="h-3 w-full bg-white/[0.04] rounded-md" />
+                              <div className="h-3 w-3/4 bg-white/[0.03] rounded-md" />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* ELEMENT MỐC THEO DÕI CUỘN ĐỂ TẢI THÊM BÀI (INTERSECTION OBSERVER) */}
+                <div ref={loadMoreRef} className="h-4 w-full pointer-events-none" />
+
+                {/* THÔNG BÁO KHI ĐÃ TẢI HẾT BÀI VIẾT */}
+                {!hasMore && displayedPosts.length > 0 && !activeSearchQuery && (
+                  <div className="py-8 text-center select-none border-t border-white/[0.04]">
+                    <p className="text-xs text-zinc-500 font-sans tracking-wide">
+                      Bạn đã xem hết các khoảnh khắc mới nhất
+                    </p>
+                  </div>
+                )}
                 </div>
               )}
               {/* Khoảng đệm đáy an toàn (Bottom Spacer) để thanh Navigation không che khuất bài viết cuối cùng */}
@@ -6322,9 +6452,9 @@ const Home = ({ initialTab }) => {
                       {media.mediaUrl && (
                         <div className="rounded-xl overflow-hidden border border-zinc-800">
                           {media.mediaType === 'video' ? (
-                            <video src={media.mediaUrl} controls autoPlay loop playsInline className="w-full max-h-[340px] object-cover" />
+                            <video src={media.mediaUrl} controls autoPlay loop playsInline preload="none" className="w-full max-h-[340px] object-cover" />
                           ) : (
-                            <img src={media.mediaUrl} alt="Media" className="w-full max-h-[340px] object-cover" />
+                            <img src={media.mediaUrl} alt="Media" loading="lazy" decoding="async" className="w-full max-h-[340px] object-cover" />
                           )}
                         </div>
                       )}
@@ -6560,9 +6690,9 @@ const Home = ({ initialTab }) => {
                       {media.mediaUrl && (
                         <div className="rounded-2xl overflow-hidden border border-zinc-800">
                           {media.mediaType === 'video' ? (
-                            <video src={media.mediaUrl} controls autoPlay loop playsInline className="w-full max-h-[380px] object-cover" />
+                            <video src={media.mediaUrl} controls autoPlay loop playsInline preload="none" className="w-full max-h-[380px] object-cover" />
                           ) : (
-                            <img src={media.mediaUrl} alt="Media" className="w-full max-h-[380px] object-cover" />
+                            <img src={media.mediaUrl} alt="Media" loading="lazy" decoding="async" className="w-full max-h-[380px] object-cover" />
                           )}
                         </div>
                       )}

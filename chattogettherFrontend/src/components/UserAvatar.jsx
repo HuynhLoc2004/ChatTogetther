@@ -86,6 +86,7 @@ const UserAvatar = ({
       title={title || candidateUsername || name || ''}
       onClick={onClick}
       loading="lazy"
+      decoding="async"
       className={`user-avatar-img select-none ${className}`}
       style={{
         width: size,
@@ -94,6 +95,7 @@ const UserAvatar = ({
         minHeight: size,
         borderRadius: '50%',
         objectFit: 'cover',
+        aspectRatio: '1 / 1',
         border: '1px solid rgba(255, 255, 255, 0.12)',
         background: '#18181b',
         flexShrink: 0,
