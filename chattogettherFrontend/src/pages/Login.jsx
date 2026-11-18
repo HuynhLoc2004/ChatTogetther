@@ -90,6 +90,8 @@ const Login = () => {
           localStorage.setItem('talovin_has_seen_onboarding', 'true');
           localStorage.removeItem('talovin_cached_posts');
           localStorage.removeItem('hasCheckedActiveRoom');
+          sessionStorage.removeItem('talovin_active_room_session');
+          localStorage.removeItem('talovin_active_room_session');
 
           try {
             const payloadBase64 = token.split('.')[1];

@@ -104,6 +104,19 @@ const ChatRoom = () => {
   const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
   const activeTheme = getThemeById(currentThemeId);
 
+  // Đánh dấu active session phòng đàm thoại trong session hiện tại
+  useEffect(() => {
+    if (roomId) {
+      try {
+        sessionStorage.setItem('talovin_active_room_session', JSON.stringify({
+          id: roomId,
+          name: roomInfo?.nameroom || roomInfo?.roomName || `Phòng #${roomId}`,
+          joinedAt: Date.now()
+        }));
+      } catch (_) { }
+    }
+  }, [roomId, roomInfo?.nameroom, roomInfo?.roomName]);
+
   // Modal Hồ Sơ Người Dùng & Bạn Bè
   const [selectedProfileUserId, setSelectedProfileUserId] = useState(null);
   const [isFriendsModalOpen, setIsFriendsModalOpen] = useState(false);
@@ -1043,6 +1056,7 @@ const ChatRoom = () => {
 
             // Logic DISBAND
             if (receivedMsg.id === -2) {
+              try { sessionStorage.removeItem('talovin_active_room_session'); } catch (_) { }
               toast.error("Phòng chat này đã được giải tán!", { duration: 6000 });
               navigate('/');
               return;
@@ -1422,10 +1436,12 @@ const ChatRoom = () => {
       danger: true,
       onConfirm: async () => {
         try {
+          try { sessionStorage.removeItem('talovin_active_room_session'); } catch (_) { }
           await axiosClient.delete(`/rooms/disband/${roomId}`);
           toast.success("Đã giải tán phòng chat thành công");
           navigate('/');
         } catch (err) {
+          try { sessionStorage.removeItem('talovin_active_room_session'); } catch (_) { }
           toast.error(err.response?.data?.message || "Lỗi khi giải tán phòng!");
         }
       }
@@ -1447,12 +1463,14 @@ const ChatRoom = () => {
       danger: true,
       onConfirm: async () => {
         try {
+          try { sessionStorage.removeItem('talovin_active_room_session'); } catch (_) { }
           await axiosClient.post(`/rooms/leave-room`, null, {
             params: { room_id: roomId }
           });
           toast.success("Đã rời khỏi phòng");
           navigate('/');
         } catch (err) {
+          try { sessionStorage.removeItem('talovin_active_room_session'); } catch (_) { }
           toast.error(err.response?.data?.message || "Lỗi khi rời phòng!");
         }
       }

@@ -324,6 +324,8 @@ const Home = ({ initialTab }) => {
 
   // Trạng thái mở popup/modal đăng bài (+ Chia sẻ khoảnh khắc)
   const [isComposerModalOpen, setIsComposerModalOpen] = useState(false);
+  // Phòng đàm thoại đang tham gia thực sự (active session)
+  const [activeRoom, setActiveRoom] = useState(null);
   // Bộ lọc nhanh dạng viên thuốc: 'all' | 'challenge' | 'confession' | 'audio'
   const [quickFilter, setQuickFilter] = useState('all');
 
@@ -1197,30 +1199,52 @@ const Home = ({ initialTab }) => {
   };
 
   const checkActiveRoom = async () => {
-    if (sessionStorage.getItem('hasCheckedActiveRoom')) return false;
+    // 1. Chỉ kiểm tra khi có session phòng đàm thoại cục bộ đang hoạt động trong phiên này
+    const localSessionRaw = sessionStorage.getItem('talovin_active_room_session');
+
+    // Nếu người dùng mới vào trang hoặc không có active session cục bộ:
+    if (!localSessionRaw) {
+      setActiveRoom(null);
+      // Dọn dẹp bản ghi cũ trên database nếu có để tránh tình trạng "kẹt phòng"
+      try {
+        const res = await axiosClient.get('/rooms/my-active-room');
+        if (res.data?.data?.id) {
+          axiosClient.post('/rooms/leave-room', null, { params: { room_id: res.data.data.id } }).catch(() => {});
+        }
+      } catch (_) { }
+      return false;
+    }
+
+    // 2. Nếu có session cục bộ, đối chiếu với backend
     try {
+      const localSession = JSON.parse(localSessionRaw);
       const res = await axiosClient.get('/rooms/my-active-room');
-      if (res.data?.data) {
-        const room = res.data.data;
-        toast((t) => (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span>Bạn đang trong phòng: <strong>#{room.nameroom || room.roomName}</strong></span>
-            <button
-              onClick={() => { toast.dismiss(t.id); navigate(`/room/${room.id}`, { state: { room } }); }}
-              style={{ background: '#f4f4f5', color: '#18181b', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontWeight: 600 }}
-            >
-              Quay lại
-            </button>
-          </div>
-        ), { duration: 6000 });
-        sessionStorage.setItem('hasCheckedActiveRoom', 'true');
+      if (res.data?.data && String(res.data.data.id) === String(localSession.id)) {
+        setActiveRoom(res.data.data);
         return true;
+      } else {
+        sessionStorage.removeItem('talovin_active_room_session');
+        setActiveRoom(null);
       }
     } catch (_) {
-      // Bỏ qua lỗi êm đềm nếu không có phòng hoạt động
+      sessionStorage.removeItem('talovin_active_room_session');
+      setActiveRoom(null);
     }
-    sessionStorage.setItem('hasCheckedActiveRoom', 'true');
     return false;
+  };
+
+  const handleLeaveActiveRoom = async (e) => {
+    if (e) e.stopPropagation();
+    if (!activeRoom) return;
+    const targetRoomId = activeRoom.id;
+    setActiveRoom(null);
+    sessionStorage.removeItem('talovin_active_room_session');
+    try {
+      await axiosClient.post('/rooms/leave-room', null, {
+        params: { room_id: targetRoomId }
+      });
+      toast.success('Đã rời khỏi phòng đàm thoại');
+    } catch (_) { }
   };
 
   const fetchRooms = async (isSilent = false) => {
@@ -3359,8 +3383,46 @@ const Home = ({ initialTab }) => {
               </nav>
             </div>
 
-            {/* Phía dưới: Trình phát nhạc mini & Hồ sơ tài khoản ở đáy */}
+            {/* Phía dưới: Trạng thái phòng đàm thoại (nếu có session), Trình phát nhạc mini & Hồ sơ tài khoản ở đáy */}
             <div className="flex flex-col gap-2.5 w-full pt-4 border-t border-white/[0.06]">
+              {/* Widget phòng đàm thoại đang tham gia (chỉ hiện khi có active session thật sự) */}
+              {activeRoom && (
+                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex flex-col gap-2 animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between gap-1.5 min-w-0">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                      <span className="text-[11px] font-medium text-emerald-400 truncate">
+                        #{activeRoom.nameroom || activeRoom.roomName || activeRoom.name || `Phòng #${activeRoom.id}`}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleLeaveActiveRoom}
+                      className="text-zinc-500 hover:text-rose-400 p-0.5 rounded transition-colors cursor-pointer"
+                      title="Rời phòng"
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/room/${activeRoom.id}`, { state: { room: activeRoom } })}
+                      className="flex-1 py-1 px-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold text-[11px] text-center transition-all active:scale-95 cursor-pointer"
+                    >
+                      Quay lại
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleLeaveActiveRoom}
+                      className="py-1 px-2 rounded-lg bg-white/5 hover:bg-rose-500/20 hover:text-rose-400 text-zinc-400 text-[11px] font-medium transition-all active:scale-95 cursor-pointer"
+                    >
+                      Rời
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Trình phát nhạc mini */}
               <div 
                 onClick={() => setShowMobileMusicSheet(true)}
