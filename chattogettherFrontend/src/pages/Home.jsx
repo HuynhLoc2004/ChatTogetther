@@ -1230,7 +1230,7 @@ const Home = ({ initialTab }) => {
       try {
         const res = await axiosClient.get('/rooms/my-active-room');
         if (res.data?.data?.id) {
-          axiosClient.post('/rooms/leave-room', null, { params: { room_id: res.data.data.id } }).catch(() => {});
+          axiosClient.post('/rooms/leave-room', null, { params: { room_id: res.data.data.id } }).catch(() => { });
         }
       } catch (_) { }
       return false;
@@ -3201,21 +3201,21 @@ const Home = ({ initialTab }) => {
 
       // Bộ lọc nhanh dạng viên thuốc
       if (quickFilter === 'challenge') {
-        const isChallenge = (p.content || '').includes('[Thử thách]') || 
-                            (p.content || '').includes('[Challenge]') || 
-                            (p.vibe || '').toLowerCase().includes('thử thách') ||
-                            p.challengeQuestion;
+        const isChallenge = (p.content || '').includes('[Thử thách]') ||
+          (p.content || '').includes('[Challenge]') ||
+          (p.vibe || '').toLowerCase().includes('thử thách') ||
+          p.challengeQuestion;
         if (!isChallenge) return false;
       } else if (quickFilter === 'confession') {
-        const isConfession = (p.content || '').toLowerCase().includes('tâm sự') || 
-                             (p.vibe || '').toLowerCase().includes('tâm sự') ||
-                             (p.vibe || '').toLowerCase().includes('cảm xúc');
+        const isConfession = (p.content || '').toLowerCase().includes('tâm sự') ||
+          (p.vibe || '').toLowerCase().includes('tâm sự') ||
+          (p.vibe || '').toLowerCase().includes('cảm xúc');
         if (!isConfession) return false;
       } else if (quickFilter === 'audio') {
-        const hasAudio = p.voiceUrl || p.voiceBioUrl || p.hasAudio || p.audioDuration || 
-                         (p.imageUrl && p.imageUrl.includes('audioUrl')) ||
-                         (p.content || '').includes('Ghi âm') ||
-                         (p.content || '').includes('[Voice');
+        const hasAudio = p.voiceUrl || p.voiceBioUrl || p.hasAudio || p.audioDuration ||
+          (p.imageUrl && p.imageUrl.includes('audioUrl')) ||
+          (p.content || '').includes('Ghi âm') ||
+          (p.content || '').includes('[Voice');
         if (!hasAudio) return false;
       }
 
@@ -3441,301 +3441,296 @@ const Home = ({ initialTab }) => {
         {/* CỘT 1: THANH ĐIỀU HƯỚNG BÊN TRÁI (240px) - CỐ ĐỊNH SÁT MÉP TRÁI */}
         {/* ============================================================== */}
         <aside className="w-[240px] shrink-0 sticky top-0 h-[100dvh] hidden lg:flex flex-col justify-between py-5 px-3.5 z-30 select-none border-r border-white/[0.06] bg-[#090A0F] overflow-y-auto [scrollbar-width:none]">
-            <div>
-              {/* Logo Talovin ở trên cùng (có cả Icon T và Tên Talovin) */}
-              <div 
-                className="cursor-pointer hover:opacity-90 active:scale-95 transition-all px-2 mb-6"
-                onClick={handleLogoRefresh} 
-                title="Talovin - Về đầu trang"
+          <div>
+            {/* Logo Talovin ở trên cùng (có cả Icon T và Tên Talovin) */}
+            <div
+              className="cursor-pointer hover:opacity-90 active:scale-95 transition-all px-2 mb-6"
+              onClick={handleLogoRefresh}
+              title="Talovin - Về đầu trang"
+            >
+              <TalovinLogo size={28} showText={true} />
+            </div>
+
+            {/* Các mục điều hướng có cả Icon và Tên rõ ràng */}
+            <nav className="flex flex-col gap-1 w-full">
+              {/* 1. Sảnh trực tuyến */}
+              <button
+                type="button"
+                onClick={() => { setActiveTab('feed'); setActiveFilterTag(null); setQuickFilter('all'); }}
+                className={`flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer w-full text-left ${activeTab === 'feed'
+                  ? 'bg-white/[0.08] text-[#F3F4F6] font-semibold'
+                  : 'text-[#9CA3AF] hover:text-[#F3F4F6] hover:bg-white/[0.04]'
+                  }`}
               >
-                <TalovinLogo size={28} showText={true} />
-              </div>
+                <Compass size={19} strokeWidth={1.75} />
+                <span>Sảnh trực tuyến</span>
+              </button>
 
-              {/* Các mục điều hướng có cả Icon và Tên rõ ràng */}
-              <nav className="flex flex-col gap-1 w-full">
-                {/* 1. Sảnh trực tuyến */}
-                <button
-                  type="button"
-                  onClick={() => { setActiveTab('feed'); setActiveFilterTag(null); setQuickFilter('all'); }}
-                  className={`flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer w-full text-left ${
-                    activeTab === 'feed'
-                      ? 'bg-white/[0.08] text-[#F3F4F6] font-semibold'
-                      : 'text-[#9CA3AF] hover:text-[#F3F4F6] hover:bg-white/[0.04]'
+              {/* 2. Cộng đồng */}
+              <button
+                type="button"
+                onClick={() => handleSwitchTab('groups')}
+                className={`flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer w-full text-left ${activeTab === 'groups'
+                  ? 'bg-white/[0.08] text-[#F3F4F6] font-semibold'
+                  : 'text-[#9CA3AF] hover:text-[#F3F4F6] hover:bg-white/[0.04]'
                   }`}
-                >
-                  <Compass size={19} strokeWidth={1.75} />
-                  <span>Sảnh trực tuyến</span>
-                </button>
+              >
+                <Users size={19} strokeWidth={1.75} />
+                <span>Cộng đồng</span>
+              </button>
 
-                {/* 2. Cộng đồng */}
-                <button
-                  type="button"
-                  onClick={() => handleSwitchTab('groups')}
-                  className={`flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer w-full text-left ${
-                    activeTab === 'groups'
-                      ? 'bg-white/[0.08] text-[#F3F4F6] font-semibold'
-                      : 'text-[#9CA3AF] hover:text-[#F3F4F6] hover:bg-white/[0.04]'
+              {/* 3. Phòng đàm thoại */}
+              <button
+                type="button"
+                onClick={() => handleSwitchTab('rooms')}
+                className={`flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer w-full text-left ${activeTab === 'rooms'
+                  ? 'bg-white/[0.08] text-[#F3F4F6] font-semibold'
+                  : 'text-[#9CA3AF] hover:text-[#F3F4F6] hover:bg-white/[0.04]'
                   }`}
-                >
-                  <Users size={19} strokeWidth={1.75} />
-                  <span>Cộng đồng</span>
-                </button>
+              >
+                <Radio size={19} strokeWidth={1.75} />
+                <span className="flex-1">Phòng đàm thoại</span>
+                {userAccessibleRooms.length > 0 && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                )}
+              </button>
 
-                {/* 3. Phòng đàm thoại */}
-                <button
-                  type="button"
-                  onClick={() => handleSwitchTab('rooms')}
-                  className={`flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer w-full text-left ${
-                    activeTab === 'rooms'
-                      ? 'bg-white/[0.08] text-[#F3F4F6] font-semibold'
-                      : 'text-[#9CA3AF] hover:text-[#F3F4F6] hover:bg-white/[0.04]'
+              {/* 4. Tin nhắn */}
+              <button
+                type="button"
+                onClick={() => navigate('/messages', { state: { from: location.pathname + location.search } })}
+                className="flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer w-full text-left text-[#9CA3AF] hover:text-[#F3F4F6] hover:bg-white/[0.04]"
+              >
+                <MessageSquare size={19} strokeWidth={1.75} />
+                <span className="flex-1">Tin nhắn</span>
+                {unreadMessagesCount > 0 && (
+                  <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-white text-zinc-950 font-bold text-[10px] flex items-center justify-center">
+                    {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
+                  </span>
+                )}
+              </button>
+
+              {/* 5. Đã lưu */}
+              <button
+                type="button"
+                onClick={() => handleSwitchTab('saved')}
+                className={`flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer w-full text-left ${activeTab === 'saved'
+                  ? 'bg-white/[0.08] text-[#F3F4F6] font-semibold'
+                  : 'text-[#9CA3AF] hover:text-[#F3F4F6] hover:bg-white/[0.04]'
                   }`}
-                >
-                  <Radio size={19} strokeWidth={1.75} />
-                  <span className="flex-1">Phòng đàm thoại</span>
-                  {userAccessibleRooms.length > 0 && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                  )}
-                </button>
+              >
+                <Bookmark size={19} strokeWidth={1.75} />
+                <span>Đã lưu</span>
+              </button>
 
-                {/* 4. Tin nhắn */}
+              {/* Quản trị viên (nếu có quyền) */}
+              {isAdminUser && (
                 <button
                   type="button"
-                  onClick={() => navigate('/messages', { state: { from: location.pathname + location.search } })}
-                  className="flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer w-full text-left text-[#9CA3AF] hover:text-[#F3F4F6] hover:bg-white/[0.04]"
+                  onClick={() => navigate('/admin')}
+                  className="flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer w-full text-left text-zinc-400 hover:text-white hover:bg-white/[0.04]"
                 >
-                  <MessageSquare size={19} strokeWidth={1.75} />
-                  <span className="flex-1">Tin nhắn</span>
-                  {unreadMessagesCount > 0 && (
-                    <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-white text-zinc-950 font-bold text-[10px] flex items-center justify-center">
-                      {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
+                  <Shield size={19} strokeWidth={1.75} />
+                  <span>Bảng Quản Trị</span>
+                </button>
+              )}
+            </nav>
+          </div>
+
+          {/* Phía dưới: Trạng thái phòng đàm thoại (nếu có session), Trình phát nhạc mini & Hồ sơ tài khoản ở đáy */}
+          <div className="flex flex-col gap-2.5 w-full pt-4 border-t border-white/[0.06]">
+            {/* Widget phòng đàm thoại đang tham gia (chỉ hiện khi có active session thật sự) */}
+            {activeRoom && (
+              <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex flex-col gap-2 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between gap-1.5 min-w-0">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                    <span className="text-[11px] font-medium text-emerald-400 truncate">
+                      #{activeRoom.nameroom || activeRoom.roomName || activeRoom.name || `Phòng #${activeRoom.id}`}
                     </span>
-                  )}
-                </button>
-
-                {/* 5. Đã lưu */}
-                <button
-                  type="button"
-                  onClick={() => handleSwitchTab('saved')}
-                  className={`flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer w-full text-left ${
-                    activeTab === 'saved'
-                      ? 'bg-white/[0.08] text-[#F3F4F6] font-semibold'
-                      : 'text-[#9CA3AF] hover:text-[#F3F4F6] hover:bg-white/[0.04]'
-                  }`}
-                >
-                  <Bookmark size={19} strokeWidth={1.75} />
-                  <span>Đã lưu</span>
-                </button>
-
-                {/* Quản trị viên (nếu có quyền) */}
-                {isAdminUser && (
+                  </div>
                   <button
                     type="button"
-                    onClick={() => navigate('/admin')}
-                    className="flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer w-full text-left text-zinc-400 hover:text-white hover:bg-white/[0.04]"
+                    onClick={handleLeaveActiveRoom}
+                    className="text-zinc-500 hover:text-rose-400 p-0.5 rounded transition-colors cursor-pointer"
+                    title="Rời phòng"
                   >
-                    <Shield size={19} strokeWidth={1.75} />
-                    <span>Bảng Quản Trị</span>
+                    <X size={13} />
                   </button>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/room/${activeRoom.id}`, { state: { room: activeRoom } })}
+                    className="flex-1 py-1 px-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold text-[11px] text-center transition-all active:scale-95 cursor-pointer"
+                  >
+                    Quay lại
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleLeaveActiveRoom}
+                    className="py-1 px-2 rounded-lg bg-white/5 hover:bg-rose-500/20 hover:text-rose-400 text-zinc-400 text-[11px] font-medium transition-all active:scale-95 cursor-pointer"
+                  >
+                    Rời
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Trình phát nhạc mini */}
+            <div
+              onClick={() => setShowMobileMusicSheet(true)}
+              className="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] transition-colors cursor-pointer flex items-center gap-2.5"
+              title="Trình phát nhạc không gian"
+            >
+              <div className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center text-zinc-300 shrink-0">
+                <Music size={14} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium text-[#F3F4F6] truncate">
+                  {currentTrack ? (currentTrack.title || currentTrack.name) : "Sunset Coffee Vibe"}
+                </p>
+                <p className="text-[10px] text-zinc-500 truncate">
+                  {isPlayingRadio ? 'Đang phát' : 'Tạm dừng'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  togglePlayRadio();
+                }}
+                className="w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-zinc-200 transition-colors shrink-0"
+              >
+                {isPlayingRadio ? <Pause size={10} /> : <Play size={10} className="ml-0.5" />}
+              </button>
+            </div>
+
+            {/* Hồ sơ tài khoản ở đáy */}
+            <div
+              onClick={() => navigate('/profile')}
+              className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-white/[0.04] transition-colors cursor-pointer w-full"
+            >
+              <div className="relative">
+                <UserAvatar user={currentUser} size={34} />
+                <span className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-[#090A0F]" />
+              </div>
+              <div className="min-w-0 flex-1 text-left">
+                <p className="text-xs font-semibold text-[#F3F4F6] truncate">{currentUserName}</p>
+                <p className="text-[11px] text-zinc-500 font-mono truncate">@{currentUserAccount}</p>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        {/* ============================================================== */}
+        {/* CỘT 2: KHU VỰC SẢNH CHÍNH Ở GIỮA (flex-1 min-w-0, bg-[#0D0F14]) */}
+        {/* ============================================================== */}
+        <main className="flex-1 min-w-0 min-h-[100dvh] bg-[#0D0F14] border-r border-white/[0.06] flex flex-col relative pb-28 lg:pb-12 overflow-x-hidden">
+
+          {/* ============================================================== */}
+          {/* THANH HEADER DÍNH TRÊN CÙNG (STICKY HEADER)                     */}
+          {/* ============================================================== */}
+          <header className="sticky top-0 z-30 h-14 w-full bg-[#0D0F14]/90 backdrop-blur-md border-b border-white/[0.06] px-4 sm:px-8 flex items-center justify-between select-none">
+            {/* Bên trái: Duy nhất Wordmark "Talovin" trên mobile / Tiêu đề tab trên desktop */}
+            <div className="flex items-center gap-2.5">
+              <div className="lg:hidden flex items-center cursor-pointer shrink-0" onClick={handleLogoRefresh}>
+                <TalovinLogo size={21} showText={true} />
+              </div>
+
+              <h1 className="hidden lg:block text-base font-semibold text-[#F3F4F6] tracking-tight font-sans">
+                {activeTab === 'feed' && "Sảnh trực tuyến"}
+                {activeTab === 'groups' && "Cộng đồng"}
+                {activeTab === 'rooms' && "Phòng đàm thoại"}
+                {activeTab === 'saved' && "Đã lưu"}
+                {activeTab === 'trending' && "Thịnh hành"}
+                {activeTab === 'friends' && "Bạn bè"}
+              </h1>
+            </div>
+
+            {/* Bên phải: Mobile (Đúng 3 icon Search, Bell, Menu ≡ với gap-3) / Desktop (Search, Bell, + Đăng) */}
+            {/* Mobile Header Icons: Tinh gọn tuyệt đối, giải phóng không gian */}
+            <div className="lg:hidden flex items-center gap-3">
+              {/* 1. Tìm kiếm */}
+              <button
+                type="button"
+                onClick={() => setShowMobileSearchBar(!showMobileSearchBar)}
+                className="w-9 h-9 rounded-full flex items-center justify-center text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                title="Tìm kiếm"
+                aria-label="Tìm kiếm"
+              >
+                <Search size={18} strokeWidth={1.75} />
+              </button>
+
+              {/* 2. Thông báo */}
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !isNotifOpen;
+                  setIsNotifOpen(next);
+                  if (next) handleMarkAllNotificationsRead();
+                  requestNotificationPermission();
+                }}
+                className="w-9 h-9 rounded-full flex items-center justify-center text-zinc-400 hover:text-white relative transition-colors cursor-pointer"
+                title="Thông báo"
+                aria-label="Thông báo"
+              >
+                <Bell size={18} strokeWidth={1.75} />
+                {notifications.filter(n => n.unread && n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM').length > 0 && (
+                  <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-[#0D0F14]" />
                 )}
-              </nav>
+              </button>
+
+              {/* 3. Menu mở rộng ≡ (Mở Bảng Điều Khiển Nổi) */}
+              <button
+                type="button"
+                onClick={() => setShowMobileActionDrawer(true)}
+                className="w-9 h-9 rounded-full flex items-center justify-center text-zinc-300 hover:text-white bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] transition-all cursor-pointer active:scale-95"
+                title="Menu mở rộng"
+                aria-label="Menu mở rộng"
+              >
+                <Menu size={18} strokeWidth={2} />
+              </button>
             </div>
 
-            {/* Phía dưới: Trạng thái phòng đàm thoại (nếu có session), Trình phát nhạc mini & Hồ sơ tài khoản ở đáy */}
-            <div className="flex flex-col gap-2.5 w-full pt-4 border-t border-white/[0.06]">
-              {/* Widget phòng đàm thoại đang tham gia (chỉ hiện khi có active session thật sự) */}
-              {activeRoom && (
-                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex flex-col gap-2 animate-in fade-in duration-200">
-                  <div className="flex items-center justify-between gap-1.5 min-w-0">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-                      <span className="text-[11px] font-medium text-emerald-400 truncate">
-                        #{activeRoom.nameroom || activeRoom.roomName || activeRoom.name || `Phòng #${activeRoom.id}`}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleLeaveActiveRoom}
-                      className="text-zinc-500 hover:text-rose-400 p-0.5 rounded transition-colors cursor-pointer"
-                      title="Rời phòng"
-                    >
-                      <X size={13} />
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/room/${activeRoom.id}`, { state: { room: activeRoom } })}
-                      className="flex-1 py-1 px-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold text-[11px] text-center transition-all active:scale-95 cursor-pointer"
-                    >
-                      Quay lại
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleLeaveActiveRoom}
-                      className="py-1 px-2 rounded-lg bg-white/5 hover:bg-rose-500/20 hover:text-rose-400 text-zinc-400 text-[11px] font-medium transition-all active:scale-95 cursor-pointer"
-                    >
-                      Rời
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Trình phát nhạc mini */}
-              <div 
-                onClick={() => setShowMobileMusicSheet(true)}
-                className="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] transition-colors cursor-pointer flex items-center gap-2.5"
-                title="Trình phát nhạc không gian"
+            {/* Desktop Header Icons: Search, Bell, + Đăng */}
+            <div className="hidden lg:flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowMobileSearchBar(!showMobileSearchBar)}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                title="Tìm kiếm"
               >
-                <div className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center text-zinc-300 shrink-0">
-                  <Music size={14} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium text-[#F3F4F6] truncate">
-                    {currentTrack ? (currentTrack.title || currentTrack.name) : "Sunset Coffee Vibe"}
-                  </p>
-                  <p className="text-[10px] text-zinc-500 truncate">
-                    {isPlayingRadio ? 'Đang phát' : 'Tạm dừng'}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    togglePlayRadio();
-                  }}
-                  className="w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-zinc-200 transition-colors shrink-0"
-                >
-                  {isPlayingRadio ? <Pause size={10} /> : <Play size={10} className="ml-0.5" />}
-                </button>
-              </div>
+                <Search size={15} strokeWidth={1.75} />
+              </button>
 
-              {/* Hồ sơ tài khoản ở đáy */}
-              <div
-                onClick={() => navigate('/profile')}
-                className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-white/[0.04] transition-colors cursor-pointer w-full"
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !isNotifOpen;
+                  setIsNotifOpen(next);
+                  if (next) handleMarkAllNotificationsRead();
+                  requestNotificationPermission();
+                }}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-white relative transition-colors cursor-pointer"
+                title="Thông báo"
               >
-                <div className="relative">
-                  <UserAvatar user={currentUser} size={34} />
-                  <span className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-[#090A0F]" />
-                </div>
-                <div className="min-w-0 flex-1 text-left">
-                  <p className="text-xs font-semibold text-[#F3F4F6] truncate">{currentUserName}</p>
-                  <p className="text-[11px] text-zinc-500 font-mono truncate">@{currentUserAccount}</p>
-                </div>
-              </div>
+                <Bell size={15} strokeWidth={1.75} />
+                {notifications.filter(n => n.unread && n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM').length > 0 && (
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-[#111319]" />
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsComposerModalOpen(true)}
+                className="flex items-center gap-1 px-3.5 py-1.5 rounded-full bg-white text-zinc-950 font-semibold text-xs hover:bg-zinc-200 transition-colors shadow-sm cursor-pointer ml-1"
+              >
+                <Plus size={14} strokeWidth={2} />
+                <span>Đăng</span>
+              </button>
             </div>
-          </aside>
-
-          {/* ============================================================== */}
-          {/* CỘT 2: KHU VỰC SẢNH CHÍNH Ở GIỮA (flex-1 min-w-0, bg-[#0D0F14]) */}
-          {/* ============================================================== */}
-          <main className="flex-1 min-w-0 min-h-[100dvh] bg-[#0D0F14] border-r border-white/[0.06] flex flex-col relative pb-28 lg:pb-12 overflow-x-hidden">
-
-            {/* ============================================================== */}
-            {/* THANH HEADER DÍNH TRÊN CÙNG (STICKY HEADER)                     */}
-            {/* ============================================================== */}
-            <header className="sticky top-0 z-30 h-14 w-full bg-[#0D0F14]/90 backdrop-blur-md border-b border-white/[0.06] px-4 sm:px-8 flex items-center justify-between select-none">
-              {/* Bên trái: Logo trên mobile / Tiêu đề "Sảnh trực tuyến" trên desktop */}
-              <div className="flex items-center gap-2.5">
-                <div className="lg:hidden flex items-center cursor-pointer shrink-0" onClick={handleLogoRefresh}>
-                  <TalovinLogo size={28} showText={true} />
-                </div>
-
-                {/* Dòng nhãn nhỏ hiển thị bộ lọc hiện tại trên mobile */}
-                <button
-                  type="button"
-                  onClick={() => setShowMobileActionDrawer(true)}
-                  className="lg:hidden flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/[0.05] hover:bg-white/[0.08] border border-white/[0.08] text-[11px] font-medium text-zinc-300 active:scale-95 transition-all cursor-pointer"
-                  title="Mở bảng điều khiển không gian Sảnh"
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="truncate max-w-[105px]">Sảnh · {currentFilterLabel}</span>
-                  <ChevronDown size={11} className="text-zinc-500" />
-                </button>
-
-                <h1 className="hidden lg:block text-base font-semibold text-[#F3F4F6] tracking-tight font-sans">
-                  {activeTab === 'feed' && "Sảnh trực tuyến"}
-                  {activeTab === 'groups' && "Cộng đồng"}
-                  {activeTab === 'rooms' && "Phòng đàm thoại"}
-                  {activeTab === 'saved' && "Đã lưu"}
-                  {activeTab === 'trending' && "Thịnh hành"}
-                  {activeTab === 'friends' && "Bạn bè"}
-                </h1>
-              </div>
-
-              {/* Bên phải: Nút Menu Hamburger, Tìm kiếm, Thông báo, Avatar */}
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                {/* NÚT MENU HAMBURGER ĐỘC ĐÁO TRÊN MOBILE (Mở Bảng Điều Khiển Nổi) */}
-                <button
-                  type="button"
-                  onClick={() => setShowMobileActionDrawer(true)}
-                  className="lg:hidden w-8 h-8 rounded-full flex items-center justify-center text-zinc-300 hover:text-white bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] transition-all cursor-pointer active:scale-95"
-                  title="Bảng điều khiển Sảnh"
-                  aria-label="Bảng điều khiển Sảnh"
-                >
-                  <Menu size={16} strokeWidth={2} />
-                </button>
-
-                {/* Trình phát nhạc mini trên mobile */}
-                <button
-                  type="button"
-                  onClick={() => setShowMobileMusicSheet(true)}
-                  className="lg:hidden w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                  title="Nhạc không gian"
-                >
-                  <Music size={15} strokeWidth={1.75} />
-                </button>
-
-                {/* Icon Tìm kiếm */}
-                <button
-                  type="button"
-                  onClick={() => setShowMobileSearchBar(!showMobileSearchBar)}
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                  title="Tìm kiếm"
-                >
-                  <Search size={15} strokeWidth={1.75} />
-                </button>
-
-                {/* Icon Thông báo (Chuông) */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next = !isNotifOpen;
-                    setIsNotifOpen(next);
-                    if (next) handleMarkAllNotificationsRead();
-                    requestNotificationPermission();
-                  }}
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-white relative transition-colors cursor-pointer"
-                  title="Thông báo"
-                >
-                  <Bell size={15} strokeWidth={1.75} />
-                  {notifications.filter(n => n.unread && n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM').length > 0 && (
-                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-[#111319]" />
-                  )}
-                </button>
-
-                {/* Nút "+ Đăng" trên desktop */}
-                <button
-                  type="button"
-                  onClick={() => setIsComposerModalOpen(true)}
-                  className="hidden lg:flex items-center gap-1 px-3.5 py-1.5 rounded-full bg-white text-zinc-950 font-semibold text-xs hover:bg-zinc-200 transition-colors shadow-sm cursor-pointer ml-1"
-                >
-                  <Plus size={14} strokeWidth={2} />
-                  <span>Đăng</span>
-                </button>
-
-                {/* Avatar tài khoản trên mobile (bấm vào mở trang cá nhân) */}
-                <button
-                  type="button"
-                  onClick={() => navigate('/profile')}
-                  className="lg:hidden w-7 h-7 rounded-full overflow-hidden border border-white/20 ml-0.5 cursor-pointer flex-shrink-0 hover:opacity-80 transition-opacity"
-                  title="Trang cá nhân"
-                >
-                  <UserAvatar user={currentUser} size={28} />
-                </button>
-              </div>
-            </header>
+          </header>
 
           {/* Thanh Search di động / xổ xuống (khi bấm kính lúp) */}
           {showMobileSearchBar && (
@@ -3787,7 +3782,7 @@ const Home = ({ initialTab }) => {
           {/* ============================================================== */}
           <AnimatePresence>
             {isComposerModalOpen && (
-              <div 
+              <div
                 className="fixed inset-0 z-[120] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 select-none"
                 onClick={() => setIsComposerModalOpen(false)}
               >
@@ -3815,286 +3810,286 @@ const Home = ({ initialTab }) => {
                   </div>
                   <div className="overflow-y-auto [scrollbar-width:none]">
                     <div className="feed-composer-wrapper !pt-0">
-              <div className="post-creator-box">
-                <div className="creator-input-row">
-                  <UserAvatar user={currentUser} size={36} />
-                  <div className="creator-field-wrap">
-                    <textarea
-                      ref={newPostInputRef}
-                      rows="2"
-                      placeholder="Bạn đang nghĩ gì? Chia sẻ câu chuyện, cảm xúc hoặc một khoảnh khắc cùng cộng đồng..."
-                      value={newPostContent}
-                      onChange={(e) => setNewPostContent(e.target.value)}
-                    />
-                  </div>
-                </div>
+                      <div className="post-creator-box">
+                        <div className="creator-input-row">
+                          <UserAvatar user={currentUser} size={36} />
+                          <div className="creator-field-wrap">
+                            <textarea
+                              ref={newPostInputRef}
+                              rows="2"
+                              placeholder="Bạn đang nghĩ gì? Chia sẻ câu chuyện, cảm xúc hoặc một khoảnh khắc cùng cộng đồng..."
+                              value={newPostContent}
+                              onChange={(e) => setNewPostContent(e.target.value)}
+                            />
+                          </div>
+                        </div>
 
-                {/* Preview Ảnh / Video ngắn đã nén */}
-                {attachedMedia && (
-                  <div className="composer-attached-preview relative group">
-                    {attachedMedia.type === 'video' ? (
-                      <div className="relative w-full h-full flex items-center justify-center bg-black/60 rounded-xl overflow-hidden">
-                        <video
-                          src={attachedMedia.url}
-                          autoPlay
-                          loop
-                          muted={previewVideoMuted}
-                          playsInline
-                          className="preview-media-element"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setPreviewVideoMuted(prev => !prev)}
-                          className="absolute bottom-2 left-2 px-2.5 py-1 rounded-lg bg-black/80 backdrop-blur-md text-[11px] font-mono text-white/95 flex items-center gap-1.5 shadow-lg border border-white/10 hover:bg-black transition-all z-10"
-                          title={previewVideoMuted ? "Bật âm thanh video gốc" : "Tắt tiếng"}
-                        >
-                          {previewVideoMuted ? (
-                            <>
-                              <VolumeX size={13} className="text-zinc-400" />
-                              <span>Tắt tiếng</span>
-                            </>
+                        {/* Preview Ảnh / Video ngắn đã nén */}
+                        {attachedMedia && (
+                          <div className="composer-attached-preview relative group">
+                            {attachedMedia.type === 'video' ? (
+                              <div className="relative w-full h-full flex items-center justify-center bg-black/60 rounded-xl overflow-hidden">
+                                <video
+                                  src={attachedMedia.url}
+                                  autoPlay
+                                  loop
+                                  muted={previewVideoMuted}
+                                  playsInline
+                                  className="preview-media-element"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewVideoMuted(prev => !prev)}
+                                  className="absolute bottom-2 left-2 px-2.5 py-1 rounded-lg bg-black/80 backdrop-blur-md text-[11px] font-mono text-white/95 flex items-center gap-1.5 shadow-lg border border-white/10 hover:bg-black transition-all z-10"
+                                  title={previewVideoMuted ? "Bật âm thanh video gốc" : "Tắt tiếng"}
+                                >
+                                  {previewVideoMuted ? (
+                                    <>
+                                      <VolumeX size={13} className="text-zinc-400" />
+                                      <span>Tắt tiếng</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Volume2 size={13} className="text-emerald-400" />
+                                      <span>Âm thanh gốc</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            ) : (
+                              <img
+                                src={attachedMedia.url}
+                                alt="Đính kèm"
+                                className="preview-media-element"
+                              />
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setAttachedMedia(null)}
+                              className="btn-remove-attached"
+                              title="Xóa tệp đính kèm"
+                            >
+                              <X size={13} />
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Preview Ghi âm 15s */}
+                        {isRecordingVoice ? (
+                          <div className="voice-recording-indicator">
+                            <span className="rec-dot-pulsing"></span>
+                            <span className="font-mono text-xs text-rose-400">
+                              Đang thu âm: 00:{voiceDuration < 10 ? `0${voiceDuration}` : voiceDuration} / 00:15
+                            </span>
+                            <button
+                              type="button"
+                              onClick={stopVoiceRecording}
+                              className="btn-stop-rec"
+                            >
+                              <Square size={11} fill="currentColor" /> Dừng
+                            </button>
+                          </div>
+                        ) : voiceBase64 ? (
+                          <div className="voice-preview-deck">
+                            <button
+                              type="button"
+                              onClick={togglePlayVoicePreview}
+                              className="btn-play-voice-preview"
+                              title={isPlayingVoicePreview ? "Tạm dừng" : "Nghe thử"}
+                            >
+                              {isPlayingVoicePreview ? <Pause size={12} /> : <Play size={12} />}
+                            </button>
+                            <div className="voice-waveform-preview">
+                              <span className={`wave-bar ${isPlayingVoicePreview ? 'playing' : ''}`}></span>
+                              <span className={`wave-bar ${isPlayingVoicePreview ? 'playing' : ''}`}></span>
+                              <span className={`wave-bar ${isPlayingVoicePreview ? 'playing' : ''}`}></span>
+                              <span className={`wave-bar ${isPlayingVoicePreview ? 'playing' : ''}`}></span>
+                              <span className={`wave-bar ${isPlayingVoicePreview ? 'playing' : ''}`}></span>
+                            </div>
+                            <span className="font-mono text-xs text-zinc-300">
+                              00:{voiceDuration < 10 ? `0${voiceDuration}` : voiceDuration}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={clearVoiceRecording}
+                              className="btn-delete-voice"
+                              title="Hủy ghi âm"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        ) : null}
+
+                        {/* Chọn Vibe Tags: Icon thật có màu sắc trang nhã, không màu mè AI bóng bẩy */}
+                        <div className="composer-vibes-wrapper my-2">
+                          <div className="flex items-center justify-between mb-1.5 px-0.5">
+                            <span className="text-[11.5px] font-medium text-zinc-400 flex items-center gap-1.5 flex-wrap">
+                              <Smile size={13} className="text-zinc-400 flex-shrink-0" />
+                              <span>Chủ đề & Cảm xúc ({dynamicVibes.length})</span>
+                              {selectedVibe && (
+                                <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-200 border border-zinc-700">
+                                  Đang chọn: {dynamicVibes.find(v => v.id === selectedVibe)?.label}
+                                </span>
+                              )}
+                            </span>
+                            {dynamicVibes.length > 3 && (
+                              <button
+                                type="button"
+                                onClick={() => setIsVibesExpanded(!isVibesExpanded)}
+                                className="text-xs text-zinc-400 hover:text-zinc-200 flex items-center gap-1 transition-colors flex-shrink-0"
+                              >
+                                <span>{isVibesExpanded ? 'Thu gọn' : 'Xem tất cả'}</span>
+                                <ChevronDown size={13} className={`transition-transform duration-200 ${isVibesExpanded ? 'rotate-180' : ''}`} />
+                              </button>
+                            )}
+                          </div>
+
+                          {isVibesExpanded ? (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-1.5 pt-0.5 pb-1 animate-fade-in">
+                              {dynamicVibes.map(v => {
+                                const IconComponent = v.icon || Tag;
+                                const isSelected = selectedVibe === v.id;
+                                return (
+                                  <button
+                                    key={v.id}
+                                    type="button"
+                                    onClick={() => setSelectedVibe(isSelected ? null : v.id)}
+                                    className={`vibe-tag-pill w-full justify-center ${isSelected ? 'active' : ''}`}
+                                  >
+                                    <IconComponent size={13} strokeWidth={1.75} className={`vibe-icon flex-shrink-0 ${v.color || 'text-zinc-400'}`} />
+                                    <span className="truncate">{v.label}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
                           ) : (
-                            <>
-                              <Volume2 size={13} className="text-emerald-400" />
-                              <span>Âm thanh gốc</span>
-                            </>
+                            <div className="vibe-tags-row flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
+                              {dynamicVibes.map(v => {
+                                const IconComponent = v.icon || Tag;
+                                const isSelected = selectedVibe === v.id;
+                                return (
+                                  <button
+                                    key={v.id}
+                                    type="button"
+                                    onClick={() => setSelectedVibe(isSelected ? null : v.id)}
+                                    className={`vibe-tag-pill flex-shrink-0 ${isSelected ? 'active' : ''}`}
+                                  >
+                                    <IconComponent size={13} strokeWidth={1.75} className={`vibe-icon flex-shrink-0 ${v.color || 'text-zinc-400'}`} />
+                                    <span>{v.label}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
                           )}
-                        </button>
-                      </div>
-                    ) : (
-                      <img
-                        src={attachedMedia.url}
-                        alt="Đính kèm"
-                        className="preview-media-element"
-                      />
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setAttachedMedia(null)}
-                      className="btn-remove-attached"
-                      title="Xóa tệp đính kèm"
-                    >
-                      <X size={13} />
-                    </button>
-                  </div>
-                )}
+                        </div>
 
-                {/* Preview Ghi âm 15s */}
-                {isRecordingVoice ? (
-                  <div className="voice-recording-indicator">
-                    <span className="rec-dot-pulsing"></span>
-                    <span className="font-mono text-xs text-rose-400">
-                      Đang thu âm: 00:{voiceDuration < 10 ? `0${voiceDuration}` : voiceDuration} / 00:15
-                    </span>
-                    <button
-                      type="button"
-                      onClick={stopVoiceRecording}
-                      className="btn-stop-rec"
-                    >
-                      <Square size={11} fill="currentColor" /> Dừng
-                    </button>
-                  </div>
-                ) : voiceBase64 ? (
-                  <div className="voice-preview-deck">
-                    <button
-                      type="button"
-                      onClick={togglePlayVoicePreview}
-                      className="btn-play-voice-preview"
-                      title={isPlayingVoicePreview ? "Tạm dừng" : "Nghe thử"}
-                    >
-                      {isPlayingVoicePreview ? <Pause size={12} /> : <Play size={12} />}
-                    </button>
-                    <div className="voice-waveform-preview">
-                      <span className={`wave-bar ${isPlayingVoicePreview ? 'playing' : ''}`}></span>
-                      <span className={`wave-bar ${isPlayingVoicePreview ? 'playing' : ''}`}></span>
-                      <span className={`wave-bar ${isPlayingVoicePreview ? 'playing' : ''}`}></span>
-                      <span className={`wave-bar ${isPlayingVoicePreview ? 'playing' : ''}`}></span>
-                      <span className={`wave-bar ${isPlayingVoicePreview ? 'playing' : ''}`}></span>
-                    </div>
-                    <span className="font-mono text-xs text-zinc-300">
-                      00:{voiceDuration < 10 ? `0${voiceDuration}` : voiceDuration}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={clearVoiceRecording}
-                      className="btn-delete-voice"
-                      title="Hủy ghi âm"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                ) : null}
+                        {/* Nhập Sparks / Chủ đề cộng đồng nếu mở */}
+                        {showSparkInput && (
+                          <div className="community-sparks-section animate-fade-in">
+                            <div className="custom-spark-input-row">
+                              <Hash size={14} className="spark-input-icon text-emerald-400" />
+                              <input
+                                type="text"
+                                placeholder="Gắn thẻ góc nhìn, #chủ đề quan tâm..."
+                                value={customTagInput}
+                                onChange={(e) => setCustomTagInput(e.target.value)}
+                                onKeyDown={handleAddCustomTag}
+                              />
+                              <button
+                                type="button"
+                                onClick={handleAddCustomTag}
+                                disabled={!customTagInput.trim()}
+                                className="btn-add-spark-action"
+                              >
+                                <Plus size={12} /> <span>Thêm</span>
+                              </button>
+                            </div>
 
-                {/* Chọn Vibe Tags: Icon thật có màu sắc trang nhã, không màu mè AI bóng bẩy */}
-                <div className="composer-vibes-wrapper my-2">
-                  <div className="flex items-center justify-between mb-1.5 px-0.5">
-                    <span className="text-[11.5px] font-medium text-zinc-400 flex items-center gap-1.5 flex-wrap">
-                      <Smile size={13} className="text-zinc-400 flex-shrink-0" />
-                      <span>Chủ đề & Cảm xúc ({dynamicVibes.length})</span>
-                      {selectedVibe && (
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-200 border border-zinc-700">
-                          Đang chọn: {dynamicVibes.find(v => v.id === selectedVibe)?.label}
-                        </span>
-                      )}
-                    </span>
-                    {dynamicVibes.length > 3 && (
-                      <button
-                        type="button"
-                        onClick={() => setIsVibesExpanded(!isVibesExpanded)}
-                        className="text-xs text-zinc-400 hover:text-zinc-200 flex items-center gap-1 transition-colors flex-shrink-0"
-                      >
-                        <span>{isVibesExpanded ? 'Thu gọn' : 'Xem tất cả'}</span>
-                        <ChevronDown size={13} className={`transition-transform duration-200 ${isVibesExpanded ? 'rotate-180' : ''}`} />
-                      </button>
-                    )}
-                  </div>
+                            {/* Gợi ý chủ đề nhanh để người dùng không cần gõ thủ công */}
+                            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pt-2 pb-0.5">
+                              <span className="text-[10px] text-zinc-500 font-mono flex-shrink-0">Gợi ý nhanh:</span>
+                              {['#tam_su', '#am_nhac', '#cong_nghe', '#doi_song', '#goc_nhin'].map(suggested => (
+                                <button
+                                  key={suggested}
+                                  type="button"
+                                  onClick={() => {
+                                    if (!selectedTags.includes(suggested)) {
+                                      setSelectedTags(prev => [...prev, suggested]);
+                                    }
+                                  }}
+                                  className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-zinc-850 hover:bg-zinc-800 text-zinc-300 hover:text-emerald-400 border border-zinc-700/60 flex-shrink-0 transition-colors active:scale-95"
+                                >
+                                  {suggested}
+                                </button>
+                              ))}
+                            </div>
 
-                  {isVibesExpanded ? (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-1.5 pt-0.5 pb-1 animate-fade-in">
-                      {dynamicVibes.map(v => {
-                        const IconComponent = v.icon || Tag;
-                        const isSelected = selectedVibe === v.id;
-                        return (
+                            {selectedTags.length > 0 && (
+                              <div className="selected-sparks-wrap pt-1">
+                                {selectedTags.map(tag => (
+                                  <span key={tag} className="active-spark-chip font-mono">
+                                    {tag}
+                                    <button type="button" onClick={() => handleRemoveTag(tag)} className="btn-remove-spark"><X size={10} /></button>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Toolbar đính kèm & Đăng bài */}
+                        <div className="creator-bottom-row">
+                          <div className="creator-left-tools">
+                            <input
+                              ref={fileInputRef}
+                              type="file"
+                              accept="image/*,video/*"
+                              style={{ display: 'none' }}
+                              onChange={handleFileSelect}
+                            />
+
+                            <button
+                              type="button"
+                              onClick={() => fileInputRef.current?.click()}
+                              className={`btn-subtool ${attachedMedia ? 'active' : ''}`}
+                              title="Đính kèm hình ảnh hoặc video clip ngắn"
+                            >
+                              <ImageIcon size={15} strokeWidth={1.5} className="text-sky-400 flex-shrink-0" />
+                              <span>Ảnh<span className="hidden sm:inline"> / Video</span></span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={isRecordingVoice ? stopVoiceRecording : startVoiceRecording}
+                              className={`btn-subtool ${isRecordingVoice || voiceBase64 ? 'active-rose' : ''}`}
+                              title="Ghi âm giọng nói 15 giây"
+                            >
+                              <Mic size={15} strokeWidth={1.5} className="text-rose-400 flex-shrink-0" />
+                              <span>{isRecordingVoice ? 'Thu âm...' : (voiceBase64 ? 'Đã thu' : 'Ghi âm')}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setShowSparkInput(!showSparkInput)}
+                              className={`btn-subtool ${showSparkInput || selectedTags.length > 0 ? 'active' : ''}`}
+                              title="Gắn thẻ chủ đề bài viết"
+                            >
+                              <Tag size={15} strokeWidth={1.5} className="text-amber-400 flex-shrink-0" />
+                              <span><span className="hidden sm:inline">Gắn </span>chủ đề</span>
+                            </button>
+                          </div>
+
                           <button
-                            key={v.id}
                             type="button"
-                            onClick={() => setSelectedVibe(isSelected ? null : v.id)}
-                            className={`vibe-tag-pill w-full justify-center ${isSelected ? 'active' : ''}`}
+                            onClick={handleCreatePost}
+                            disabled={isPosting || (!newPostContent.trim() && !attachedMedia && !voiceBase64)}
+                            className="btn-publish-submit"
                           >
-                            <IconComponent size={13} strokeWidth={1.75} className={`vibe-icon flex-shrink-0 ${v.color || 'text-zinc-400'}`} />
-                            <span className="truncate">{v.label}</span>
+                            {isPosting ? 'Đang gửi...' : 'Đăng bài'}
                           </button>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="vibe-tags-row flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
-                      {dynamicVibes.map(v => {
-                        const IconComponent = v.icon || Tag;
-                        const isSelected = selectedVibe === v.id;
-                        return (
-                          <button
-                            key={v.id}
-                            type="button"
-                            onClick={() => setSelectedVibe(isSelected ? null : v.id)}
-                            className={`vibe-tag-pill flex-shrink-0 ${isSelected ? 'active' : ''}`}
-                          >
-                            <IconComponent size={13} strokeWidth={1.75} className={`vibe-icon flex-shrink-0 ${v.color || 'text-zinc-400'}`} />
-                            <span>{v.label}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* Nhập Sparks / Chủ đề cộng đồng nếu mở */}
-                {showSparkInput && (
-                  <div className="community-sparks-section animate-fade-in">
-                    <div className="custom-spark-input-row">
-                      <Hash size={14} className="spark-input-icon text-emerald-400" />
-                      <input
-                        type="text"
-                        placeholder="Gắn thẻ góc nhìn, #chủ đề quan tâm..."
-                        value={customTagInput}
-                        onChange={(e) => setCustomTagInput(e.target.value)}
-                        onKeyDown={handleAddCustomTag}
-                      />
-                      <button
-                        type="button"
-                        onClick={handleAddCustomTag}
-                        disabled={!customTagInput.trim()}
-                        className="btn-add-spark-action"
-                      >
-                        <Plus size={12} /> <span>Thêm</span>
-                      </button>
-                    </div>
-
-                    {/* Gợi ý chủ đề nhanh để người dùng không cần gõ thủ công */}
-                    <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pt-2 pb-0.5">
-                      <span className="text-[10px] text-zinc-500 font-mono flex-shrink-0">Gợi ý nhanh:</span>
-                      {['#tam_su', '#am_nhac', '#cong_nghe', '#doi_song', '#goc_nhin'].map(suggested => (
-                        <button
-                          key={suggested}
-                          type="button"
-                          onClick={() => {
-                            if (!selectedTags.includes(suggested)) {
-                              setSelectedTags(prev => [...prev, suggested]);
-                            }
-                          }}
-                          className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-zinc-850 hover:bg-zinc-800 text-zinc-300 hover:text-emerald-400 border border-zinc-700/60 flex-shrink-0 transition-colors active:scale-95"
-                        >
-                          {suggested}
-                        </button>
-                      ))}
-                    </div>
-
-                    {selectedTags.length > 0 && (
-                      <div className="selected-sparks-wrap pt-1">
-                        {selectedTags.map(tag => (
-                          <span key={tag} className="active-spark-chip font-mono">
-                            {tag}
-                            <button type="button" onClick={() => handleRemoveTag(tag)} className="btn-remove-spark"><X size={10} /></button>
-                          </span>
-                        ))}
+                        </div>
                       </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Toolbar đính kèm & Đăng bài */}
-                <div className="creator-bottom-row">
-                  <div className="creator-left-tools">
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*,video/*"
-                      style={{ display: 'none' }}
-                      onChange={handleFileSelect}
-                    />
-
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className={`btn-subtool ${attachedMedia ? 'active' : ''}`}
-                      title="Đính kèm hình ảnh hoặc video clip ngắn"
-                    >
-                      <ImageIcon size={15} strokeWidth={1.5} className="text-sky-400 flex-shrink-0" />
-                      <span>Ảnh<span className="hidden sm:inline"> / Video</span></span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={isRecordingVoice ? stopVoiceRecording : startVoiceRecording}
-                      className={`btn-subtool ${isRecordingVoice || voiceBase64 ? 'active-rose' : ''}`}
-                      title="Ghi âm giọng nói 15 giây"
-                    >
-                      <Mic size={15} strokeWidth={1.5} className="text-rose-400 flex-shrink-0" />
-                      <span>{isRecordingVoice ? 'Thu âm...' : (voiceBase64 ? 'Đã thu' : 'Ghi âm')}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setShowSparkInput(!showSparkInput)}
-                      className={`btn-subtool ${showSparkInput || selectedTags.length > 0 ? 'active' : ''}`}
-                      title="Gắn thẻ chủ đề bài viết"
-                    >
-                      <Tag size={15} strokeWidth={1.5} className="text-amber-400 flex-shrink-0" />
-                      <span><span className="hidden sm:inline">Gắn </span>chủ đề</span>
-                    </button>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleCreatePost}
-                    disabled={isPosting || (!newPostContent.trim() && !attachedMedia && !voiceBase64)}
-                    className="btn-publish-submit"
-                  >
-                    {isPosting ? 'Đang gửi...' : 'Đăng bài'}
-                  </button>
-                </div>
-              </div>
-            </div>
+                    </div>
                   </div>
                 </motion.div>
               </div>
@@ -4262,9 +4257,9 @@ const Home = ({ initialTab }) => {
                     const isFounder = post.authorVipTier === 'FOUNDER' || post.authorRoles?.includes('ROLE_ADMIN') || post.authorRoles?.includes('ROLE_AMDIN') || post.authorBadge;
                     const parsedMedia = parsePostMedia(post.imageUrl, post);
                     const isChallengePost = (post.content || '').includes('[Thử thách]') ||
-                                            (post.content || '').includes('[Challenge]') ||
-                                            (post.vibe || '').toLowerCase().includes('thử thách') ||
-                                            post.challengeQuestion;
+                      (post.content || '').includes('[Challenge]') ||
+                      (post.vibe || '').toLowerCase().includes('thử thách') ||
+                      post.challengeQuestion;
 
                     return (
                       <article
@@ -4346,9 +4341,8 @@ const Home = ({ initialTab }) => {
                                     e.stopPropagation();
                                     handleToggleSavePost(post.id);
                                   }}
-                                  className={`p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.05] transition-colors cursor-pointer ${
-                                    isSaved ? 'text-amber-400' : ''
-                                  }`}
+                                  className={`p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.05] transition-colors cursor-pointer ${isSaved ? 'text-amber-400' : ''
+                                    }`}
                                   title={isSaved ? "Bỏ lưu bài viết" : "Lưu bài viết"}
                                 >
                                   <Bookmark size={15} strokeWidth={1.5} fill={isSaved ? "currentColor" : "none"} />
@@ -4588,9 +4582,8 @@ const Home = ({ initialTab }) => {
                                   e.stopPropagation();
                                   handlePostCardClick(e, post, true);
                                 }}
-                                className={`flex items-center gap-1.5 text-xs hover:text-white transition-colors cursor-pointer ${
-                                  selectedThreadPost?.id === post.id ? 'text-white font-semibold' : ''
-                                }`}
+                                className={`flex items-center gap-1.5 text-xs hover:text-white transition-colors cursor-pointer ${selectedThreadPost?.id === post.id ? 'text-white font-semibold' : ''
+                                  }`}
                                 title="Bình luận"
                               >
                                 <MessageSquare size={16} strokeWidth={1.5} />
@@ -4610,265 +4603,265 @@ const Home = ({ initialTab }) => {
                               </button>
                             </div>
 
-                      {/* Khu vực bình luận: Chỉ mở khi người dùng click */}
-                      {expandedComments[post.id] && (
-                        <div className="post-comments-container">
-                          <div className="comments-stack">
-                            {(!commentsMap[post.id] || commentsMap[post.id].length === 0) ? (
-                              <p className="empty-cmt-notice">Chưa có phản hồi nào. Hãy là người đầu tiên chia sẻ góc nhìn!</p>
-                            ) : (
-                              buildCommentThreads(commentsMap[post.id]).map((thread) => {
-                                const renderCommentBubble = (cmt, isReply = false) => {
-                                  const isCmtMe = currentUserId && cmt.authorId?.toString() === currentUserId.toString();
-                                  const canDeleteCmt = isCmtMe || (currentUserId && post.authorId?.toString() === currentUserId.toString());
-                                  const isEditingThisCmt = editingCommentId === cmt.id;
+                            {/* Khu vực bình luận: Chỉ mở khi người dùng click */}
+                            {expandedComments[post.id] && (
+                              <div className="post-comments-container">
+                                <div className="comments-stack">
+                                  {(!commentsMap[post.id] || commentsMap[post.id].length === 0) ? (
+                                    <p className="empty-cmt-notice">Chưa có phản hồi nào. Hãy là người đầu tiên chia sẻ góc nhìn!</p>
+                                  ) : (
+                                    buildCommentThreads(commentsMap[post.id]).map((thread) => {
+                                      const renderCommentBubble = (cmt, isReply = false) => {
+                                        const isCmtMe = currentUserId && cmt.authorId?.toString() === currentUserId.toString();
+                                        const canDeleteCmt = isCmtMe || (currentUserId && post.authorId?.toString() === currentUserId.toString());
+                                        const isEditingThisCmt = editingCommentId === cmt.id;
 
-                                  return (
-                                    <div key={cmt.id} className={isReply ? "cmt-reply-item" : "cmt-row cmt-root-row"}>
-                                      <div
-                                        className="cursor-pointer flex-shrink-0"
-                                        onClick={() => navigateToProfile(cmt.authorId)}
-                                        title="Xem hồ sơ cá nhân"
-                                      >
-                                        <UserAvatar
-                                          avatar={cmt.authorAvatar}
-                                          name={cmt.authorNickname || cmt.authorAccount}
-                                          size={isReply ? 24 : 30}
-                                        />
-                                      </div>
-                                      <div className={`cmt-bubble-content ${isReply ? 'reply-bubble' : 'root-bubble'}`}>
-                                        <div className="cmt-header-row">
-                                          <div className="cmt-author-info min-w-0">
-                                            <span
-                                              className={`cmt-user-name ${isReply ? 'reply-name' : ''} cursor-pointer hover:underline truncate`}
+                                        return (
+                                          <div key={cmt.id} className={isReply ? "cmt-reply-item" : "cmt-row cmt-root-row"}>
+                                            <div
+                                              className="cursor-pointer flex-shrink-0"
                                               onClick={() => navigateToProfile(cmt.authorId)}
+                                              title="Xem hồ sơ cá nhân"
                                             >
-                                              {cmt.authorNickname || cmt.authorAccount || 'Thành viên'}
-                                            </span>
-                                            <span className={`cmt-user-handle ${isReply ? 'reply-handle' : ''} truncate`}>
-                                              @{cmt.authorAccount || 'user'}
-                                            </span>
-                                            <span className="cmt-meta-dot flex-shrink-0">·</span>
-                                            <span className="cmt-time-label flex-shrink-0">{cmt.formattedTime || 'Vừa xong'}</span>
+                                              <UserAvatar
+                                                avatar={cmt.authorAvatar}
+                                                name={cmt.authorNickname || cmt.authorAccount}
+                                                size={isReply ? 24 : 30}
+                                              />
+                                            </div>
+                                            <div className={`cmt-bubble-content ${isReply ? 'reply-bubble' : 'root-bubble'}`}>
+                                              <div className="cmt-header-row">
+                                                <div className="cmt-author-info min-w-0">
+                                                  <span
+                                                    className={`cmt-user-name ${isReply ? 'reply-name' : ''} cursor-pointer hover:underline truncate`}
+                                                    onClick={() => navigateToProfile(cmt.authorId)}
+                                                  >
+                                                    {cmt.authorNickname || cmt.authorAccount || 'Thành viên'}
+                                                  </span>
+                                                  <span className={`cmt-user-handle ${isReply ? 'reply-handle' : ''} truncate`}>
+                                                    @{cmt.authorAccount || 'user'}
+                                                  </span>
+                                                  <span className="cmt-meta-dot flex-shrink-0">·</span>
+                                                  <span className="cmt-time-label flex-shrink-0">{cmt.formattedTime || 'Vừa xong'}</span>
+                                                </div>
+                                              </div>
+
+                                              {isEditingThisCmt ? (
+                                                <div className="cmt-inline-edit-box">
+                                                  <input
+                                                    type="text"
+                                                    value={editingCommentText}
+                                                    onChange={(e) => setEditingCommentText(e.target.value)}
+                                                    className="cmt-inline-edit-input"
+                                                    autoFocus
+                                                    onKeyDown={(e) => {
+                                                      if (e.key === 'Enter') handleSaveEditComment(post.id, cmt.id);
+                                                      if (e.key === 'Escape') setEditingCommentId(null);
+                                                    }}
+                                                  />
+                                                  <div className="cmt-inline-edit-actions">
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => setEditingCommentId(null)}
+                                                      className="btn-cancel-inline-cmt"
+                                                    >
+                                                      Hủy
+                                                    </button>
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => handleSaveEditComment(post.id, cmt.id)}
+                                                      disabled={isSavingComment}
+                                                      className="btn-save-inline-cmt"
+                                                    >
+                                                      {isSavingComment ? 'Đang lưu...' : 'Lưu'}
+                                                    </button>
+                                                  </div>
+                                                </div>
+                                              ) : (
+                                                <>
+                                                  <p className="cmt-body-text">
+                                                    {cmt.replyToUser && (
+                                                      <span className="cmt-mention-badge font-mono">
+                                                        @{cmt.replyToUser}{' '}
+                                                      </span>
+                                                    )}
+                                                    {cmt.content}
+                                                  </p>
+
+                                                  {/* Footer thao tác bình luận: Like, Trả lời, Sửa, Xóa */}
+                                                  <div className="cmt-footer-row">
+                                                    {/* Nút Thả tim / Cảm xúc */}
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => handleToggleLikeComment(post.id, cmt.id)}
+                                                      className={`btn-cmt-act reaction ${cmt.isLiked ? 'liked text-rose-500 font-bold' : ''}`}
+                                                      title={cmt.isLiked ? 'Bỏ thích phản hồi' : 'Thích phản hồi'}
+                                                    >
+                                                      <Heart
+                                                        size={11.5}
+                                                        className={cmt.isLiked ? "fill-rose-500 text-rose-500 transition-all scale-105" : "transition-all"}
+                                                      />
+                                                      {Number(cmt.likesCount || 0) > 0 && (
+                                                        <span className="cmt-like-count font-mono text-[10.5px]">{cmt.likesCount}</span>
+                                                      )}
+                                                    </button>
+
+                                                    {/* Nút Trả lời */}
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => {
+                                                        setReplyTargetMap(prev => ({
+                                                          ...prev,
+                                                          [post.id]: {
+                                                            commentId: cmt.id,
+                                                            authorAccount: cmt.authorAccount || 'user',
+                                                            authorNickname: cmt.authorNickname || cmt.authorAccount || 'Thành viên'
+                                                          }
+                                                        }));
+                                                        const inputEl = document.getElementById(`comment-input-${post.id}`);
+                                                        if (inputEl) inputEl.focus();
+                                                      }}
+                                                      className="btn-cmt-act reply"
+                                                      title="Trả lời phản hồi này"
+                                                    >
+                                                      <CornerDownRight size={11.5} className="flex-shrink-0" />
+                                                      <span>Trả lời</span>
+                                                    </button>
+
+                                                    {isCmtMe && !isEditingThisCmt && (
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => handleStartEditComment(cmt)}
+                                                        className="btn-cmt-act"
+                                                        title="Sửa phản hồi"
+                                                      >
+                                                        <Edit3 size={11} />
+                                                        <span>Sửa</span>
+                                                      </button>
+                                                    )}
+                                                    {canDeleteCmt && (
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => handleDeleteComment(post.id, cmt.id)}
+                                                        className="btn-cmt-act danger text-zinc-500 hover:text-rose-400"
+                                                        title="Xóa phản hồi"
+                                                      >
+                                                        <Trash2 size={11} />
+                                                        <span>Xóa</span>
+                                                      </button>
+                                                    )}
+                                                  </div>
+                                                </>
+                                              )}
+                                            </div>
                                           </div>
+                                        );
+                                      };
+
+                                      return (
+                                        <div key={thread.id} className="cmt-thread-group">
+                                          {/* 1. Bình luận gốc cấp 1 */}
+                                          {renderCommentBubble(thread, false)}
+
+                                          {/* 2. Nhánh các phản hồi con có đường kẻ dọc phân cấp rõ rệt */}
+                                          {thread.replies && thread.replies.length > 0 && (
+                                            <div className="cmt-replies-branch-thread">
+                                              {thread.replies.map((replyCmt) => renderCommentBubble(replyCmt, true))}
+                                            </div>
+                                          )}
                                         </div>
+                                      );
+                                    })
+                                  )}
+                                </div>
 
-                                        {isEditingThisCmt ? (
-                                          <div className="cmt-inline-edit-box">
-                                            <input
-                                              type="text"
-                                              value={editingCommentText}
-                                              onChange={(e) => setEditingCommentText(e.target.value)}
-                                              className="cmt-inline-edit-input"
-                                              autoFocus
-                                              onKeyDown={(e) => {
-                                                if (e.key === 'Enter') handleSaveEditComment(post.id, cmt.id);
-                                                if (e.key === 'Escape') setEditingCommentId(null);
-                                              }}
-                                            />
-                                            <div className="cmt-inline-edit-actions">
-                                              <button
-                                                type="button"
-                                                onClick={() => setEditingCommentId(null)}
-                                                className="btn-cancel-inline-cmt"
-                                              >
-                                                Hủy
-                                              </button>
-                                              <button
-                                                type="button"
-                                                onClick={() => handleSaveEditComment(post.id, cmt.id)}
-                                                disabled={isSavingComment}
-                                                className="btn-save-inline-cmt"
-                                              >
-                                                {isSavingComment ? 'Đang lưu...' : 'Lưu'}
-                                              </button>
-                                            </div>
-                                          </div>
-                                        ) : (
-                                          <>
-                                            <p className="cmt-body-text">
-                                              {cmt.replyToUser && (
-                                                <span className="cmt-mention-badge font-mono">
-                                                  @{cmt.replyToUser}{' '}
-                                                </span>
-                                              )}
-                                              {cmt.content}
-                                            </p>
-
-                                            {/* Footer thao tác bình luận: Like, Trả lời, Sửa, Xóa */}
-                                            <div className="cmt-footer-row">
-                                              {/* Nút Thả tim / Cảm xúc */}
-                                              <button
-                                                type="button"
-                                                onClick={() => handleToggleLikeComment(post.id, cmt.id)}
-                                                className={`btn-cmt-act reaction ${cmt.isLiked ? 'liked text-rose-500 font-bold' : ''}`}
-                                                title={cmt.isLiked ? 'Bỏ thích phản hồi' : 'Thích phản hồi'}
-                                              >
-                                                <Heart
-                                                  size={11.5}
-                                                  className={cmt.isLiked ? "fill-rose-500 text-rose-500 transition-all scale-105" : "transition-all"}
-                                                />
-                                                {Number(cmt.likesCount || 0) > 0 && (
-                                                  <span className="cmt-like-count font-mono text-[10.5px]">{cmt.likesCount}</span>
-                                                )}
-                                              </button>
-
-                                              {/* Nút Trả lời */}
-                                              <button
-                                                type="button"
-                                                onClick={() => {
-                                                  setReplyTargetMap(prev => ({
-                                                    ...prev,
-                                                    [post.id]: {
-                                                      commentId: cmt.id,
-                                                      authorAccount: cmt.authorAccount || 'user',
-                                                      authorNickname: cmt.authorNickname || cmt.authorAccount || 'Thành viên'
-                                                    }
-                                                  }));
-                                                  const inputEl = document.getElementById(`comment-input-${post.id}`);
-                                                  if (inputEl) inputEl.focus();
-                                                }}
-                                                className="btn-cmt-act reply"
-                                                title="Trả lời phản hồi này"
-                                              >
-                                                <CornerDownRight size={11.5} className="flex-shrink-0" />
-                                                <span>Trả lời</span>
-                                              </button>
-
-                                              {isCmtMe && !isEditingThisCmt && (
-                                                <button
-                                                  type="button"
-                                                  onClick={() => handleStartEditComment(cmt)}
-                                                  className="btn-cmt-act"
-                                                  title="Sửa phản hồi"
-                                                >
-                                                  <Edit3 size={11} />
-                                                  <span>Sửa</span>
-                                                </button>
-                                              )}
-                                              {canDeleteCmt && (
-                                                <button
-                                                  type="button"
-                                                  onClick={() => handleDeleteComment(post.id, cmt.id)}
-                                                  className="btn-cmt-act danger text-zinc-500 hover:text-rose-400"
-                                                  title="Xóa phản hồi"
-                                                >
-                                                  <Trash2 size={11} />
-                                                  <span>Xóa</span>
-                                                </button>
-                                              )}
-                                            </div>
-                                          </>
-                                        )}
-                                      </div>
+                                {/* Thanh thông báo mục tiêu đang trả lời */}
+                                {replyTargetMap[post.id] && (
+                                  <div className="replying-to-banner">
+                                    <div className="flex items-center gap-1.5 text-xs text-zinc-300">
+                                      <CornerDownRight size={12} className="text-sky-400" />
+                                      <span>Đang trả lời <strong>@{replyTargetMap[post.id].authorAccount}</strong></span>
                                     </div>
-                                  );
-                                };
-
-                                return (
-                                  <div key={thread.id} className="cmt-thread-group">
-                                    {/* 1. Bình luận gốc cấp 1 */}
-                                    {renderCommentBubble(thread, false)}
-
-                                    {/* 2. Nhánh các phản hồi con có đường kẻ dọc phân cấp rõ rệt */}
-                                    {thread.replies && thread.replies.length > 0 && (
-                                      <div className="cmt-replies-branch-thread">
-                                        {thread.replies.map((replyCmt) => renderCommentBubble(replyCmt, true))}
-                                      </div>
-                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => setReplyTargetMap(prev => ({ ...prev, [post.id]: null }))}
+                                      className="btn-cancel-reply"
+                                      title="Hủy trả lời"
+                                    >
+                                      <X size={12} />
+                                    </button>
                                   </div>
-                                );
-                              })
-                            )}
-                          </div>
+                                )}
 
-                          {/* Thanh thông báo mục tiêu đang trả lời */}
-                          {replyTargetMap[post.id] && (
-                            <div className="replying-to-banner">
-                              <div className="flex items-center gap-1.5 text-xs text-zinc-300">
-                                <CornerDownRight size={12} className="text-sky-400" />
-                                <span>Đang trả lời <strong>@{replyTargetMap[post.id].authorAccount}</strong></span>
+                                {/* Khung nhập phản hồi */}
+                                <div className="cmt-input-form">
+                                  <input
+                                    id={`comment-input-${post.id}`}
+                                    type="text"
+                                    placeholder={replyTargetMap[post.id] ? `Trả lời @${replyTargetMap[post.id].authorAccount}...` : "Viết phản hồi ngắn..."}
+                                    value={commentInputs[post.id] || ''}
+                                    onChange={(e) => setCommentInputs({ ...commentInputs, [post.id]: e.target.value })}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleAddComment(post.id);
+                                      }
+                                    }}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAddComment(post.id)}
+                                    disabled={submittingComment[post.id] || !commentInputs[post.id]?.trim()}
+                                    className="btn-submit-cmt"
+                                    title="Gửi phản hồi"
+                                  >
+                                    <Send size={13} />
+                                  </button>
+                                </div>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => setReplyTargetMap(prev => ({ ...prev, [post.id]: null }))}
-                                className="btn-cancel-reply"
-                                title="Hủy trả lời"
-                              >
-                                <X size={12} />
-                              </button>
-                            </div>
-                          )}
-
-                          {/* Khung nhập phản hồi */}
-                          <div className="cmt-input-form">
-                            <input
-                              id={`comment-input-${post.id}`}
-                              type="text"
-                              placeholder={replyTargetMap[post.id] ? `Trả lời @${replyTargetMap[post.id].authorAccount}...` : "Viết phản hồi ngắn..."}
-                              value={commentInputs[post.id] || ''}
-                              onChange={(e) => setCommentInputs({ ...commentInputs, [post.id]: e.target.value })}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  handleAddComment(post.id);
-                                }
-                              }}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => handleAddComment(post.id)}
-                              disabled={submittingComment[post.id] || !commentInputs[post.id]?.trim()}
-                              className="btn-submit-cmt"
-                              title="Gửi phản hồi"
-                            >
-                              <Send size={13} />
-                            </button>
-                          </div>
-                        </div>
-                      )}
+                            )}
                           </div>
                         </div>
                       </article>
-                  );
-                })}
+                    );
+                  })}
 
-                {/* SKELETON KHI ĐANG TẢI THÊM BÀI VIẾT (INFINITE SCROLL) */}
-                {isFetchingMore && (
-                  <div className="divide-y divide-white/[0.06] border-t border-white/[0.06]">
-                    {[1, 2].map((i) => (
-                      <div key={`skel-more-${i}`} className="px-4 sm:px-6 py-5 animate-pulse">
-                        <div className="flex items-start gap-3.5">
-                          {/* Hình tròn avatar */}
-                          <div className="w-10 h-10 rounded-full bg-white/[0.04] shrink-0" />
-                          <div className="flex-1 space-y-2.5 pt-1">
-                            {/* 2 thanh chữ giả */}
-                            <div className="flex items-center gap-2">
-                              <div className="h-3.5 w-28 bg-white/[0.06] rounded-md" />
-                              <div className="h-3 w-16 bg-white/[0.03] rounded-md" />
-                            </div>
-                            <div className="space-y-1.5">
-                              <div className="h-3 w-full bg-white/[0.04] rounded-md" />
-                              <div className="h-3 w-3/4 bg-white/[0.03] rounded-md" />
+                  {/* SKELETON KHI ĐANG TẢI THÊM BÀI VIẾT (INFINITE SCROLL) */}
+                  {isFetchingMore && (
+                    <div className="divide-y divide-white/[0.06] border-t border-white/[0.06]">
+                      {[1, 2].map((i) => (
+                        <div key={`skel-more-${i}`} className="px-4 sm:px-6 py-5 animate-pulse">
+                          <div className="flex items-start gap-3.5">
+                            {/* Hình tròn avatar */}
+                            <div className="w-10 h-10 rounded-full bg-white/[0.04] shrink-0" />
+                            <div className="flex-1 space-y-2.5 pt-1">
+                              {/* 2 thanh chữ giả */}
+                              <div className="flex items-center gap-2">
+                                <div className="h-3.5 w-28 bg-white/[0.06] rounded-md" />
+                                <div className="h-3 w-16 bg-white/[0.03] rounded-md" />
+                              </div>
+                              <div className="space-y-1.5">
+                                <div className="h-3 w-full bg-white/[0.04] rounded-md" />
+                                <div className="h-3 w-3/4 bg-white/[0.03] rounded-md" />
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                      ))}
+                    </div>
+                  )}
 
-                {/* ELEMENT MỐC THEO DÕI CUỘN ĐỂ TẢI THÊM BÀI (INTERSECTION OBSERVER) */}
-                <div ref={loadMoreRef} className="h-4 w-full pointer-events-none" />
+                  {/* ELEMENT MỐC THEO DÕI CUỘN ĐỂ TẢI THÊM BÀI (INTERSECTION OBSERVER) */}
+                  <div ref={loadMoreRef} className="h-4 w-full pointer-events-none" />
 
-                {/* THÔNG BÁO KHI ĐÃ TẢI HẾT BÀI VIẾT */}
-                {!hasMore && displayedPosts.length > 0 && !activeSearchQuery && (
-                  <div className="py-8 text-center select-none border-t border-white/[0.04]">
-                    <p className="text-xs text-zinc-500 font-sans tracking-wide">
-                      Bạn đã xem hết các khoảnh khắc mới nhất
-                    </p>
-                  </div>
-                )}
+                  {/* THÔNG BÁO KHI ĐÃ TẢI HẾT BÀI VIẾT */}
+                  {!hasMore && displayedPosts.length > 0 && !activeSearchQuery && (
+                    <div className="py-8 text-center select-none border-t border-white/[0.04]">
+                      <p className="text-xs text-zinc-500 font-sans tracking-wide">
+                        Bạn đã xem hết các khoảnh khắc mới nhất
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
               {/* Khoảng đệm đáy an toàn (Bottom Spacer) để thanh Navigation không che khuất bài viết cuối cùng */}
@@ -5101,27 +5094,27 @@ const Home = ({ initialTab }) => {
         {/* ============================================================== */}
         {/* CỘT 3: BẢNG TRỰC TUYẾN SẢNH (340px) - NEO CỐ ĐỊNH BÊN PHẢI   */}
         {/* ============================================================== */}
-        <aside className="w-[340px] shrink-0 hidden xl:flex flex-col sticky top-0 h-[100dvh] p-5 gap-4 bg-[#090A0F] border-l border-white/[0.06] overflow-y-auto [scrollbar-width:none] select-none">
-          {/* KHỐI 1: ĐANG TRONG SẢNH */}
-          <div className="p-4 rounded-2xl bg-[#12151D] border border-white/[0.06] flex flex-col gap-3 shadow-sm">
+        <aside className="w-[340px] shrink-0 hidden xl:flex flex-col sticky top-0 h-[100dvh] p-5 gap-5 bg-[#090A0F] border-l border-white/[0.06] overflow-y-auto [scrollbar-width:none] select-none">
+          {/* KHỐI 1: ĐANG HOẠT ĐỘNG TRONG SẢNH */}
+          <div className="p-4 rounded-2xl bg-[#111319] border border-white/[0.06] flex flex-col gap-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <h3 className="text-xs font-semibold text-[#F3F4F6] font-sans">
-                  Đang trong sảnh ({activeLoungeUsers.length})
+                <h3 className="text-xs font-bold text-[#F3F4F6] uppercase tracking-wider font-sans">
+                  Đang trong Sảnh ({activeLoungeUsers.length})
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => handleSwitchTab('friends')}
-                className="text-[11px] text-[#8E929F] hover:text-[#F3F4F6] transition-colors cursor-pointer"
+                className="text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
               >
                 Xem tất cả
               </button>
             </div>
 
             {activeLoungeUsers.length === 0 ? (
-              <p className="text-xs text-[#8E929F] py-2">Hiện chưa có thành viên nào khác trong sảnh.</p>
+              <p className="text-xs text-zinc-500 py-2">Hiện chưa có thành viên nào khác trong sảnh.</p>
             ) : (
               <div className="grid grid-cols-5 gap-2.5 pt-1">
                 {activeLoungeUsers.map((u) => (
@@ -5140,9 +5133,9 @@ const Home = ({ initialTab }) => {
                         size={40}
                         className="group-hover:ring-2 group-hover:ring-white/30 transition-all rounded-full"
                       />
-                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-[#12151D]" />
+                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-[#111319]" />
                     </div>
-                    <span className="text-[10px] text-[#8E929F] truncate max-w-[50px] group-hover:text-white transition-colors">
+                    <span className="text-[10px] text-zinc-400 truncate max-w-[50px] group-hover:text-white transition-colors">
                       {u.name.split(' ')[0]}
                     </span>
                   </div>
@@ -5151,107 +5144,109 @@ const Home = ({ initialTab }) => {
             )}
           </div>
 
-          {/* KHỐI 2: SÓNG FM 5 GIÂY (CHUYÊN BIỆT CHO VOICE, KHÔNG LẶP NHẠC NỀN) */}
-          <div className="p-4 rounded-2xl bg-[#12151D] border border-white/[0.06] flex flex-col gap-3 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Radio size={14} className="text-zinc-400" />
-                <h3 className="text-xs font-semibold text-[#F3F4F6] font-sans">
-                  Sóng FM 5 giây
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsSpeedMatchOpen(true)}
-                className="text-[11px] text-zinc-400 hover:text-white transition-colors cursor-pointer"
-              >
-                Dò sóng →
-              </button>
-            </div>
-
-            <p className="text-xs text-[#8E929F] leading-relaxed">
-              Lắng nghe voice 5 giây ngẫu nhiên từ người dùng khác hoặc gửi đoạn ghi âm ngắn của bạn.
-            </p>
-
-            <div className="grid grid-cols-2 gap-2 pt-0.5">
-              <button
-                type="button"
-                onClick={() => setIsSpeedMatchOpen(true)}
-                className="py-2 px-2.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.12] text-[#F3F4F6] border border-white/[0.1] text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-98"
-                title="Dò sóng ngẫu nhiên"
-              >
-                <Radio size={13} className="text-emerald-400" />
-                <span>Dò sóng</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsComposerModalOpen(true)}
-                className="py-2 px-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 hover:text-white border border-white/[0.06] text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-98"
-                title="Thu âm 5s gửi sảnh"
-              >
-                <Mic size={13} className="text-zinc-400" />
-                <span>Thu âm 5s</span>
-              </button>
-            </div>
-          </div>
-
-          {/* KHỐI 3: THẺ BÀI HÔM NAY */}
-          <div className="p-4 rounded-2xl bg-[#12151D] border border-white/[0.06] flex flex-col gap-3 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Dices size={14} className="text-zinc-400" />
-                <h3 className="text-xs font-semibold text-[#F3F4F6] font-sans">
-                  Thẻ bài hôm nay
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsPartyWheelOpen(true)}
-                className="text-[11px] text-zinc-400 hover:text-white transition-colors cursor-pointer"
-              >
-                Mở bộ bài →
-              </button>
-            </div>
-
-            <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] flex flex-col gap-2.5">
-              <p className="text-xs text-[#E5E7EB] leading-relaxed italic">
-                "{QUICK_CHALLENGES[quickChallengeIdx]}"
-              </p>
-              <div className="flex items-center gap-2 pt-1">
+          {/* KHỐI 2: SÓNG FM & THẺ BÀI NHANH */}
+          <div className="p-4 rounded-2xl bg-[#111319] border border-white/[0.06] flex flex-col gap-3.5">
+            {/* Sóng FM 1-chạm */}
+            <div className="flex flex-col gap-2 pb-3 border-b border-white/[0.06]">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Radio size={14} className="text-emerald-400" />
+                  <span className="text-xs font-bold text-[#F3F4F6] uppercase tracking-wider font-sans">
+                    Sóng FM Trực Tuyến
+                  </span>
+                </div>
                 <button
                   type="button"
-                  onClick={() => setQuickChallengeIdx((prev) => (prev + 1) % QUICK_CHALLENGES.length)}
-                  className="flex-1 py-1.5 px-2.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 hover:text-white border border-white/[0.06] text-[11px] font-medium transition-colors cursor-pointer text-center"
+                  onClick={() => setIsSpeedMatchOpen(true)}
+                  className="text-[11px] text-emerald-400 hover:text-emerald-300 font-medium transition-colors cursor-pointer"
                 >
-                  Đổi thẻ khác
+                  Dò sóng →
                 </button>
+              </div>
+
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.05]">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                    <Radio size={15} className={isPlayingRadio ? "animate-pulse" : ""} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold text-[#F3F4F6] truncate">
+                      {currentTrack ? (currentTrack.title || currentTrack.name) : "Tần số Talovin FM"}
+                    </p>
+                    <p className="text-[10.5px] text-zinc-500 font-mono">
+                      {isPlayingRadio ? '96.4 MHz • Đang phát' : '96.4 MHz • Sẵn sàng'}
+                    </p>
+                  </div>
+                </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    setNewPostContent(`[Thử thách]: "${QUICK_CHALLENGES[quickChallengeIdx]}"\n\n`);
-                    setIsComposerModalOpen(true);
-                  }}
-                  className="flex-1 py-1.5 px-2.5 rounded-lg bg-[#F3F4F6] hover:bg-white text-[#090A0F] text-[11px] font-semibold transition-colors cursor-pointer text-center shadow-sm"
+                  onClick={togglePlayRadio}
+                  className="w-8 h-8 rounded-full bg-white text-zinc-950 hover:bg-zinc-200 active:scale-95 flex items-center justify-center transition-all shrink-0 cursor-pointer shadow-sm"
+                  title={isPlayingRadio ? "Tạm dừng" : "Phát sóng"}
                 >
-                  Bàn luận
+                  {isPlayingRadio ? <Pause size={13} className="fill-zinc-950" /> : <Play size={13} className="fill-zinc-950 ml-0.5" />}
                 </button>
               </div>
             </div>
+
+            {/* Thẻ bài gợi ý nhanh */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Dices size={14} className="text-amber-400" />
+                  <span className="text-xs font-bold text-[#F3F4F6] uppercase tracking-wider font-sans">
+                    Thẻ Bài Ngẫu Nhiên
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsPartyWheelOpen(true)}
+                  className="text-[11px] text-amber-400 hover:text-amber-300 font-medium transition-colors cursor-pointer"
+                >
+                  Mở bộ bài →
+                </button>
+              </div>
+
+              <div className="p-3 rounded-xl bg-amber-500/[0.04] border border-amber-500/15 flex flex-col gap-2.5">
+                <p className="text-xs text-zinc-300 leading-relaxed italic">
+                  "{QUICK_CHALLENGES[quickChallengeIdx]}"
+                </p>
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setQuickChallengeIdx((prev) => (prev + 1) % QUICK_CHALLENGES.length)}
+                    className="flex-1 py-1.5 px-2.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-zinc-300 text-[11px] font-medium transition-colors cursor-pointer text-center"
+                  >
+                    Đổi thẻ khác
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewPostContent(`[Thử thách]: "${QUICK_CHALLENGES[quickChallengeIdx]}"\n\n`);
+                      setIsComposerModalOpen(true);
+                    }}
+                    className="flex-1 py-1.5 px-2.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[11px] font-semibold transition-colors cursor-pointer text-center"
+                  >
+                    Bàn luận
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* KHỐI 4: PHÒNG ĐÀM THOẠI */}
-          <div className="p-4 rounded-2xl bg-[#12151D] border border-white/[0.06] flex flex-col gap-3 shadow-sm">
+          {/* KHỐI 3: PHÒNG ĐÀM THOẠI ĐANG MỞ */}
+          <div className="p-4 rounded-2xl bg-[#111319] border border-white/[0.06] flex flex-col gap-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Radio size={14} className="text-zinc-400" />
-                <h3 className="text-xs font-semibold text-[#F3F4F6] font-sans">
-                  Phòng đàm thoại ({publicRooms.length})
+                <Radio size={14} className="text-sky-400" />
+                <h3 className="text-xs font-bold text-[#F3F4F6] uppercase tracking-wider font-sans">
+                  Phòng Đàm Thoại ({publicRooms.length})
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => handleSwitchTab('rooms')}
-                className="text-[11px] text-[#8E929F] hover:text-[#F3F4F6] transition-colors cursor-pointer"
+                className="text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
               >
                 Xem tất cả
               </button>
@@ -5259,7 +5254,7 @@ const Home = ({ initialTab }) => {
 
             {publicRooms.length === 0 ? (
               <div className="py-3 text-center flex flex-col items-center gap-2">
-                <p className="text-xs text-[#8E929F]">Chưa có phòng voice công khai nào.</p>
+                <p className="text-xs text-zinc-500">Chưa có phòng voice công khai nào.</p>
                 <button
                   type="button"
                   onClick={() => setIsCreateModalOpen(true)}
@@ -5280,7 +5275,7 @@ const Home = ({ initialTab }) => {
                       <p className="text-xs font-semibold text-zinc-200 group-hover:text-white truncate">
                         #{room.nameroom || room.roomName || room.name || `Phòng ${room.id}`}
                       </p>
-                      <p className="text-[10.5px] text-[#8E929F] font-mono">
+                      <p className="text-[10.5px] text-zinc-500 font-mono">
                         {room.soluong || 1} người đang nghe
                       </p>
                     </div>
@@ -5573,6 +5568,48 @@ const Home = ({ initialTab }) => {
                 </button>
               </div>
 
+              {/* TRÌNH PHÁT NHẠC MINI TRONG BẢNG ĐIỀU KHIỂN (Sunset Coffee Vibe) */}
+              <div
+                onClick={() => {
+                  setShowMobileActionDrawer(false);
+                  setShowMobileMusicSheet(true);
+                }}
+                className="p-3 rounded-2xl bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.07] transition-all cursor-pointer flex items-center justify-between shadow-sm"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-violet-500/15 border border-violet-500/25 flex items-center justify-center text-violet-400 shrink-0">
+                    <Music size={16} className={isPlayingRadio ? 'animate-bounce' : ''} />
+                  </div>
+                  <div className="min-w-0 text-left">
+                    <p className="text-xs font-semibold text-white truncate">
+                      {currentTrack ? (currentTrack.title || currentTrack.name) : "Sunset Coffee Vibe"}
+                    </p>
+                    <p className="text-[10px] text-zinc-400 truncate flex items-center gap-1.5">
+                      {isPlayingRadio ? (
+                        <>
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          <span>Đang phát nhạc không gian</span>
+                        </>
+                      ) : (
+                        <span>Tạm dừng • Bấm để nghe nhạc</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    togglePlayRadio();
+                  }}
+                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 flex items-center justify-center text-white transition-all shrink-0 ml-2"
+                  title={isPlayingRadio ? "Tạm dừng" : "Phát nhạc"}
+                >
+                  {isPlayingRadio ? <Pause size={13} /> : <Play size={13} className="ml-0.5" />}
+                </button>
+              </div>
+
               {/* NHÓM 1 — TƯƠNG TÁC NHANH (2 THẺ NÚT LỚN) */}
               <div className="space-y-2">
                 <span className="text-[11px] font-mono text-zinc-400 tracking-wider uppercase font-medium">
@@ -5650,11 +5687,10 @@ const Home = ({ initialTab }) => {
                           }
                           setShowMobileActionDrawer(false);
                         }}
-                        className={`w-full p-2.5 rounded-xl border flex items-center justify-between transition-all cursor-pointer ${
-                          isSelected
-                            ? 'bg-white/[0.08] border-white/20 text-white shadow-sm'
-                            : 'bg-white/[0.02] hover:bg-white/[0.05] border-white/[0.06] text-zinc-300'
-                        }`}
+                        className={`w-full p-2.5 rounded-xl border flex items-center justify-between transition-all cursor-pointer ${isSelected
+                          ? 'bg-white/[0.08] border-white/20 text-white shadow-sm'
+                          : 'bg-white/[0.02] hover:bg-white/[0.05] border-white/[0.06] text-zinc-300'
+                          }`}
                       >
                         <div className="flex items-center gap-3">
                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isSelected ? 'bg-white text-zinc-950 font-bold' : 'bg-white/[0.06] text-zinc-400'}`}>

@@ -1,73 +1,73 @@
 import React from 'react';
 
 /**
- * TALOVIN BRAND LOGO & MONOGRAM
- * Ngôn ngữ thiết kế: High-End Industrial Minimalist (Tương tự Linear, Vercel, Apple)
- * - Monogram khối chữ T tỷ lệ vàng cân đối hoàn hảo
- * - Bảng màu Titanium Silver nguyên bản trên nền Deep Obsidian
- * - Tuyệt đối không gắn nhãn phụ "LIVE" hay dải màu lòe loẹt
+ * TALOVIN ARTISTIC WORDMARK & MONOGRAM
+ * - Thiết kế Wordmark thuần túy, loại bỏ hoàn toàn hộp vuông chữ T đóng khung.
+ * - Chữ cái T đầu tiên cách điệu với nét gạch ngang vát nhịp lướt mượt mà nối tự nhiên sang "alovin".
+ * - Typography: Modern Sans-Serif font-bold text-[21px] tracking-[-0.04em] text-[#F4F4F5].
  */
-export const TalovinLogo = ({ size = 28, showText = true, brandName = 'Talovin', textClassName = "", className = "", style = {} }) => {
-  return (
-    <div
-      className={`talovin-brand-lockup flex items-center gap-2.5 select-none cursor-pointer ${className}`}
-      style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none', ...style }}
-    >
+export const TalovinLogo = ({
+  size = 21,
+  showText = true,
+  brandName = 'Talovin',
+  textClassName = "",
+  className = "",
+  style = {}
+}) => {
+  const fontSize = typeof size === 'number' ? size : 21;
+
+  // Nếu showText = false: chỉ render biểu tượng Monogram chữ T cách điệu nghệ thuật (không hộp viền)
+  if (!showText) {
+    return (
       <svg
-        width={size}
-        height={size}
-        viewBox="0 0 48 48"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        className="talovin-emblem"
-        style={{ flexShrink: 0, transition: 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)' }}
+        viewBox="0 0 20 22"
+        fill="currentColor"
+        className={`talovin-t-monogram inline-block shrink-0 select-none text-[#F4F4F5] ${className}`}
+        style={{
+          height: `${fontSize}px`,
+          width: 'auto',
+          ...style
+        }}
       >
-        <defs>
-          <linearGradient id="taloObsidianPlate" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#1c1c20" />
-            <stop offset="100%" stopColor="#0a0a0c" />
-          </linearGradient>
-
-          <linearGradient id="taloTitaniumT" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#ffffff" />
-            <stop offset="45%" stopColor="#e4e4e7" />
-            <stop offset="100%" stopColor="#a1a1aa" />
-          </linearGradient>
-
-          <linearGradient id="taloBorderGlow" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#3f3f46" />
-            <stop offset="100%" stopColor="#27272a" />
-          </linearGradient>
-        </defs>
-
-        {/* Khung Squircle Deep Obsidian với viền sáng tinh tế */}
-        <rect
-          x="2"
-          y="2"
-          width="44"
-          height="44"
-          rx="12"
-          fill="#141722"
-          stroke="rgba(255, 255, 255, 0.16)"
-          strokeWidth="1.5"
-        />
-
-        {/* Monogram T Titanium nguyên khối cân xứng chuẩn mực */}
         <path
-          d="M13 13.5C13 12.67 13.67 12 14.5 12H33.5C34.33 12 35 12.67 35 13.5V17C35 17.83 34.33 18.5 33.5 18.5H27V33.5C27 34.6 26.1 35.5 25 35.5H23C21.9 35.5 21 34.6 21 33.5V18.5H14.5C13.67 18.5 13 17.83 13 17V13.5Z"
-          fill="#FFFFFF"
+          d="M2 3.2H18.2C19.3 3.2 19.8 4.4 19.1 5.2L17.2 7.6C16.8 8.1 16.2 8.4 15.6 8.4H12.4V20.5C12.4 21.3 11.7 22 10.9 22H9.3C8.5 22 7.8 21.3 7.8 20.5V8.4H2C1.2 8.4 0.5 7.7 0.5 6.9V4.7C0.5 3.9 1.2 3.2 2 3.2Z"
         />
       </svg>
+    );
+  }
 
-      {showText && (
-        <span
-          className={`talovin-brand-title font-sans font-bold tracking-tight text-zinc-100 ${textClassName}`}
-          style={{ fontSize: Math.max(16, size * 0.65), letterSpacing: '-0.025em' }}
-        >
-          {brandName || 'Talovin'}
-        </span>
-      )}
-    </div>
+  // Wordmark Talovin đầy đủ không hộp vuông
+  return (
+    <span
+      className={`talovin-wordmark inline-flex items-center font-sans font-bold select-none text-[#F4F4F5] tracking-[-0.04em] ${className}`}
+      style={{
+        fontSize: `${fontSize}px`,
+        lineHeight: 1,
+        letterSpacing: '-0.04em',
+        ...style
+      }}
+    >
+      {/* Chữ T cách điệu đặc trưng thương hiệu */}
+      <svg
+        viewBox="0 0 20 22"
+        fill="currentColor"
+        className="talovin-t-mark inline-block shrink-0"
+        style={{
+          height: '0.9em',
+          width: 'auto',
+          marginRight: '-0.03em',
+          transform: 'translateY(-0.04em)'
+        }}
+        aria-hidden="true"
+      >
+        <path
+          d="M2 3.2H18.2C19.3 3.2 19.8 4.4 19.1 5.2L17.2 7.6C16.8 8.1 16.2 8.4 15.6 8.4H12.4V20.5C12.4 21.3 11.7 22 10.9 22H9.3C8.5 22 7.8 21.3 7.8 20.5V8.4H2C1.2 8.4 0.5 7.7 0.5 6.9V4.7C0.5 3.9 1.2 3.2 2 3.2Z"
+        />
+      </svg>
+      <span className={`tracking-[-0.04em] ${textClassName}`}>
+        {brandName.startsWith('T') || brandName.startsWith('t') ? brandName.slice(1) : brandName}
+      </span>
+    </span>
   );
 };
 
