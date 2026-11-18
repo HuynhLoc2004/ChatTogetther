@@ -1,3 +1,9 @@
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   # 1. PostgreSQL Database (Cô lập nội bộ, không expose port ra ngoài)
   postgres:
@@ -5,6 +11,7 @@ services:
     container_name: talovin-postgres
     restart: unless-stopped
     mem_limit: 700m
+    logging: *default-logging
     environment:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}
@@ -25,6 +32,7 @@ services:
     container_name: talovin-redis
     restart: unless-stopped
     mem_limit: 150m
+    logging: *default-logging
     command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru --appendonly yes --requirepass ${REDIS_PASSWORD}
     volumes:
       - redisdata:/data
@@ -44,6 +52,7 @@ services:
     container_name: talovin-backend
     restart: unless-stopped
     mem_limit: 1536m
+    logging: *default-logging
     env_file: .env
     environment:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/${DB_NAME}
@@ -75,6 +84,7 @@ services:
     container_name: talovin-nginx
     restart: unless-stopped
     mem_limit: 128m
+    logging: *default-logging
     ports:
       - "80:80"
       - "443:443"
