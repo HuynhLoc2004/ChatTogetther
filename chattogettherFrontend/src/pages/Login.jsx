@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Lock, Eye, EyeOff, AlertCircle, Loader2 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
@@ -6,36 +6,32 @@ import TalovinLogo from '../components/TalovinLogo';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 
+// Chiều cao chuẩn 16 thanh Audio Visualizer
+const AUDIO_BAR_HEIGHTS = [10, 18, 26, 14, 30, 22, 12, 28, 16, 24, 8, 20, 28, 14, 18, 10];
+
 const Login = () => {
   const { updateCurrentUser, refreshProfile } = useAuth();
   const navigate = useNavigate();
 
-  // Kiểm tra cờ xem intro: chỉ chạy intro lần đầu tiên truy cập
-  const [introSeen, setIntroSeen] = useState(() => {
-    return localStorage.getItem('talovin_intro_seen') === 'true';
-  });
-
-  const [activeSection, setActiveSection] = useState(0);
   const [isRegisterMode, setIsRegisterMode] = useState(false);
-
-  // Form states
   const [formData, setFormData] = useState({ account: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [slowMessage, setSlowMessage] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
-  const containerRef = useRef(null);
-  const section1Ref = useRef(null);
-  const section2Ref = useRef(null);
-  const section3Ref = useRef(null);
   const elapsedTimerRef = useRef(null);
 
-  // Nếu đã có token đăng nhập hợp lệ, chuyển thẳng vào Sảnh chính
+  // Splash Screen khi đã có token đăng nhập hợp lệ: hiển thị tinh gọn 0.8s rồi chuyển vào Sảnh
   useEffect(() => {
     const token = localStorage.getItem('accesstoken');
     if (token) {
-      navigate('/', { replace: true });
+      setIsRedirecting(true);
+      const timer = setTimeout(() => {
+        navigate('/', { replace: true });
+      }, 850);
+      return () => clearTimeout(timer);
     }
   }, [navigate]);
 
@@ -43,39 +39,6 @@ const Login = () => {
   useEffect(() => {
     axiosClient.get('/ping').catch(() => {});
   }, []);
-
-  // Lắng nghe scroll để xác định màn hình đang hiển thị & tự động lưu cờ khi tới màn cuối
-  const handleScroll = useCallback(() => {
-    if (!containerRef.current) return;
-    const { scrollTop, clientHeight } = containerRef.current;
-    if (clientHeight <= 0) return;
-
-    const index = Math.round(scrollTop / clientHeight);
-    if (index !== activeSection && index >= 0 && index <= 2) {
-      setActiveSection(index);
-      if (index === 2) {
-        localStorage.setItem('talovin_intro_seen', 'true');
-      }
-    }
-  }, [activeSection]);
-
-  // Cuộn mượt đến màn hình chỉ định
-  const scrollToSection = (idx) => {
-    const targetRef = idx === 0 ? section1Ref : (idx === 1 ? section2Ref : section3Ref);
-    if (targetRef.current) {
-      targetRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-    setActiveSection(idx);
-    if (idx === 2) {
-      localStorage.setItem('talovin_intro_seen', 'true');
-    }
-  };
-
-  // Nút "Bỏ qua": Cuộn thẳng xuống màn Đăng nhập và lưu cờ đã xem
-  const handleSkip = () => {
-    localStorage.setItem('talovin_intro_seen', 'true');
-    scrollToSection(2);
-  };
 
   // Xử lý gửi Form Đăng nhập / Đăng ký
   const handleSubmit = async (e) => {
@@ -123,6 +86,8 @@ const Login = () => {
             localStorage.setItem('refreshToken', refreshToken);
           }
 
+          localStorage.setItem('talovin_intro_seen', 'true');
+          localStorage.setItem('talovin_has_seen_onboarding', 'true');
           localStorage.removeItem('talovin_cached_posts');
           localStorage.removeItem('hasCheckedActiveRoom');
 
@@ -176,22 +141,97 @@ const Login = () => {
     }
   };
 
-  // Giao diện Form Đăng nhập / Đăng ký dùng chung
-  const renderAuthForm = () => (
-    <div className="w-full max-w-[360px] mx-auto">
-      {/* Header Form */}
-      <div className="flex flex-col items-center text-center mb-6">
-        <TalovinLogo size={36} showText={false} />
-        <h2 className="text-xl sm:text-2xl font-semibold text-[#F3F4F6] tracking-tight mt-4 font-sans">
-          {isRegisterMode ? 'Tạo tài khoản' : 'Đăng nhập'}
-        </h2>
-        <p className="mt-1 text-xs text-[#9CA3AF] font-normal">
-          {isRegisterMode ? 'Gia nhập không gian trò chuyện Talovin' : 'Nhập tài khoản để vào thẳng Sảnh chính'}
-        </p>
-      </div>
+  // MÀN HÌNH SPLASH SCREEN KHI ĐÃ ĐĂNG NHẬP
+  if (isRedirecting) {
+    return (
+      <div className="min-h-[100dvh] w-full bg-[#08090C] text-[#F4F4F5] flex flex-col justify-center items-center select-none relative overflow-hidden">
+        {/* Nguồn sáng khuếch tán từ đỉnh */}
+        <div 
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background: 'radial-gradient(ellipse 60% 40% at 50% 0%, rgba(255,255,255,0.06), transparent)'
+          }}
+        />
 
-      {/* Thẻ Form */}
-      <div className="bg-[#161922] border border-white/[0.08] rounded-2xl p-6 sm:p-7 shadow-xl shadow-black/40">
+        <div className="flex flex-col items-center gap-4 relative z-10 animate-fade-in">
+          <TalovinLogo size={36} showText={true} />
+
+          {/* Sóng âm thanh mini */}
+          <div className="flex items-center gap-1.5 h-6 my-1" aria-hidden="true">
+            {[10, 16, 22, 12, 24, 18, 10, 20].map((h, i) => (
+              <span
+                key={i}
+                className="w-[2.5px] rounded-full bg-white/70"
+                style={{
+                  height: `${h}px`,
+                  animation: 'talovinWave 1.2s ease-in-out infinite',
+                  animationDelay: `${(i * 0.1).toFixed(2)}s`
+                }}
+              />
+            ))}
+          </div>
+
+          <p className="text-xs text-zinc-500 font-mono tracking-wide">Đang vào Sảnh trực tuyến...</p>
+        </div>
+
+        <style>{`
+          @keyframes talovinWave {
+            0%, 100% { transform: scaleY(0.4); opacity: 0.35; }
+            50% { transform: scaleY(1); opacity: 0.9; }
+          }
+        `}</style>
+      </div>
+    );
+  }
+
+  // GIAO DIỆN CHÍNH: MODERN DARK CRAFT (ARC BROWSER / RAYCAST STYLE)
+  return (
+    <div className="min-h-[100dvh] w-full bg-[#08090C] text-[#F4F4F5] flex flex-col justify-center items-center px-4 py-8 select-none relative overflow-hidden">
+      {/* 1. NGUỒN SÁNG KHUẾCH TÁN CỰC DỊU TỪ ĐỈNH MÀN HÌNH XUỐNG */}
+      <div 
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: 'radial-gradient(ellipse 60% 40% at 50% 0%, rgba(255,255,255,0.06), transparent)'
+        }}
+      />
+
+      {/* 2. KHỐI THẺ TRUNG TÂM (w-full max-w-[420px]) CÓ CHIỀU SÂU VẬT LÝ */}
+      <div className="w-full max-w-[420px] bg-[#11131A] rounded-2xl border-t border-white/[0.14] border-x border-b border-white/[0.06] shadow-[0_24px_64px_rgba(0,0,0,0.75)] p-6 sm:p-8 relative z-10">
+        
+        {/* PHẦN ĐẦU THẺ: Logo Talovin + Status Pill "Sảnh đang mở" */}
+        <div className="flex items-center justify-between pb-4">
+          <div className="flex items-center gap-2.5">
+            <TalovinLogo size={30} showText={true} />
+          </div>
+
+          {/* Viên thuốc trạng thái nhịp nhẹ */}
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-medium tracking-tight">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span>Sảnh đang mở</span>
+          </div>
+        </div>
+
+        {/* AUDIO VISUALIZER: 16 thanh dọc màu trắng mờ đóng vai trò đường phân cách nghệ thuật */}
+        <div className="flex items-center justify-center gap-1.5 h-7 my-3 select-none" aria-hidden="true">
+          {AUDIO_BAR_HEIGHTS.map((height, i) => (
+            <span
+              key={i}
+              className="w-[2.5px] rounded-full bg-white/40"
+              style={{
+                height: `${height}px`,
+                animation: 'talovinWave 1.4s ease-in-out infinite',
+                animationDelay: `${(i * 0.08).toFixed(2)}s`
+              }}
+            />
+          ))}
+        </div>
+
+        {/* DÒNG GIỚI THIỆU DUY NHẤT */}
+        <p className="text-[13px] text-zinc-400 text-center font-normal leading-relaxed mb-6">
+          Trò chuyện, gửi voice 5s và nghe nhạc cùng nhau.
+        </p>
+
+        {/* THÔNG BÁO LỖI (NẾU CÓ) */}
         {error && (
           <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-start gap-2.5 text-rose-300 text-xs leading-relaxed">
             <AlertCircle size={15} className="text-rose-400 shrink-0 mt-0.5" strokeWidth={1.75} />
@@ -199,14 +239,15 @@ const Login = () => {
           </div>
         )}
 
+        {/* 3. FORM ĐĂNG NHẬP / ĐĂNG KÝ SẮC NÉT, ĐỘ TƯƠNG PHẢN CAO */}
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Ô nhập tài khoản */}
+          {/* Ô nhập Tài khoản */}
           <div className="space-y-1.5 text-left">
-            <label className="block text-xs font-medium text-[#9CA3AF]">
+            <label className="block text-xs font-medium text-zinc-400">
               Tài khoản
             </label>
             <div className="relative flex items-center">
-              <div className="absolute left-3.5 text-[#9CA3AF]/60 pointer-events-none">
+              <div className="absolute left-3.5 text-zinc-500 pointer-events-none">
                 <User size={16} strokeWidth={1.75} />
               </div>
               <input
@@ -214,37 +255,37 @@ const Login = () => {
                 name="account"
                 autoComplete="username"
                 required
-                placeholder="Tên tài khoản"
+                placeholder="Nhập tên tài khoản"
                 value={formData.account}
                 onChange={(e) => setFormData({ ...formData, account: e.target.value })}
-                className="w-full pl-10 pr-3.5 py-2.5 bg-[#0F1117] border border-white/[0.08] hover:border-white/[0.15] focus:border-white/25 rounded-xl text-sm text-[#F3F4F6] placeholder-[#9CA3AF]/40 outline-none transition-colors"
+                className="w-full h-11 pl-10 pr-3.5 bg-[#090A0E] border border-white/[0.08] hover:border-white/[0.14] focus:border-white/30 focus:ring-1 focus:ring-white/20 rounded-xl text-sm text-[#F4F4F5] placeholder-zinc-600 outline-none transition-all shadow-inner"
               />
             </div>
           </div>
 
-          {/* Ô nhập mật khẩu */}
+          {/* Ô nhập Mật khẩu */}
           <div className="space-y-1.5 text-left">
-            <label className="block text-xs font-medium text-[#9CA3AF]">
+            <label className="block text-xs font-medium text-zinc-400">
               Mật khẩu
             </label>
             <div className="relative flex items-center">
-              <div className="absolute left-3.5 text-[#9CA3AF]/60 pointer-events-none">
+              <div className="absolute left-3.5 text-zinc-500 pointer-events-none">
                 <Lock size={16} strokeWidth={1.75} />
               </div>
               <input
                 type={showPassword ? 'text' : 'password'}
                 name="password"
-                autoComplete="current-password"
+                autoComplete={isRegisterMode ? "new-password" : "current-password"}
                 required
-                placeholder="Mật khẩu của bạn"
+                placeholder="Nhập mật khẩu"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                className="w-full pl-10 pr-10 py-2.5 bg-[#0F1117] border border-white/[0.08] hover:border-white/[0.15] focus:border-white/25 rounded-xl text-sm text-[#F3F4F6] placeholder-[#9CA3AF]/40 outline-none transition-colors"
+                className="w-full h-11 pl-10 pr-10 bg-[#090A0E] border border-white/[0.08] hover:border-white/[0.14] focus:border-white/30 focus:ring-1 focus:ring-white/20 rounded-xl text-sm text-[#F4F4F5] placeholder-zinc-600 outline-none transition-all shadow-inner"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 text-[#9CA3AF]/60 hover:text-[#F3F4F6] transition-colors cursor-pointer"
+                className="absolute right-3.5 text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
                 title={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
               >
                 {showPassword ? <EyeOff size={16} strokeWidth={1.75} /> : <Eye size={16} strokeWidth={1.75} />}
@@ -259,166 +300,57 @@ const Login = () => {
             </div>
           )}
 
-          {/* Nút Submit */}
+          {/* Nút bấm chính ("Tiếp tục vào Sảnh") */}
           <button
             type="submit"
             disabled={submitting}
-            className="w-full mt-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#6366F1] to-[#8B5CF6] hover:opacity-95 text-white font-medium text-sm flex items-center justify-center gap-2 shadow-md shadow-indigo-500/25 transition-all active:scale-[0.99] disabled:opacity-50 cursor-pointer"
+            className="w-full h-11 mt-2 rounded-xl bg-[#F4F4F5] hover:bg-white text-[#09090B] font-semibold text-sm flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.99] disabled:opacity-50 cursor-pointer"
           >
             {submitting ? (
               <>
-                <Loader2 size={16} className="animate-spin" strokeWidth={1.75} />
-                <span>{isRegisterMode ? 'Đang tạo...' : 'Đang vào...'}</span>
+                <Loader2 size={16} className="animate-spin text-[#09090B]" strokeWidth={2} />
+                <span>{isRegisterMode ? 'Đang tạo tài khoản...' : 'Đang vào Sảnh...'}</span>
               </>
             ) : (
-              <span>{isRegisterMode ? 'Tạo tài khoản' : 'Đăng nhập vào Sảnh'}</span>
+              <span>{isRegisterMode ? 'Tạo tài khoản và vào Sảnh' : 'Tiếp tục vào Sảnh'}</span>
             )}
           </button>
         </form>
 
-        {/* Chuyển đổi giữa Đăng nhập và Đăng ký */}
-        <div className="mt-5 pt-4 border-t border-white/[0.06] text-center">
-          <button
-            type="button"
-            onClick={() => {
-              setIsRegisterMode(!isRegisterMode);
-              setError('');
-            }}
-            className="text-xs text-[#9CA3AF] hover:text-[#F3F4F6] transition-colors cursor-pointer"
-          >
-            {isRegisterMode ? 'Đã có tài khoản? Đăng nhập' : 'Chưa có tài khoản? Đăng ký ngay'}
-          </button>
+        {/* Đường phân cách mảnh với chữ "hoặc" */}
+        <div className="relative flex items-center justify-center my-4">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-white/[0.06]" />
+          </div>
+          <span className="relative px-3 bg-[#11131A] text-[11px] font-medium text-zinc-500 uppercase tracking-wider">
+            hoặc
+          </span>
         </div>
-      </div>
-    </div>
-  );
 
-  // NẾU ĐÃ XEM INTRO RỒI: Hiển thị thẳng màn hình Đăng nhập (không cuộn snap)
-  if (introSeen) {
-    return (
-      <div className="min-h-[100dvh] w-full bg-[#0F1117] text-[#F3F4F6] flex flex-col justify-center items-center px-4 py-8 select-none">
-        {renderAuthForm()}
-      </div>
-    );
-  }
-
-  // LẦN ĐẦU TRUY CẬP: Container Cuộn / Vuốt dọc toàn màn hình (Vertical Scroll-Snap)
-  return (
-    <div
-      ref={containerRef}
-      onScroll={handleScroll}
-      className="h-[100dvh] w-full bg-[#0F1117] text-[#F3F4F6] overflow-y-scroll snap-y snap-mandatory scroll-smooth relative select-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-    >
-      {/* Nút "Bỏ qua" cố định góc trên bên phải (chỉ hiện khi chưa tới màn 3) */}
-      {activeSection < 2 && (
+        {/* Nút chuyển đổi qua lại giữa Đăng nhập / Tạo tài khoản mới */}
         <button
           type="button"
-          onClick={handleSkip}
-          className="fixed top-5 right-5 sm:top-7 sm:right-8 z-30 text-xs text-zinc-500 hover:text-zinc-300 transition-colors py-1.5 px-3 cursor-pointer"
+          onClick={() => {
+            setIsRegisterMode(!isRegisterMode);
+            setError('');
+          }}
+          className="w-full h-10 rounded-xl bg-transparent hover:bg-white/[0.04] border border-white/[0.08] hover:border-white/[0.14] text-xs font-medium text-zinc-300 hover:text-white transition-all cursor-pointer flex items-center justify-center"
         >
-          Bỏ qua
+          {isRegisterMode ? 'Đã có tài khoản? Đăng nhập' : 'Chưa có tài khoản? Tạo tài khoản mới'}
         </button>
-      )}
-
-      {/* 3 dấu chấm dọc siêu mảnh báo hiệu vị trí trang đang vuốt */}
-      <div className="fixed right-3 sm:right-6 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-30 pointer-events-none">
-        {[0, 1, 2].map((idx) => (
-          <div
-            key={idx}
-            className={`w-1 rounded-full transition-all duration-300 ${
-              activeSection === idx ? 'h-6 bg-[#F3F4F6]' : 'h-1.5 bg-white/20'
-            }`}
-          />
-        ))}
       </div>
 
-      {/* ============================================================== */}
-      {/* MÀN 1 (Chào đón): Logo chữ T tối giản & Tên sản phẩm */}
-      {/* ============================================================== */}
-      <section
-        ref={section1Ref}
-        data-section-index="0"
-        className="h-[100dvh] w-full snap-start flex flex-col justify-between items-center px-6 py-10 relative overflow-hidden"
-      >
-        <div className="h-6" />
+      {/* FOOTER TINH TẾ */}
+      <div className="mt-6 text-center text-[11px] text-zinc-600 font-mono tracking-tight relative z-10">
+        Talovin · Social Lounge & Real-time Audio
+      </div>
 
-        <div
-          className={`flex-1 flex flex-col items-center justify-center text-center max-w-sm mx-auto transition-all duration-500 ease-out ${
-            activeSection === 0 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
-          }`}
-        >
-          <TalovinLogo size={42} showText={false} />
-          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[#F3F4F6] mt-6 mb-2.5 font-sans">
-            Talovin
-          </h1>
-          <p className="text-sm sm:text-base text-[#9CA3AF] font-normal leading-relaxed">
-            Talovin — Không gian trò chuyện & âm nhạc thời gian thực.
-          </p>
-        </div>
-
-        {/* Hướng dẫn vuốt lên & đường kẻ dọc mảnh animation */}
-        <div className="pb-4 flex flex-col items-center gap-3">
-          <span className="text-xs text-zinc-500 tracking-wide font-normal">
-            Vuốt lên để tiếp tục
-          </span>
-          <div className="w-[1.5px] h-7 bg-white/10 rounded-full overflow-hidden relative">
-            <div className="w-full h-3 bg-white/40 rounded-full animate-pulse" />
-          </div>
-        </div>
-      </section>
-
-      {/* ============================================================== */}
-      {/* MÀN 2 (Giá trị cốt lõi): 3 dòng ngắn gọn phân cấp rõ ràng */}
-      {/* ============================================================== */}
-      <section
-        ref={section2Ref}
-        data-section-index="1"
-        className="h-[100dvh] w-full snap-start flex flex-col justify-center items-center px-6 py-12 relative overflow-hidden"
-      >
-        <div
-          className={`max-w-[420px] w-full mx-auto space-y-10 sm:space-y-12 transition-all duration-500 ease-out ${
-            activeSection === 1 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
-          }`}
-        >
-          <div className="space-y-2 text-left">
-            <span className="text-[11px] font-mono tracking-widest text-zinc-500">01 / ÂM THANH</span>
-            <p className="text-base sm:text-lg text-[#F3F4F6] font-normal leading-relaxed">
-              Gửi một đoạn voice 5 giây trên Sóng FM, nghe giọng nhau trước khi bắt đầu câu chuyện.
-            </p>
-          </div>
-
-          <div className="space-y-2 text-left">
-            <span className="text-[11px] font-mono tracking-widest text-zinc-500">02 / KẾT NỐI</span>
-            <p className="text-base sm:text-lg text-[#F3F4F6] font-normal leading-relaxed">
-              Rút thẻ câu hỏi ngẫu nhiên để phá tan sự im lặng trong sảnh.
-            </p>
-          </div>
-
-          <div className="space-y-2 text-left">
-            <span className="text-[11px] font-mono tracking-widest text-zinc-500">03 / ĐỒNG ĐIỆU</span>
-            <p className="text-base sm:text-lg text-[#F3F4F6] font-normal leading-relaxed">
-              Nghe chung một giai điệu và nhắn tin trực tiếp cùng bạn bè.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* ============================================================== */}
-      {/* MÀN 3 (Điểm dừng cuối cùng): Tích hợp trực tiếp Form Đăng nhập */}
-      {/* ============================================================== */}
-      <section
-        ref={section3Ref}
-        data-section-index="2"
-        className="h-[100dvh] w-full snap-start flex flex-col justify-center items-center px-4 sm:px-6 py-8 relative overflow-hidden"
-      >
-        <div
-          className={`w-full flex justify-center transition-all duration-500 ease-out ${
-            activeSection === 2 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
-          }`}
-        >
-          {renderAuthForm()}
-        </div>
-      </section>
+      <style>{`
+        @keyframes talovinWave {
+          0%, 100% { transform: scaleY(0.4); opacity: 0.35; }
+          50% { transform: scaleY(1); opacity: 0.85; }
+        }
+      `}</style>
     </div>
   );
 };
