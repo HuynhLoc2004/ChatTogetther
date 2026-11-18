@@ -78,6 +78,16 @@ jobs:
           password: ${{ secrets.VPS_PASSWORD }}
           script: |
             set -e
+            echo ">>> [0/5] Ensuring Docker and Docker Compose are installed..."
+            if ! command -v docker >/dev/null 2>&1; then
+              echo ">>> Docker not found, installing Docker & Docker Compose..."
+              curl -fsSL https://get.docker.com | sh
+              systemctl enable --now docker
+            fi
+            if ! docker compose version >/dev/null 2>&1; then
+              apt-get update && apt-get install -y docker-compose-plugin || true
+            fi
+
             echo ">>> [1/5] Configuring firewall rules (80, 443, 22)..."
             if command -v ufw >/dev/null 2>&1; then
               ufw allow 80/tcp || true
