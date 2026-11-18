@@ -96,17 +96,39 @@ jobs:
             fi
 
             echo ">>> [2/5] Checking SSL Certificate status..."
-            mkdir -p /etc/letsencrypt/live/talovin.duckdns.org
             mkdir -p /var/www/certbot
             
-            NEED_CERT=0
-            if [ ! -f /etc/letsencrypt/live/talovin.duckdns.org/fullchain.pem ] || [ ! -f /etc/letsencrypt/live/talovin.duckdns.org/privkey.pem ]; then
-              echo ">>> Initializing bootstrap self-signed SSL certificate so Nginx can start safely..."
-              docker run --rm -v /etc/letsencrypt:/etc/letsencrypt alpine/openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
+            IS_GENUINE_CERT=0
+            if [ -f /etc/letsencrypt/live/talovin.duckdns.org/fullchain.pem ]; then
+              if docker run --rm -v /etc/letsencrypt:/etc/letsencrypt alpine/openssl x509 -in /etc/letsencrypt/live/talovin.duckdns.org/fullchain.pem -noout -issuer 2>/dev/null | grep -q "Let's Encrypt"; then
+                echo ">>> Genuine Let's Encrypt SSL certificate is already installed and valid."
+                IS_GENUINE_CERT=1
+              fi
+            fi
+
+            if [ "$IS_GENUINE_CERT" = "0" ]; then
+              echo ">>> Genuine SSL not found. Requesting trusted Let's Encrypt certificate via Certbot standalone on port 80..."
+              docker stop talovin-nginx 2>/dev/null || true
+              sleep 2
+              rm -rf /etc/letsencrypt/live/talovin.duckdns.org /etc/letsencrypt/archive/talovin.duckdns.org /etc/letsencrypt/renewal/talovin.duckdns.org.conf
+              
+              docker run --rm -p 80:80 \
+                -v /etc/letsencrypt:/etc/letsencrypt \
+                certbot/certbot certonly --standalone \
+                -d talovin.duckdns.org \
+                --email huynhloc2004@gmail.com \
+                --agree-tos --no-eff-email \
+                --non-interactive || echo ">>> Certbot standalone warning: will use fallback certificate"
+            fi
+
+            # Fallback self-signed if certbot is rate-limited so Nginx can start
+            if [ ! -f /etc/letsencrypt/live/talovin.duckdns.org/fullchain.pem ]; then
+              echo ">>> Generating fallback self-signed SSL certificate..."
+              mkdir -p /etc/letsencrypt/live/talovin.duckdns.org
+              docker run --rm -v /etc/letsencrypt:/etc/letsencrypt alpine/openssl req -x509 -nodes -newkey rsa:2048 -days 30 \
                 -keyout /etc/letsencrypt/live/talovin.duckdns.org/privkey.pem \
                 -out /etc/letsencrypt/live/talovin.duckdns.org/fullchain.pem \
                 -subj "/CN=talovin.duckdns.org"
-              NEED_CERT=1
             fi
 
             echo ">>> [3/5] Starting Docker Compose stack..."
@@ -114,27 +136,8 @@ jobs:
             cd /opt/talovin
             docker compose up -d --build
 
-            if [ "$NEED_CERT" = "1" ]; then
-              echo ">>> [4/5] Requesting genuine Let's Encrypt SSL certificate via Certbot..."
-              sleep 5
-              docker run --rm \
-                -v /etc/letsencrypt:/etc/letsencrypt \
-                -v /var/www/certbot:/var/www/certbot \
-                certbot/certbot certonly --webroot -w /var/www/certbot \
-                -d talovin.duckdns.org \
-                --email huynhloc2004@gmail.com \
-                --agree-tos --no-eff-email \
-                --force-renewal || echo ">>> Certbot warning: check DNS propagation or firewall if cert generation fails"
-              
-              docker compose exec -T nginx nginx -s reload || docker compose restart nginx || true
-            else
-              echo ">>> [4/5] SSL Certificate already present, running certbot renewal check..."
-              docker run --rm \
-                -v /etc/letsencrypt:/etc/letsencrypt \
-                -v /var/www/certbot:/var/www/certbot \
-                certbot/certbot renew --webroot -w /var/www/certbot --quiet || true
-              docker compose restart nginx || docker compose exec -T nginx nginx -s reload || true
-            fi
+            echo ">>> [4/5] Reloading Nginx with active SSL configuration..."
+            docker compose restart nginx || docker compose exec -T nginx nginx -s reload || true
 
             echo ">>> [5/5] Setting up auto-renew cron and verifying status..."
             (crontab -l 2>/dev/null | grep -q "certbot renew") || (crontab -l 2>/dev/null; echo "0 3 * * * docker run --rm -v /etc/letsencrypt:/etc/letsencrypt -v /var/www/certbot:/var/www/certbot certbot/certbot renew --webroot -w /var/www/certbot --quiet && docker exec talovin-nginx nginx -s reload") | crontab - || true
