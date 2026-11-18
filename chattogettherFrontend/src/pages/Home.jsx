@@ -643,8 +643,22 @@ const Home = ({ initialTab }) => {
   const [tracks, setTracks] = useState([]);
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
   const [showMobileMusicSheet, setShowMobileMusicSheet] = useState(false);
+  const [showMobileActionDrawer, setShowMobileActionDrawer] = useState(false);
   const audioRef = useRef(null);
   const newPostInputRef = useRef(null);
+  const touchStartYRef = useRef(null);
+
+  // Nhãn hiển thị trạng thái bộ lọc hiện tại trên thanh tiêu đề Mobile
+  const currentFilterLabel = useMemo(() => {
+    if (activeTab === 'trending') return 'Thịnh hành';
+    if (activeTab === 'saved') return 'Đã lưu';
+    if (activeTab === 'friends') return 'Bạn bè';
+    if (activeFilterTag) return `#${activeFilterTag}`;
+    if (quickFilter === 'challenge') return 'Thử thách';
+    if (quickFilter === 'confession') return 'Tâm sự';
+    if (quickFilter === 'audio') return 'Âm thanh';
+    return 'Tất cả';
+  }, [activeTab, activeFilterTag, quickFilter]);
 
   // Speed Vibe Match
   const [isSpeedMatchOpen, setIsSpeedMatchOpen] = useState(false);
@@ -3623,10 +3637,23 @@ const Home = ({ initialTab }) => {
             {/* ============================================================== */}
             <header className="sticky top-0 z-30 h-14 w-full bg-[#0D0F14]/90 backdrop-blur-md border-b border-white/[0.06] px-4 sm:px-8 flex items-center justify-between select-none">
               {/* Bên trái: Logo trên mobile / Tiêu đề "Sảnh trực tuyến" trên desktop */}
-              <div className="flex items-center gap-3">
-                <div className="lg:hidden flex items-center cursor-pointer" onClick={handleLogoRefresh}>
+              <div className="flex items-center gap-2.5">
+                <div className="lg:hidden flex items-center cursor-pointer shrink-0" onClick={handleLogoRefresh}>
                   <TalovinLogo size={28} showText={true} />
                 </div>
+
+                {/* Dòng nhãn nhỏ hiển thị bộ lọc hiện tại trên mobile */}
+                <button
+                  type="button"
+                  onClick={() => setShowMobileActionDrawer(true)}
+                  className="lg:hidden flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/[0.05] hover:bg-white/[0.08] border border-white/[0.08] text-[11px] font-medium text-zinc-300 active:scale-95 transition-all cursor-pointer"
+                  title="Mở bảng điều khiển không gian Sảnh"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="truncate max-w-[105px]">Sảnh · {currentFilterLabel}</span>
+                  <ChevronDown size={11} className="text-zinc-500" />
+                </button>
+
                 <h1 className="hidden lg:block text-base font-semibold text-[#F3F4F6] tracking-tight font-sans">
                   {activeTab === 'feed' && "Sảnh trực tuyến"}
                   {activeTab === 'groups' && "Cộng đồng"}
@@ -3637,8 +3664,19 @@ const Home = ({ initialTab }) => {
                 </h1>
               </div>
 
-              {/* Bên phải: Dò sóng FM, Bốc thẻ bài, Tìm kiếm, Thông báo, Nút "+ Đăng" (trên desktop), Avatar (trên mobile) */}
-              <div className="flex items-center gap-2">
+              {/* Bên phải: Nút Menu Hamburger, Tìm kiếm, Thông báo, Avatar */}
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                {/* NÚT MENU HAMBURGER ĐỘC ĐÁO TRÊN MOBILE (Mở Bảng Điều Khiển Nổi) */}
+                <button
+                  type="button"
+                  onClick={() => setShowMobileActionDrawer(true)}
+                  className="lg:hidden w-8 h-8 rounded-full flex items-center justify-center text-zinc-300 hover:text-white bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] transition-all cursor-pointer active:scale-95"
+                  title="Bảng điều khiển Sảnh"
+                  aria-label="Bảng điều khiển Sảnh"
+                >
+                  <Menu size={16} strokeWidth={2} />
+                </button>
+
                 {/* Trình phát nhạc mini trên mobile */}
                 <button
                   type="button"
@@ -3649,7 +3687,7 @@ const Home = ({ initialTab }) => {
                   <Music size={15} strokeWidth={1.75} />
                 </button>
 
-                {/* Nút mở nhanh "Dò sóng FM" */}
+                {/* Nút mở nhanh "Dò sóng FM" trên desktop */}
                 <button
                   type="button"
                   onClick={() => setIsSpeedMatchOpen(true)}
@@ -3660,7 +3698,7 @@ const Home = ({ initialTab }) => {
                   <span>Dò sóng FM</span>
                 </button>
 
-                {/* Nút "Bốc thẻ bài" */}
+                {/* Nút "Bốc thẻ bài" trên desktop */}
                 <button
                   type="button"
                   onClick={() => setIsPartyWheelOpen(true)}
@@ -3720,116 +3758,6 @@ const Home = ({ initialTab }) => {
                 </button>
               </div>
             </header>
-
-            {/* DẢI CÔNG CỤ DI ĐỘNG CUỘN NGANG (MOBILE TOOLBAR - DÒ SÓNG, BỐC BÀI, LỌC NHANH) */}
-            <div className="lg:hidden flex items-center gap-2 px-3 sm:px-4 py-2.5 bg-[#111319]/95 backdrop-blur-md border-b border-white/[0.06] overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden shrink-0 z-20 select-none">
-              {/* Nút Dò sóng FM */}
-              <button
-                type="button"
-                onClick={() => setIsSpeedMatchOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.06] active:bg-white/[0.12] text-zinc-200 border border-white/[0.08] text-xs font-medium shrink-0 transition-colors cursor-pointer"
-              >
-                <Radio size={13} className="text-emerald-400 animate-pulse" strokeWidth={2} />
-                <span>Dò sóng FM</span>
-              </button>
-
-              {/* Nút Bốc thẻ bài */}
-              <button
-                type="button"
-                onClick={() => setIsPartyWheelOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.06] active:bg-white/[0.12] text-zinc-200 border border-white/[0.08] text-xs font-medium shrink-0 transition-colors cursor-pointer"
-              >
-                <Dices size={13} className="text-amber-400" strokeWidth={2} />
-                <span>Bốc thẻ bài</span>
-              </button>
-
-              <div className="w-px h-4 bg-white/10 shrink-0 mx-0.5" />
-
-              {/* Bộ lọc nhanh bài viết */}
-              <button
-                type="button"
-                onClick={() => {
-                  if (activeTab !== 'feed') handleSwitchTab('feed');
-                  setQuickFilter('all');
-                }}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium shrink-0 transition-all cursor-pointer ${
-                  activeTab === 'feed' && quickFilter === 'all'
-                    ? 'bg-white text-zinc-950 font-semibold shadow-sm'
-                    : 'bg-white/[0.04] text-zinc-400 hover:text-zinc-200 border border-white/[0.06]'
-                }`}
-              >
-                Tất cả
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleSwitchTab('trending')}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium shrink-0 transition-all cursor-pointer ${
-                  activeTab === 'trending'
-                    ? 'bg-white text-zinc-950 font-semibold shadow-sm'
-                    : 'bg-white/[0.04] text-zinc-400 hover:text-zinc-200 border border-white/[0.06]'
-                }`}
-              >
-                Thịnh hành
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleSwitchTab('saved')}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium shrink-0 transition-all cursor-pointer ${
-                  activeTab === 'saved'
-                    ? 'bg-white text-zinc-950 font-semibold shadow-sm'
-                    : 'bg-white/[0.04] text-zinc-400 hover:text-zinc-200 border border-white/[0.06]'
-                }`}
-              >
-                Đã lưu
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  if (activeTab !== 'feed') handleSwitchTab('feed');
-                  setQuickFilter('challenge');
-                }}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium shrink-0 transition-all cursor-pointer ${
-                  activeTab === 'feed' && quickFilter === 'challenge'
-                    ? 'bg-white text-zinc-950 font-semibold shadow-sm'
-                    : 'bg-white/[0.04] text-zinc-400 hover:text-zinc-200 border border-white/[0.06]'
-                }`}
-              >
-                Thử thách
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  if (activeTab !== 'feed') handleSwitchTab('feed');
-                  setQuickFilter('confession');
-                }}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium shrink-0 transition-all cursor-pointer ${
-                  activeTab === 'feed' && quickFilter === 'confession'
-                    ? 'bg-white text-zinc-950 font-semibold shadow-sm'
-                    : 'bg-white/[0.04] text-zinc-400 hover:text-zinc-200 border border-white/[0.06]'
-                }`}
-              >
-                Tâm sự
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  if (activeTab !== 'feed') handleSwitchTab('feed');
-                  setQuickFilter('audio');
-                }}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium shrink-0 transition-all cursor-pointer ${
-                  activeTab === 'feed' && quickFilter === 'audio'
-                    ? 'bg-white text-zinc-950 font-semibold shadow-sm'
-                    : 'bg-white/[0.04] text-zinc-400 hover:text-zinc-200 border border-white/[0.06]'
-                }`}
-              >
-                Âm thanh
-              </button>
-            </div>
 
           {/* Thanh Search di động / xổ xuống (khi bấm kính lúp) */}
           {showMobileSearchBar && (
@@ -4195,18 +4123,6 @@ const Home = ({ initialTab }) => {
             )}
           </AnimatePresence>
 
-          {/* NÚT NỔI "+ ĐĂNG" TRÊN MOBILE (Góc dưới bên phải phía trên thanh đáy) */}
-          <div className="lg:hidden fixed bottom-20 right-4 z-40">
-            <button
-              type="button"
-              onClick={() => setIsComposerModalOpen(true)}
-              className="h-10 px-4 rounded-full bg-white text-zinc-950 font-semibold text-xs flex items-center gap-1.5 shadow-xl hover:bg-zinc-200 active:scale-95 transition-all cursor-pointer"
-              title="Đăng bài mới"
-            >
-              <Plus size={15} strokeWidth={2.5} />
-              <span>Đăng</span>
-            </button>
-          </div>
 
           {/* ============================================================== */}
           {/* TAB: DANH SÁCH BÀI VIẾT (Chỉ ở Sảnh trực tuyến, Thịnh hành hoặc Đã lưu) */}
@@ -4563,7 +4479,7 @@ const Home = ({ initialTab }) => {
                               {/* Media preview (Ảnh hoặc Video) */}
                               {parsedMedia.mediaUrl && (
                                 <div
-                                  className="relative rounded-xl overflow-hidden bg-black/40 border border-white/[0.06] max-h-[440px] w-fit max-w-full cursor-pointer group/media"
+                                  className="relative rounded-xl overflow-hidden bg-black/40 border border-white/[0.06] w-full max-w-full cursor-pointer group/media my-2 flex items-center justify-center"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setLightboxMedia({
@@ -4575,7 +4491,7 @@ const Home = ({ initialTab }) => {
                                   }}
                                 >
                                   {parsedMedia.mediaType === 'video' ? (
-                                    <div className="relative">
+                                    <div className="relative w-full flex items-center justify-center bg-black/40">
                                       <video
                                         key={`vid-${post.id}-${unmutedVideoPosts[post.id] ? 'unmuted' : 'muted'}`}
                                         src={parsedMedia.mediaUrl}
@@ -4584,8 +4500,7 @@ const Home = ({ initialTab }) => {
                                         muted={!unmutedVideoPosts[post.id]}
                                         playsInline
                                         preload="none"
-                                        className="max-h-[440px] w-auto max-w-full object-cover rounded-xl"
-                                        style={{ aspectRatio: '16 / 10', minHeight: '160px', backgroundColor: '#14161F' }}
+                                        className="w-full h-auto max-h-[460px] object-contain rounded-xl"
                                       />
                                       <div className="absolute bottom-2.5 left-2.5 flex items-center gap-2 z-10">
                                         <button
@@ -4615,8 +4530,7 @@ const Home = ({ initialTab }) => {
                                       loading="lazy"
                                       decoding="async"
                                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                      className="max-h-[440px] w-auto max-w-full object-cover rounded-xl"
-                                      style={{ aspectRatio: '16 / 10', minHeight: '160px', backgroundColor: '#14161F' }}
+                                      className="w-full h-auto max-h-[460px] object-contain bg-black/40 rounded-xl border border-white/[0.06]"
                                     />
                                   )}
                                 </div>
@@ -5642,11 +5556,175 @@ const Home = ({ initialTab }) => {
         )}
       </AnimatePresence>
 
+      {/* BẢNG ĐIỀU KHIỂN NỔI (INTERACTIVE ACTION SHEET / DRAWER) TRÊN MOBILE */}
+      <AnimatePresence>
+        {showMobileActionDrawer && (
+          <div className="fixed inset-0 z-[999] flex items-end justify-center select-none">
+            {/* Backdrop làm mờ nền */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="absolute inset-0 bg-black/75 backdrop-blur-sm"
+              onClick={() => setShowMobileActionDrawer(false)}
+            />
+
+            {/* Khung Drawer trượt lên từ đáy */}
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 26, stiffness: 280 }}
+              className="relative w-full max-w-lg bg-[#11131A] border-t border-white/[0.12] rounded-t-3xl p-5 pb-8 shadow-2xl flex flex-col gap-4 z-10 max-h-[85dvh] overflow-y-auto"
+            >
+              {/* Thanh gạt nhỏ ở đỉnh */}
+              <div className="w-10 h-1 rounded-full bg-white/20 mx-auto -mt-1 mb-1" />
+
+              {/* Tiêu đề & Nút đóng */}
+              <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-sm font-bold text-white font-sans">Bảng điều khiển Sảnh</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowMobileActionDrawer(false)}
+                  className="w-7 h-7 rounded-full bg-white/[0.06] hover:bg-white/[0.1] text-zinc-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+                  title="Đóng"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+
+              {/* NHÓM 1 — TƯƠNG TÁC NHANH (2 THẺ NÚT LỚN) */}
+              <div className="space-y-2">
+                <span className="text-[11px] font-mono text-zinc-400 tracking-wider uppercase font-medium">
+                  Tương tác nhanh
+                </span>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {/* Thẻ Dò sóng FM 5s */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowMobileActionDrawer(false);
+                      setIsSpeedMatchOpen(true);
+                    }}
+                    className="p-3.5 rounded-2xl bg-gradient-to-br from-emerald-500/15 via-teal-500/10 to-transparent border border-emerald-500/25 active:scale-98 transition-all text-left flex flex-col justify-between group cursor-pointer shadow-sm"
+                  >
+                    <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center mb-2">
+                      <Radio size={16} className="animate-pulse" strokeWidth={2} />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-white mb-0.5">Dò sóng FM 5s</h4>
+                      <p className="text-[10px] text-zinc-400 leading-tight">Voice tâm sự & kết nối nhanh</p>
+                    </div>
+                  </button>
+
+                  {/* Thẻ Bốc thẻ bài thử thách */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowMobileActionDrawer(false);
+                      setIsPartyWheelOpen(true);
+                    }}
+                    className="p-3.5 rounded-2xl bg-gradient-to-br from-amber-500/15 via-orange-500/10 to-transparent border border-amber-500/25 active:scale-98 transition-all text-left flex flex-col justify-between group cursor-pointer shadow-sm"
+                  >
+                    <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center mb-2">
+                      <Dices size={16} strokeWidth={2} />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-white mb-0.5">Bốc thẻ bài</h4>
+                      <p className="text-[10px] text-zinc-400 leading-tight">Câu hỏi phá tan im lặng</p>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* NHÓM 2 — LỌC KHÔNG GIAN SẢNH (LƯỚI CHỌN NHANH CÓ DẤU TÍCH) */}
+              <div className="space-y-2 pt-1">
+                <span className="text-[11px] font-mono text-zinc-400 tracking-wider uppercase font-medium">
+                  Lọc không gian Sảnh
+                </span>
+                <div className="flex flex-col gap-1.5">
+                  {[
+                    { key: 'all', tab: 'feed', label: 'Tất cả bài viết', desc: 'Toàn bộ khoảnh khắc mới nhất', icon: Globe },
+                    { key: 'trending', tab: 'trending', label: 'Thịnh hành', desc: 'Nhiều tương tác & sôi nổi nhất', icon: Flame },
+                    { key: 'challenge', tab: 'feed', filter: 'challenge', label: 'Thử thách', desc: 'Câu đố & trò chơi cộng đồng', icon: Sparkles },
+                    { key: 'confession', tab: 'feed', filter: 'confession', label: 'Tâm sự', desc: 'Chia sẻ cảm xúc & lắng nghe', icon: MessageCircle },
+                    { key: 'audio', tab: 'feed', filter: 'audio', label: 'Âm thanh', desc: 'Bài viết có giọng nói & âm nhạc', icon: Mic },
+                  ].map((item) => {
+                    const isSelected = item.tab === 'trending'
+                      ? activeTab === 'trending'
+                      : (activeTab === 'feed' && (item.filter ? quickFilter === item.filter : quickFilter === 'all' && !activeFilterTag));
+
+                    const IconComp = item.icon;
+
+                    return (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() => {
+                          if (item.tab === 'trending') {
+                            handleSwitchTab('trending');
+                          } else {
+                            if (activeTab !== 'feed') handleSwitchTab('feed');
+                            setQuickFilter(item.filter || 'all');
+                            setActiveFilterTag(null);
+                          }
+                          setShowMobileActionDrawer(false);
+                        }}
+                        className={`w-full p-2.5 rounded-xl border flex items-center justify-between transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-white/[0.08] border-white/20 text-white shadow-sm'
+                            : 'bg-white/[0.02] hover:bg-white/[0.05] border-white/[0.06] text-zinc-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isSelected ? 'bg-white text-zinc-950 font-bold' : 'bg-white/[0.06] text-zinc-400'}`}>
+                            <IconComp size={15} strokeWidth={isSelected ? 2.5 : 1.75} />
+                          </div>
+                          <div className="text-left">
+                            <p className="text-xs font-semibold leading-tight text-white">{item.label}</p>
+                            <p className="text-[10px] text-zinc-400 leading-tight">{item.desc}</p>
+                          </div>
+                        </div>
+
+                        {isSelected && (
+                          <div className="w-5 h-5 rounded-full bg-emerald-400 text-zinc-950 flex items-center justify-center">
+                            <Check size={12} strokeWidth={3} />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* MODAL LIGHTBOX XEM ĐA PHƯƠNG TIỆN TOÀN MÀN HÌNH (ẢNH & VIDEO) */}
       {lightboxMedia && (
         <div
-          className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-black/95 backdrop-blur-md p-2 sm:p-6 animate-fade-in select-none"
+          className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md p-2 sm:p-6 animate-in fade-in zoom-in-95 duration-200 select-none"
           onClick={() => setLightboxMedia(null)}
+          onTouchStart={(e) => {
+            touchStartYRef.current = e.touches[0].clientY;
+          }}
+          onTouchMove={(e) => {
+            if (touchStartYRef.current !== null) {
+              const diff = e.touches[0].clientY - touchStartYRef.current;
+              if (diff > 75) {
+                setLightboxMedia(null);
+                touchStartYRef.current = null;
+              }
+            }
+          }}
+          onTouchEnd={() => {
+            touchStartYRef.current = null;
+          }}
         >
           {/* Top Bar: Title/Author and Actions */}
           <div
@@ -5677,7 +5755,7 @@ const Home = ({ initialTab }) => {
                 type="button"
                 onClick={() => setLightboxMedia(null)}
                 className="p-2 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-all border border-zinc-700/60"
-                title="Đóng (Esc)"
+                title="Đóng (Esc hoặc vuốt xuống)"
               >
                 <X size={16} />
               </button>
@@ -6732,9 +6810,9 @@ const Home = ({ initialTab }) => {
                       {media.mediaUrl && (
                         <div className="rounded-xl overflow-hidden border border-zinc-800">
                           {media.mediaType === 'video' ? (
-                            <video src={media.mediaUrl} controls autoPlay loop playsInline preload="none" className="w-full max-h-[340px] object-cover" />
+                            <video src={media.mediaUrl} controls autoPlay loop playsInline preload="none" className="w-full h-auto max-h-[460px] object-contain bg-black/40" />
                           ) : (
-                            <img src={media.mediaUrl} alt="Media" loading="lazy" decoding="async" className="w-full max-h-[340px] object-cover" />
+                            <img src={media.mediaUrl} alt="Media" loading="lazy" decoding="async" className="w-full h-auto max-h-[460px] object-contain bg-black/40" />
                           )}
                         </div>
                       )}
@@ -6970,9 +7048,9 @@ const Home = ({ initialTab }) => {
                       {media.mediaUrl && (
                         <div className="rounded-2xl overflow-hidden border border-zinc-800">
                           {media.mediaType === 'video' ? (
-                            <video src={media.mediaUrl} controls autoPlay loop playsInline preload="none" className="w-full max-h-[380px] object-cover" />
+                            <video src={media.mediaUrl} controls autoPlay loop playsInline preload="none" className="w-full h-auto max-h-[460px] object-contain bg-black/40" />
                           ) : (
-                            <img src={media.mediaUrl} alt="Media" loading="lazy" decoding="async" className="w-full max-h-[380px] object-cover" />
+                            <img src={media.mediaUrl} alt="Media" loading="lazy" decoding="async" className="w-full h-auto max-h-[460px] object-contain bg-black/40" />
                           )}
                         </div>
                       )}

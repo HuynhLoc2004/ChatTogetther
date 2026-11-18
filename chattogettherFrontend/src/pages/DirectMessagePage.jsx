@@ -248,30 +248,12 @@ export const DirectMessagePage = () => {
     navigate('/', { replace: true });
   }, [location, searchParams, navigate]);
 
-  // Xử lý nút Back trong header khung chat (đặc biệt trên màn hình mobile)
+  // Xử lý nút Back trong header khung chat trên điện thoại: quay lại danh sách hội thoại
   const handleChatBack = useCallback(() => {
-    // 1. Nếu người dùng vào thẳng đoạn chat này từ màn hình ngoài (Trang cá nhân, Sảnh bài viết, etc.)
-    const fromParam = searchParams.get('from');
-    if (fromParam) {
-      try {
-        const decoded = decodeURIComponent(fromParam);
-        if (decoded && !decoded.startsWith('/messages') && !decoded.startsWith('/call') && decoded !== location.pathname) {
-          navigate(decoded, { replace: true });
-          return;
-        }
-      } catch (_) { }
-    }
-
-    if (location.state?.from && !location.state.from.startsWith('/messages') && !location.state.from.startsWith('/call') && location.state.from !== location.pathname) {
-      navigate(location.state.from, { replace: true });
-      return;
-    }
-
-    // 2. Mặc định trên mobile: quay về danh sách hội thoại /messages (replace: true để triệt tiêu việc chồng chất lịch sử)
     setActivePartner(null);
     lastTargetIdRef.current = null;
     navigate('/messages', { replace: true });
-  }, [searchParams, location, navigate]);
+  }, [navigate]);
 
   // Danh sách bạn bè / hội thoại (Nạp tức thì từ cache, tự động hydrate từ tin nhắn cục bộ và sắp xếp mới nhất từ 0ms)
   const userPrefix = currentUserId ? `${currentUserId}_` : '';
@@ -1770,10 +1752,10 @@ export const DirectMessagePage = () => {
   }, [messages, currentUserId]);
 
   return (
-    <div className="flex h-screen w-full bg-[#090A0F] text-[#F3F4F6] select-none overflow-hidden font-sans animate-in fade-in duration-200">
+    <div className="flex h-[100dvh] w-full bg-[#090A0F] text-[#F3F4F6] select-none overflow-hidden font-sans pb-[env(safe-area-inset-bottom)] animate-in fade-in duration-200">
 
       {/* THANH ĐIỀU HƯỚNG BÊN TRÁI (220px) CỐ ĐỊNH TRÊN DESKTOP - ĐỒNG BỘ 100% VỚI SẢNH */}
-      <aside className="w-[220px] min-w-[220px] h-screen sticky top-0 hidden lg:flex flex-col justify-between py-5 px-3 z-30 select-none border-r border-white/[0.07] bg-[#090A0F] shrink-0">
+      <aside className="w-[220px] min-w-[220px] h-[100dvh] sticky top-0 hidden lg:flex flex-col justify-between py-5 px-3 z-30 select-none border-r border-white/[0.07] bg-[#090A0F] shrink-0">
         <div>
           {/* Logo Talovin ở trên cùng */}
           <div 
@@ -2351,7 +2333,7 @@ export const DirectMessagePage = () => {
                           className={`w-full flex ${isMe ? 'justify-end' : 'justify-start'} my-2`}
                         >
                           <div
-                            className={`w-72 rounded-2xl p-3.5 shadow-sm border bg-zinc-900 border-zinc-800 ${isMe ? 'rounded-tr-sm' : 'rounded-tl-sm'}`}
+                            className={`w-full max-w-[280px] rounded-2xl p-3.5 shadow-sm border bg-zinc-900 border-zinc-800 ${isMe ? 'rounded-tr-sm' : 'rounded-tl-sm'}`}
                           >
                             {/* Tiêu đề & Icon loại cuộc gọi */}
                             <div className="flex items-center justify-between gap-2 mb-2.5 pb-2.5 border-b border-zinc-800/80">
