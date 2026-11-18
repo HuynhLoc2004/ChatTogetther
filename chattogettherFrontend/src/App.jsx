@@ -148,19 +148,37 @@ class ErrorBoundary extends Component {
   }
 }
 
+// Helper kiểm tra token JWT hợp lệ & chưa hết hạn
+export const isTokenValid = (token) => {
+  if (!token || typeof token !== 'string') return false;
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return false;
+    const payload = JSON.parse(atob(parts[1]));
+    if (!payload.exp) return true;
+    return payload.exp * 1000 > Date.now();
+  } catch (e) {
+    return false;
+  }
+};
+
 // Component bảo vệ Route
 const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem('accesstoken');
-  if (!token) {
+  if (!token || !isTokenValid(token)) {
+    if (token) {
+      localStorage.removeItem('accesstoken');
+      localStorage.removeItem('refreshToken');
+    }
     return <Navigate to="/login" replace />;
   }
   return children;
 };
 
-// Component ngăn truy cập Login/Register khi đã đăng nhập
+// Component ngăn truy cập Register khi đã có phiên đăng nhập hợp lệ
 const PublicRoute = ({ children }) => {
   const token = localStorage.getItem('accesstoken');
-  if (token) {
+  if (token && isTokenValid(token)) {
     return <Navigate to="/" replace />;
   }
   return children;
@@ -238,7 +256,7 @@ function App() {
           <Routes>
             <Route 
               path="/login" 
-              element={<PublicRoute><Login /></PublicRoute>} 
+              element={<Login />} 
             />
             <Route 
               path="/register" 

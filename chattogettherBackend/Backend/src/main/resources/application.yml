@@ -1,5 +1,5 @@
 jwt:
   secret_key: ${JWT_SECRET_KEY:huynhtanloc27102004deptraiquadithoiabcdefghjk}
-  exp_access: ${JWT_EXP_ACCESS:60} #min
-  exp_refresh: ${JWT_EXP_REFRESH:10080} #min
+  exp_access: ${JWT_EXP_ACCESS:43200} # 43200 min = 30 days
+  exp_refresh: ${JWT_EXP_REFRESH:129600} # 129600 min = 90 days
 
