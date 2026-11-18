@@ -11,7 +11,7 @@ import {
   Mic, Headphones, Moon, Gamepad2, Film, Square,
   Flag, AlertTriangle, UserCheck, UserPlus, Phone, PhoneCall,
   ChevronDown, Menu, Globe, Layers, SlidersHorizontal, Repeat, Sun, Smile,
-  ArrowLeft, RefreshCw, Clock, Loader2, SkipBack, SkipForward, ChevronLeft
+  ArrowLeft, RefreshCw, RotateCcw, Clock, Loader2, SkipBack, SkipForward, ChevronLeft
 } from 'lucide-react';
 import axiosClient, { BACKEND_URL } from '../api/axiosClient';
 import { saveRoomsOffline, getRoomsOffline } from '../utils/offlineDB';
@@ -3075,6 +3075,35 @@ const Home = ({ initialTab }) => {
     "Nếu có thể gửi một lời nhắn cho chính mình của 5 năm trước, bạn sẽ viết gì?"
   ];
   const [quickChallengeIdx, setQuickChallengeIdx] = useState(0);
+  const [quickChallengeAnswer, setQuickChallengeAnswer] = useState('');
+  const [isSubmittingQuickAnswer, setIsSubmittingQuickAnswer] = useState(false);
+
+  // Gửi câu trả lời nhanh cho thẻ bài hôm nay trực tiếp vào Sảnh
+  const handleQuickChallengeAnswer = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!quickChallengeAnswer.trim()) {
+      setNewPostContent(`[Thử thách]: "${QUICK_CHALLENGES[quickChallengeIdx]}"\n\n`);
+      setIsComposerModalOpen(true);
+      return;
+    }
+    try {
+      setIsSubmittingQuickAnswer(true);
+      const content = `[Thử thách]: "${QUICK_CHALLENGES[quickChallengeIdx]}"\n\n${quickChallengeAnswer.trim()}`;
+      const res = await axiosClient.post('/posts', {
+        content,
+        vibe: 'Thử thách'
+      });
+      if (res.data && res.data.data) {
+        setPosts(prev => [res.data.data, ...prev]);
+        setQuickChallengeAnswer('');
+        toast.success("Đã chia sẻ góc nhìn thử thách vào Sảnh!");
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Không thể gửi câu trả lời lúc này!");
+    } finally {
+      setIsSubmittingQuickAnswer(false);
+    }
+  };
 
   const activeLoungeUsers = useMemo(() => {
     const list = [];
@@ -3438,17 +3467,17 @@ const Home = ({ initialTab }) => {
       <div className="min-h-[100dvh] w-full bg-[#090A0F] text-[#F3F4F6] flex selection:bg-white/20 select-none">
 
         {/* ============================================================== */}
-        {/* CỘT 1: THANH ĐIỀU HƯỚNG BÊN TRÁI (240px) - CỐ ĐỊNH SÁT MÉP TRÁI */}
+        {/* THANH ĐIỀU HƯỚNG BÊN TRÁI (220px) - SẮC NÉT & CỐ ĐỊNH          */}
         {/* ============================================================== */}
-        <aside className="w-[240px] shrink-0 sticky top-0 h-[100dvh] hidden lg:flex flex-col justify-between py-5 px-3.5 z-30 select-none border-r border-white/[0.06] bg-[#090A0F] overflow-y-auto [scrollbar-width:none]">
+        <aside className="w-[220px] shrink-0 sticky top-0 h-[100dvh] hidden lg:flex flex-col justify-between py-5 px-3 z-30 select-none border-r border-white/[0.06] bg-[#090A0F] overflow-y-auto [scrollbar-width:none]">
           <div>
-            {/* Logo Talovin ở trên cùng (có cả Icon T và Tên Talovin) */}
+            {/* Wordmark Talovin ở trên cùng (nét nghệ, không dùng ô vuông chữ T) */}
             <div
               className="cursor-pointer hover:opacity-90 active:scale-95 transition-all px-2 mb-6"
               onClick={handleLogoRefresh}
               title="Talovin - Về đầu trang"
             >
-              <TalovinLogo size={28} showText={true} />
+              <TalovinLogo size={22} showText={true} />
             </div>
 
             {/* Các mục điều hướng có cả Icon và Tên rõ ràng */}
@@ -3624,9 +3653,9 @@ const Home = ({ initialTab }) => {
         </aside>
 
         {/* ============================================================== */}
-        {/* CỘT 2: KHU VỰC SẢNH CHÍNH Ở GIỮA (flex-1 min-w-0, bg-[#0D0F14]) */}
+        {/* KHÔNG GIAN SẢNH MỞ RỘNG (flex-1 min-w-0, bg-[#0D0F14])        */}
         {/* ============================================================== */}
-        <main className="flex-1 min-w-0 min-h-[100dvh] bg-[#0D0F14] border-r border-white/[0.06] flex flex-col relative pb-28 lg:pb-12 overflow-x-hidden">
+        <main className="flex-1 min-w-0 min-h-[100dvh] bg-[#0D0F14] flex flex-col relative pb-28 lg:pb-12 overflow-x-hidden">
 
           {/* ============================================================== */}
           {/* THANH HEADER DÍNH TRÊN CÙNG (STICKY HEADER)                     */}
@@ -4098,13 +4127,13 @@ const Home = ({ initialTab }) => {
 
 
           {/* ============================================================== */}
-          {/* TAB: DANH SÁCH BÀI VIẾT (Chỉ ở Sảnh trực tuyến, Thịnh hành hoặc Đã lưu) */}
+          {/* TAB: DANH SÁCH BÀI VIẾT (LIVE SOCIAL LOUNGE)                  */}
           {/* ============================================================== */}
           {(activeTab === 'feed' || activeTab === 'trending' || activeTab === 'saved') && (
-            <div className="posts-stream-container w-full max-w-[760px] mx-auto px-0 sm:px-6">
+            <div className="posts-stream-container w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
               {/* BANNER KẾT QUẢ TÌM KIẾM THÔNG MINH */}
               {activeSearchQuery && (
-                <div className="search-status-banner flex items-center justify-between p-3.5 mb-3 rounded-2xl bg-[#141414] border border-[#222222] shadow-sm animate-fade-in">
+                <div className="search-status-banner flex items-center justify-between p-3.5 mb-5 rounded-2xl bg-[#141414] border border-[#222222] shadow-sm animate-fade-in">
                   <div className="flex items-center gap-2 min-w-0">
                     <Search size={14} className="text-sky-400 flex-shrink-0" />
                     <span className="text-xs text-zinc-300 truncate">
@@ -4117,7 +4146,7 @@ const Home = ({ initialTab }) => {
                   <button
                     type="button"
                     onClick={clearSearch}
-                    className="flex-shrink-0 text-xs text-zinc-400 hover:text-white flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#1c1c1c] hover:bg-[#252525] border border-[#2e2e2e] transition-all"
+                    className="flex-shrink-0 text-xs text-zinc-400 hover:text-white flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#1c1c1c] hover:bg-[#252525] border border-[#2e2e2e] transition-all cursor-pointer"
                   >
                     <X size={12} />
                     <span>Đặt lại</span>
@@ -4127,7 +4156,7 @@ const Home = ({ initialTab }) => {
 
               {/* KHỐI NGƯỜI DÙNG PHÙ HỢP TÌM KIẾM */}
               {activeSearchQuery && !isSearching && searchUsers && searchUsers.length > 0 && (
-                <div className="mb-4 p-3.5 rounded-2xl bg-[#141414] border border-[#222222] shadow-sm animate-fade-in space-y-2.5">
+                <div className="mb-6 p-4 rounded-2xl bg-[#141414] border border-[#222222] shadow-sm animate-fade-in space-y-2.5">
                   <div className="flex items-center justify-between pb-1.5 border-b border-[#202020]">
                     <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-300">
                       <Users size={14} className="text-emerald-400" />
@@ -4137,7 +4166,7 @@ const Home = ({ initialTab }) => {
                       {searchUsers.length} tài khoản
                     </span>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
                     {searchUsers.slice(0, 6).map((u) => (
                       <div
                         key={u.id}
@@ -4195,6 +4224,269 @@ const Home = ({ initialTab }) => {
                 </div>
               )}
 
+              {/* ============================================================== */}
+              {/* TẦNG 1: KHU VỰC TRỰC TUYẾN & TƯƠNG TÁC NHANH (LIVE LOUNGE DECK) */}
+              {/* ============================================================== */}
+              {activeTab === 'feed' && !activeSearchQuery && !activeFilterTag && (
+                <div className="mb-7">
+                  <div className="flex items-center justify-between mb-3 px-1">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      <h2 className="text-xs font-bold text-zinc-300 uppercase tracking-wider font-mono">
+                        Live Social Lounge Deck
+                      </h2>
+                    </div>
+                    <span className="text-[11px] text-zinc-500 font-mono hidden sm:inline">
+                      Không gian tương tác trực tiếp
+                    </span>
+                  </div>
+
+                  {/* 3 khối thẻ ngang: Mobile vuốt trượt ngang mượt mà, Desktop xếp 3 cột */}
+                  <div className="flex gap-3.5 overflow-x-auto no-scrollbar snap-x snap-mandatory pb-2 -mx-3 px-3 sm:mx-0 sm:px-0 md:grid md:grid-cols-3 md:gap-4 md:overflow-visible">
+                    {/* KHỐI 1: SÓNG FM 5 GIÂY */}
+                    <div className="w-[84vw] max-w-[320px] shrink-0 snap-start md:w-auto p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-[#121620] via-[#0E121B] to-[#0A0D14] border border-emerald-500/20 shadow-lg flex flex-col justify-between relative overflow-hidden group">
+                      <div className="absolute -top-10 -right-10 w-28 h-28 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
+
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center text-emerald-400 shrink-0">
+                              <Radio size={16} className={isPlayingRadio ? "animate-pulse" : ""} />
+                            </div>
+                            <div>
+                              <h3 className="text-xs font-bold text-white uppercase tracking-wider font-sans">
+                                Sóng FM 5 Giây
+                              </h3>
+                              <p className="text-[10px] text-emerald-400 font-mono">
+                                {isPlayingRadio ? "96.4 MHz • Đang phát trực tiếp" : "96.4 MHz • Voice ngẫu nhiên"}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0" />
+                        </div>
+
+                        {/* Thanh sóng âm & bài hát */}
+                        <div className="py-2.5 px-3 rounded-xl bg-black/40 border border-white/[0.05] mb-3 flex items-center justify-between">
+                          <div className="flex items-center gap-1 h-5">
+                            <span className={`w-1 rounded-full bg-emerald-400 transition-all ${isPlayingRadio ? "h-5 animate-pulse" : "h-2"}`} />
+                            <span className={`w-1 rounded-full bg-emerald-400/80 transition-all ${isPlayingRadio ? "h-3 animate-bounce" : "h-2.5"}`} />
+                            <span className={`w-1 rounded-full bg-emerald-400 transition-all ${isPlayingRadio ? "h-4 animate-pulse" : "h-1.5"}`} />
+                            <span className={`w-1 rounded-full bg-emerald-400/70 transition-all ${isPlayingRadio ? "h-3 animate-bounce" : "h-3"}`} />
+                            <span className={`w-1 rounded-full bg-emerald-400 transition-all ${isPlayingRadio ? "h-5 animate-pulse" : "h-2"}`} />
+                          </div>
+                          <p className="text-xs font-medium text-zinc-300 truncate max-w-[130px] px-2">
+                            {currentTrack ? (currentTrack.title || currentTrack.name) : "Sunset Coffee Vibe"}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={togglePlayRadio}
+                            className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 flex items-center justify-center text-white transition-colors cursor-pointer shrink-0"
+                            title={isPlayingRadio ? "Tạm dừng" : "Nghe nhạc"}
+                          >
+                            {isPlayingRadio ? <Pause size={11} /> : <Play size={11} className="ml-0.5" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Nút Dò sóng & Thu âm */}
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setIsSpeedMatchOpen(true)}
+                          className="py-2 px-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                        >
+                          <Radio size={13} />
+                          <span>Dò sóng 5s</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsComposerModalOpen(true);
+                            setTimeout(() => startVoiceRecording?.(), 300);
+                          }}
+                          className="py-2 px-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-zinc-200 border border-white/10 text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                        >
+                          <Mic size={13} className="text-emerald-400" />
+                          <span>Thu âm 5s</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* KHỐI 2: THẺ BÀI HÔM NAY (CÓ Ô TRẢ LỜI TRỰC TIẾP TẠI CHỖ) */}
+                    <div className="w-[84vw] max-w-[320px] shrink-0 snap-start md:w-auto p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-[#1C1812] via-[#15121B] to-[#0E0C14] border border-amber-500/20 shadow-lg flex flex-col justify-between relative overflow-hidden group">
+                      <div className="absolute -top-10 -right-10 w-28 h-28 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
+
+                      <div>
+                        <div className="flex items-center justify-between mb-2.5">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/25 flex items-center justify-center text-amber-400 shrink-0">
+                              <Dices size={16} />
+                            </div>
+                            <div>
+                              <h3 className="text-xs font-bold text-white uppercase tracking-wider font-sans">
+                                Thẻ Bài Hôm Nay
+                              </h3>
+                              <p className="text-[10px] text-amber-400/90 font-mono">
+                                Phá tan khoảng cách
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setQuickChallengeIdx((prev) => (prev + 1) % QUICK_CHALLENGES.length)}
+                            className="text-[11px] text-zinc-400 hover:text-amber-300 transition-colors flex items-center gap-1 cursor-pointer bg-white/[0.04] px-2 py-1 rounded-lg border border-white/[0.06]"
+                            title="Đổi thẻ câu hỏi khác"
+                          >
+                            <RotateCcw size={11} />
+                            <span>Đổi thẻ</span>
+                          </button>
+                        </div>
+
+                        {/* Câu hỏi lớn rõ nét */}
+                        <div className="p-3 rounded-xl bg-black/40 border border-white/[0.06] mb-3 min-h-[58px] flex items-center">
+                          <p className="text-xs text-zinc-200 font-medium leading-relaxed italic line-clamp-2">
+                            "{QUICK_CHALLENGES[quickChallengeIdx]}"
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Ô nhập câu trả lời nhanh trực tiếp ngay bên dưới */}
+                      <form onSubmit={handleQuickChallengeAnswer} className="flex items-center gap-1.5 pt-1">
+                        <input
+                          type="text"
+                          placeholder="Nhập nhanh câu trả lời..."
+                          value={quickChallengeAnswer}
+                          onChange={(e) => setQuickChallengeAnswer(e.target.value)}
+                          className="flex-1 min-w-0 bg-white/[0.05] border border-white/[0.08] focus:border-amber-400/50 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none transition-colors font-sans"
+                        />
+                        <button
+                          type="submit"
+                          disabled={isSubmittingQuickAnswer}
+                          className="py-2 px-3 rounded-xl bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-zinc-950 text-xs font-bold transition-all shrink-0 cursor-pointer shadow-sm active:scale-95 flex items-center gap-1"
+                        >
+                          {isSubmittingQuickAnswer ? (
+                            <Loader2 size={13} className="animate-spin" />
+                          ) : (
+                            <>
+                              <span>Gửi</span>
+                              <Send size={11} />
+                            </>
+                          )}
+                        </button>
+                      </form>
+                    </div>
+
+                    {/* KHỐI 3: PHÒNG & NGƯỜI ĐANG ONLINE (1-CHẠM NHẮN TIN / VÀO PHÒNG) */}
+                    <div className="w-[84vw] max-w-[320px] shrink-0 snap-start md:w-auto p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-[#111726] via-[#0E1320] to-[#0A0E18] border border-sky-500/20 shadow-lg flex flex-col justify-between relative overflow-hidden group">
+                      <div className="absolute -top-10 -right-10 w-28 h-28 bg-sky-500/10 rounded-full blur-2xl pointer-events-none" />
+
+                      <div>
+                        <div className="flex items-center justify-between mb-2.5">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-xl bg-sky-500/15 border border-sky-500/25 flex items-center justify-center text-sky-400 shrink-0">
+                              <Users size={16} />
+                            </div>
+                            <div>
+                              <h3 className="text-xs font-bold text-white uppercase tracking-wider font-sans">
+                                Đang Trực Tuyến
+                              </h3>
+                              <p className="text-[10px] text-sky-400 font-mono">
+                                {activeLoungeUsers.length} người • {publicRooms.length} phòng mở
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleSwitchTab('rooms')}
+                            className="text-[11px] text-sky-400 hover:text-sky-300 font-medium transition-colors cursor-pointer"
+                          >
+                            Tất cả →
+                          </button>
+                        </div>
+
+                        {/* Danh sách người online 1-chạm để nhắn tin */}
+                        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1 mb-2.5">
+                          {activeLoungeUsers.length === 0 ? (
+                            <p className="text-xs text-zinc-500 italic py-1">Chưa có thành viên khác online</p>
+                          ) : (
+                            activeLoungeUsers.slice(0, 6).map((u) => (
+                              <div
+                                key={u.id}
+                                onClick={() => navigate(`/messages/${u.id}`, { state: { from: location.pathname + location.search } })}
+                                className="relative cursor-pointer group shrink-0"
+                                title={`${u.name} (@${u.account}) - Bấm để nhắn tin 1-chạm`}
+                              >
+                                <div className="w-8 h-8 rounded-full ring-2 ring-transparent group-hover:ring-sky-400 transition-all overflow-hidden">
+                                  <UserAvatar
+                                    avatarUrl={u.avatar}
+                                    username={u.account}
+                                    name={u.name}
+                                    userId={u.id}
+                                    size={32}
+                                  />
+                                </div>
+                                <span className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-[#0E1320]" />
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Phòng đàm thoại nổi bật nhất hoặc nút tạo phòng */}
+                      <div className="pt-1">
+                        {publicRooms.length > 0 ? (
+                          <div
+                            onClick={() => onRoomCardClick(publicRooms[0])}
+                            className="p-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.07] transition-all cursor-pointer flex items-center justify-between"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className="w-6 h-6 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center shrink-0">
+                                <Radio size={12} className="animate-pulse" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold text-white truncate max-w-[130px]">
+                                  #{publicRooms[0].nameroom || publicRooms[0].name || "Phòng thảo luận"}
+                                </p>
+                                <p className="text-[10px] text-zinc-400 font-mono">
+                                  {publicRooms[0].soluong || 1} người đang nghe
+                                </p>
+                              </div>
+                            </div>
+                            <span className="text-[11px] font-semibold text-sky-400 shrink-0">Vào →</span>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setIsCreateModalOpen(true)}
+                            className="w-full py-2 px-3 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-zinc-200 border border-white/10 text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                          >
+                            <Plus size={13} className="text-sky-400" />
+                            <span>+ Mở phòng mới</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ============================================================== */}
+              {/* TẦNG 2: BẢNG KHOẢNH KHẮC CỘNG ĐỒNG (LƯỚI 2 CỘT NOTE CARDS)     */}
+              {/* ============================================================== */}
+              {!activeSearchQuery && (
+                <div className="flex items-center justify-between mb-4 px-1">
+                  <div className="flex items-center gap-2">
+                    <Sparkles size={15} className="text-indigo-400" />
+                    <h2 className="text-xs font-bold text-zinc-300 uppercase tracking-wider font-mono">
+                      Bảng Khoảnh Khắc Cộng Đồng
+                    </h2>
+                  </div>
+                  <span className="text-[11px] text-zinc-500 font-mono">
+                    {displayedPosts.length} khoảnh khắc
+                  </span>
+                </div>
+              )}
+
               {/* TRẠNG THÁI ĐANG TÌM KIẾM */}
               {isSearching ? (
                 <div className="py-14 text-center text-zinc-400 font-mono">
@@ -4203,33 +4495,27 @@ const Home = ({ initialTab }) => {
                   <p className="text-[11px] text-zinc-600 mt-1">Áp dụng thuật toán đối soát ngữ nghĩa & xếp hạng tương tác</p>
                 </div>
               ) : (loadingPosts && posts.length === 0) ? (
-                <div className="flex flex-col w-full divide-y divide-white/[0.06]">
-                  {[1, 2, 3].map((i) => (
-                    <div key={`skel-init-${i}`} className="px-4 sm:px-6 py-5 animate-pulse">
-                      <div className="flex items-start gap-3.5">
-                        {/* Hình tròn avatar */}
+                /* SKELETON LƯỚI 2 CỘT CHO NOTE CARDS */
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-5 w-full">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={`skel-init-${i}`} className="p-5 rounded-2xl bg-[#12151D] border border-white/[0.06] animate-pulse space-y-3.5">
+                      <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-white/[0.04] shrink-0" />
-                        <div className="flex-1 space-y-3 pt-1">
-                          {/* 2 thanh chữ giả */}
-                          <div className="flex items-center gap-2">
-                            <div className="h-3.5 w-28 bg-white/[0.06] rounded-md" />
-                            <div className="h-3 w-16 bg-white/[0.03] rounded-md" />
-                          </div>
-                          <div className="space-y-2">
-                            <div className="h-3 w-full bg-white/[0.04] rounded-md" />
-                            <div className="h-3 w-5/6 bg-white/[0.03] rounded-md" />
-                            <div className="h-3 w-2/3 bg-white/[0.03] rounded-md" />
-                          </div>
-                          {/* Khung nội dung mờ */}
-                          {i === 2 && (
-                            <div className="h-44 w-full bg-white/[0.03] rounded-xl border border-white/[0.04]" />
-                          )}
-                          <div className="pt-2 flex items-center gap-6">
-                            <div className="h-4 w-12 bg-white/[0.04] rounded-md" />
-                            <div className="h-4 w-12 bg-white/[0.04] rounded-md" />
-                            <div className="h-4 w-12 bg-white/[0.04] rounded-md" />
-                          </div>
+                        <div className="space-y-1.5 flex-1">
+                          <div className="h-3.5 w-28 bg-white/[0.06] rounded-md" />
+                          <div className="h-2.5 w-16 bg-white/[0.03] rounded-md" />
                         </div>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="h-3 w-full bg-white/[0.04] rounded-md" />
+                        <div className="h-3 w-4/5 bg-white/[0.03] rounded-md" />
+                      </div>
+                      {i % 2 === 0 && (
+                        <div className="h-40 w-full bg-white/[0.03] rounded-xl border border-white/[0.04]" />
+                      )}
+                      <div className="pt-2 flex items-center justify-between border-t border-white/[0.04]">
+                        <div className="h-4 w-16 bg-white/[0.04] rounded-md" />
+                        <div className="h-4 w-20 bg-white/[0.04] rounded-md" />
                       </div>
                     </div>
                   ))}
@@ -4249,7 +4535,8 @@ const Home = ({ initialTab }) => {
                   )}
                 </div>
               ) : (
-                <div className="flex flex-col w-full divide-y divide-white/[0.06]">
+                <div className="w-full">
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-5 w-full">
                   {displayedPosts.map((post) => {
                     const currentReaction = REACTION_EMOJIS.find(e => e.type === post.myReaction);
                     const isSaved = Array.isArray(savedPostIds) && savedPostIds.includes(post.id);
@@ -4265,10 +4552,10 @@ const Home = ({ initialTab }) => {
                       <article
                         key={post.id}
                         id={`post-${post.id}`}
-                        className="px-4 sm:px-6 py-5 hover:bg-white/[0.015] transition-colors cursor-pointer"
+                        className="rounded-2xl bg-[#12151D]/90 hover:bg-[#161A24] border border-white/[0.07] hover:border-white/[0.14] p-4 sm:p-5 shadow-lg transition-all duration-200 cursor-pointer flex flex-col justify-between group"
                         onClick={(e) => handlePostCardClick(e, post)}
                       >
-                        {/* Bố cục chuẩn 2 cột Threads / Linear */}
+                        {/* Bố cục Note Card Sảnh tương tác trực tiếp */}
                         <div className="flex items-start gap-3.5">
                           {/* Cột trái (40px): Avatar tròn của người đăng */}
                           <div
@@ -4567,40 +4854,75 @@ const Home = ({ initialTab }) => {
                               )}
                             </div>
 
-                            {/* Dòng 3: Hàng icon Tim, Bình luận, Chia sẻ tinh gọn */}
-                            <div className="flex items-center gap-6 pt-1 text-zinc-400">
-                              <PostReactionDock
-                                post={post}
-                                onReact={handleReactPost}
-                                activePickerId={activeReactionPicker}
-                                setActivePickerId={setActiveReactionPicker}
-                              />
+                            {/* Thanh Tương Tác Đối Thoại Sảnh (KHÔNG DÙNG HÀNG 3 ICON THREADS) */}
+                            <div className="pt-3 border-t border-white/[0.06] flex items-center justify-between gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
+                              {/* Cụm 1: Thả cảm xúc & Nút thảo luận */}
+                              <div className="flex items-center gap-2">
+                                <PostReactionDock
+                                  post={post}
+                                  onReact={handleReactPost}
+                                  activePickerId={activeReactionPicker}
+                                  setActivePickerId={setActiveReactionPicker}
+                                />
 
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handlePostCardClick(e, post, true);
-                                }}
-                                className={`flex items-center gap-1.5 text-xs hover:text-white transition-colors cursor-pointer ${selectedThreadPost?.id === post.id ? 'text-white font-semibold' : ''
-                                  }`}
-                                title="Bình luận"
-                              >
-                                <MessageSquare size={16} strokeWidth={1.5} />
-                                <span className="font-mono text-xs">{post.commentsCount || 0}</span>
-                              </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handlePostCardClick(e, post, true);
+                                  }}
+                                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 hover:text-white transition-colors cursor-pointer text-xs font-medium border border-white/[0.05] ${selectedThreadPost?.id === post.id ? 'text-white bg-white/10' : ''}`}
+                                  title="Xem thảo luận"
+                                >
+                                  <MessageSquare size={13} strokeWidth={1.5} />
+                                  <span className="font-mono text-[11px]">{post.commentsCount || 0}</span>
+                                </button>
+                              </div>
 
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSharePost(post);
-                                }}
-                                className="flex items-center gap-1.5 text-xs hover:text-white transition-colors cursor-pointer"
-                                title="Chia sẻ bài viết"
-                              >
-                                <Share2 size={16} strokeWidth={1.5} />
-                              </button>
+                              {/* Cụm 2: Nhắn riêng & Gửi voice & Chia sẻ */}
+                              <div className="flex items-center gap-1.5">
+                                {!isMe && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        navigate(`/messages/${post.authorId || post.userId}`, { state: { from: location.pathname + location.search } });
+                                      }}
+                                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-zinc-300 hover:text-white border border-white/[0.08] text-xs font-medium transition-all cursor-pointer active:scale-95"
+                                      title="Nhắn riêng cho tác giả"
+                                    >
+                                      <Send size={12} className="text-sky-400" />
+                                      <span>Nhắn riêng</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        navigate(`/messages/${post.authorId || post.userId}`, { state: { from: location.pathname + location.search, autoRecordVoice: true } });
+                                      }}
+                                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 text-xs font-medium transition-all cursor-pointer active:scale-95"
+                                      title="Gửi voice trực tiếp cho tác giả"
+                                    >
+                                      <Mic size={12} className="text-emerald-400" />
+                                      <span>Gửi voice</span>
+                                    </button>
+                                  </>
+                                )}
+
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSharePost(post);
+                                  }}
+                                  className="p-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 hover:text-white transition-colors cursor-pointer border border-white/[0.05]"
+                                  title="Chia sẻ bài viết"
+                                >
+                                  <Share2 size={13} strokeWidth={1.5} />
+                                </button>
+                              </div>
                             </div>
 
                             {/* Khu vực bình luận: Chỉ mở khi người dùng click */}
@@ -4825,26 +5147,23 @@ const Home = ({ initialTab }) => {
                       </article>
                     );
                   })}
+                  </div>
 
                   {/* SKELETON KHI ĐANG TẢI THÊM BÀI VIẾT (INFINITE SCROLL) */}
                   {isFetchingMore && (
-                    <div className="divide-y divide-white/[0.06] border-t border-white/[0.06]">
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-5 w-full mt-4">
                       {[1, 2].map((i) => (
-                        <div key={`skel-more-${i}`} className="px-4 sm:px-6 py-5 animate-pulse">
-                          <div className="flex items-start gap-3.5">
-                            {/* Hình tròn avatar */}
+                        <div key={`skel-more-${i}`} className="p-5 rounded-2xl bg-[#12151D] border border-white/[0.06] animate-pulse space-y-3">
+                          <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-white/[0.04] shrink-0" />
-                            <div className="flex-1 space-y-2.5 pt-1">
-                              {/* 2 thanh chữ giả */}
-                              <div className="flex items-center gap-2">
-                                <div className="h-3.5 w-28 bg-white/[0.06] rounded-md" />
-                                <div className="h-3 w-16 bg-white/[0.03] rounded-md" />
-                              </div>
-                              <div className="space-y-1.5">
-                                <div className="h-3 w-full bg-white/[0.04] rounded-md" />
-                                <div className="h-3 w-3/4 bg-white/[0.03] rounded-md" />
-                              </div>
+                            <div className="flex-1 space-y-1.5">
+                              <div className="h-3.5 w-28 bg-white/[0.06] rounded-md" />
+                              <div className="h-2.5 w-16 bg-white/[0.03] rounded-md" />
                             </div>
+                          </div>
+                          <div className="space-y-1.5">
+                            <div className="h-3 w-full bg-white/[0.04] rounded-md" />
+                            <div className="h-3 w-3/4 bg-white/[0.03] rounded-md" />
                           </div>
                         </div>
                       ))}
@@ -4856,7 +5175,7 @@ const Home = ({ initialTab }) => {
 
                   {/* THÔNG BÁO KHI ĐÃ TẢI HẾT BÀI VIẾT */}
                   {!hasMore && displayedPosts.length > 0 && !activeSearchQuery && (
-                    <div className="py-8 text-center select-none border-t border-white/[0.04]">
+                    <div className="py-8 text-center select-none border-t border-white/[0.04] mt-4">
                       <p className="text-xs text-zinc-500 font-sans tracking-wide">
                         Bạn đã xem hết các khoảnh khắc mới nhất
                       </p>
@@ -4873,7 +5192,7 @@ const Home = ({ initialTab }) => {
           {/* TAB: CỘNG ĐỒNG & NHÓM THẢO LUẬN */}
           {/* ============================================================== */}
           {activeTab === 'groups' && (
-            <div className="w-full max-w-[760px] mx-auto px-4 sm:px-6">
+            <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 py-4">
               <SectionErrorBoundary>
                 <CommunitySection
                   currentUserId={currentUserId}
@@ -4901,7 +5220,7 @@ const Home = ({ initialTab }) => {
           {/* TAB: BẠN BÈ & KẾT NỐI (HIỂN THỊ NGUYÊN BẢN TRỌN MÀN HÌNH)     */}
           {/* ============================================================== */}
           {activeTab === 'friends' && (
-            <div className="w-full max-w-[760px] mx-auto px-4 sm:px-6">
+            <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 py-4">
               <SectionErrorBoundary>
                 <FriendsSection
                   currentUserId={currentUserId}
@@ -5090,211 +5409,6 @@ const Home = ({ initialTab }) => {
             );
           })()}
         </main>
-
-        {/* ============================================================== */}
-        {/* CỘT 3: BẢNG TRỰC TUYẾN SẢNH (340px) - NEO CỐ ĐỊNH BÊN PHẢI   */}
-        {/* ============================================================== */}
-        <aside className="w-[340px] shrink-0 hidden xl:flex flex-col sticky top-0 h-[100dvh] p-5 gap-5 bg-[#090A0F] border-l border-white/[0.06] overflow-y-auto [scrollbar-width:none] select-none">
-          {/* KHỐI 1: ĐANG HOẠT ĐỘNG TRONG SẢNH */}
-          <div className="p-4 rounded-2xl bg-[#111319] border border-white/[0.06] flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <h3 className="text-xs font-bold text-[#F3F4F6] uppercase tracking-wider font-sans">
-                  Đang trong Sảnh ({activeLoungeUsers.length})
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleSwitchTab('friends')}
-                className="text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
-              >
-                Xem tất cả
-              </button>
-            </div>
-
-            {activeLoungeUsers.length === 0 ? (
-              <p className="text-xs text-zinc-500 py-2">Hiện chưa có thành viên nào khác trong sảnh.</p>
-            ) : (
-              <div className="grid grid-cols-5 gap-2.5 pt-1">
-                {activeLoungeUsers.map((u) => (
-                  <div
-                    key={u.id}
-                    onClick={() => navigate(`/messages/${u.id}`, { state: { from: location.pathname + location.search } })}
-                    className="group relative flex flex-col items-center gap-1 cursor-pointer"
-                    title={`${u.name} (@${u.account}) - Bấm để nhắn tin`}
-                  >
-                    <div className="relative">
-                      <UserAvatar
-                        avatarUrl={u.avatar}
-                        username={u.account}
-                        name={u.name}
-                        userId={u.id}
-                        size={40}
-                        className="group-hover:ring-2 group-hover:ring-white/30 transition-all rounded-full"
-                      />
-                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-[#111319]" />
-                    </div>
-                    <span className="text-[10px] text-zinc-400 truncate max-w-[50px] group-hover:text-white transition-colors">
-                      {u.name.split(' ')[0]}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* KHỐI 2: SÓNG FM & THẺ BÀI NHANH */}
-          <div className="p-4 rounded-2xl bg-[#111319] border border-white/[0.06] flex flex-col gap-3.5">
-            {/* Sóng FM 1-chạm */}
-            <div className="flex flex-col gap-2 pb-3 border-b border-white/[0.06]">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Radio size={14} className="text-emerald-400" />
-                  <span className="text-xs font-bold text-[#F3F4F6] uppercase tracking-wider font-sans">
-                    Sóng FM Trực Tuyến
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsSpeedMatchOpen(true)}
-                  className="text-[11px] text-emerald-400 hover:text-emerald-300 font-medium transition-colors cursor-pointer"
-                >
-                  Dò sóng →
-                </button>
-              </div>
-
-              <div className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.05]">
-                <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
-                    <Radio size={15} className={isPlayingRadio ? "animate-pulse" : ""} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold text-[#F3F4F6] truncate">
-                      {currentTrack ? (currentTrack.title || currentTrack.name) : "Tần số Talovin FM"}
-                    </p>
-                    <p className="text-[10.5px] text-zinc-500 font-mono">
-                      {isPlayingRadio ? '96.4 MHz • Đang phát' : '96.4 MHz • Sẵn sàng'}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={togglePlayRadio}
-                  className="w-8 h-8 rounded-full bg-white text-zinc-950 hover:bg-zinc-200 active:scale-95 flex items-center justify-center transition-all shrink-0 cursor-pointer shadow-sm"
-                  title={isPlayingRadio ? "Tạm dừng" : "Phát sóng"}
-                >
-                  {isPlayingRadio ? <Pause size={13} className="fill-zinc-950" /> : <Play size={13} className="fill-zinc-950 ml-0.5" />}
-                </button>
-              </div>
-            </div>
-
-            {/* Thẻ bài gợi ý nhanh */}
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Dices size={14} className="text-amber-400" />
-                  <span className="text-xs font-bold text-[#F3F4F6] uppercase tracking-wider font-sans">
-                    Thẻ Bài Ngẫu Nhiên
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsPartyWheelOpen(true)}
-                  className="text-[11px] text-amber-400 hover:text-amber-300 font-medium transition-colors cursor-pointer"
-                >
-                  Mở bộ bài →
-                </button>
-              </div>
-
-              <div className="p-3 rounded-xl bg-amber-500/[0.04] border border-amber-500/15 flex flex-col gap-2.5">
-                <p className="text-xs text-zinc-300 leading-relaxed italic">
-                  "{QUICK_CHALLENGES[quickChallengeIdx]}"
-                </p>
-                <div className="flex items-center gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setQuickChallengeIdx((prev) => (prev + 1) % QUICK_CHALLENGES.length)}
-                    className="flex-1 py-1.5 px-2.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-zinc-300 text-[11px] font-medium transition-colors cursor-pointer text-center"
-                  >
-                    Đổi thẻ khác
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNewPostContent(`[Thử thách]: "${QUICK_CHALLENGES[quickChallengeIdx]}"\n\n`);
-                      setIsComposerModalOpen(true);
-                    }}
-                    className="flex-1 py-1.5 px-2.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[11px] font-semibold transition-colors cursor-pointer text-center"
-                  >
-                    Bàn luận
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* KHỐI 3: PHÒNG ĐÀM THOẠI ĐANG MỞ */}
-          <div className="p-4 rounded-2xl bg-[#111319] border border-white/[0.06] flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Radio size={14} className="text-sky-400" />
-                <h3 className="text-xs font-bold text-[#F3F4F6] uppercase tracking-wider font-sans">
-                  Phòng Đàm Thoại ({publicRooms.length})
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleSwitchTab('rooms')}
-                className="text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
-              >
-                Xem tất cả
-              </button>
-            </div>
-
-            {publicRooms.length === 0 ? (
-              <div className="py-3 text-center flex flex-col items-center gap-2">
-                <p className="text-xs text-zinc-500">Chưa có phòng voice công khai nào.</p>
-                <button
-                  type="button"
-                  onClick={() => setIsCreateModalOpen(true)}
-                  className="px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-zinc-200 text-xs font-medium border border-white/10 transition-colors cursor-pointer"
-                >
-                  + Tạo phòng mới
-                </button>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {publicRooms.slice(0, 3).map((room) => (
-                  <div
-                    key={room.id}
-                    onClick={() => onRoomCardClick(room)}
-                    className="p-2.5 rounded-xl bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.05] transition-all cursor-pointer flex items-center justify-between group"
-                  >
-                    <div className="min-w-0 flex-1 pr-2">
-                      <p className="text-xs font-semibold text-zinc-200 group-hover:text-white truncate">
-                        #{room.nameroom || room.roomName || room.name || `Phòng ${room.id}`}
-                      </p>
-                      <p className="text-[10.5px] text-zinc-500 font-mono">
-                        {room.soluong || 1} người đang nghe
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onRoomCardClick(room);
-                      }}
-                      className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white text-zinc-300 hover:text-zinc-950 font-semibold text-[11px] transition-all cursor-pointer"
-                    >
-                      Vào
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </aside>
       </div>
 
       {/* NÚT TẠO BÀI VIẾT NỔI (+ ĐĂNG) TRÊN MOBILE */}
