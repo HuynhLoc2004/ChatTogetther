@@ -1,13 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Compass, Users, Radio, UserCheck, User } from 'lucide-react';
+import { Compass, Users, Radio, MessageSquare } from 'lucide-react';
 
 export const MobileBottomNav = ({
-  activeTab = 'feed', // 'feed' | 'groups' | 'friends' | 'profile'
+  activeTab = 'feed', // 'feed' | 'groups' | 'fm' | 'messages'
   unreadMessagesCount = 0,
-  pendingFriendsCount = 0,
   onOpenFm = null,
-  onOpenFriends = null,
   onSwitchTab = null
 }) => {
   const navigate = useNavigate();
@@ -64,103 +62,73 @@ export const MobileBottomNav = ({
     }
   };
 
-  const handleFriendsClick = () => {
-    if (onSwitchTab) {
-      onSwitchTab('friends');
-    } else if (onOpenFriends) {
-      onOpenFriends();
-    } else {
-      navigate('/friends');
-    }
-  };
-
-  const handleProfileClick = () => {
-    navigate('/profile');
+  const handleMessagesClick = () => {
+    navigate('/messages');
   };
 
   return (
     <nav
-      className="mobile-bottom-nav lg:hidden fixed bottom-0 left-0 right-0 bg-[#161922]/95 backdrop-blur-md border-t border-white/10 grid grid-cols-5 items-center justify-items-center z-50 px-1 select-none"
+      className="mobile-bottom-nav lg:hidden fixed bottom-0 left-0 right-0 bg-[#111319]/95 backdrop-blur-md border-t border-white/[0.08] grid grid-cols-4 items-center justify-items-center z-50 px-2 select-none"
       style={{
         paddingBottom: 'max(8px, env(safe-area-inset-bottom))',
-        height: 'calc(62px + env(safe-area-inset-bottom, 0px))'
+        height: 'calc(58px + env(safe-area-inset-bottom, 0px))'
       }}
     >
       {/* 1. Sảnh */}
       <button 
         type="button"
-        className={`b-nav-item w-full min-h-[44px] flex flex-col items-center justify-center gap-1 transition-all active:scale-90 cursor-pointer ${
-          activeTab === 'feed' ? 'text-white font-semibold' : 'text-[#94A3B8] hover:text-[#F8FAFC]'
+        className={`w-full min-h-[44px] flex flex-col items-center justify-center gap-1 transition-colors cursor-pointer ${
+          activeTab === 'feed' ? 'text-[#F3F4F6] font-semibold' : 'text-[#9CA3AF] hover:text-[#F3F4F6]'
         }`}
         onClick={handleSanhClick}
         title="Sảnh trực tuyến"
       >
-        <div className={`p-1.5 rounded-xl transition-all ${activeTab === 'feed' ? 'bg-white/10 shadow-sm' : ''}`}>
-          <Compass size={22} strokeWidth={1.75} />
-        </div>
-        <span className="text-[10px] tracking-tight font-medium">Sảnh</span>
+        <Compass size={20} strokeWidth={1.75} />
+        <span className="text-[11px] font-medium tracking-tight">Sảnh</span>
       </button>
 
       {/* 2. Cộng đồng */}
       <button 
         type="button"
-        className={`b-nav-item w-full min-h-[44px] flex flex-col items-center justify-center gap-1 transition-all active:scale-90 cursor-pointer ${
-          activeTab === 'groups' ? 'text-white font-semibold' : 'text-[#94A3B8] hover:text-[#F8FAFC]'
+        className={`w-full min-h-[44px] flex flex-col items-center justify-center gap-1 transition-colors cursor-pointer ${
+          activeTab === 'groups' ? 'text-[#F3F4F6] font-semibold' : 'text-[#9CA3AF] hover:text-[#F3F4F6]'
         }`}
         onClick={handleCommunityClick}
         title="Cộng đồng"
       >
-        <div className={`p-1.5 rounded-xl transition-all ${activeTab === 'groups' ? 'bg-white/10 shadow-sm' : ''}`}>
-          <Users size={22} strokeWidth={1.75} />
-        </div>
-        <span className="text-[10px] tracking-tight font-medium">Cộng đồng</span>
+        <Users size={20} strokeWidth={1.75} />
+        <span className="text-[11px] font-medium tracking-tight">Cộng đồng</span>
       </button>
 
-      {/* 3. Dò FM (Gradient Indigo -> Violet phát sáng nhẹ shadow-indigo-500/30) */}
-      <div className="b-nav-cell flex items-center justify-center w-full min-h-[44px]">
-        <button 
-          type="button"
-          className="w-12 h-12 rounded-full bg-gradient-to-tr from-[#6366F1] to-[#8B5CF6] text-white shadow-lg shadow-indigo-500/30 flex items-center justify-center hover:opacity-95 active:scale-90 transition-all border border-white/20 cursor-pointer"
-          onClick={handleFmClick}
-          title="Mở Trạm Dò Sóng FM"
-        >
-          <Radio size={22} strokeWidth={1.75} className="text-white" />
-        </button>
-      </div>
-
-      {/* 4. Bạn bè & Kết nối */}
+      {/* 3. Sóng FM */}
       <button 
         type="button"
-        className={`b-nav-item w-full min-h-[44px] flex flex-col items-center justify-center gap-1 transition-all active:scale-90 cursor-pointer ${
-          activeTab === 'friends' ? 'text-white font-semibold' : 'text-[#94A3B8] hover:text-[#F8FAFC]'
+        className={`w-full min-h-[44px] flex flex-col items-center justify-center gap-1 transition-colors cursor-pointer ${
+          activeTab === 'fm' ? 'text-[#F3F4F6] font-semibold' : 'text-[#9CA3AF] hover:text-[#F3F4F6]'
         }`}
-        onClick={handleFriendsClick}
-        title="Bạn bè"
+        onClick={handleFmClick}
+        title="Sóng FM"
       >
-        <div className={`relative p-1.5 rounded-xl transition-all ${activeTab === 'friends' ? 'bg-white/10 shadow-sm' : ''}`}>
-          <UserCheck size={22} strokeWidth={1.75} />
-          {pendingFriendsCount > 0 && (
-            <span className="absolute -top-1 -right-2 min-w-[16px] h-[16px] px-1 rounded-full bg-[#10B981] text-zinc-950 text-[9px] font-mono font-bold flex items-center justify-center border-2 border-[#161922] shadow-md animate-pulse">
-              {pendingFriendsCount > 9 ? '9+' : pendingFriendsCount}
+        <Radio size={20} strokeWidth={1.75} />
+        <span className="text-[11px] font-medium tracking-tight">Sóng FM</span>
+      </button>
+
+      {/* 4. Tin nhắn */}
+      <button 
+        type="button"
+        className="w-full min-h-[44px] flex flex-col items-center justify-center gap-1 transition-colors cursor-pointer text-[#9CA3AF] hover:text-[#F3F4F6] relative"
+        onClick={handleMessagesClick}
+        title="Tin nhắn"
+      >
+        <div className="relative">
+          <MessageSquare size={20} strokeWidth={1.75} />
+          {effectiveUnreadMessages > 0 && (
+            <span className="absolute -top-1 -right-2 min-w-[15px] h-[15px] px-1 rounded-full bg-white text-zinc-950 text-[9px] font-mono font-bold flex items-center justify-center shadow-sm">
+              {effectiveUnreadMessages > 9 ? '9+' : effectiveUnreadMessages}
             </span>
           )}
         </div>
-        <span className="text-[10px] tracking-tight font-medium">Bạn bè</span>
-      </button>
-
-      {/* 5. Hồ sơ */}
-      <button 
-        type="button"
-        className={`b-nav-item w-full min-h-[44px] flex flex-col items-center justify-center gap-1 transition-all active:scale-90 cursor-pointer ${
-          activeTab === 'profile' ? 'text-white font-semibold' : 'text-[#94A3B8] hover:text-[#F8FAFC]'
-        }`}
-        onClick={handleProfileClick}
-        title="Hồ sơ cá nhân"
-      >
-        <div className={`p-1.5 rounded-xl transition-all ${activeTab === 'profile' ? 'bg-white/10 shadow-sm' : ''}`}>
-          <User size={22} strokeWidth={1.75} />
-        </div>
-        <span className="text-[10px] tracking-tight font-medium">Hồ sơ</span>
+        <span className="text-[11px] font-medium tracking-tight">Tin nhắn</span>
       </button>
     </nav>
   );

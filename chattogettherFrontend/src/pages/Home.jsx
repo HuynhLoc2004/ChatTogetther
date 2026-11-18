@@ -3251,159 +3251,177 @@ const Home = ({ initialTab }) => {
         </div>
       )}
 
-      {/* KHUNG CĂN GIỮA TOÀN BỘ ỨNG DỤNG - DARK ZINC MATTE */}
-      <div className="app-main-layout">
+      {/* KHUNG CĂN GIỮA TOÀN BỘ ỨNG DỤNG - CANVAS #090A0F */}
+      <div className="min-h-screen w-full bg-[#090A0F] text-[#F3F4F6] flex justify-center selection:bg-white/20 select-none">
+        <div className="flex w-full max-w-[940px] justify-between relative">
 
-        {/* ============================================================== */}
-        {/* COMPACT ICON RAIL (72px) - CỐ ĐỊNH SÁT MÉP TRÁI */}
-        {/* ============================================================== */}
-        <aside className="compact-icon-rail hidden md:flex flex-col justify-between items-center w-[72px] min-w-[72px] h-screen sticky top-0 bg-[#0D0F14] border-r border-white/[0.06] py-5 px-2 z-30 select-none">
-          {/* Logo Talovin ở trên */}
-          <div className="flex flex-col items-center gap-6 w-full">
-            <div 
-              className="cursor-pointer transition-transform hover:scale-105 active:scale-95 group relative flex items-center justify-center"
-              onClick={handleLogoRefresh} 
-              title="Talovin - Về đầu trang"
-            >
-              <TalovinLogo size={32} showText={false} />
-              <div className="absolute left-[calc(100%+14px)] px-2.5 py-1 bg-[#1A1D26] text-white text-xs font-semibold rounded-lg shadow-xl border border-white/10 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 z-50">
-                Trang chủ Talovin
+          {/* ============================================================== */}
+          {/* THANH ĐIỀU HƯỚNG BÊN TRÁI (220px) - CỐ ĐỊNH, KHÔNG BỊ TRỐNG TRẢI */}
+          {/* ============================================================== */}
+          <aside className="w-[220px] min-w-[220px] h-screen sticky top-0 hidden lg:flex flex-col justify-between py-5 px-3 z-30 select-none border-r border-white/[0.07] bg-[#090A0F]">
+            <div>
+              {/* Logo Talovin ở trên cùng (có cả Icon T và Tên Talovin) */}
+              <div 
+                className="cursor-pointer hover:opacity-90 active:scale-95 transition-all px-2 mb-6"
+                onClick={handleLogoRefresh} 
+                title="Talovin - Về đầu trang"
+              >
+                <TalovinLogo size={28} showText={true} />
               </div>
-            </div>
 
-            {/* Các icon điều hướng chính */}
-            <nav className="flex flex-col items-center gap-2.5 w-full">
-              {/* 1. Sảnh trực tuyến */}
-              <button
-                type="button"
-                onClick={() => { setActiveTab('feed'); setActiveFilterTag(null); setQuickFilter('all'); }}
-                className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-200 relative group cursor-pointer ${
-                  activeTab === 'feed'
-                    ? 'bg-gradient-to-tr from-[#6366F1] to-[#8B5CF6] text-white shadow-lg shadow-indigo-500/30'
-                    : 'text-zinc-400 hover:text-white hover:bg-white/[0.06]'
-                }`}
-              >
-                <Compass size={20} strokeWidth={1.75} />
-                <div className="absolute left-[calc(100%+14px)] px-2.5 py-1 bg-[#1A1D26] text-white text-xs font-semibold rounded-lg shadow-xl border border-white/10 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 z-50">
-                  Sảnh trực tuyến
-                </div>
-              </button>
-
-              {/* 2. Cộng đồng */}
-              <button
-                type="button"
-                onClick={() => handleSwitchTab('groups')}
-                className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-200 relative group cursor-pointer ${
-                  activeTab === 'groups'
-                    ? 'bg-gradient-to-tr from-[#6366F1] to-[#8B5CF6] text-white shadow-lg shadow-indigo-500/30'
-                    : 'text-zinc-400 hover:text-white hover:bg-white/[0.06]'
-                }`}
-              >
-                <Users size={20} strokeWidth={1.75} />
-                <div className="absolute left-[calc(100%+14px)] px-2.5 py-1 bg-[#1A1D26] text-white text-xs font-semibold rounded-lg shadow-xl border border-white/10 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 z-50">
-                  Cộng đồng
-                </div>
-              </button>
-
-              {/* 3. Phòng đàm thoại */}
-              <button
-                type="button"
-                onClick={() => handleSwitchTab('rooms')}
-                className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-200 relative group cursor-pointer ${
-                  activeTab === 'rooms'
-                    ? 'bg-gradient-to-tr from-[#6366F1] to-[#8B5CF6] text-white shadow-lg shadow-indigo-500/30'
-                    : 'text-zinc-400 hover:text-white hover:bg-white/[0.06]'
-                }`}
-              >
-                <Radio size={20} strokeWidth={1.75} />
-                {userAccessibleRooms.length > 0 && (
-                  <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                )}
-                <div className="absolute left-[calc(100%+14px)] px-2.5 py-1 bg-[#1A1D26] text-white text-xs font-semibold rounded-lg shadow-xl border border-white/10 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 z-50">
-                  Phòng đàm thoại ({userAccessibleRooms.length})
-                </div>
-              </button>
-
-              {/* 4. Tin nhắn */}
-              <button
-                type="button"
-                onClick={() => navigate('/messages', { state: { from: location.pathname + location.search } })}
-                className="w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-200 relative group cursor-pointer text-zinc-400 hover:text-white hover:bg-white/[0.06]"
-              >
-                <MessageSquare size={20} strokeWidth={1.75} />
-                {unreadMessagesCount > 0 && (
-                  <span className="absolute top-1.5 right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white font-bold text-[9px] flex items-center justify-center border-2 border-[#0D0F14] animate-pulse">
-                    {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
-                  </span>
-                )}
-                <div className="absolute left-[calc(100%+14px)] px-2.5 py-1 bg-[#1A1D26] text-white text-xs font-semibold rounded-lg shadow-xl border border-white/10 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 z-50">
-                  Tin nhắn {unreadMessagesCount > 0 ? `(${unreadMessagesCount})` : ''}
-                </div>
-              </button>
-
-              {/* 5. Đã lưu */}
-              <button
-                type="button"
-                onClick={() => handleSwitchTab('saved')}
-                className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-200 relative group cursor-pointer ${
-                  activeTab === 'saved'
-                    ? 'bg-gradient-to-tr from-[#6366F1] to-[#8B5CF6] text-white shadow-lg shadow-indigo-500/30'
-                    : 'text-zinc-400 hover:text-white hover:bg-white/[0.06]'
-                }`}
-              >
-                <Bookmark size={20} strokeWidth={1.75} />
-                <div className="absolute left-[calc(100%+14px)] px-2.5 py-1 bg-[#1A1D26] text-white text-xs font-semibold rounded-lg shadow-xl border border-white/10 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 z-50">
-                  Đã lưu ({Array.isArray(savedPostIds) ? savedPostIds.length : 0})
-                </div>
-              </button>
-
-              {/* Quản trị viên (nếu có quyền) */}
-              {isAdminUser && (
+              {/* Các mục điều hướng có cả Icon và Tên rõ ràng */}
+              <nav className="flex flex-col gap-1 w-full">
+                {/* 1. Sảnh trực tuyến */}
                 <button
                   type="button"
-                  onClick={() => navigate('/admin')}
-                  className="w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-200 relative group cursor-pointer text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 border border-emerald-500/20"
+                  onClick={() => { setActiveTab('feed'); setActiveFilterTag(null); setQuickFilter('all'); }}
+                  className={`flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer w-full text-left ${
+                    activeTab === 'feed'
+                      ? 'bg-white/[0.08] text-[#F3F4F6] font-semibold'
+                      : 'text-[#9CA3AF] hover:text-[#F3F4F6] hover:bg-white/[0.04]'
+                  }`}
                 >
-                  <Shield size={20} strokeWidth={1.75} />
-                  <div className="absolute left-[calc(100%+14px)] px-2.5 py-1 bg-[#1A1D26] text-emerald-400 text-xs font-semibold rounded-lg shadow-xl border border-emerald-500/30 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 z-50">
-                    Bảng Quản Trị
-                  </div>
+                  <Compass size={19} strokeWidth={1.75} />
+                  <span>Sảnh trực tuyến</span>
                 </button>
-              )}
-            </nav>
-          </div>
 
-          {/* Avatar tài khoản ở dưới cùng */}
-          <div 
-            className="cursor-pointer transition-transform hover:scale-105 active:scale-95 group relative"
-            onClick={() => navigate('/profile')}
-          >
-            <div className="relative">
-              <UserAvatar user={currentUser} size={38} />
-              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-[#0D0F14]" />
+                {/* 2. Cộng đồng */}
+                <button
+                  type="button"
+                  onClick={() => handleSwitchTab('groups')}
+                  className={`flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer w-full text-left ${
+                    activeTab === 'groups'
+                      ? 'bg-white/[0.08] text-[#F3F4F6] font-semibold'
+                      : 'text-[#9CA3AF] hover:text-[#F3F4F6] hover:bg-white/[0.04]'
+                  }`}
+                >
+                  <Users size={19} strokeWidth={1.75} />
+                  <span>Cộng đồng</span>
+                </button>
+
+                {/* 3. Phòng đàm thoại */}
+                <button
+                  type="button"
+                  onClick={() => handleSwitchTab('rooms')}
+                  className={`flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer w-full text-left ${
+                    activeTab === 'rooms'
+                      ? 'bg-white/[0.08] text-[#F3F4F6] font-semibold'
+                      : 'text-[#9CA3AF] hover:text-[#F3F4F6] hover:bg-white/[0.04]'
+                  }`}
+                >
+                  <Radio size={19} strokeWidth={1.75} />
+                  <span className="flex-1">Phòng đàm thoại</span>
+                  {userAccessibleRooms.length > 0 && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  )}
+                </button>
+
+                {/* 4. Tin nhắn */}
+                <button
+                  type="button"
+                  onClick={() => navigate('/messages', { state: { from: location.pathname + location.search } })}
+                  className="flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer w-full text-left text-[#9CA3AF] hover:text-[#F3F4F6] hover:bg-white/[0.04]"
+                >
+                  <MessageSquare size={19} strokeWidth={1.75} />
+                  <span className="flex-1">Tin nhắn</span>
+                  {unreadMessagesCount > 0 && (
+                    <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-white text-zinc-950 font-bold text-[10px] flex items-center justify-center">
+                      {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
+                    </span>
+                  )}
+                </button>
+
+                {/* 5. Đã lưu */}
+                <button
+                  type="button"
+                  onClick={() => handleSwitchTab('saved')}
+                  className={`flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer w-full text-left ${
+                    activeTab === 'saved'
+                      ? 'bg-white/[0.08] text-[#F3F4F6] font-semibold'
+                      : 'text-[#9CA3AF] hover:text-[#F3F4F6] hover:bg-white/[0.04]'
+                  }`}
+                >
+                  <Bookmark size={19} strokeWidth={1.75} />
+                  <span>Đã lưu</span>
+                </button>
+
+                {/* Quản trị viên (nếu có quyền) */}
+                {isAdminUser && (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/admin')}
+                    className="flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer w-full text-left text-zinc-400 hover:text-white hover:bg-white/[0.04]"
+                  >
+                    <Shield size={19} strokeWidth={1.75} />
+                    <span>Bảng Quản Trị</span>
+                  </button>
+                )}
+              </nav>
             </div>
-            <div className="absolute left-[calc(100%+14px)] bottom-0 px-2.5 py-1 bg-[#1A1D26] text-white text-xs font-semibold rounded-lg shadow-xl border border-white/10 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 z-50">
-              {currentUserName} (@{currentUserAccount})
-            </div>
-          </div>
-        </aside>
 
-        {/* ============================================================== */}
-        {/* CỘT 2: MAIN WORKSPACE (Sảnh trực tuyến & Tín hiệu đa phương tiện) */}
-        {/* ============================================================== */}
-        <main className="main-stream">
-
-          {/* ============================================================== */}
-          {/* THANH HEADER NỔI TỐI GIẢN PHÍA TRÊN (TOP BAR)                  */}
-          {/* ============================================================== */}
-          <header className="sticky top-0 z-20 w-full bg-[#0D0F14]/90 backdrop-blur-md border-b border-white/[0.06] px-4 sm:px-6 py-3 flex items-center justify-between gap-3 select-none">
-            {/* Bên trái: Tiêu đề không gian hiện tại & Bộ lọc nhanh dạng viên thuốc */}
-            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-              <div className="flex items-center gap-2 shrink-0">
-                <div className="md:hidden cursor-pointer" onClick={handleLogoRefresh}>
-                  <TalovinLogo size={28} showText={false} />
+            {/* Phía dưới: Trình phát nhạc mini & Hồ sơ tài khoản ở đáy */}
+            <div className="flex flex-col gap-2.5 w-full pt-4 border-t border-white/[0.06]">
+              {/* Trình phát nhạc mini */}
+              <div 
+                onClick={() => setShowMobileMusicSheet(true)}
+                className="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] transition-colors cursor-pointer flex items-center gap-2.5"
+                title="Trình phát nhạc không gian"
+              >
+                <div className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center text-zinc-300 shrink-0">
+                  <Music size={14} />
                 </div>
-                <h1 className="text-base sm:text-lg font-bold text-white tracking-tight font-sans whitespace-nowrap">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium text-[#F3F4F6] truncate">
+                    {currentTrack ? (currentTrack.title || currentTrack.name) : "Sunset Coffee Vibe"}
+                  </p>
+                  <p className="text-[10px] text-zinc-500 truncate">
+                    {isPlayingRadio ? 'Đang phát' : 'Tạm dừng'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    togglePlayRadio();
+                  }}
+                  className="w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-zinc-200 transition-colors shrink-0"
+                >
+                  {isPlayingRadio ? <Pause size={10} /> : <Play size={10} className="ml-0.5" />}
+                </button>
+              </div>
+
+              {/* Hồ sơ tài khoản ở đáy */}
+              <div
+                onClick={() => navigate('/profile')}
+                className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-white/[0.04] transition-colors cursor-pointer w-full"
+              >
+                <div className="relative">
+                  <UserAvatar user={currentUser} size={34} />
+                  <span className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-[#090A0F]" />
+                </div>
+                <div className="min-w-0 flex-1 text-left">
+                  <p className="text-xs font-semibold text-[#F3F4F6] truncate">{currentUserName}</p>
+                  <p className="text-[11px] text-zinc-500 font-mono truncate">@{currentUserAccount}</p>
+                </div>
+              </div>
+            </div>
+          </aside>
+
+          {/* ============================================================== */}
+          {/* CỘT 2: KHUNG NỘI DUNG CHÍNH Ở GIỮA (max-w-[680px], bg-[#111319]) */}
+          {/* ============================================================== */}
+          <main className="w-full max-w-[680px] min-h-screen bg-[#111319] border-x border-t border-white/[0.07] lg:rounded-t-2xl flex flex-col relative">
+
+            {/* ============================================================== */}
+            {/* THANH HEADER DÍNH TRÊN CÙNG (STICKY HEADER)                     */}
+            {/* ============================================================== */}
+            <header className="sticky top-0 z-30 h-14 w-full bg-[#111319]/80 backdrop-blur-md border-b border-white/[0.06] px-4 sm:px-6 flex items-center justify-between select-none lg:rounded-t-2xl">
+              {/* Bên trái: Logo trên mobile / Tiêu đề "Sảnh trực tuyến" trên desktop */}
+              <div className="flex items-center gap-3">
+                <div className="lg:hidden flex items-center cursor-pointer" onClick={handleLogoRefresh}>
+                  <TalovinLogo size={24} showText={true} />
+                </div>
+                <h1 className="hidden lg:block text-base font-semibold text-[#F3F4F6] tracking-tight font-sans">
                   {activeTab === 'feed' && "Sảnh trực tuyến"}
                   {activeTab === 'groups' && "Cộng đồng"}
                   {activeTab === 'rooms' && "Phòng đàm thoại"}
@@ -3413,134 +3431,79 @@ const Home = ({ initialTab }) => {
                 </h1>
               </div>
 
-              {/* Bộ lọc nhanh dạng viên thuốc (Tất cả, Thử thách, Tâm sự, Âm thanh) */}
-              {activeTab === 'feed' && (
-                <div className="hidden sm:flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none]">
-                  {[
-                    { id: 'all', label: 'Tất cả' },
-                    { id: 'challenge', label: 'Thử thách' },
-                    { id: 'confession', label: 'Tâm sự' },
-                    { id: 'audio', label: 'Âm thanh' }
-                  ].map((filter) => {
-                    const isActive = quickFilter === filter.id && !activeFilterTag;
-                    return (
-                      <button
-                        key={filter.id}
-                        type="button"
-                        onClick={() => {
-                          setQuickFilter(filter.id);
-                          setActiveFilterTag(null);
-                        }}
-                        className={`px-3 py-1 rounded-full text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
-                          isActive
-                            ? 'bg-white text-zinc-950 shadow-md'
-                            : 'bg-white/[0.05] hover:bg-white/10 text-zinc-400 hover:text-white border border-white/5'
-                        }`}
-                      >
-                        {filter.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Bên phải: Trình phát nhạc mini, Dò sóng FM, Bốc thẻ bài, Tìm kiếm, Thông báo */}
-            <div className="flex items-center gap-2 shrink-0">
-              {/* Trình phát nhạc mini ("Sunset Coffee Vibe" dạng pill nhỏ gọn) */}
-              <div 
-                className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-full bg-[#161922] border border-white/10 hover:border-white/20 transition-all cursor-pointer group"
-                onClick={() => setShowMobileMusicSheet(true)}
-                title="Bấm để mở trình phát nhạc không gian"
-              >
-                <div className="flex items-center gap-1 text-zinc-400">
-                  {isPlayingRadio ? (
-                    <div className="flex items-center gap-0.5 h-3">
-                      <span className="w-0.5 h-2 bg-emerald-400 rounded animate-pulse" />
-                      <span className="w-0.5 h-3 bg-emerald-400 rounded animate-pulse [animation-delay:0.2s]" />
-                      <span className="w-0.5 h-1.5 bg-emerald-400 rounded animate-pulse [animation-delay:0.4s]" />
-                    </div>
-                  ) : (
-                    <Music size={13} className="text-zinc-400 group-hover:text-white" />
-                  )}
-                </div>
-
-                <span className="text-xs font-medium text-zinc-200 truncate max-w-[85px] sm:max-w-[130px] hidden xs:inline">
-                  {currentTrack ? (currentTrack.title || currentTrack.name) : "Sunset Coffee Vibe"}
-                </span>
-
+              {/* Bên phải: Dò sóng FM, Bốc thẻ bài, Tìm kiếm, Thông báo, Nút "+ Đăng" (trên desktop) */}
+              <div className="flex items-center gap-2">
+                {/* Trình phát nhạc mini trên mobile */}
                 <button
                   type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    togglePlayRadio();
-                  }}
-                  className="w-5 h-5 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-zinc-200 transition-colors ml-0.5"
-                  title={isPlayingRadio ? "Tạm dừng" : "Phát nhạc"}
+                  onClick={() => setShowMobileMusicSheet(true)}
+                  className="lg:hidden w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                  title="Nhạc không gian"
                 >
-                  {isPlayingRadio ? <Pause size={10} /> : <Play size={10} className="ml-0.5" />}
+                  <Music size={15} strokeWidth={1.75} />
+                </button>
+
+                {/* Nút mở nhanh "Dò sóng FM" */}
+                <button
+                  type="button"
+                  onClick={() => setIsSpeedMatchOpen(true)}
+                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.05] hover:bg-white/[0.1] text-zinc-300 border border-white/[0.08] text-xs font-medium transition-colors cursor-pointer"
+                  title="Dò sóng FM"
+                >
+                  <Radio size={13} strokeWidth={1.75} />
+                  <span>Dò sóng FM</span>
+                </button>
+
+                {/* Nút "Bốc thẻ bài" */}
+                <button
+                  type="button"
+                  onClick={() => setIsPartyWheelOpen(true)}
+                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.05] hover:bg-white/[0.1] text-zinc-300 border border-white/[0.08] text-xs font-medium transition-colors cursor-pointer"
+                  title="Bốc thẻ bài"
+                >
+                  <Dices size={13} strokeWidth={1.75} />
+                  <span>Bốc thẻ bài</span>
+                </button>
+
+                {/* Icon Tìm kiếm */}
+                <button
+                  type="button"
+                  onClick={() => setShowMobileSearchBar(!showMobileSearchBar)}
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                  title="Tìm kiếm"
+                >
+                  <Search size={15} strokeWidth={1.75} />
+                </button>
+
+                {/* Icon Thông báo (Chuông) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !isNotifOpen;
+                    setIsNotifOpen(next);
+                    if (next) handleMarkAllNotificationsRead();
+                    requestNotificationPermission();
+                  }}
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-white relative transition-colors cursor-pointer"
+                  title="Thông báo"
+                >
+                  <Bell size={15} strokeWidth={1.75} />
+                  {notifications.filter(n => n.unread && n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM').length > 0 && (
+                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-white" />
+                  )}
+                </button>
+
+                {/* Nút "+ Đăng" trên desktop */}
+                <button
+                  type="button"
+                  onClick={() => setIsComposerModalOpen(true)}
+                  className="hidden lg:flex items-center gap-1 px-3.5 py-1.5 rounded-full bg-white text-zinc-950 font-semibold text-xs hover:bg-zinc-200 transition-colors shadow-sm cursor-pointer ml-1"
+                >
+                  <Plus size={14} strokeWidth={2} />
+                  <span>Đăng</span>
                 </button>
               </div>
-
-              {/* Nút mở nhanh "Dò sóng FM" */}
-              <button
-                type="button"
-                onClick={() => setIsSpeedMatchOpen(true)}
-                className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 text-xs font-semibold transition-all active:scale-95 cursor-pointer shadow-sm shadow-indigo-500/10"
-                title="Dò sóng FM & Kết nối 1-1"
-              >
-                <Radio size={13} strokeWidth={2} />
-                <span>Dò sóng FM</span>
-              </button>
-
-              {/* Nút "Bốc thẻ bài" */}
-              <button
-                type="button"
-                onClick={() => setIsPartyWheelOpen(true)}
-                className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-all active:scale-95 cursor-pointer shadow-sm shadow-amber-500/10"
-                title="Bốc thẻ bài thử thách & câu hỏi ngẫu nhiên"
-              >
-                <Dices size={13} strokeWidth={2} />
-                <span>Bốc thẻ bài</span>
-              </button>
-
-              {/* Icon Tìm kiếm (khi cần tra cứu nhanh) */}
-              <button
-                type="button"
-                onClick={() => setShowMobileSearchBar(!showMobileSearchBar)}
-                className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-95 border cursor-pointer ${
-                  showMobileSearchBar || activeSearchQuery
-                    ? 'bg-white text-zinc-950 border-white'
-                    : 'bg-[#161922] border-white/10 text-zinc-400 hover:text-white hover:border-white/20'
-                }`}
-                title="Tìm kiếm nội dung, chủ đề"
-              >
-                <Search size={15} strokeWidth={1.75} />
-              </button>
-
-              {/* Icon Thông báo (Chuông) */}
-              <button
-                type="button"
-                onClick={() => {
-                  const next = !isNotifOpen;
-                  setIsNotifOpen(next);
-                  if (next) {
-                    handleMarkAllNotificationsRead();
-                  }
-                  requestNotificationPermission();
-                }}
-                className="w-9 h-9 rounded-full bg-[#161922] border border-white/10 hover:border-white/20 relative flex items-center justify-center text-zinc-400 hover:text-white transition-all active:scale-95 cursor-pointer"
-                title="Thông báo sảnh"
-              >
-                <Bell size={15} strokeWidth={1.75} />
-                {notifications.filter(n => n.unread && n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM').length > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 min-w-[17px] h-[17px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-mono font-bold flex items-center justify-center border-2 border-[#0D0F14] shadow-sm animate-pulse">
-                    {notifications.filter(n => n.unread && n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM').length > 99 ? '99+' : notifications.filter(n => n.unread && n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM').length}
-                  </span>
-                )}
-              </button>
-            </div>
-          </header>
+            </header>
 
           {/* Thanh Search di động / xổ xuống (khi bấm kính lúp) */}
           {showMobileSearchBar && (
@@ -3906,16 +3869,16 @@ const Home = ({ initialTab }) => {
             )}
           </AnimatePresence>
 
-          {/* NÚT NỔI "+ CHIA SẺ KHOẢNH KHẮC" Ở GÓC DƯỚI BÊN PHẢI */}
-          <div className="fixed bottom-6 right-6 sm:bottom-8 sm:right-8 z-40">
+          {/* NÚT NỔI "+ ĐĂNG" TRÊN MOBILE (Góc dưới bên phải phía trên thanh đáy) */}
+          <div className="lg:hidden fixed bottom-20 right-4 z-40">
             <button
               type="button"
               onClick={() => setIsComposerModalOpen(true)}
-              className="h-12 px-5 rounded-full bg-gradient-to-r from-[#6366F1] to-[#8B5CF6] text-white font-semibold text-xs sm:text-sm flex items-center gap-2.5 shadow-2xl shadow-indigo-500/40 hover:scale-105 active:scale-95 transition-all cursor-pointer group"
-              title="Đăng bài hoặc chia sẻ âm thanh mới"
+              className="h-10 px-4 rounded-full bg-white text-zinc-950 font-semibold text-xs flex items-center gap-1.5 shadow-xl hover:bg-zinc-200 active:scale-95 transition-all cursor-pointer"
+              title="Đăng bài mới"
             >
-              <Plus size={18} strokeWidth={2.5} className="group-hover:rotate-90 transition-transform duration-200" />
-              <span>Chia sẻ khoảnh khắc</span>
+              <Plus size={15} strokeWidth={2.5} />
+              <span>Đăng</span>
             </button>
           </div>
 
@@ -4074,7 +4037,7 @@ const Home = ({ initialTab }) => {
                   )}
                 </div>
               ) : (
-                <div className="masonry-bento-grid columns-1 md:columns-2 xl:columns-3 gap-4 sm:gap-5 [column-fill:_balance] w-full">
+                <div className="flex flex-col w-full divide-y divide-white/[0.06]">
                   {displayedPosts.map((post) => {
                     const currentReaction = REACTION_EMOJIS.find(e => e.type === post.myReaction);
                     const isSaved = Array.isArray(savedPostIds) && savedPostIds.includes(post.id);
@@ -4090,383 +4053,343 @@ const Home = ({ initialTab }) => {
                       <article
                         key={post.id}
                         id={`post-${post.id}`}
-                        className={`post-item-card break-inside-avoid mb-4 sm:mb-5 rounded-[16px] p-4 sm:p-5 shadow-lg transition-all duration-200 cursor-pointer ${
-                          isChallengePost
-                            ? 'border-indigo-500/35 bg-gradient-to-b from-indigo-950/20 to-[#13161F] shadow-indigo-500/5 ring-1 ring-indigo-500/15'
-                            : 'border-white/[0.06] bg-[#13161F] hover:border-white/12'
-                        }`}
+                        className="px-4 sm:px-6 py-5 hover:bg-white/[0.015] transition-colors cursor-pointer"
                         onClick={(e) => handlePostCardClick(e, post)}
                       >
-                        {/* Thẻ Thử Thách Nổi Bật (Có nút Trả lời thẻ này) */}
-                        {isChallengePost && (
-                          <div className="flex items-center justify-between gap-2 mb-3 px-3 py-1.5 rounded-xl bg-indigo-500/15 border border-indigo-500/25">
-                            <div className="flex items-center gap-1.5 text-xs font-semibold text-indigo-300">
-                              <Sparkles size={13} className="text-indigo-400" />
-                              <span>Thẻ Thử Thách</span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setNewPostContent(`[Hưởng ứng Thử thách của @${post.authorNickname || post.authorAccount || 'bạn'}]: `);
-                                setIsComposerModalOpen(true);
-                              }}
-                              className="px-2.5 py-1 rounded-lg bg-indigo-500/25 hover:bg-indigo-500/40 text-indigo-200 border border-indigo-500/30 text-[11px] font-semibold flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
-                            >
-                              <Sparkles size={11} />
-                              <span>Trả lời thẻ này</span>
-                            </button>
+                        {/* Bố cục chuẩn 2 cột Threads / Linear */}
+                        <div className="flex items-start gap-3.5">
+                          {/* Cột trái (40px): Avatar tròn của người đăng */}
+                          <div
+                            className="w-10 h-10 min-w-10 rounded-full cursor-pointer hover:opacity-90 transition-opacity flex-shrink-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigateToProfile(post.authorId || post.userId);
+                            }}
+                          >
+                            <UserAvatar
+                              avatar={post.authorAvatar}
+                              name={post.authorNickname || post.authorAccount}
+                              size={40}
+                            />
                           </div>
-                        )}
 
-                        {post.groupId && (
-                          <div className="flex items-center justify-between pb-1.5 mb-2 text-xs text-zinc-400 border-b border-zinc-800/60">
-                            <div
-                              className="flex items-center gap-1.5 min-w-0 hover:text-zinc-200 cursor-pointer"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigate(`/communities/${post.groupId}`);
-                              }}
-                            >
-                              <Users size={13} className="text-zinc-400 shrink-0" />
-                              <span className="text-xs text-zinc-400 truncate">
-                                Đăng trong <strong className="font-semibold text-zinc-300 hover:underline">{post.groupName || 'Cộng đồng'}</strong>
-                              </span>
+                          {/* Cột phải: Chiếm toàn bộ không gian còn lại */}
+                          <div className="flex-1 min-w-0">
+                            {/* Dòng 1: Tên hiển thị (in đậm), @username, thời gian, nút lưu & menu 3 chấm */}
+                            <div className="flex items-center justify-between gap-2 mb-1.5">
+                              <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                                <span
+                                  className="font-bold text-sm text-[#F3F4F6] hover:underline cursor-pointer truncate max-w-[160px] sm:max-w-[220px]"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigateToProfile(post.authorId || post.userId);
+                                  }}
+                                >
+                                  {post.authorNickname || post.authorAccount || "Thành viên"}
+                                </span>
+
+                                {isFounder && (
+                                  <span className="font-mono text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700/80">
+                                    PRO
+                                  </span>
+                                )}
+
+                                <span
+                                  className="font-mono text-xs text-zinc-400 hover:text-zinc-300 cursor-pointer truncate"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigateToProfile(post.authorId || post.userId);
+                                  }}
+                                >
+                                  @{post.authorAccount || "user"}
+                                </span>
+                                <span className="text-zinc-600 text-xs">·</span>
+                                <span className="font-mono text-xs text-zinc-400 whitespace-nowrap">
+                                  {post.formattedTime || "Vừa xong"}
+                                </span>
+
+                                {post.groupId && (
+                                  <span
+                                    className="text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer truncate hidden sm:inline"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      navigate(`/communities/${post.groupId}`);
+                                    }}
+                                  >
+                                    trong <strong className="font-medium text-zinc-300">{post.groupName || 'Cộng đồng'}</strong>
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Nút lưu bài & menu 3 chấm */}
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleToggleSavePost(post.id);
+                                  }}
+                                  className={`p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.05] transition-colors cursor-pointer ${
+                                    isSaved ? 'text-amber-400' : ''
+                                  }`}
+                                  title={isSaved ? "Bỏ lưu bài viết" : "Lưu bài viết"}
+                                >
+                                  <Bookmark size={15} strokeWidth={1.5} fill={isSaved ? "currentColor" : "none"} />
+                                </button>
+
+                                <div className="relative">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setPostMenuOpenId(postMenuOpenId === post.id ? null : post.id);
+                                    }}
+                                    className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.05] transition-colors cursor-pointer"
+                                    title="Tùy chọn"
+                                  >
+                                    <MoreVertical size={15} strokeWidth={1.5} />
+                                  </button>
+
+                                  {postMenuOpenId === post.id && (
+                                    <div className="post-menu-dropdown animate-fade-in absolute right-0 top-full mt-1 z-50 bg-[#161922] border border-white/10 rounded-xl shadow-xl py-1 min-w-[140px]" onClick={(e) => e.stopPropagation()}>
+                                      {isMe ? (
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleOpenEditPost(post);
+                                            }}
+                                            className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 text-zinc-300 hover:bg-white/[0.06] hover:text-white"
+                                          >
+                                            <Edit3 size={13} /> Sửa bài viết
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleDeletePost(post.id);
+                                            }}
+                                            className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 text-rose-400 hover:bg-rose-500/10"
+                                          >
+                                            <Trash2 size={13} /> Xóa bài viết
+                                          </button>
+                                        </>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleOpenReportModal(post.id);
+                                          }}
+                                          className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 text-amber-400 hover:bg-amber-500/10"
+                                        >
+                                          <Flag size={13} /> Báo cáo vi phạm
+                                        </button>
+                                      )}
+
+                                      {isAdminUser && !isMe && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDeletePost(post.id);
+                                          }}
+                                          className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 text-rose-400 hover:bg-rose-500/10"
+                                        >
+                                          <Trash2 size={13} /> Xóa bài (Admin)
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
                             </div>
 
-                            {!post.isMemberOfGroup && (
+                            {/* Dòng 2: Nội dung bài viết */}
+                            <div className="space-y-3 mb-3">
+                              {/* Nếu là bài Thử thách: cắt bỏ chữ [Thử thách]: thô và hiển thị trong khối quote tinh tế */}
+                              {isChallengePost ? (
+                                <div className="p-3 sm:p-3.5 rounded-lg bg-white/[0.03] border-l-2 border-white/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                  <p className="text-[13.5px] leading-relaxed text-[#F3F4F6]">
+                                    {(post.content || '')
+                                      .replace(/^\[Thử thách\]:?\s*/i, '')
+                                      .replace(/^\[Challenge\]:?\s*/i, '')
+                                      .trim()}
+                                  </p>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setNewPostContent(`[Hưởng ứng Thử thách của @${post.authorNickname || post.authorAccount || 'bạn'}]: `);
+                                      setIsComposerModalOpen(true);
+                                    }}
+                                    className="self-start sm:self-center px-3 py-1 rounded-full bg-white text-zinc-950 text-xs font-semibold hover:bg-zinc-200 transition-colors shrink-0 shadow-sm"
+                                  >
+                                    Trả lời
+                                  </button>
+                                </div>
+                              ) : (
+                                post.content && (post.content.trim() !== 'Ghi âm giọng nói' || !parsedMedia.audioUrl) && (
+                                  <p className="text-[14px] leading-relaxed text-[#E5E7EB] whitespace-pre-line break-words">
+                                    {post.content}
+                                  </p>
+                                )
+                              )}
+
+                              {/* Media preview (Ảnh hoặc Video) */}
+                              {parsedMedia.mediaUrl && (
+                                <div
+                                  className="relative rounded-xl overflow-hidden bg-black/40 border border-white/[0.06] max-h-[440px] w-fit max-w-full cursor-pointer group/media"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setLightboxMedia({
+                                      url: parsedMedia.mediaUrl,
+                                      type: parsedMedia.mediaType,
+                                      author: post.authorNickname || post.authorName || post.author,
+                                      title: post.content
+                                    });
+                                  }}
+                                >
+                                  {parsedMedia.mediaType === 'video' ? (
+                                    <div className="relative">
+                                      <video
+                                        key={`vid-${post.id}-${unmutedVideoPosts[post.id] ? 'unmuted' : 'muted'}`}
+                                        src={parsedMedia.mediaUrl}
+                                        autoPlay
+                                        loop
+                                        muted={!unmutedVideoPosts[post.id]}
+                                        playsInline
+                                        className="max-h-[440px] w-auto object-cover rounded-xl"
+                                      />
+                                      <div className="absolute bottom-2.5 left-2.5 flex items-center gap-2 z-10">
+                                        <button
+                                          type="button"
+                                          onClick={(e) => togglePostVideoSound(post.id, e)}
+                                          className="px-2.5 py-1 rounded-lg bg-black/80 backdrop-blur-md text-[11px] font-mono text-white/95 flex items-center gap-1.5 shadow-lg border border-white/10 hover:bg-black transition-all"
+                                          title={unmutedVideoPosts[post.id] ? "Tắt tiếng" : "Bật âm thanh video gốc"}
+                                        >
+                                          {unmutedVideoPosts[post.id] ? (
+                                            <>
+                                              <Volume2 size={13} className="text-emerald-400" />
+                                              <span>Bật tiếng</span>
+                                            </>
+                                          ) : (
+                                            <>
+                                              <VolumeX size={13} className="text-zinc-400" />
+                                              <span>Tắt tiếng</span>
+                                            </>
+                                          )}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <img
+                                      src={parsedMedia.mediaUrl}
+                                      alt="Ảnh bài viết"
+                                      loading="lazy"
+                                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                      className="max-h-[440px] w-auto object-cover rounded-xl"
+                                    />
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Trình phát Voice Note ngắn trên thẻ */}
+                              {parsedMedia.audioUrl && (
+                                <div
+                                  className="post-voice-player-pill"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => handleTogglePlayPostVoice(post.id, parsedMedia.audioUrl)}
+                                    className="btn-play-card-voice"
+                                    title={playingVoicePostId === post.id ? "Tạm dừng" : "Nghe ghi âm"}
+                                  >
+                                    {playingVoicePostId === post.id ? <Pause size={13} /> : <Play size={13} />}
+                                  </button>
+                                  <div className="card-voice-waveform">
+                                    <span className={`card-wave-bar ${playingVoicePostId === post.id ? 'active' : ''}`}></span>
+                                    <span className={`card-wave-bar ${playingVoicePostId === post.id ? 'active' : ''}`}></span>
+                                    <span className={`card-wave-bar ${playingVoicePostId === post.id ? 'active' : ''}`}></span>
+                                    <span className={`card-wave-bar ${playingVoicePostId === post.id ? 'active' : ''}`}></span>
+                                    <span className={`card-wave-bar ${playingVoicePostId === post.id ? 'active' : ''}`}></span>
+                                    <span className={`card-wave-bar ${playingVoicePostId === post.id ? 'active' : ''}`}></span>
+                                  </div>
+                                  <span className="font-mono text-xs text-zinc-300">
+                                    {parsedMedia.audioDuration ? `00:${parsedMedia.audioDuration < 10 ? `0${parsedMedia.audioDuration}` : parsedMedia.audioDuration}` : '00:15'}
+                                  </span>
+                                </div>
+                              )}
+
+                              {/* Vibes / Chủ đề */}
+                              {post.vibe && typeof post.vibe === 'string' && (
+                                <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                                  {parsePostVibes(post.vibe).map((item, idx) => {
+                                    const meta = getVibeIcon(item.text);
+                                    const IconComponent = item.isTag ? Tag : meta.icon;
+                                    const isActive = activeFilterTag === item.text;
+                                    return (
+                                      <button
+                                        key={idx}
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setActiveFilterTag(isActive ? null : item.text);
+                                        }}
+                                        className={`post-topic-chip ${isActive ? 'active' : ''}`}
+                                        title={`Lọc theo chủ đề: ${item.text}`}
+                                      >
+                                        {item.isTag ? (
+                                          <span className="text-zinc-500 font-mono text-[10px]">#</span>
+                                        ) : (
+                                          <IconComponent size={12} className={meta.color || 'text-zinc-400'} />
+                                        )}
+                                        <span>{item.text}</span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Dòng 3: Hàng icon Tim, Bình luận, Chia sẻ tinh gọn */}
+                            <div className="flex items-center gap-6 pt-1 text-zinc-400">
+                              <PostReactionDock
+                                post={post}
+                                onReact={handleReactPost}
+                                activePickerId={activeReactionPicker}
+                                setActivePickerId={setActiveReactionPicker}
+                              />
+
                               <button
                                 type="button"
-                                onClick={async (e) => {
+                                onClick={(e) => {
                                   e.stopPropagation();
-                                  try {
-                                    await axiosClient.post(`/groups/${post.groupId}/join`);
-                                    toast.success(`Đã gia nhập ${post.groupName || 'cộng đồng'}!`);
-                                    setPosts(prev => prev.map(p => p.groupId === post.groupId ? { ...p, isMemberOfGroup: true } : p));
-                                  } catch (err) {
-                                    toast.error(err.response?.data?.message || 'Không thể gia nhập');
-                                  }
+                                  handlePostCardClick(e, post, true);
                                 }}
-                                className="px-2.5 py-1 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[11px] font-medium border border-zinc-700 transition-all flex items-center gap-1 active:scale-95 shrink-0"
+                                className={`flex items-center gap-1.5 text-xs hover:text-white transition-colors cursor-pointer ${
+                                  selectedThreadPost?.id === post.id ? 'text-white font-semibold' : ''
+                                }`}
+                                title="Bình luận"
                               >
-                                <Plus size={11} />
-                                <span>Tham gia</span>
+                                <MessageSquare size={16} strokeWidth={1.5} />
+                                <span className="font-mono text-xs">{post.commentsCount || 0}</span>
                               </button>
-                            )}
-                          </div>
-                        )}
 
-                        <div className="post-header-row">
-                        <div
-                          className="post-avatar-click cursor-pointer"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigateToProfile(post.authorId || post.userId);
-                          }}
-                        >
-                          <UserAvatar
-                            avatar={post.authorAvatar}
-                            name={post.authorNickname || post.authorAccount}
-                            size={36}
-                          />
-                        </div>
-
-                        <div className="post-header-info">
-                          <div className="post-name-line">
-                            <span
-                              className="author-display-name cursor-pointer hover:underline"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigateToProfile(post.authorId || post.userId);
-                              }}
-                            >
-                              {post.authorNickname || post.authorAccount || "Thành viên"}
-                            </span>
-
-                            {/* Badge PRO chuẩn Dark Zinc Minimalist */}
-                            {isFounder && (
-                              <span className="font-mono text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-200 border border-zinc-700">
-                                PRO
-                              </span>
-                            )}
-
-                            <span
-                              className="author-handle font-mono cursor-pointer hover:underline"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigateToProfile(post.authorId || post.userId);
-                              }}
-                            >
-                              @{post.authorAccount || "user"}
-                            </span>
-                            <span className="text-zinc-600">·</span>
-                            <span className="post-time-meta font-mono">{post.formattedTime || "Vừa xong"}</span>
-
-                            {activeTab === 'trending' && (post.searchHits || 0) > 0 && (
-                              <span className="font-mono text-[10px] text-zinc-300 bg-zinc-800/90 px-1.5 py-0.5 rounded border border-zinc-700/60 flex items-center gap-1" title="Lượt tìm kiếm bài viết theo thuật toán AI">
-                                🔥 {post.searchHits} tìm kiếm
-                              </span>
-                            )}
-
-                            {post.vibe && typeof post.vibe === 'string' && (
-                              <div className="post-topics-bar">
-                                {parsePostVibes(post.vibe).map((item, idx) => {
-                                  const meta = getVibeIcon(item.text);
-                                  const IconComponent = item.isTag ? Tag : meta.icon;
-                                  const isActive = activeFilterTag === item.text;
-                                  return (
-                                    <button
-                                      key={idx}
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setActiveFilterTag(isActive ? null : item.text);
-                                      }}
-                                      className={`post-topic-chip ${isActive ? 'active' : ''}`}
-                                      title={`Lọc theo chủ đề: ${item.text}`}
-                                    >
-                                      {item.isTag ? (
-                                        <span className="text-zinc-500 font-mono text-[10px]">#</span>
-                                      ) : (
-                                        <IconComponent size={12} className={meta.color || 'text-zinc-400'} />
-                                      )}
-                                      <span>{item.text}</span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Nút lưu & menu thao tác */}
-                        <div className="post-header-actions">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleToggleSavePost(post.id);
-                            }}
-                            className={`btn-save-post ${isSaved ? 'saved' : ''}`}
-                            title={isSaved ? "Bỏ lưu bài viết" : "Lưu bài viết"}
-                          >
-                            <Bookmark size={15} strokeWidth={1.5} fill={isSaved ? "currentColor" : "none"} />
-                          </button>
-
-                          <div className="post-menu-container">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setPostMenuOpenId(postMenuOpenId === post.id ? null : post.id);
-                              }}
-                              className="post-menu-btn"
-                              title="Tùy chọn bài viết"
-                            >
-                              <MoreVertical size={15} strokeWidth={1.5} />
-                            </button>
-
-                            {postMenuOpenId === post.id && (
-                              <div className="post-menu-dropdown animate-fade-in" onClick={(e) => e.stopPropagation()}>
-                                {isMe ? (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleOpenEditPost(post);
-                                      }}
-                                      className="post-menu-item"
-                                    >
-                                      <Edit3 size={13} /> Sửa bài viết
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDeletePost(post.id);
-                                      }}
-                                      className="post-menu-item danger"
-                                    >
-                                      <Trash2 size={13} /> Xóa bài viết
-                                    </button>
-                                  </>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleOpenReportModal(post.id);
-                                    }}
-                                    className="post-menu-item text-amber-400 hover:text-amber-300"
-                                  >
-                                    <Flag size={13} /> Báo cáo vi phạm
-                                  </button>
-                                )}
-
-                                {isAdminUser && !isMe && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDeletePost(post.id);
-                                    }}
-                                    className="post-menu-item danger"
-                                  >
-                                    <Trash2 size={13} /> Xóa bài (Admin)
-                                  </button>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Nội dung bài viết */}
-                      <div
-                        className="post-body-content"
-                      >
-                        {/* Chỉ hiển thị chữ nếu không phải là nhãn fallback 'Ghi âm giọng nói' khi đã có audioUrl */}
-                        {post.content && (post.content.trim() !== 'Ghi âm giọng nói' || !parsedMedia.audioUrl) && (
-                          <p>{post.content}</p>
-                        )}
-
-                        {/* Hiển thị Media: Ảnh hoặc Video ngắn tự động lặp muted + Click để mở toàn màn hình (Lightbox) */}
-                        {parsedMedia.mediaUrl && (
-                          <div
-                            className="post-media-frame cursor-pointer group/media relative"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setLightboxMedia({
-                                url: parsedMedia.mediaUrl,
-                                type: parsedMedia.mediaType,
-                                author: post.authorNickname || post.authorName || post.author,
-                                title: post.content
-                              });
-                            }}
-                            title="Bấm để xem chi tiết / phóng to toàn màn hình"
-                          >
-                            {parsedMedia.mediaType === 'video' ? (
-                              <div className="relative w-full overflow-hidden rounded-xl">
-                                <video
-                                  key={`vid-${post.id}-${unmutedVideoPosts[post.id] ? 'unmuted' : 'muted'}`}
-                                  src={parsedMedia.mediaUrl}
-                                  autoPlay
-                                  loop
-                                  muted={!unmutedVideoPosts[post.id]}
-                                  playsInline
-                                  className="post-media-video group-hover/media:brightness-95 transition-all"
-                                />
-                                <div className="absolute bottom-2.5 left-2.5 flex items-center gap-2 z-10">
-                                  <button
-                                    type="button"
-                                    onClick={(e) => togglePostVideoSound(post.id, e)}
-                                    className="px-2.5 py-1 rounded-lg bg-black/80 backdrop-blur-md text-[11px] font-mono text-white/95 flex items-center gap-1.5 shadow-lg border border-white/10 hover:bg-black transition-all"
-                                    title={unmutedVideoPosts[post.id] ? "Tắt tiếng" : "Bật âm thanh video gốc"}
-                                  >
-                                    {unmutedVideoPosts[post.id] ? (
-                                      <>
-                                        <Volume2 size={13} className="text-emerald-400" />
-                                        <span>Bật tiếng</span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <VolumeX size={13} className="text-zinc-400" />
-                                        <span>Tắt tiếng</span>
-                                      </>
-                                    )}
-                                  </button>
-                                </div>
-                                <div className="absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-lg bg-black/75 backdrop-blur-md text-[11px] font-mono text-white/95 flex items-center gap-1.5 shadow-lg opacity-85 group-hover/media:opacity-100 transition-opacity">
-                                  <Maximize2 size={12} />
-                                  <span>Phóng to</span>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="relative w-full overflow-hidden rounded-xl">
-                                <img
-                                  src={parsedMedia.mediaUrl}
-                                  alt="Khoảnh khắc"
-                                  loading="lazy"
-                                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                  className="post-media-image group-hover/media:scale-[1.01] transition-transform duration-300"
-                                />
-                                <div className="absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-lg bg-black/75 backdrop-blur-md text-[11px] font-mono text-white/95 flex items-center gap-1.5 shadow-lg opacity-0 group-hover/media:opacity-100 transition-opacity">
-                                  <Maximize2 size={12} />
-                                  <span>Xem lớn</span>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Trình phát Voice Note ngắn trên thẻ */}
-                        {parsedMedia.audioUrl && (
-                          <div
-                            className="post-voice-player-pill"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => handleTogglePlayPostVoice(post.id, parsedMedia.audioUrl)}
-                              className="btn-play-card-voice"
-                              title={playingVoicePostId === post.id ? "Tạm dừng" : "Nghe ghi âm"}
-                            >
-                              {playingVoicePostId === post.id ? <Pause size={13} /> : <Play size={13} />}
-                            </button>
-                            <div className="card-voice-waveform">
-                              <span className={`card-wave-bar ${playingVoicePostId === post.id ? 'active' : ''}`}></span>
-                              <span className={`card-wave-bar ${playingVoicePostId === post.id ? 'active' : ''}`}></span>
-                              <span className={`card-wave-bar ${playingVoicePostId === post.id ? 'active' : ''}`}></span>
-                              <span className={`card-wave-bar ${playingVoicePostId === post.id ? 'active' : ''}`}></span>
-                              <span className={`card-wave-bar ${playingVoicePostId === post.id ? 'active' : ''}`}></span>
-                              <span className={`card-wave-bar ${playingVoicePostId === post.id ? 'active' : ''}`}></span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSharePost(post);
+                                }}
+                                className="flex items-center gap-1.5 text-xs hover:text-white transition-colors cursor-pointer"
+                                title="Chia sẻ bài viết"
+                              >
+                                <Share2 size={16} strokeWidth={1.5} />
+                              </button>
                             </div>
-                            <span className="font-mono text-xs text-zinc-300">
-                              {parsedMedia.audioDuration ? `00:${parsedMedia.audioDuration < 10 ? `0${parsedMedia.audioDuration}` : parsedMedia.audioDuration}` : '00:15'}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Thanh tương tác (Phẳng, không viền pill quanh từng nút) */}
-                      <div className="post-actions-toolbar">
-
-                        {/* Reaction Dock: Hover desktop, Long-press drag mobile, Top 5 emojis, Compact count */}
-                        <PostReactionDock
-                          post={post}
-                          onReact={handleReactPost}
-                          activePickerId={activeReactionPicker}
-                          setActivePickerId={setActiveReactionPicker}
-                        />
-
-                        {/* Nút bình luận: Mở modal chi tiết & focus ô nhập */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handlePostCardClick(e, post, true);
-                          }}
-                          className={`action-btn ${selectedThreadPost?.id === post.id ? 'text-sky-400 font-semibold' : ''}`}
-                          title="Bình luận & Thảo luận"
-                        >
-                          <MessageSquare size={15} strokeWidth={1.5} />
-                          <span className="font-mono text-xs">{post.commentsCount || 0}</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSharePost(post);
-                          }}
-                          className="action-btn"
-                          title="Chia sẻ bài viết"
-                        >
-                          <Share2 size={15} strokeWidth={1.5} />
-                          <span className="text-xs">Chia sẻ</span>
-                        </button>
-                      </div>
 
                       {/* Khu vực bình luận: Chỉ mở khi người dùng click */}
                       {expandedComments[post.id] && (
@@ -4685,7 +4608,9 @@ const Home = ({ initialTab }) => {
                           </div>
                         </div>
                       )}
-                    </article>
+                          </div>
+                        </div>
+                      </article>
                   );
                 })}
                 </div>
@@ -4917,6 +4842,7 @@ const Home = ({ initialTab }) => {
             );
           })()}
         </main>
+        </div>
       </div>
 
       {/* THANH ĐIỀU HƯỚNG DÀNH CHO MOBILE - 5 TAB CHUẨN THỰC DỤNG */}
@@ -6974,15 +6900,18 @@ const Home = ({ initialTab }) => {
           color: #f87171;
         }
 
-        /* ================= CỘT 2: STREAM CHÍNH MỞ RỘNG TOÀN BỘ CHIỀU NGANG ================= */
+        /* ================= CỘT 2: KHUNG NỘI DUNG LIỀN MẠCH (UNIFIED CONTAINER 680PX) ================= */
         .main-stream {
           flex: 1;
-          max-width: 100%;
+          max-width: 680px;
           width: 100%;
           min-width: 0;
-          border-left: none;
-          border-right: none;
-          background: var(--social-bg);
+          border-left: 1px solid rgba(255, 255, 255, 0.07);
+          border-right: 1px solid rgba(255, 255, 255, 0.07);
+          border-top: 1px solid rgba(255, 255, 255, 0.07);
+          border-top-left-radius: 16px;
+          border-top-right-radius: 16px;
+          background: #111319;
           min-height: 100vh;
           display: flex;
           flex-direction: column;
@@ -6990,7 +6919,7 @@ const Home = ({ initialTab }) => {
 
         .posts-stream-container {
           width: 100%;
-          padding: 16px 20px;
+          padding: 0;
           box-sizing: border-box;
         }
 
@@ -9046,37 +8975,28 @@ const Home = ({ initialTab }) => {
         }
         @keyframes spin { 100% { transform: rotate(360deg); } }
 
-        /* Phân tầng màn hình rộng */
-        @media (min-width: 1600px) {
-          .app-main-layout { max-width: 100%; }
-          .main-stream { max-width: 100%; }
-        }
-
         /* RESPONSIVE */
-        @media (max-width: 1080px) {
-          .widgets-sidebar { display: none; }
+        @media (max-width: 1024px) {
+          .main-stream { 
+            max-width: 100%; 
+            border-left: none;
+            border-right: none;
+            border-top: none;
+            border-radius: 0;
+            padding-bottom: calc(100px + env(safe-area-inset-bottom, 24px)); 
+          }
         }
 
         @media (max-width: 768px) {
           .nav-sidebar { display: none; }
           .mobile-top-bar { display: flex; }
-          .mobile-bottom-nav { 
-            display: grid; 
-            grid-template-columns: repeat(5, 1fr);
-            align-items: center;
-            justify-items: center;
-            transition: transform 0.2s ease, opacity 0.2s ease;
-          }
-          /* Tự động trượt ẩn thanh điều hướng dưới khi bàn phím mở hoặc đang gõ để tránh cấn input */
-          body:has(textarea:focus) .mobile-bottom-nav,
-          body:has(input:focus) .mobile-bottom-nav {
-            transform: translateY(100%);
-            opacity: 0;
-            pointer-events: none;
-          }
           .main-stream { 
             max-width: 100%; 
             min-width: 0; 
+            border-left: none;
+            border-right: none;
+            border-top: none;
+            border-radius: 0;
             padding-bottom: calc(120px + env(safe-area-inset-bottom, 24px)); 
           }
           .stream-header {
