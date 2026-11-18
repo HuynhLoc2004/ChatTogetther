@@ -2086,7 +2086,9 @@ export const DirectMessagePage = () => {
                         return;
                       }
                       const currentFrom = encodeURIComponent(location.pathname + (location.search || ''));
-                      navigate(`/call/direct/${safeCallTargetId}?type=audio&from=${currentFrom}`);
+                      const nameParam = activePartner?.nickname || activePartner?.account ? `&name=${encodeURIComponent(activePartner.nickname || activePartner.account)}` : '';
+                      const avatarParam = activePartner?.avatar ? `&avatar=${encodeURIComponent(activePartner.avatar)}` : '';
+                      navigate(`/call/direct/${safeCallTargetId}?type=audio&from=${currentFrom}${nameParam}${avatarParam}`);
                     }}
                     className="h-8.5 sm:h-9 px-2.5 sm:px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-medium flex items-center gap-1.5 transition-all active:scale-[0.98] cursor-pointer"
                     title="Gọi thoại"
@@ -2103,7 +2105,9 @@ export const DirectMessagePage = () => {
                         return;
                       }
                       const currentFrom = encodeURIComponent(location.pathname + (location.search || ''));
-                      navigate(`/call/direct/${safeCallTargetId}?type=video&from=${currentFrom}`);
+                      const nameParam = activePartner?.nickname || activePartner?.account ? `&name=${encodeURIComponent(activePartner.nickname || activePartner.account)}` : '';
+                      const avatarParam = activePartner?.avatar ? `&avatar=${encodeURIComponent(activePartner.avatar)}` : '';
+                      navigate(`/call/direct/${safeCallTargetId}?type=video&from=${currentFrom}${nameParam}${avatarParam}`);
                     }}
                     className="h-8.5 sm:h-9 px-2.5 sm:px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-medium flex items-center gap-1.5 transition-all active:scale-[0.98] cursor-pointer"
                     title="Gọi video"
@@ -2325,7 +2329,9 @@ export const DirectMessagePage = () => {
                                   const safeTargetId = activePartner?.id || urlTargetUserId;
                                   if (safeTargetId) {
                                     const currentFrom = encodeURIComponent(location.pathname + (location.search || ''));
-                                    navigate(`/call/direct/${safeTargetId}?type=${isVideo ? 'video' : 'audio'}&from=${currentFrom}`);
+                                    const nameParam = activePartner?.nickname || activePartner?.account ? `&name=${encodeURIComponent(activePartner.nickname || activePartner.account)}` : '';
+                                    const avatarParam = activePartner?.avatar ? `&avatar=${encodeURIComponent(activePartner.avatar)}` : '';
+                                    navigate(`/call/direct/${safeTargetId}?type=${isVideo ? 'video' : 'audio'}&from=${currentFrom}${nameParam}${avatarParam}`);
                                   }
                                 }}
                                 className="bg-zinc-800 hover:bg-zinc-700 text-white font-sans text-xs font-medium px-3 h-8 rounded-lg flex items-center gap-1.5 transition-colors border border-zinc-700/60"

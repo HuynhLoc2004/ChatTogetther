@@ -270,13 +270,15 @@ const GlobalCallBanner = () => {
 
     const currentFrom = encodeURIComponent((location.pathname + (location.search || '')) || '/');
     const callIdParam = incomingCall.callId ? `&callId=${incomingCall.callId}` : '';
+    const nameParam = incomingCall.callerName ? `&name=${encodeURIComponent(incomingCall.callerName)}` : '';
+    const avatarParam = incomingCall.callerAvatar ? `&avatar=${encodeURIComponent(incomingCall.callerAvatar)}` : '';
     if (roomId) {
-      navigate(`/call/room/${roomId}?type=${isVid ? 'video' : 'audio'}&autoAnswer=true${callIdParam}&from=${currentFrom}`);
+      navigate(`/call/room/${roomId}?type=${isVid ? 'video' : 'audio'}&autoAnswer=true${callIdParam}&from=${currentFrom}${nameParam}${avatarParam}`);
     } else if (callerId) {
-      navigate(`/call/direct/${callerId}?callerId=${callerId}&userId=${callerId}&type=${isVid ? 'video' : 'audio'}&autoAnswer=true${callIdParam}&from=${currentFrom}`);
+      navigate(`/call/direct/${callerId}?callerId=${callerId}&userId=${callerId}&type=${isVid ? 'video' : 'audio'}&autoAnswer=true${callIdParam}&from=${currentFrom}${nameParam}${avatarParam}`);
     } else {
       // Fallback an toàn nếu callerId bị thiếu trong gói tin
-      navigate(`/call/direct?type=${isVid ? 'video' : 'audio'}&autoAnswer=true${callIdParam}&from=${currentFrom}`);
+      navigate(`/call/direct?type=${isVid ? 'video' : 'audio'}&autoAnswer=true${callIdParam}&from=${currentFrom}${nameParam}${avatarParam}`);
     }
   };
 

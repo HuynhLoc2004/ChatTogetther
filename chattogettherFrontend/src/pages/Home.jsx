@@ -322,6 +322,11 @@ const Home = ({ initialTab }) => {
     return 'feed';
   });
 
+  // Trạng thái mở popup/modal đăng bài (+ Chia sẻ khoảnh khắc)
+  const [isComposerModalOpen, setIsComposerModalOpen] = useState(false);
+  // Bộ lọc nhanh dạng viên thuốc: 'all' | 'challenge' | 'confession' | 'audio'
+  const [quickFilter, setQuickFilter] = useState('all');
+
   useEffect(() => {
     const searchParamTab = new URLSearchParams(location.search).get('tab');
     if (searchParamTab) {
@@ -1497,6 +1502,7 @@ const Home = ({ initialTab }) => {
         clearVoiceRecording();
         setSelectedTags([]);
         setShowSparkInput(false);
+        setIsComposerModalOpen(false);
         toast.success("Đã đăng bài viết thành công!");
       }
     } catch (err) {
@@ -3011,6 +3017,26 @@ const Home = ({ initialTab }) => {
         if (!pVibe.includes(tagLower) && !pContent.includes(tagLower)) return false;
       }
 
+      // Bộ lọc nhanh dạng viên thuốc
+      if (quickFilter === 'challenge') {
+        const isChallenge = (p.content || '').includes('[Thử thách]') || 
+                            (p.content || '').includes('[Challenge]') || 
+                            (p.vibe || '').toLowerCase().includes('thử thách') ||
+                            p.challengeQuestion;
+        if (!isChallenge) return false;
+      } else if (quickFilter === 'confession') {
+        const isConfession = (p.content || '').toLowerCase().includes('tâm sự') || 
+                             (p.vibe || '').toLowerCase().includes('tâm sự') ||
+                             (p.vibe || '').toLowerCase().includes('cảm xúc');
+        if (!isConfession) return false;
+      } else if (quickFilter === 'audio') {
+        const hasAudio = p.voiceUrl || p.voiceBioUrl || p.hasAudio || p.audioDuration || 
+                         (p.imageUrl && p.imageUrl.includes('audioUrl')) ||
+                         (p.content || '').includes('Ghi âm') ||
+                         (p.content || '').includes('[Voice');
+        if (!hasAudio) return false;
+      }
+
       if (activeTab === 'saved') {
         return Array.isArray(savedPostIds) && savedPostIds.includes(p.id);
       }
@@ -3229,196 +3255,135 @@ const Home = ({ initialTab }) => {
       <div className="app-main-layout">
 
         {/* ============================================================== */}
-        {/* CỘT 1: THANH ĐIỀU HƯỚNG TRÁI (220px - 240px) - GHIM CỐ ĐỊNH STICKY */}
+        {/* COMPACT ICON RAIL (72px) - CỐ ĐỊNH SÁT MÉP TRÁI */}
         {/* ============================================================== */}
-        <aside className="nav-sidebar sticky top-0 h-screen flex flex-col justify-between py-4 z-20">
-          <div className="flex flex-col gap-3 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden flex-1 pr-1">
-            <div className="nav-brand" onClick={handleLogoRefresh} title="Bấm để cuộn lên đầu & làm mới dữ liệu">
-              <TalovinLogo size={30} brandName={systemConfig.brand_name || 'Talovin'} />
-            </div>
-
-            {/* Live Music Deck */}
-            <div className="ambient-radio-widget">
-              <div className="radio-top-row">
-                <Music size={13} className="text-zinc-400" />
-                <span className="radio-name-text">
-                  {currentTrack ? (currentTrack.title || currentTrack.name) : "Âm nhạc hệ thống"}
-                </span>
-                {currentTrack && (
-                  <div className="equalizer-bars-group">
-                    <span className={`eq-bar ${isPlayingRadio ? 'animating' : ''}`}></span>
-                    <span className={`eq-bar ${isPlayingRadio ? 'animating' : ''}`}></span>
-                    <span className={`eq-bar ${isPlayingRadio ? 'animating' : ''}`}></span>
-                    <span className={`eq-bar ${isPlayingRadio ? 'animating' : ''}`}></span>
-                  </div>
-                )}
+        <aside className="compact-icon-rail hidden md:flex flex-col justify-between items-center w-[72px] min-w-[72px] h-screen sticky top-0 bg-[#0D0F14] border-r border-white/[0.06] py-5 px-2 z-30 select-none">
+          {/* Logo Talovin ở trên */}
+          <div className="flex flex-col items-center gap-6 w-full">
+            <div 
+              className="cursor-pointer transition-transform hover:scale-105 active:scale-95 group relative flex items-center justify-center"
+              onClick={handleLogoRefresh} 
+              title="Talovin - Về đầu trang"
+            >
+              <TalovinLogo size={32} showText={false} />
+              <div className="absolute left-[calc(100%+14px)] px-2.5 py-1 bg-[#1A1D26] text-white text-xs font-semibold rounded-lg shadow-xl border border-white/10 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 z-50">
+                Trang chủ Talovin
               </div>
-              {currentTrack ? (
-                <div className="radio-btns-row">
-                  <button
-                    type="button"
-                    onClick={togglePlayRadio}
-                    className="btn-radio-toggle"
-                    title={isPlayingRadio ? "Tạm dừng" : "Phát nhạc"}
-                  >
-                    {isPlayingRadio ? <Pause size={12} /> : <Play size={12} />}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={playNextRadio}
-                    className="btn-radio-next"
-                    title="Chuyển bài"
-                  >
-                    <Shuffle size={12} />
-                  </button>
-                  <span className="radio-genre-label font-mono">
-                    {currentTrack.genreTag || currentTrack.genre || "Bản nhạc"}
-                  </span>
-                </div>
-              ) : (
-                <p className="text-[11px] text-zinc-500 mt-1">Chưa có bản nhạc nào</p>
-              )}
             </div>
 
-            {/* Menu Điều Hướng (Động từ Admin Dashboard) */}
-            <div className="nav-menu">
-              {dynamicMenu.lobby?.visible !== false && (
-                <button
-                  className={`nav-item ${activeTab === 'feed' ? 'active' : ''}`}
-                  onClick={() => { setActiveTab('feed'); setActiveFilterTag(null); }}
-                  onClick={() => handleSwitchTab('feed')}
-                >
-                  <Compass size={15} strokeWidth={1.5} />
-                  <span>{dynamicMenu.lobby?.label || "Sảnh trực tuyến"}</span>
-                </button>
-              )}
-
-              {dynamicMenu.groups?.visible !== false && (
-                <button
-                  className={`nav-item ${activeTab === 'groups' ? 'active' : ''}`}
-                  onClick={() => handleSwitchTab('groups')}
-                >
-                  <Users size={15} strokeWidth={1.5} />
-                  <span>{dynamicMenu.groups?.label || "Cộng đồng"}</span>
-                </button>
-              )}
-
-              <button
-                className={`nav-item ${activeTab === 'friends' ? 'active' : ''}`}
-                onClick={() => handleSwitchTab('friends')}
-                title="Quản lý và tìm kiếm bạn bè"
-              >
-                <UserCheck size={15} strokeWidth={1.5} />
-                <span>Bạn bè</span>
-                {pendingFriendsCount > 0 && (
-                  <span className="badge-count ml-auto px-1.5 py-0.2 rounded-full bg-emerald-500 text-zinc-950 font-bold text-[10px]">{pendingFriendsCount}</span>
-                )}
-              </button>
-
-              {dynamicMenu.rooms?.visible !== false && (
-                <button
-                  className={`nav-item ${activeTab === 'rooms' ? 'active' : ''}`}
-                  onClick={() => { setActiveTab('rooms'); setActiveFilterTag(null); }}
-                  onClick={() => handleSwitchTab('rooms')}
-                >
-                  <Radio size={15} strokeWidth={1.5} />
-                  <span>{dynamicMenu.rooms?.label || "Phòng đàm thoại"}</span>
-                </button>
-              )}
-
-              {dynamicMenu.trending?.visible !== false && (
-                <button
-                  className={`nav-item ${activeTab === 'trending' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('trending')}
-                  onClick={() => handleSwitchTab('trending')}
-                >
-                  <Flame size={15} strokeWidth={1.5} />
-                  <span>{dynamicMenu.trending?.label || "Thịnh hành"}</span>
-                </button>
-              )}
-
-              {dynamicMenu.saved?.visible !== false && (
-                <button
-                  className={`nav-item ${activeTab === 'saved' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('saved')}
-                  onClick={() => handleSwitchTab('saved')}
-                >
-                  <Bookmark size={15} strokeWidth={1.5} />
-                  <span>{dynamicMenu.saved?.label || "Đã lưu"} ({Array.isArray(savedPostIds) ? savedPostIds.length : 0})</span>
-                </button>
-              )}
-
+            {/* Các icon điều hướng chính */}
+            <nav className="flex flex-col items-center gap-2.5 w-full">
+              {/* 1. Sảnh trực tuyến */}
               <button
                 type="button"
-                className="nav-item flex items-center justify-between"
-                onClick={() => navigate('/messages', { state: { from: location.pathname + location.search } })}
-                title="Hộp thư tin nhắn"
+                onClick={() => { setActiveTab('feed'); setActiveFilterTag(null); setQuickFilter('all'); }}
+                className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-200 relative group cursor-pointer ${
+                  activeTab === 'feed'
+                    ? 'bg-gradient-to-tr from-[#6366F1] to-[#8B5CF6] text-white shadow-lg shadow-indigo-500/30'
+                    : 'text-zinc-400 hover:text-white hover:bg-white/[0.06]'
+                }`}
               >
-                <div className="flex items-center gap-2.5">
-                  <MessageSquare size={15} strokeWidth={1.5} />
-                  <span>Tin nhắn</span>
+                <Compass size={20} strokeWidth={1.75} />
+                <div className="absolute left-[calc(100%+14px)] px-2.5 py-1 bg-[#1A1D26] text-white text-xs font-semibold rounded-lg shadow-xl border border-white/10 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 z-50">
+                  Sảnh trực tuyến
                 </div>
+              </button>
+
+              {/* 2. Cộng đồng */}
+              <button
+                type="button"
+                onClick={() => handleSwitchTab('groups')}
+                className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-200 relative group cursor-pointer ${
+                  activeTab === 'groups'
+                    ? 'bg-gradient-to-tr from-[#6366F1] to-[#8B5CF6] text-white shadow-lg shadow-indigo-500/30'
+                    : 'text-zinc-400 hover:text-white hover:bg-white/[0.06]'
+                }`}
+              >
+                <Users size={20} strokeWidth={1.75} />
+                <div className="absolute left-[calc(100%+14px)] px-2.5 py-1 bg-[#1A1D26] text-white text-xs font-semibold rounded-lg shadow-xl border border-white/10 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 z-50">
+                  Cộng đồng
+                </div>
+              </button>
+
+              {/* 3. Phòng đàm thoại */}
+              <button
+                type="button"
+                onClick={() => handleSwitchTab('rooms')}
+                className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-200 relative group cursor-pointer ${
+                  activeTab === 'rooms'
+                    ? 'bg-gradient-to-tr from-[#6366F1] to-[#8B5CF6] text-white shadow-lg shadow-indigo-500/30'
+                    : 'text-zinc-400 hover:text-white hover:bg-white/[0.06]'
+                }`}
+              >
+                <Radio size={20} strokeWidth={1.75} />
+                {userAccessibleRooms.length > 0 && (
+                  <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                )}
+                <div className="absolute left-[calc(100%+14px)] px-2.5 py-1 bg-[#1A1D26] text-white text-xs font-semibold rounded-lg shadow-xl border border-white/10 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 z-50">
+                  Phòng đàm thoại ({userAccessibleRooms.length})
+                </div>
+              </button>
+
+              {/* 4. Tin nhắn */}
+              <button
+                type="button"
+                onClick={() => navigate('/messages', { state: { from: location.pathname + location.search } })}
+                className="w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-200 relative group cursor-pointer text-zinc-400 hover:text-white hover:bg-white/[0.06]"
+              >
+                <MessageSquare size={20} strokeWidth={1.75} />
                 {unreadMessagesCount > 0 && (
-                  <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-full bg-rose-500 text-white font-bold animate-pulse shadow-sm">
+                  <span className="absolute top-1.5 right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white font-bold text-[9px] flex items-center justify-center border-2 border-[#0D0F14] animate-pulse">
                     {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
                   </span>
                 )}
+                <div className="absolute left-[calc(100%+14px)] px-2.5 py-1 bg-[#1A1D26] text-white text-xs font-semibold rounded-lg shadow-xl border border-white/10 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 z-50">
+                  Tin nhắn {unreadMessagesCount > 0 ? `(${unreadMessagesCount})` : ''}
+                </div>
               </button>
 
-              {dynamicMenu.friends?.visible !== false && (
-                <button
-                  className="nav-item flex items-center justify-between"
-                  onClick={() => handleSwitchTab('friends')}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Users size={15} strokeWidth={1.5} />
-                    <span>{dynamicMenu.friends?.label || "Bạn bè"}</span>
-                  </div>
-                  {pendingFriendsCount > 0 && (
-                    <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                      {pendingFriendsCount}
-                    </span>
-                  )}
-                </button>
-              )}
+              {/* 5. Đã lưu */}
+              <button
+                type="button"
+                onClick={() => handleSwitchTab('saved')}
+                className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-200 relative group cursor-pointer ${
+                  activeTab === 'saved'
+                    ? 'bg-gradient-to-tr from-[#6366F1] to-[#8B5CF6] text-white shadow-lg shadow-indigo-500/30'
+                    : 'text-zinc-400 hover:text-white hover:bg-white/[0.06]'
+                }`}
+              >
+                <Bookmark size={20} strokeWidth={1.75} />
+                <div className="absolute left-[calc(100%+14px)] px-2.5 py-1 bg-[#1A1D26] text-white text-xs font-semibold rounded-lg shadow-xl border border-white/10 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 z-50">
+                  Đã lưu ({Array.isArray(savedPostIds) ? savedPostIds.length : 0})
+                </div>
+              </button>
 
-              {dynamicMenu.profile?.visible !== false && (
-                <button
-                  className="nav-item"
-                  onClick={() => navigate('/profile')}
-                >
-                  <User size={15} strokeWidth={1.5} />
-                  <span>{dynamicMenu.profile?.label || "Hồ sơ & Huy hiệu"}</span>
-                </button>
-              )}
-
-              {/* Nút vào Bảng Quản Trị Hệ Thống (Dành riêng cho Quản trị viên) */}
+              {/* Quản trị viên (nếu có quyền) */}
               {isAdminUser && (
                 <button
                   type="button"
-                  className="nav-item border border-emerald-500/30 text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 transition-all font-semibold"
                   onClick={() => navigate('/admin')}
-                  title="Mở Bảng Quản Trị Hệ Thống"
+                  className="w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-200 relative group cursor-pointer text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 border border-emerald-500/20"
                 >
-                  <Shield size={15} strokeWidth={2} />
-                  <span>Bảng Quản Trị</span>
+                  <Shield size={20} strokeWidth={1.75} />
+                  <div className="absolute left-[calc(100%+14px)] px-2.5 py-1 bg-[#1A1D26] text-emerald-400 text-xs font-semibold rounded-lg shadow-xl border border-emerald-500/30 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 z-50">
+                    Bảng Quản Trị
+                  </div>
                 </button>
               )}
-            </div>
+            </nav>
           </div>
 
-          {/* User Profile & Account Dock Card (Chân Sidebar chuẩn phong cách Linear / Discord) */}
-          <div
-            className="nav-user-dock cursor-pointer mt-3 shrink-0"
+          {/* Avatar tài khoản ở dưới cùng */}
+          <div 
+            className="cursor-pointer transition-transform hover:scale-105 active:scale-95 group relative"
             onClick={() => navigate('/profile')}
-            title="Quản lý tài khoản, hồ sơ & đăng xuất"
           >
-            <div className="dock-user-profile">
-              <UserAvatar user={currentUser} size={34} />
-              <div className="dock-user-meta min-w-0 flex-1">
-                <span className="dock-user-name truncate block">{currentUserName}</span>
-                <span className="dock-user-handle font-mono truncate block">@{currentUserAccount}</span>
-              </div>
+            <div className="relative">
+              <UserAvatar user={currentUser} size={38} />
+              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-[#0D0F14]" />
+            </div>
+            <div className="absolute left-[calc(100%+14px)] bottom-0 px-2.5 py-1 bg-[#1A1D26] text-white text-xs font-semibold rounded-lg shadow-xl border border-white/10 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 z-50">
+              {currentUserName} (@{currentUserAccount})
             </div>
           </div>
         </aside>
@@ -3428,26 +3393,132 @@ const Home = ({ initialTab }) => {
         {/* ============================================================== */}
         <main className="main-stream">
 
-          {/* Header Mobile */}
-          <header className="mobile-top-bar sticky top-0 z-30 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80 h-14 px-4 flex items-center justify-between">
-            {/* Bên trái: Logo Talovin nằm sát mép trái tự nhiên, thẳng hàng với lề bài viết bên dưới */}
-            <div className="flex items-center cursor-pointer" onClick={handleLogoRefresh} title="Bấm để cuộn lên đầu & làm mới bài viết">
-              <TalovinLogo size={24} />
+          {/* ============================================================== */}
+          {/* THANH HEADER NỔI TỐI GIẢN PHÍA TRÊN (TOP BAR)                  */}
+          {/* ============================================================== */}
+          <header className="sticky top-0 z-20 w-full bg-[#0D0F14]/90 backdrop-blur-md border-b border-white/[0.06] px-4 sm:px-6 py-3 flex items-center justify-between gap-3 select-none">
+            {/* Bên trái: Tiêu đề không gian hiện tại & Bộ lọc nhanh dạng viên thuốc */}
+            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="md:hidden cursor-pointer" onClick={handleLogoRefresh}>
+                  <TalovinLogo size={28} showText={false} />
+                </div>
+                <h1 className="text-base sm:text-lg font-bold text-white tracking-tight font-sans whitespace-nowrap">
+                  {activeTab === 'feed' && "Sảnh trực tuyến"}
+                  {activeTab === 'groups' && "Cộng đồng"}
+                  {activeTab === 'rooms' && "Phòng đàm thoại"}
+                  {activeTab === 'saved' && "Đã lưu"}
+                  {activeTab === 'trending' && "Thịnh hành"}
+                  {activeTab === 'friends' && "Bạn bè"}
+                </h1>
+              </div>
+
+              {/* Bộ lọc nhanh dạng viên thuốc (Tất cả, Thử thách, Tâm sự, Âm thanh) */}
+              {activeTab === 'feed' && (
+                <div className="hidden sm:flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none]">
+                  {[
+                    { id: 'all', label: 'Tất cả' },
+                    { id: 'challenge', label: 'Thử thách' },
+                    { id: 'confession', label: 'Tâm sự' },
+                    { id: 'audio', label: 'Âm thanh' }
+                  ].map((filter) => {
+                    const isActive = quickFilter === filter.id && !activeFilterTag;
+                    return (
+                      <button
+                        key={filter.id}
+                        type="button"
+                        onClick={() => {
+                          setQuickFilter(filter.id);
+                          setActiveFilterTag(null);
+                        }}
+                        className={`px-3 py-1 rounded-full text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
+                          isActive
+                            ? 'bg-white text-zinc-950 shadow-md'
+                            : 'bg-white/[0.05] hover:bg-white/10 text-zinc-400 hover:text-white border border-white/5'
+                        }`}
+                      >
+                        {filter.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
-            {/* Bên phải: 3 nút thao tác gọn gàng: Tìm kiếm, Chuông thông báo, Tin nhắn */}
-            <div className="flex items-center gap-2">
-              {/* 1. Icon Tìm kiếm */}
+            {/* Bên phải: Trình phát nhạc mini, Dò sóng FM, Bốc thẻ bài, Tìm kiếm, Thông báo */}
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Trình phát nhạc mini ("Sunset Coffee Vibe" dạng pill nhỏ gọn) */}
+              <div 
+                className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-full bg-[#161922] border border-white/10 hover:border-white/20 transition-all cursor-pointer group"
+                onClick={() => setShowMobileMusicSheet(true)}
+                title="Bấm để mở trình phát nhạc không gian"
+              >
+                <div className="flex items-center gap-1 text-zinc-400">
+                  {isPlayingRadio ? (
+                    <div className="flex items-center gap-0.5 h-3">
+                      <span className="w-0.5 h-2 bg-emerald-400 rounded animate-pulse" />
+                      <span className="w-0.5 h-3 bg-emerald-400 rounded animate-pulse [animation-delay:0.2s]" />
+                      <span className="w-0.5 h-1.5 bg-emerald-400 rounded animate-pulse [animation-delay:0.4s]" />
+                    </div>
+                  ) : (
+                    <Music size={13} className="text-zinc-400 group-hover:text-white" />
+                  )}
+                </div>
+
+                <span className="text-xs font-medium text-zinc-200 truncate max-w-[85px] sm:max-w-[130px] hidden xs:inline">
+                  {currentTrack ? (currentTrack.title || currentTrack.name) : "Sunset Coffee Vibe"}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    togglePlayRadio();
+                  }}
+                  className="w-5 h-5 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-zinc-200 transition-colors ml-0.5"
+                  title={isPlayingRadio ? "Tạm dừng" : "Phát nhạc"}
+                >
+                  {isPlayingRadio ? <Pause size={10} /> : <Play size={10} className="ml-0.5" />}
+                </button>
+              </div>
+
+              {/* Nút mở nhanh "Dò sóng FM" */}
+              <button
+                type="button"
+                onClick={() => setIsSpeedMatchOpen(true)}
+                className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 text-xs font-semibold transition-all active:scale-95 cursor-pointer shadow-sm shadow-indigo-500/10"
+                title="Dò sóng FM & Kết nối 1-1"
+              >
+                <Radio size={13} strokeWidth={2} />
+                <span>Dò sóng FM</span>
+              </button>
+
+              {/* Nút "Bốc thẻ bài" */}
+              <button
+                type="button"
+                onClick={() => setIsPartyWheelOpen(true)}
+                className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-all active:scale-95 cursor-pointer shadow-sm shadow-amber-500/10"
+                title="Bốc thẻ bài thử thách & câu hỏi ngẫu nhiên"
+              >
+                <Dices size={13} strokeWidth={2} />
+                <span>Bốc thẻ bài</span>
+              </button>
+
+              {/* Icon Tìm kiếm (khi cần tra cứu nhanh) */}
               <button
                 type="button"
                 onClick={() => setShowMobileSearchBar(!showMobileSearchBar)}
-                className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-95 border ${showMobileSearchBar || activeSearchQuery ? 'bg-white text-black border-white' : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white'}`}
-                title="Tìm kiếm bài viết, chủ đề"
+                className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-95 border cursor-pointer ${
+                  showMobileSearchBar || activeSearchQuery
+                    ? 'bg-white text-zinc-950 border-white'
+                    : 'bg-[#161922] border-white/10 text-zinc-400 hover:text-white hover:border-white/20'
+                }`}
+                title="Tìm kiếm nội dung, chủ đề"
               >
-                <Search size={16} />
+                <Search size={15} strokeWidth={1.75} />
               </button>
 
-              {/* 2. Icon Thông báo (Chuông) */}
+              {/* Icon Thông báo (Chuông) */}
               <button
                 type="button"
                 onClick={() => {
@@ -3458,43 +3529,28 @@ const Home = ({ initialTab }) => {
                   }
                   requestNotificationPermission();
                 }}
-                className="w-9 h-9 rounded-full bg-zinc-900 border border-zinc-800 relative flex items-center justify-center text-zinc-300 hover:text-white transition-all active:scale-95"
+                className="w-9 h-9 rounded-full bg-[#161922] border border-white/10 hover:border-white/20 relative flex items-center justify-center text-zinc-400 hover:text-white transition-all active:scale-95 cursor-pointer"
                 title="Thông báo sảnh"
               >
-                <Bell size={16} strokeWidth={1.6} />
+                <Bell size={15} strokeWidth={1.75} />
                 {notifications.filter(n => n.unread && n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM').length > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-mono font-bold flex items-center justify-center border-2 border-zinc-950 shadow-sm animate-pulse">
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[17px] h-[17px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-mono font-bold flex items-center justify-center border-2 border-[#0D0F14] shadow-sm animate-pulse">
                     {notifications.filter(n => n.unread && n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM').length > 99 ? '99+' : notifications.filter(n => n.unread && n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM').length}
-                  </span>
-                )}
-              </button>
-
-              {/* 3. Icon Tin nhắn (mở thẳng /messages kèm badge chưa đọc) */}
-              <button
-                type="button"
-                onClick={() => navigate('/messages', { state: { from: location.pathname + location.search } })}
-                className="w-9 h-9 rounded-full bg-zinc-900 border border-zinc-800 relative flex items-center justify-center text-zinc-300 hover:text-white transition-all active:scale-95"
-                title="Tin nhắn & Hộp thư"
-              >
-                <MessageCircle size={16} strokeWidth={1.6} />
-                {unreadMessagesCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-mono font-bold flex items-center justify-center border-2 border-zinc-950 shadow-sm animate-pulse">
-                    {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
                   </span>
                 )}
               </button>
             </div>
           </header>
 
-          {/* Thanh Search di động mở rộng (khi bấm kính lúp trên Mobile) */}
+          {/* Thanh Search di động / xổ xuống (khi bấm kính lúp) */}
           {showMobileSearchBar && (
-            <div className="sm:hidden px-3 py-2 bg-[#13151b] border-b border-[#232838] animate-slide-up">
+            <div className="px-4 py-3 bg-[#13151b] border-b border-white/[0.06] animate-in fade-in duration-150">
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
                   executeSearch(searchInput);
                 }}
-                className="flex items-center gap-2 p-1.5 rounded-xl bg-[#171a23] border border-[#242b3b]"
+                className="flex items-center gap-2 p-1.5 rounded-xl bg-[#171a23] border border-white/10"
               >
                 <Search size={14} className="text-zinc-500 ml-1.5 flex-shrink-0" />
                 <input
@@ -3502,7 +3558,7 @@ const Home = ({ initialTab }) => {
                   placeholder="Tìm kiếm nội dung, chủ đề..."
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
-                  className="bg-transparent text-xs text-white placeholder-zinc-500 w-full focus:outline-none"
+                  className="bg-transparent text-xs text-white placeholder-zinc-500 w-full focus:outline-none font-sans"
                   enterKeyHint="search"
                   autoFocus
                 />
@@ -3513,7 +3569,7 @@ const Home = ({ initialTab }) => {
                 )}
                 <button
                   type="submit"
-                  className="px-3 py-1 rounded-lg bg-white text-black text-xs font-semibold flex-shrink-0"
+                  className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-[#6366F1] to-[#8B5CF6] text-white text-xs font-semibold flex-shrink-0 cursor-pointer"
                 >
                   Tìm
                 </button>
@@ -3521,130 +3577,49 @@ const Home = ({ initialTab }) => {
             </div>
           )}
 
-          {/* Thanh Tab điều hướng Sảnh (100% full width trên Mobile & PC, cuộn ngang mượt mà, loại bỏ hoàn toàn chuông trùng) */}
-          <div className="stream-header flex items-center justify-between w-full border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-md px-3 py-1.5">
-            {/* 1. Phân loại tab: Chiếm trọn bề ngang, cuộn ngang mượt mà */}
-            <div ref={streamTabsRef} className="stream-tabs flex-1 flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden overscroll-x-contain scroll-smooth">
-              <button
-                type="button"
-                className={`stream-tab ${activeTab === 'feed' ? 'active' : ''}`}
-                onClick={() => handleSwitchTab('feed')}
-              >
-                <Globe size={14} className="tab-icon flex-shrink-0" />
-                <span>Sảnh trực tuyến</span>
-              </button>
-              <button
-                type="button"
-                className={`stream-tab ${activeTab === 'groups' ? 'active' : ''}`}
-                onClick={() => handleSwitchTab('groups')}
-              >
-                <Users size={14} className="tab-icon flex-shrink-0" />
-                <span>Cộng đồng</span>
-              </button>
-              <button
-                type="button"
-                className={`stream-tab ${activeTab === 'friends' ? 'active' : ''}`}
-                onClick={() => handleSwitchTab('friends')}
-              >
-                <UserCheck size={14} className="tab-icon flex-shrink-0" />
-                <span>Bạn bè</span>
-                {pendingFriendsCount > 0 && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                )}
-              </button>
-              <button
-                type="button"
-                className={`stream-tab ${activeTab === 'trending' ? 'active' : ''}`}
-                onClick={() => handleSwitchTab('trending')}
-              >
-                <Flame size={14} className="tab-icon flex-shrink-0" />
-                <span>Thịnh hành</span>
-              </button>
-              <button
-                type="button"
-                className={`stream-tab ${activeTab === 'saved' ? 'active' : ''}`}
-                onClick={() => handleSwitchTab('saved')}
-              >
-                <Bookmark size={14} className="tab-icon flex-shrink-0" />
-                <span>Đã lưu</span>
-              </button>
-              <button
-                type="button"
-                className={`stream-tab ${activeTab === 'rooms' ? 'active' : ''}`}
-                onClick={() => handleSwitchTab('rooms')}
-              >
-                <Radio size={14} className="tab-icon flex-shrink-0" />
-                <span>Phòng thoại ({userAccessibleRooms.length})</span>
-              </button>
-
-              {/* Chip Thẻ thử thách (Bấm mở Modal Thẻ Bài Thử Thách) */}
-              <button
-                type="button"
-                onClick={() => setIsPartyWheelOpen(true)}
-                className="stream-tab !border-zinc-800 hover:!border-zinc-700 !text-zinc-300 hover:!text-white flex items-center gap-1.5 whitespace-nowrap active:scale-95"
-                title="Bốc ngẫu nhiên thẻ bài thử thách & câu hỏi"
-              >
-                <Dices size={14} className="tab-icon flex-shrink-0 text-zinc-300" />
-                <span>Thẻ thử thách</span>
-              </button>
-            </div>
-
-            {/* NÚT THAO TÁC SẢNH: TIN NHẮN & CHUÔNG THÔNG BÁO (Chỉ hiện trên PC, ẩn trên Mobile để không trùng với thanh trên cùng) */}
-            <div className="!hidden md:!flex items-center gap-1.5 ml-2">
-              <button
-                type="button"
-                onClick={() => navigate('/messages', { state: { from: location.pathname + location.search } })}
-                className="btn-header-notif relative"
-                title="Hộp thư tin nhắn"
-              >
-                <MessageSquare size={15} strokeWidth={1.5} />
-                {unreadMessagesCount > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-mono font-bold flex items-center justify-center border-2 border-zinc-950 shadow-sm animate-pulse">
-                    {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
-                  </span>
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  const next = !isNotifOpen;
-                  setIsNotifOpen(next);
-                  if (next) {
-                    handleMarkAllNotificationsRead();
-                  }
-                  requestNotificationPermission();
-                }}
-                className="btn-header-notif relative"
-                title="Thông báo sảnh (Mở ngăn kéo)"
-              >
-                <Bell size={15} strokeWidth={1.5} />
-                {notifications.filter(n => n.unread && n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM').length > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-mono font-bold flex items-center justify-center border-2 border-zinc-950 shadow-sm animate-pulse">
-                    {notifications.filter(n => n.unread && n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM').length > 99 ? '99+' : notifications.filter(n => n.unread && n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM').length}
-                  </span>
-                )}
-              </button>
-            </div>
-          </div>
-
           {/* Banner lọc chủ đề đang chọn */}
           {activeFilterTag && (
-            <div className="active-tag-filter-banner">
-              <span>Đang lọc bài viết theo: <strong className="font-mono">{activeFilterTag}</strong></span>
-              <button onClick={() => setActiveFilterTag(null)} className="btn-clear-tag-filter">
+            <div className="mx-4 sm:mx-6 my-3 p-2.5 rounded-xl bg-white/[0.05] border border-white/10 flex items-center justify-between text-xs text-zinc-300">
+              <span>Đang lọc bài viết theo: <strong className="font-mono text-white">#{activeFilterTag}</strong></span>
+              <button onClick={() => setActiveFilterTag(null)} className="flex items-center gap-1 text-zinc-400 hover:text-white text-xs cursor-pointer">
                 <X size={12} /> Bỏ lọc
               </button>
             </div>
           )}
 
           {/* ============================================================== */}
-          {/* KHU VỰC A+: PHÒNG ĐÀM THOẠI TRỰC TIẾP (LIVE AUDIO LOUNGE ROOMS) */}
+          {/* MODAL POPUP: BỘ TẠO BÀI VIẾT (+ CHIA SẺ KHOẢNH KHẮC)          */}
           {/* ============================================================== */}
-          {/* KHU VỰC B: BỘ TẠO TÍN HIỆU ĐA PHƯƠNG TIỆN (Multimedia Composer) */}
-          {/* ============================================================== */}
-          {activeTab === 'feed' && (
-            <div className="feed-composer-wrapper pt-1 sm:pt-3">
+          <AnimatePresence>
+            {isComposerModalOpen && (
+              <div 
+                className="fixed inset-0 z-[120] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 select-none"
+                onClick={() => setIsComposerModalOpen(false)}
+              >
+                <motion.div
+                  initial={{ scale: 0.95, opacity: 0, y: 10 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  exit={{ scale: 0.95, opacity: 0, y: 10 }}
+                  transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                  className="w-full max-w-xl bg-[#161922] border border-white/10 rounded-2xl shadow-2xl p-4 sm:p-5 overflow-hidden max-h-[90vh] flex flex-col"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between pb-3 mb-3 border-b border-white/[0.06]">
+                    <div className="flex items-center gap-2">
+                      <Sparkles size={16} className="text-indigo-400" />
+                      <h3 className="text-sm font-bold text-white tracking-tight">Chia sẻ khoảnh khắc mới</h3>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsComposerModalOpen(false)}
+                      className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                      title="Đóng"
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+                  <div className="overflow-y-auto [scrollbar-width:none]">
+                    <div className="feed-composer-wrapper !pt-0">
               <div className="post-creator-box">
                 <div className="creator-input-row">
                   <UserAvatar user={currentUser} size={36} />
@@ -3925,7 +3900,24 @@ const Home = ({ initialTab }) => {
                 </div>
               </div>
             </div>
-          )}
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+
+          {/* NÚT NỔI "+ CHIA SẺ KHOẢNH KHẮC" Ở GÓC DƯỚI BÊN PHẢI */}
+          <div className="fixed bottom-6 right-6 sm:bottom-8 sm:right-8 z-40">
+            <button
+              type="button"
+              onClick={() => setIsComposerModalOpen(true)}
+              className="h-12 px-5 rounded-full bg-gradient-to-r from-[#6366F1] to-[#8B5CF6] text-white font-semibold text-xs sm:text-sm flex items-center gap-2.5 shadow-2xl shadow-indigo-500/40 hover:scale-105 active:scale-95 transition-all cursor-pointer group"
+              title="Đăng bài hoặc chia sẻ âm thanh mới"
+            >
+              <Plus size={18} strokeWidth={2.5} className="group-hover:rotate-90 transition-transform duration-200" />
+              <span>Chia sẻ khoảnh khắc</span>
+            </button>
+          </div>
 
           {/* ============================================================== */}
           {/* TAB: DANH SÁCH BÀI VIẾT (Chỉ ở Sảnh trực tuyến, Thịnh hành hoặc Đã lưu) */}
@@ -4082,70 +4074,89 @@ const Home = ({ initialTab }) => {
                   )}
                 </div>
               ) : (
-                displayedPosts.map((post) => {
-                  const currentReaction = REACTION_EMOJIS.find(e => e.type === post.myReaction);
-                  const isSaved = Array.isArray(savedPostIds) && savedPostIds.includes(post.id);
-                  const isMe = currentUserId && post.authorId?.toString() === currentUserId.toString();
-                  const isFounder = post.authorVipTier === 'FOUNDER' || post.authorRoles?.includes('ROLE_ADMIN') || post.authorRoles?.includes('ROLE_AMDIN') || post.authorBadge;
-                  const parsedMedia = parsePostMedia(post.imageUrl, post);
+                <div className="masonry-bento-grid columns-1 md:columns-2 xl:columns-3 gap-4 sm:gap-5 [column-fill:_balance] w-full">
+                  {displayedPosts.map((post) => {
+                    const currentReaction = REACTION_EMOJIS.find(e => e.type === post.myReaction);
+                    const isSaved = Array.isArray(savedPostIds) && savedPostIds.includes(post.id);
+                    const isMe = currentUserId && post.authorId?.toString() === currentUserId.toString();
+                    const isFounder = post.authorVipTier === 'FOUNDER' || post.authorRoles?.includes('ROLE_ADMIN') || post.authorRoles?.includes('ROLE_AMDIN') || post.authorBadge;
+                    const parsedMedia = parsePostMedia(post.imageUrl, post);
+                    const isChallengePost = (post.content || '').includes('[Thử thách]') ||
+                                            (post.content || '').includes('[Challenge]') ||
+                                            (post.vibe || '').toLowerCase().includes('thử thách') ||
+                                            post.challengeQuestion;
 
-                  return (
-                    <article
-                      key={post.id}
-                      id={`post-${post.id}`}
-                      className="post-item-card cursor-pointer transition-colors hover:bg-zinc-900/40"
-                      onClick={(e) => handlePostCardClick(e, post)}
-                    >
-                      {post.groupId && (
-                        <div className="flex items-center justify-between pb-1.5 mb-2 text-xs text-zinc-400 border-b border-zinc-800/60">
-                          <div
-                            className="flex items-center gap-1.5 min-w-0 hover:text-zinc-200 cursor-pointer"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/communities/${post.groupId}`);
-                            }}
-                          >
-                            <Users size={13} className="text-zinc-400 shrink-0" />
-                            <span className="text-xs text-zinc-400 truncate">
-                              Đăng trong <strong className="font-semibold text-zinc-300 hover:underline">{post.groupName || 'Cộng đồng'}</strong>
-                            </span>
-                          </div>
-
-                          {!post.isMemberOfGroup && (
+                    return (
+                      <article
+                        key={post.id}
+                        id={`post-${post.id}`}
+                        className={`post-item-card break-inside-avoid mb-4 sm:mb-5 rounded-[16px] p-4 sm:p-5 shadow-lg transition-all duration-200 cursor-pointer ${
+                          isChallengePost
+                            ? 'border-indigo-500/35 bg-gradient-to-b from-indigo-950/20 to-[#13161F] shadow-indigo-500/5 ring-1 ring-indigo-500/15'
+                            : 'border-white/[0.06] bg-[#13161F] hover:border-white/12'
+                        }`}
+                        onClick={(e) => handlePostCardClick(e, post)}
+                      >
+                        {/* Thẻ Thử Thách Nổi Bật (Có nút Trả lời thẻ này) */}
+                        {isChallengePost && (
+                          <div className="flex items-center justify-between gap-2 mb-3 px-3 py-1.5 rounded-xl bg-indigo-500/15 border border-indigo-500/25">
+                            <div className="flex items-center gap-1.5 text-xs font-semibold text-indigo-300">
+                              <Sparkles size={13} className="text-indigo-400" />
+                              <span>Thẻ Thử Thách</span>
+                            </div>
                             <button
                               type="button"
-                              onClick={async (e) => {
+                              onClick={(e) => {
                                 e.stopPropagation();
-                                try {
-                                  await axiosClient.post(`/groups/${post.groupId}/join`);
-                                  toast.success(`Đã gia nhập ${post.groupName || 'cộng đồng'}!`);
-                                  setPosts(prev => prev.map(p => p.groupId === post.groupId ? { ...p, isMemberOfGroup: true } : p));
-                                } catch (err) {
-                                  toast.error(err.response?.data?.message || 'Không thể gia nhập');
-                                }
+                                setNewPostContent(`[Hưởng ứng Thử thách của @${post.authorNickname || post.authorAccount || 'bạn'}]: `);
+                                setIsComposerModalOpen(true);
                               }}
-                              className="px-2.5 py-1 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[11px] font-medium border border-zinc-700 transition-all flex items-center gap-1 active:scale-95 shrink-0"
+                              className="px-2.5 py-1 rounded-lg bg-indigo-500/25 hover:bg-indigo-500/40 text-indigo-200 border border-indigo-500/30 text-[11px] font-semibold flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
                             >
-                              <Plus size={11} />
-                              <span>Tham gia</span>
+                              <Sparkles size={11} />
+                              <span>Trả lời thẻ này</span>
                             </button>
-                          )}
-                        </div>
-                      )}
+                          </div>
+                        )}
 
-                      {/* Tín hiệu Đề xuất Xã hội Thông minh (Smart Social Discovery Signals) */}
-                      {post.recommendationReason && !post.groupId && !post.repostedByUsername && (
-                        <div className="flex items-center gap-1.5 pb-2 mb-2 text-[11px] text-zinc-400 font-medium border-b border-zinc-800">
-                          {post.isFriendInteraction ? (
-                            <Users size={12} className="text-zinc-400 flex-shrink-0" />
-                          ) : (
-                            <Sparkles size={12} className="text-zinc-400 flex-shrink-0" />
-                          )}
-                          <span>{post.recommendationReason}</span>
-                        </div>
-                      )}
+                        {post.groupId && (
+                          <div className="flex items-center justify-between pb-1.5 mb-2 text-xs text-zinc-400 border-b border-zinc-800/60">
+                            <div
+                              className="flex items-center gap-1.5 min-w-0 hover:text-zinc-200 cursor-pointer"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/communities/${post.groupId}`);
+                              }}
+                            >
+                              <Users size={13} className="text-zinc-400 shrink-0" />
+                              <span className="text-xs text-zinc-400 truncate">
+                                Đăng trong <strong className="font-semibold text-zinc-300 hover:underline">{post.groupName || 'Cộng đồng'}</strong>
+                              </span>
+                            </div>
 
-                      <div className="post-header-row">
+                            {!post.isMemberOfGroup && (
+                              <button
+                                type="button"
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  try {
+                                    await axiosClient.post(`/groups/${post.groupId}/join`);
+                                    toast.success(`Đã gia nhập ${post.groupName || 'cộng đồng'}!`);
+                                    setPosts(prev => prev.map(p => p.groupId === post.groupId ? { ...p, isMemberOfGroup: true } : p));
+                                  } catch (err) {
+                                    toast.error(err.response?.data?.message || 'Không thể gia nhập');
+                                  }
+                                }}
+                                className="px-2.5 py-1 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[11px] font-medium border border-zinc-700 transition-all flex items-center gap-1 active:scale-95 shrink-0"
+                              >
+                                <Plus size={11} />
+                                <span>Tham gia</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="post-header-row">
                         <div
                           className="post-avatar-click cursor-pointer"
                           onClick={(e) => {
@@ -4676,7 +4687,8 @@ const Home = ({ initialTab }) => {
                       )}
                     </article>
                   );
-                })
+                })}
+                </div>
               )}
               {/* Khoảng đệm đáy an toàn (Bottom Spacer) để thanh Navigation không che khuất bài viết cuối cùng */}
               <div className="h-24 w-full pointer-events-none" />
@@ -4905,186 +4917,6 @@ const Home = ({ initialTab }) => {
             );
           })()}
         </main>
-
-        {/* ============================================================== */}
-        {/* CỘT 3: RIGHT DOCK (280px - 300px) - GHIM CỐ ĐỊNH STICKY */}
-        {/* ============================================================== */}
-        <aside className="widgets-sidebar sticky top-0 h-screen overflow-y-auto py-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden z-20">
-
-          {/* Ô Tìm Kiếm Gọn Gàng (Chỉ tìm khi Enter / Bấm Icon / Mobile Go - Có Dropdown Lịch Sử & Xu Hướng Hot) */}
-          <div className="search-section-container relative">
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                executeSearch(searchInput);
-              }}
-              className="search-input-wrap relative flex items-center"
-            >
-              <button
-                type="submit"
-                className="search-icon-btn p-1 text-zinc-500 hover:text-white transition-colors cursor-pointer"
-                title="Bấm để tìm kiếm"
-              >
-                <Search size={14} strokeWidth={1.5} className={isSearching ? "animate-spin text-sky-400" : "search-icon-muted"} />
-              </button>
-              <input
-                type="text"
-                placeholder="Tìm kiếm nội dung, chủ đề..."
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                onFocus={() => setIsSearchDropdownOpen(true)}
-                enterKeyHint="search"
-              />
-              {searchInput && (
-                <button
-                  type="button"
-                  onClick={clearSearch}
-                  className="btn-clear-kw"
-                  title="Xóa tìm kiếm"
-                >
-                  <X size={12} />
-                </button>
-              )}
-            </form>
-
-            {/* POPUP GỢI Ý: TÌM KIẾM GẦN ĐÂY & XU HƯỚNG TÌM KIẾM HOT */}
-            {isSearchDropdownOpen && (
-              <>
-                <div
-                  className="fixed inset-0 z-40"
-                  onClick={() => setIsSearchDropdownOpen(false)}
-                />
-                <div className="absolute top-[calc(100%+8px)] left-0 right-0 z-50 p-3.5 rounded-2xl bg-[#141414] border border-[#222222] shadow-2xl space-y-3 animate-fade-in">
-                  {/* Mục 1: Tìm kiếm gần đây */}
-                  {recentSearches.length > 0 && (
-                    <div>
-                      <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-[#1e1e1e]">
-                        <span className="text-[11px] font-semibold text-zinc-400 flex items-center gap-1.5">
-                          <Clock size={12} className="text-zinc-500" /> Tìm kiếm gần đây
-                        </span>
-                        <button
-                          type="button"
-                          onClick={handleClearAllRecentSearches}
-                          className="text-[10px] text-zinc-500 hover:text-rose-400 transition-colors font-mono"
-                        >
-                          Xóa hết
-                        </button>
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {recentSearches.map((term, idx) => (
-                          <div
-                            key={`recent-${idx}`}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#1a1a1a] hover:bg-[#222222] text-zinc-300 text-xs border border-[#262626] transition-all cursor-pointer group"
-                            onClick={() => executeSearch(term)}
-                          >
-                            <span className="truncate max-w-[130px]">{term}</span>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleRemoveRecentSearch(term);
-                              }}
-                              className="text-zinc-600 hover:text-rose-400 p-0.5 rounded transition-colors"
-                              title="Xóa mục này"
-                            >
-                              <X size={10} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Mục 2: Xu hướng tìm kiếm Hot */}
-                  <div>
-                    <div className="flex items-center gap-1.5 pb-1.5 mb-1.5 border-b border-[#1e1e1e]">
-                      <Flame size={12} className="text-amber-400" />
-                      <span className="text-[11px] font-semibold text-zinc-400">Xu hướng tìm kiếm (Hot)</span>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {hotSearches.slice(0, 8).map((hotItem, idx) => {
-                        const termStr = typeof hotItem === 'string' ? hotItem : (hotItem.term || hotItem.keyword);
-                        const countStr = typeof hotItem === 'object' && hotItem.count ? `${hotItem.count}` : null;
-                        return (
-                          <button
-                            key={`hot-${idx}`}
-                            type="button"
-                            onClick={() => executeSearch(termStr)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#181818] hover:bg-[#222222] text-zinc-200 text-xs border border-[#2a2a2a] hover:border-[#383838] transition-all active:scale-95"
-                          >
-                            <span className="text-amber-400 text-[10px]">#{idx + 1}</span>
-                            <span>{termStr}</span>
-                            {countStr && (
-                              <span className="text-[9.5px] font-mono text-zinc-500 ml-0.5">({countStr})</span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* Widget 1: Kết Nối Đồng Điệu 1-1 (Resonance Matchmaker) */}
-          <div className="widget-box-card">
-            {/* Widget 1: Trạm Dò Sóng FM Thời Gian Thực (FM Frequency Tuner) */}
-            <div className="widget-card-title">
-              <Radio size={14} className="text-zinc-300" />
-              <span>Trạm Dò Sóng FM Thời Gian Thực</span>
-            </div>
-            <p className="widget-card-desc">
-              Dò tìm sóng radio người lạ theo dải tần MHz hoặc tự thu âm 5 giây để phát thanh kết nối đàm thoại 1-1.
-            </p>
-            <button
-              type="button"
-              onClick={() => setIsSpeedMatchOpen(true)}
-              className="btn-widget-action"
-            >
-              Dò sóng & Phát thanh
-            </button>
-          </div>
-
-          {/* Widget 2: Bốc Thăm Câu Hỏi (Party Deck) */}
-          <div className="widget-box-card">
-            <div className="widget-card-title">
-              <Dices size={14} className="text-zinc-300" />
-              <span>Thẻ Bài Thử Thách</span>
-            </div>
-            <p className="widget-card-desc">
-              Bốc ngẫu nhiên câu hỏi kích hoạt đối thoại hoặc thử thách vui cùng sảnh.
-            </p>
-            <button
-              type="button"
-              onClick={() => setIsPartyWheelOpen(true)}
-              className="btn-widget-action secondary"
-            >
-              Bốc câu hỏi ngẫu nhiên
-            </button>
-          </div>
-
-          {/* Widget 3: Thẻ Chủ Đề Nổi Bật (Sparks Cloud) */}
-          <div className="widget-box-card">
-            <div className="widget-card-title">
-              <Hash size={14} className="text-zinc-300" />
-              <span>Chủ Đề & Dấu Ấn</span>
-            </div>
-            <div className="widget-sparks-cloud">
-              {allCommunitySparks.map(tag => (
-                <button
-                  key={tag}
-                  type="button"
-                  className={`widget-spark-pill font-mono ${activeFilterTag === tag ? 'active' : ''}`}
-                  onClick={() => setActiveFilterTag(activeFilterTag === tag ? null : tag)}
-                >
-                  {tag}
-                </button>
-              ))}
-            </div>
-          </div>
-        </aside>
-
       </div>
 
       {/* THANH ĐIỀU HƯỚNG DÀNH CHO MOBILE - 5 TAB CHUẨN THỰC DỤNG */}
@@ -6901,13 +6733,13 @@ const Home = ({ initialTab }) => {
           overflow-x: clip;
         }
 
-        /* KHUNG CHÍNH CĂN GIỮA - 3 CỘT KHÔNG BỊ TRỐNG RỖNG TRÊN MÀN HÌNH RỘNG */
+        /* KHUNG CHÍNH CĂN GIỮA - BỐ CỤC THOÁNG ĐÃNG BENTO / MASONRY GRID */
         .app-main-layout {
           display: flex;
           width: 100%;
-          max-width: 1480px;
-          margin: 0 auto;
-          justify-content: center;
+          max-width: 100%;
+          margin: 0;
+          justify-content: flex-start;
           align-items: flex-start;
           min-height: 100vh;
           position: relative;
@@ -7142,17 +6974,24 @@ const Home = ({ initialTab }) => {
           color: #f87171;
         }
 
-        /* ================= CỘT 2: STREAM CHÍNH (THREADS FLAT STREAM) ================= */
+        /* ================= CỘT 2: STREAM CHÍNH MỞ RỘNG TOÀN BỘ CHIỀU NGANG ================= */
         .main-stream {
           flex: 1;
-          max-width: 680px;
+          max-width: 100%;
+          width: 100%;
           min-width: 0;
-          border-left: 1px solid var(--card-border);
-          border-right: 1px solid var(--card-border);
+          border-left: none;
+          border-right: none;
           background: var(--social-bg);
           min-height: 100vh;
           display: flex;
           flex-direction: column;
+        }
+
+        .posts-stream-container {
+          width: 100%;
+          padding: 16px 20px;
+          box-sizing: border-box;
         }
 
         .mobile-top-bar {
@@ -7993,22 +7832,25 @@ const Home = ({ initialTab }) => {
           opacity: 0.6;
         }
 
-        /* ================= BÀI VIẾT PHẲNG (THREADS FEED STREAM ROW) ================= */
+        /* ================= THẺ BÀI VIẾT PHONG CÁCH SOCIAL LOUNGE (MASONRY CARD) ================= */
         .post-item-card {
-          background: var(--card-bg);
-          border-bottom: 1px solid var(--card-border);
-          border-top: none;
-          border-left: none;
-          border-right: none;
-          border-radius: 0;
-          margin: 0;
-          padding: 16px 20px 14px 20px;
-          box-shadow: none;
+          break-inside: avoid;
+          display: inline-block;
+          width: 100%;
+          background: #13161F;
+          border: 1px solid rgba(255, 255, 255, 0.06);
+          border-radius: 16px;
+          margin: 0 0 18px 0;
+          padding: 18px 18px 16px 18px;
+          box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.35);
           position: relative;
-          transition: background-color 0.15s ease;
+          box-sizing: border-box;
+          transition: border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s;
         }
         .post-item-card:hover {
-          background: var(--card-hover);
+          border-color: rgba(255, 255, 255, 0.12);
+          transform: translateY(-2px);
+          box-shadow: 0 10px 30px -4px rgba(0, 0, 0, 0.5);
         }
         .post-header-row {
           display: flex;
@@ -9206,9 +9048,8 @@ const Home = ({ initialTab }) => {
 
         /* Phân tầng màn hình rộng */
         @media (min-width: 1600px) {
-          .app-main-layout { max-width: 1560px; }
-          .main-stream { max-width: 820px; }
-          .widgets-sidebar { width: 310px; }
+          .app-main-layout { max-width: 100%; }
+          .main-stream { max-width: 100%; }
         }
 
         /* RESPONSIVE */

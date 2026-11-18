@@ -41,6 +41,9 @@ const CallPage = () => {
   const partnerIdRef = useRef(partnerId);
   partnerIdRef.current = partnerId;
 
+  const urlPartnerName = searchParams.get('name') || searchParams.get('callerName') || searchParams.get('partnerName');
+  const urlPartnerAvatar = searchParams.get('avatar') || searchParams.get('callerAvatar') || searchParams.get('partnerAvatar');
+
   const isVideoParam = searchParams.get('type') === 'video' || searchParams.get('video') === 'true';
   const isIncoming = searchParams.get('incoming') === 'true' || searchParams.get('autoAnswer') === 'true';
   const isRoomCall = Boolean(roomId);
@@ -81,7 +84,7 @@ const CallPage = () => {
   const [callStatusText, setCallStatusText] = useState(isIncoming ? 'Đang kết nối cuộc gọi...' : 'Đang đổ chuông...');
   const [isConnected, setIsConnected] = useState(false);
   const [hasRemoteVideo, setHasRemoteVideo] = useState(false);
-  const [isRemoteVideoEnabled, setIsRemoteVideoEnabled] = useState(true);
+  const [isRemoteVideoEnabled, setIsRemoteVideoEnabled] = useState(isVideoParam);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const stageContainerRef = useRef(null);
 
@@ -125,7 +128,17 @@ const CallPage = () => {
   }, []);
 
   // Target Information (Partner in 1-1 or Room info in Group)
-  const [partnerProfile, setPartnerProfile] = useState(null);
+  const [partnerProfile, setPartnerProfile] = useState(() => {
+    if (urlPartnerName || urlPartnerAvatar) {
+      return {
+        id: rawUserId,
+        nickname: urlPartnerName,
+        account: urlPartnerName,
+        avatar: urlPartnerAvatar || ''
+      };
+    }
+    return null;
+  });
   const [roomInfo, setRoomInfo] = useState(null);
 
   // Refs
@@ -194,6 +207,24 @@ const CallPage = () => {
       }
     }
   }, [isVideoEnabled, isVideoCall, isScreenSharing]);
+
+  // Luôn đảm bảo remoteVideoRef nhận đúng thuộc tính autoplay/playsinline trên iOS WebKit và render tức thì
+  useEffect(() => {
+    if (remoteVideoRef.current) {
+      remoteVideoRef.current.muted = true;
+      remoteVideoRef.current.defaultMuted = true;
+      remoteVideoRef.current.playsInline = true;
+      remoteVideoRef.current.setAttribute('playsinline', '');
+      remoteVideoRef.current.setAttribute('webkit-playsinline', '');
+
+      if (isConnected && hasRemoteVideo && isRemoteVideoEnabled && remoteStreamRef.current) {
+        if (remoteVideoRef.current.srcObject !== remoteStreamRef.current) {
+          remoteVideoRef.current.srcObject = remoteStreamRef.current;
+        }
+        remoteVideoRef.current.play().catch(() => { });
+      }
+    }
+  }, [isConnected, hasRemoteVideo, isRemoteVideoEnabled]);
 
   // 1. Fetch metadata (Partner or Room) & pre-fetch direct room ID
   useEffect(() => {
@@ -540,6 +571,13 @@ const CallPage = () => {
           acceptRetryTimerRef.current = null;
         }
         setCallStatusText('Đang thiết lập kênh đàm thoại...');
+        if (typeof msg.isVideoEnabled === 'boolean') {
+          setIsRemoteVideoEnabled(msg.isVideoEnabled);
+          if (!msg.isVideoEnabled) setHasRemoteVideo(false);
+        } else if (typeof msg.isVideo === 'boolean') {
+          setIsRemoteVideoEnabled(msg.isVideo);
+          if (!msg.isVideo) setHasRemoteVideo(false);
+        }
         if (msg.isVideo) setIsVideoCall(true);
         if (!peerConnectionRef.current) return;
         const pc = peerConnectionRef.current;
@@ -554,7 +592,8 @@ const CallPage = () => {
           sendCallSignal({
             type: 'ANSWER',
             answer: lastAnswerRef.current,
-            isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled)
+            isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled),
+            isVideoEnabled: Boolean(isVideoEnabled)
           });
           return;
         }
@@ -562,8 +601,14 @@ const CallPage = () => {
         isProcessingOfferRef.current = true;
         lastOfferSdpRef.current = msg.offer?.sdp;
 
-        // 3. Chỉ setRemoteDescription nếu peerConnection ở trạng thái hợp lệ
-        if (pc.signalingState !== 'stable' && pc.signalingState !== 'have-local-offer') {
+        // 3. Xử lý Glare: Nếu cả 2 bên cùng tạo Offer (have-local-offer), rollback để nhận Offer của đối phương
+        if (pc.signalingState === 'have-local-offer') {
+          try {
+            await pc.setLocalDescription({ type: 'rollback' });
+          } catch (_) { }
+        }
+
+        if (pc.signalingState !== 'stable') {
           isProcessingOfferRef.current = false;
           return;
         }
@@ -587,7 +632,8 @@ const CallPage = () => {
           sendCallSignal({
             type: 'ANSWER',
             answer: answerPayload,
-            isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled)
+            isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled),
+            isVideoEnabled: Boolean(isVideoEnabled)
           });
         }
       } catch (e) {
@@ -614,7 +660,8 @@ const CallPage = () => {
           sendCallSignal({
             type: 'OFFER',
             offer: lastOfferRef.current,
-            isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled)
+            isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled),
+            isVideoEnabled: Boolean(isVideoEnabled)
           });
           return;
         }
@@ -627,7 +674,8 @@ const CallPage = () => {
           sendCallSignal({
             type: 'OFFER',
             offer: offerPayload,
-            isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled)
+            isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled),
+            isVideoEnabled: Boolean(isVideoEnabled)
           });
         }
       } catch (e) {
@@ -637,6 +685,13 @@ const CallPage = () => {
       try {
         stopRingAudio();
         setCallStatusText('Đối phương đã trả lời. Đang kết nối đường truyền...');
+        if (typeof msg.isVideoEnabled === 'boolean') {
+          setIsRemoteVideoEnabled(msg.isVideoEnabled);
+          if (!msg.isVideoEnabled) setHasRemoteVideo(false);
+        } else if (typeof msg.isVideo === 'boolean') {
+          setIsRemoteVideoEnabled(msg.isVideo);
+          if (!msg.isVideo) setHasRemoteVideo(false);
+        }
         if (msg.isVideo) setIsVideoCall(true);
         const pc = peerConnectionRef.current;
         if (pc && pc.signalingState !== 'stable') {
@@ -655,6 +710,9 @@ const CallPage = () => {
     } else if (msg.type === 'MEDIA_STATE') {
       if (typeof msg.isVideoEnabled === 'boolean') {
         setIsRemoteVideoEnabled(msg.isVideoEnabled);
+        if (!msg.isVideoEnabled) {
+          setHasRemoteVideo(false);
+        }
       }
     } else if (msg.type === 'SCREEN_SHARE') {
       const isSharing = Boolean(msg.isSharing);
@@ -770,47 +828,56 @@ const CallPage = () => {
           }
         };
 
-        const remoteStream = new MediaStream();
-        remoteStreamRef.current = remoteStream;
-
-        if (remoteVideoRef.current) {
-          remoteVideoRef.current.srcObject = remoteStream;
-        }
-        if (remoteAudioRef.current) {
-          remoteAudioRef.current.srcObject = remoteStream;
-        }
-
         // Track nhận từ remote
         pc.ontrack = (event) => {
           if (event.track) {
-            remoteStream.addTrack(event.track);
-
             if (event.track.kind === 'video') {
-              setHasRemoteVideo(true);
+              const vTrack = event.track;
+              const inboundStream = (event.streams && event.streams[0]) ? event.streams[0] : new MediaStream([vTrack]);
+              remoteStreamRef.current = inboundStream;
+
+              // Chỉ bật hasRemoteVideo nếu track thật sự đang truyền dữ liệu (không bị mute / rỗng)
+              const isLive = !vTrack.muted && vTrack.readyState === 'live';
+              setHasRemoteVideo(isLive);
               setIsRemoteVideoEnabled(true);
               setIsVideoCall(true);
 
-              event.track.onmute = () => setHasRemoteVideo(false);
-              event.track.onunmute = () => {
-                setHasRemoteVideo(true);
-                setIsRemoteVideoEnabled(true);
+              vTrack.onmute = () => {
+                setHasRemoteVideo(false);
               };
-              event.track.onended = () => setHasRemoteVideo(false);
+              vTrack.onunmute = () => {
+                setHasRemoteVideo(true);
+                if (remoteVideoRef.current) {
+                  remoteVideoRef.current.play().catch(() => { });
+                }
+              };
+              vTrack.onended = () => {
+                setHasRemoteVideo(false);
+              };
 
               if (remoteVideoRef.current) {
-                remoteVideoRef.current.srcObject = remoteStream;
+                remoteVideoRef.current.muted = true;
+                remoteVideoRef.current.defaultMuted = true;
+                remoteVideoRef.current.playsInline = true;
+                remoteVideoRef.current.setAttribute('playsinline', '');
+                remoteVideoRef.current.setAttribute('webkit-playsinline', '');
+                remoteVideoRef.current.srcObject = inboundStream;
                 remoteVideoRef.current.play().catch(() => { });
               }
             }
 
             if (event.track.kind === 'audio') {
-              const streamToPlay = (event.streams && event.streams[0]) ? event.streams[0] : remoteStream;
+              const aTrack = event.track;
+              const streamToPlay = (event.streams && event.streams[0]) ? event.streams[0] : new MediaStream([aTrack]);
 
               // Kênh 1: HTML5 Audio Tag
               if (remoteAudioRef.current) {
-                remoteAudioRef.current.srcObject = streamToPlay;
                 remoteAudioRef.current.muted = false;
                 remoteAudioRef.current.volume = 1.0;
+                remoteAudioRef.current.playsInline = true;
+                remoteAudioRef.current.setAttribute('playsinline', '');
+                remoteAudioRef.current.setAttribute('webkit-playsinline', '');
+                remoteAudioRef.current.srcObject = streamToPlay;
                 remoteAudioRef.current.play().catch(() => { });
               }
 
@@ -1011,17 +1078,24 @@ const CallPage = () => {
 
     const existingTrack = localStreamRef.current.getVideoTracks()[0];
     if (existingTrack) {
-      existingTrack.enabled = !existingTrack.enabled;
-      setIsVideoEnabled(existingTrack.enabled);
+      const nextState = !existingTrack.enabled;
+      existingTrack.enabled = nextState;
+      setIsVideoEnabled(nextState);
       setIsVideoCall(true);
-      sendCallSignal({ type: 'MEDIA_STATE', isVideoEnabled: existingTrack.enabled });
+      sendCallSignal({ type: 'MEDIA_STATE', isVideoEnabled: nextState });
 
-      if (existingTrack.enabled && localVideoRef.current) {
-        localVideoRef.current.muted = true;
-        localVideoRef.current.defaultMuted = true;
-        localVideoRef.current.playsInline = true;
-        localVideoRef.current.srcObject = localStreamRef.current;
-        localVideoRef.current.play().catch(() => { });
+      if (localVideoRef.current) {
+        if (nextState) {
+          localVideoRef.current.muted = true;
+          localVideoRef.current.defaultMuted = true;
+          localVideoRef.current.playsInline = true;
+          localVideoRef.current.setAttribute('playsinline', '');
+          localVideoRef.current.setAttribute('webkit-playsinline', '');
+          localVideoRef.current.srcObject = localStreamRef.current;
+          localVideoRef.current.play().catch(() => { });
+        } else {
+          localVideoRef.current.srcObject = null;
+        }
       }
       return;
     }
@@ -1039,19 +1113,26 @@ const CallPage = () => {
         const videoTransceiver = transceivers.find(t => (t.sender && t.sender.track && t.sender.track.kind === 'video') || (t.receiver && t.receiver.track && t.receiver.track.kind === 'video'));
         if (videoTransceiver && videoTransceiver.sender) {
           videoTransceiver.direction = 'sendrecv';
-          videoTransceiver.sender.replaceTrack(newTrack);
+          await videoTransceiver.sender.replaceTrack(newTrack);
         } else {
           const senders = peerConnectionRef.current.getSenders();
           const videoSender = senders.find(s => s.track && s.track.kind === 'video');
           if (videoSender) {
-            videoSender.replaceTrack(newTrack);
+            await videoSender.replaceTrack(newTrack);
           } else {
             peerConnectionRef.current.addTrack(newTrack, localStreamRef.current);
           }
         }
-        const offer = await peerConnectionRef.current.createOffer();
-        await peerConnectionRef.current.setLocalDescription(offer);
-        sendCallSignal({ type: 'OFFER', offer, isVideo: true });
+        if (peerConnectionRef.current.signalingState === 'stable') {
+          const offer = await peerConnectionRef.current.createOffer();
+          await peerConnectionRef.current.setLocalDescription(offer);
+          sendCallSignal({
+            type: 'OFFER',
+            offer: { type: offer.type, sdp: offer.sdp },
+            isVideo: true,
+            isVideoEnabled: true
+          });
+        }
       }
 
       setIsVideoCall(true);
@@ -1062,6 +1143,8 @@ const CallPage = () => {
         localVideoRef.current.muted = true;
         localVideoRef.current.defaultMuted = true;
         localVideoRef.current.playsInline = true;
+        localVideoRef.current.setAttribute('playsinline', '');
+        localVideoRef.current.setAttribute('webkit-playsinline', '');
         localVideoRef.current.srcObject = localStreamRef.current;
         localVideoRef.current.play().catch(() => { });
       }
@@ -1236,6 +1319,10 @@ const CallPage = () => {
               autoPlay
               playsInline
               muted
+              onPlaying={() => setHasRemoteVideo(true)}
+              onLoadedMetadata={(e) => {
+                try { e.target.play().catch(() => {}); } catch (_) { }
+              }}
               className={`absolute inset-0 w-full h-full ${(isScreenSharing || isRemoteScreenSharing) ? 'object-contain bg-black' : 'object-cover sm:object-contain'
                 } transition-opacity duration-300 ${isConnected && hasRemoteVideo && isRemoteVideoEnabled ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none z-0'}`}
             />
@@ -1274,7 +1361,7 @@ const CallPage = () => {
                     <span>
                       {!isConnected
                         ? callStatusText
-                        : (isVideoCall && (!hasRemoteVideo || !isRemoteVideoEnabled) ? 'Đối phương chưa bật camera' : 'Đang đàm thoại')}
+                        : ((isVideoCall || isVideoParam) && (!hasRemoteVideo || !isRemoteVideoEnabled) ? 'Đối phương chưa bật camera' : 'Đang đàm thoại')}
                     </span>
                   </p>
                 </div>
