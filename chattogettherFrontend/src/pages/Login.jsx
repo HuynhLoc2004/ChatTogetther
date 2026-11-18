@@ -2,15 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   User, Lock, Eye, EyeOff, AlertCircle, Loader2, 
-  ArrowRight, Sparkles, Mic, Music, Volume2 
+  ArrowRight, Sparkles, Mic, Music 
 } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import TalovinLogo from '../components/TalovinLogo';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 
-// 16 thanh Audio Visualizer chuẩn cho hiệu ứng âm thanh sống động
-const AUDIO_BAR_HEIGHTS = [12, 22, 32, 16, 36, 26, 14, 30, 20, 28, 10, 24, 34, 18, 22, 12];
+// 16 thanh Audio Visualizer chuẩn cho hiệu ứng âm thanh trên form đăng nhập
+const AUDIO_BAR_HEIGHTS = [10, 18, 26, 14, 30, 22, 12, 28, 16, 24, 8, 20, 28, 14, 18, 10];
 
 // Helper giải mã & kiểm tra JWT token còn hạn sử dụng
 const isTokenValid = (token) => {
@@ -30,10 +30,11 @@ const Login = () => {
   const { updateCurrentUser, refreshProfile } = useAuth();
   const navigate = useNavigate();
 
-  // Trạng thái màn hình Intro điện ảnh
-  const [showIntro, setShowIntro] = useState(true);
-  const [introFading, setIntroFading] = useState(false);
-  const [hasValidToken, setHasValidToken] = useState(false);
+  // Kiểm tra cờ xem màn hình Welcome Intro lần đầu
+  const [hasSeenWelcome, setHasSeenWelcome] = useState(() => {
+    return localStorage.getItem('talovin_welcome_seen') === 'true';
+  });
+  const [isExitingWelcome, setIsExitingWelcome] = useState(false);
 
   // Trạng thái Form Đăng nhập / Đăng ký
   const [isRegisterMode, setIsRegisterMode] = useState(false);
@@ -45,52 +46,29 @@ const Login = () => {
 
   const elapsedTimerRef = useRef(null);
 
-  // Khởi động kiểm tra token & điều phối luồng Intro (khoảng 2.6s)
+  // Tự động vào Sảnh chính nếu token còn hạn
   useEffect(() => {
     const token = localStorage.getItem('accesstoken');
-    const valid = isTokenValid(token);
-    setHasValidToken(valid);
-
-    // Kích hoạt ping làm ấm máy chủ ngay khi vào trang
-    axiosClient.get('/ping').catch(() => {});
-
-    // Thời gian hiển thị đoạn giới thiệu điện ảnh (2.6 giây)
-    const introTimer = setTimeout(() => {
-      if (valid) {
-        // Token còn hạn -> Vào thẳng Sảnh chính, không bắt login lại
-        setIntroFading(true);
-        setTimeout(() => {
-          navigate('/', { replace: true });
-        }, 350);
-      } else {
-        // Chưa đăng nhập hoặc token đã hết hạn -> Hiện Form Login
-        if (token) {
-          localStorage.removeItem('accesstoken');
-          localStorage.removeItem('refreshToken');
-        }
-        setIntroFading(true);
-        setTimeout(() => {
-          setShowIntro(false);
-        }, 350);
-      }
-    }, 2600);
-
-    return () => clearTimeout(introTimer);
+    if (token && isTokenValid(token)) {
+      navigate('/', { replace: true });
+    }
   }, [navigate]);
 
-  // Bỏ qua intro ngay lập tức khi bấm nút "Vào ngay"
-  const handleSkipIntro = () => {
-    const token = localStorage.getItem('accesstoken');
-    const valid = isTokenValid(token);
-    if (valid) {
-      navigate('/', { replace: true });
-    } else {
-      if (token) {
-        localStorage.removeItem('accesstoken');
-        localStorage.removeItem('refreshToken');
-      }
-      setShowIntro(false);
-    }
+  // Làm ấm máy chủ ngay khi mở màn hình
+  useEffect(() => {
+    axiosClient.get('/ping').catch(() => {});
+  }, []);
+
+  // Chuyển mượt 350ms từ Welcome Intro sang Form Đăng nhập / Đăng ký
+  const handleEnterApp = (forRegister = false) => {
+    if (isExitingWelcome) return;
+    setIsExitingWelcome(true);
+    setTimeout(() => {
+      localStorage.setItem('talovin_welcome_seen', 'true');
+      setIsRegisterMode(forRegister);
+      setHasSeenWelcome(true);
+      setIsExitingWelcome(false);
+    }, 350);
   };
 
   // Xử lý gửi Form Đăng nhập / Đăng ký
@@ -198,248 +176,317 @@ const Login = () => {
   };
 
   // =========================================================================
-  // 1. MÀN HÌNH CINEMATIC INTRO (THẬP SÁNG XẸT QUA -> LOGO BỪNG SÁNG -> TEXT GIỚI THIỆU)
+  // 1. MÀN HÌNH WELCOME INTRO: CỤM 3 THẺ KÍNH MỜ XẾP CHỒNG NGHỆ THUẬT & ÁNH SÁNG ẤM
   // =========================================================================
-  if (showIntro) {
+  if (!hasSeenWelcome) {
     return (
       <div 
-        className={`min-h-[100dvh] w-full bg-[#08090C] text-[#F4F4F5] flex flex-col items-center justify-center relative overflow-hidden select-none font-sans transition-all duration-350 ease-out ${
-          introFading ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'
+        className={`min-h-[100dvh] w-full bg-[#08090C] text-[#F4F4F5] flex items-center justify-center relative overflow-hidden select-none font-sans transition-all duration-350 ease-out ${
+          isExitingWelcome ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'
         }`}
       >
-        {/* Nguồn sáng khuếch tán nền cực dịu */}
+        {/* Nguồn sáng khuếch tán nền cực dịu từ đỉnh */}
         <div 
           className="absolute inset-0 pointer-events-none"
           style={{
-            background: 'radial-gradient(ellipse 70% 55% at 50% 48%, rgba(99, 102, 241, 0.08), rgba(255, 255, 255, 0.02), transparent)'
+            background: 'radial-gradient(ellipse 70% 50% at 50% 30%, rgba(99, 102, 241, 0.08), rgba(255, 255, 255, 0.02), transparent)'
           }}
         />
 
-        {/* Nút bỏ qua nhanh ở góc trên bên phải */}
-        <button
-          type="button"
-          onClick={handleSkipIntro}
-          className="absolute top-5 right-5 sm:top-7 sm:right-7 z-40 px-3.5 py-1.5 rounded-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] hover:border-white/[0.16] text-xs text-zinc-400 hover:text-white transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
-        >
-          <span>{hasValidToken ? 'Vào sảnh' : 'Vào ngay'}</span>
-          <ArrowRight size={13} strokeWidth={2} />
-        </button>
-
         {/* ------------------------------------------------------------- */}
-        {/* HIỆU ỨNG TIA SÁNG CHỮ THẬP XẸT QUA MÀN HÌNH (CROSS LASER SLICE) */}
+        {/* A. BỐ CỤC LAPTOP / DESKTOP (>= 1024px): 2 CỘT CÂN ĐỐI GẮN KẾT */}
         {/* ------------------------------------------------------------- */}
-        <div className="absolute inset-0 pointer-events-none overflow-hidden flex items-center justify-center z-10">
-          {/* Tia sáng 1: Chém xiên góc -22 độ từ trái qua phải */}
-          <div className="absolute w-[220%] h-[2px] bg-gradient-to-r from-transparent via-white via-indigo-300 to-transparent shadow-[0_0_24px_rgba(255,255,255,0.9),0_0_50px_rgba(99,102,241,0.6)] animate-laser-slice-1" />
-
-          {/* Tia sáng 2: Chém xiên góc 22 độ tạo hình chữ thập cắt ngang tâm */}
-          <div className="absolute w-[220%] h-[2px] bg-gradient-to-r from-transparent via-white via-emerald-300 to-transparent shadow-[0_0_24px_rgba(255,255,255,0.9),0_0_50px_rgba(16,185,129,0.5)] animate-laser-slice-2" />
-
-          {/* Bùng sáng tâm điểm tại vị trí 2 tia giao nhau (Epicenter Flash) */}
-          <div className="absolute w-52 h-52 rounded-full bg-radial from-white/40 via-indigo-400/20 to-transparent blur-xl animate-center-burst" />
-
-          {/* Vòng sóng chấn lan tỏa nhẹ từ tâm */}
-          <div className="absolute w-28 h-28 rounded-full border border-white/30 animate-shockwave" />
-          <div className="absolute w-56 h-56 rounded-full border border-white/15 animate-shockwave-delay" />
-        </div>
-
-        {/* ------------------------------------------------------------- */}
-        {/* KHỐI TRUNG TÂM: LOGO TALOVIN & NỘI DUNG GIỚI THIỆU NỀN TẢNG */}
-        {/* ------------------------------------------------------------- */}
-        <div className="relative z-20 flex flex-col items-center text-center px-6 max-w-lg mx-auto">
+        <div className="hidden lg:grid grid-cols-2 gap-16 items-center w-full max-w-5xl mx-auto px-8 py-12 relative z-10">
           
-          {/* 1. KHỐI LOGO HIỆN LÊN SAU KHI TIA SÁNG XẸT QUA */}
-          <div className="relative mb-6 animate-logo-emergence">
-            {/* Hào quang nền của logo */}
-            <div className="absolute -inset-4 rounded-3xl bg-white/[0.04] blur-xl" />
-            
-            {/* Khung chứa Squircle cao cấp chuẩn Arc / Raycast */}
-            <div className="relative w-20 h-20 sm:w-22 sm:h-22 rounded-3xl bg-[#11131A] border border-white/[0.18] shadow-[0_16px_48px_rgba(0,0,0,0.8),0_0_50px_rgba(255,255,255,0.08)] flex items-center justify-center">
-              <TalovinLogo size={42} showText={false} />
-            </div>
-          </div>
-
-          {/* 2. CHỮ TALOVIN & HIỆU ỨNG GIỚI THIỆU NỀN TẢNG */}
-          <div className="flex flex-col items-center animate-text-reveal">
-            
-            {/* Badge phân loại */}
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.05] border border-white/[0.08] shadow-sm mb-3">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-[11px] font-mono font-medium text-zinc-300 tracking-wider uppercase">
-                Social Lounge & Audio Space
-              </span>
-            </div>
-
-            {/* Tên thương hiệu lớn */}
-            <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-[0.18em] uppercase font-sans mb-3 drop-shadow-sm">
-              Talovin
+          {/* CỘT TRÁI: TIÊU ĐỀ, MÔ TẢ & CỤM 2 NÚT HÀNH ĐỘNG */}
+          <div className="flex flex-col items-start text-left">
+            {/* Tiêu đề chính lớn */}
+            <h1 className="text-4xl lg:text-[44px] font-bold text-white tracking-tight leading-[1.2] mb-4 font-sans">
+              Bắt đúng tần số.<br />
+              Chuyện gì cũng dễ mở lời.
             </h1>
 
-            {/* Slogan & Câu giới thiệu nền tảng */}
-            <p className="text-sm sm:text-base text-zinc-200 font-medium max-w-md leading-snug mb-2 font-sans">
-              Không gian kết nối âm thanh & khoảnh khắc sống động
-            </p>
-            <p className="text-xs text-zinc-400 max-w-sm leading-relaxed mb-6 font-sans">
-              Bắt đúng tần số · Trò chuyện trực tiếp · Lắng nghe cùng nhau
+            {/* Mô tả tiếng Việt súc tích */}
+            <p className="text-[15px] text-zinc-400 leading-relaxed max-w-md mb-8 font-sans">
+              Gửi nhanh đoạn voice 5 giây, nghe chung một giai điệu và trò chuyện cùng hội bạn.
             </p>
 
-            {/* SÓNG ÂM THANH EQUALIZER VISUALIZER NHẢY SỐNG ĐỘNG */}
-            <div className="flex items-center justify-center gap-1.5 h-8 my-1" aria-hidden="true">
-              {AUDIO_BAR_HEIGHTS.map((h, i) => (
-                <span
-                  key={i}
-                  className="w-[2.5px] rounded-full bg-gradient-to-t from-white/30 via-white/80 to-white"
-                  style={{
-                    height: `${h}px`,
-                    animation: 'talovinIntroWave 1.2s ease-in-out infinite',
-                    animationDelay: `${(i * 0.07).toFixed(2)}s`
-                  }}
-                />
-              ))}
+            {/* Cụm 2 nút hành động nằm ngang gọn gàng */}
+            <div className="flex items-center gap-5 flex-wrap">
+              <button
+                type="button"
+                onClick={() => handleEnterApp(true)}
+                className="h-12 px-8 rounded-full bg-[#F4F4F5] hover:bg-white text-[#090A0F] font-semibold text-sm shadow-[0_4px_24px_rgba(255,255,255,0.15)] hover:shadow-[0_6px_30px_rgba(255,255,255,0.25)] transition-all active:scale-[0.98] cursor-pointer flex items-center gap-2.5"
+              >
+                <span>Bắt đầu khám phá</span>
+                <ArrowRight size={16} strokeWidth={2} />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleEnterApp(false)}
+                className="text-sm text-zinc-400 hover:text-white transition-colors cursor-pointer py-2"
+              >
+                Tôi đã có tài khoản? <span className="text-zinc-200 underline underline-offset-4 font-medium">Đăng nhập</span>
+              </button>
             </div>
+          </div>
 
-            {/* Dòng trạng thái điều hướng */}
-            <p className="text-[11px] text-zinc-500 font-mono tracking-wider mt-5">
-              {hasValidToken ? 'Đang kết nối vào Sảnh trực tuyến...' : 'Đang chuẩn bị không gian trò chuyện...'}
-            </p>
+          {/* CỘT PHẢI: CỤM 3 THẺ KÍNH MỜ XẾP CHỒNG NGHỆ THUẬT (STACKED GLASS CARDS) */}
+          <div className="relative w-full h-[360px] flex items-center justify-center select-none">
+            
+            {/* Nguồn sáng khuếch tán mềm mại phía sau cụm thẻ (w-300 h-300 blur-90px) */}
+            <div className="absolute w-[320px] h-[320px] rounded-full bg-indigo-500/15 blur-[90px] pointer-events-none -z-0" />
+
+            {/* Khối khung cụm thẻ */}
+            <div className="relative w-[320px] h-[250px] flex items-center justify-center">
+              
+              {/* THẺ 1: THẺ SAU CÙNG (NGHIÊNG NHẸ TRÁI -rotate-3, THANH NHẠC) */}
+              <div className="absolute -top-6 -left-5 w-[300px] p-3.5 rounded-2xl bg-white/[0.04] backdrop-blur-xl border border-white/[0.09] shadow-[0_16px_40px_rgba(0,0,0,0.55)] -rotate-3 z-10 animate-gentle-breathe-1 text-left">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0">
+                      <Music size={14} strokeWidth={2} />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-[10px] text-zinc-400 font-medium">Đang phát chung</span>
+                      <span className="text-xs font-semibold text-zinc-200 truncate max-w-[150px]">Sunset Coffee Vibe</span>
+                    </div>
+                  </div>
+
+                  {/* 3 cột sóng nhạc đang nhảy nhẹ */}
+                  <div className="flex items-center gap-1 h-4 pr-1" aria-hidden="true">
+                    <span className="w-1 h-3 rounded-full bg-indigo-400 animate-pulse" />
+                    <span className="w-1 h-4 rounded-full bg-indigo-400 animate-pulse delay-75" />
+                    <span className="w-1 h-2 rounded-full bg-indigo-400 animate-pulse delay-150" />
+                  </div>
+                </div>
+              </div>
+
+              {/* THẺ 2: THẺ GIỮA (NGHIÊNG NHẸ PHẢI rotate-2, CÂU HỎI NHANH) */}
+              <div className="absolute top-12 -right-5 w-[300px] p-3.5 rounded-2xl bg-white/[0.05] backdrop-blur-xl border border-white/[0.11] shadow-[0_18px_45px_rgba(0,0,0,0.6)] rotate-2 z-20 animate-gentle-breathe-2 text-left">
+                <div className="flex items-start gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-300 flex items-center justify-center shrink-0 mt-0.5">
+                    <Sparkles size={14} strokeWidth={2} />
+                  </div>
+                  <div className="flex flex-col flex-1 min-w-0">
+                    <span className="text-xs font-semibold text-zinc-100 leading-tight">
+                      "Đêm nay ai còn thức?"
+                    </span>
+                    <div className="flex items-center gap-2 mt-2">
+                      {/* 2 avatar nhỏ đang trả lời */}
+                      <div className="flex -space-x-1.5 overflow-hidden shrink-0">
+                        <div className="w-5 h-5 rounded-full bg-emerald-600 border border-[#11131A] flex items-center justify-center text-[9px] font-bold text-white">M</div>
+                        <div className="w-5 h-5 rounded-full bg-indigo-600 border border-[#11131A] flex items-center justify-center text-[9px] font-bold text-white">L</div>
+                      </div>
+                      <span className="text-[10px] text-zinc-400 font-mono">14 câu trả lời</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* THẺ 3: THẺ CHÍNH PHÍA TRƯỚC (THẲNG, NỔI BẬT NHẤT, LOGO + 18 NGƯỜI TRỰC TUYẾN + VOICE 5S) */}
+              <div className="relative w-[320px] p-4 rounded-2xl bg-white/[0.07] backdrop-blur-2xl border border-white/[0.16] shadow-[0_24px_60px_rgba(0,0,0,0.7)] z-30 animate-gentle-breathe-3 text-left">
+                {/* Hàng trên: Logo Talovin + Chấm xanh "18 người đang trong sảnh" (whitespace-nowrap) */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <TalovinLogo size={24} showText={true} />
+                  </div>
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 text-[10.5px] font-medium whitespace-nowrap shrink-0 shadow-sm">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                    <span className="whitespace-nowrap">18 người đang trong sảnh</span>
+                  </div>
+                </div>
+
+                {/* Hàng dưới: Thanh phát voice 5 giây mượt mà */}
+                <div className="mt-3.5 p-2 rounded-xl bg-black/40 border border-white/[0.07] flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                    <Mic size={13} strokeWidth={2} />
+                  </div>
+                  <div className="flex-1 min-w-0 flex items-center justify-between">
+                    <div className="flex flex-col text-left">
+                      <span className="text-[10px] text-zinc-400 font-medium">Voice tâm sự</span>
+                      <div className="flex items-center gap-1 mt-0.5" aria-hidden="true">
+                        <span className="w-1 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                        <span className="w-1 h-3.5 rounded-full bg-emerald-400 animate-pulse delay-75" />
+                        <span className="w-1 h-2 rounded-full bg-emerald-400 animate-pulse delay-150" />
+                        <span className="w-1 h-3 rounded-full bg-emerald-400 animate-pulse delay-100" />
+                        <span className="w-1 h-2 rounded-full bg-emerald-400 animate-pulse delay-200" />
+                      </div>
+                    </div>
+                    <span className="text-xs font-mono text-emerald-400 font-bold px-1.5">0:05</span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
           </div>
         </div>
 
         {/* ------------------------------------------------------------- */}
-        {/* CSS KEYFRAMES CHO TIA SÁNG, FLASH & CHUYỂN ĐỘNG INTRO */}
+        {/* B. BỐ CỤC ĐIỆN THOẠI / MOBILE (< 1024px): BỐ CỤC DỌC GẮN KẾT */}
+        {/* ------------------------------------------------------------- */}
+        <div className="lg:hidden flex flex-col items-center justify-center min-h-[100dvh] w-full px-5 py-8 relative z-10 text-center">
+          
+          {/* NỬA TRÊN: CỤM 3 THẺ KÍNH MỜ XẾP CHỒNG NGHỆ THUẬT */}
+          <div className="relative w-full max-w-[280px] h-[230px] flex items-center justify-center select-none shrink-0 mb-6">
+            
+            {/* Nguồn sáng khuếch tán mềm mại phía sau (w-260 h-260 blur-80px) */}
+            <div className="absolute w-[260px] h-[260px] rounded-full bg-indigo-500/15 blur-[80px] pointer-events-none -z-0" />
+
+            {/* Khung cụm thẻ */}
+            <div className="relative w-[260px] h-[210px] flex items-center justify-center">
+              
+              {/* THẺ 1: THẺ SAU CÙNG (NGHIÊNG NHẸ TRÁI -rotate-3) */}
+              <div className="absolute -top-4 -left-3 w-[240px] p-2.5 rounded-2xl bg-white/[0.04] backdrop-blur-xl border border-white/[0.09] shadow-[0_14px_36px_rgba(0,0,0,0.5)] -rotate-3 z-10 animate-gentle-breathe-1 text-left">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0">
+                      <Music size={12} strokeWidth={2} />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-[9.5px] text-zinc-400 font-medium">Đang phát chung</span>
+                      <span className="text-[11px] font-semibold text-zinc-200 truncate max-w-[125px]">Sunset Coffee Vibe</span>
+                    </div>
+                  </div>
+
+                  {/* 3 cột sóng nhạc */}
+                  <div className="flex items-center gap-1 h-3.5 pr-1" aria-hidden="true">
+                    <span className="w-1 h-2.5 rounded-full bg-indigo-400 animate-pulse" />
+                    <span className="w-1 h-3.5 rounded-full bg-indigo-400 animate-pulse delay-75" />
+                    <span className="w-1 h-2 rounded-full bg-indigo-400 animate-pulse delay-150" />
+                  </div>
+                </div>
+              </div>
+
+              {/* THẺ 2: THẺ GIỮA (NGHIÊNG NHẸ PHẢI rotate-2) */}
+              <div className="absolute top-9 -right-3 w-[240px] p-2.5 rounded-2xl bg-white/[0.05] backdrop-blur-xl border border-white/[0.11] shadow-[0_16px_40px_rgba(0,0,0,0.55)] rotate-2 z-20 animate-gentle-breathe-2 text-left">
+                <div className="flex items-start gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-300 flex items-center justify-center shrink-0 mt-0.5">
+                    <Sparkles size={12} strokeWidth={2} />
+                  </div>
+                  <div className="flex flex-col flex-1 min-w-0">
+                    <span className="text-[11.5px] font-semibold text-zinc-100 leading-tight">
+                      "Đêm nay ai còn thức?"
+                    </span>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <div className="flex -space-x-1.5 overflow-hidden shrink-0">
+                        <div className="w-4 h-4 rounded-full bg-emerald-600 border border-[#11131A] flex items-center justify-center text-[8px] font-bold text-white">M</div>
+                        <div className="w-4 h-4 rounded-full bg-indigo-600 border border-[#11131A] flex items-center justify-center text-[8px] font-bold text-white">L</div>
+                      </div>
+                      <span className="text-[9.5px] text-zinc-400 font-mono">14 câu trả lời</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* THẺ 3: THẺ CHÍNH PHÍA TRƯỚC (THẲNG, NỔI BẬT NHẤT) */}
+              <div className="relative w-[260px] p-3.5 rounded-2xl bg-white/[0.07] backdrop-blur-2xl border border-white/[0.16] shadow-[0_22px_50px_rgba(0,0,0,0.7)] z-30 animate-gentle-breathe-3 text-left">
+                {/* Logo + Trạng thái trực tuyến (whitespace-nowrap) */}
+                <div className="flex items-center justify-between gap-1.5">
+                  <TalovinLogo size={22} showText={true} />
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 text-[10px] font-medium whitespace-nowrap shrink-0 shadow-sm">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                    <span className="whitespace-nowrap">18 người đang trong sảnh</span>
+                  </div>
+                </div>
+
+                {/* Thanh voice 5s */}
+                <div className="mt-3 p-1.5 rounded-xl bg-black/40 border border-white/[0.07] flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                    <Mic size={11} strokeWidth={2} />
+                  </div>
+                  <div className="flex-1 min-w-0 flex items-center justify-between">
+                    <div className="flex flex-col text-left">
+                      <span className="text-[9.5px] text-zinc-400 font-medium">Voice tâm sự</span>
+                      <div className="flex items-center gap-1 mt-0.5" aria-hidden="true">
+                        <span className="w-1 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                        <span className="w-1 h-3 rounded-full bg-emerald-400 animate-pulse delay-75" />
+                        <span className="w-1 h-2 rounded-full bg-emerald-400 animate-pulse delay-150" />
+                        <span className="w-1 h-2.5 rounded-full bg-emerald-400 animate-pulse delay-100" />
+                      </div>
+                    </div>
+                    <span className="text-[11px] font-mono text-emerald-400 font-bold px-1">0:05</span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          {/* NỬA DƯỚI: TIÊU ĐỀ, MÔ TẢ & 2 NÚT HÀNH ĐỘNG GẮN KẾT */}
+          <div className="w-full max-w-sm flex flex-col items-center text-center">
+            {/* Tiêu đề chính */}
+            <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight leading-snug mb-2 font-sans">
+              Bắt đúng tần số.<br />Chuyện gì cũng dễ mở lời.
+            </h1>
+
+            {/* Mô tả tiếng Việt */}
+            <p className="text-xs sm:text-sm text-zinc-400 leading-relaxed max-w-[320px] mb-6 font-sans">
+              Gửi nhanh đoạn voice 5 giây, nghe chung một giai điệu và trò chuyện cùng hội bạn.
+            </p>
+
+            {/* Cụm nút hành động */}
+            <div className="flex flex-col items-center gap-3 w-full">
+              <button
+                type="button"
+                onClick={() => handleEnterApp(true)}
+                className="h-11 w-full max-w-[280px] rounded-full bg-[#F4F4F5] hover:bg-white text-[#090A0F] font-semibold text-sm shadow-[0_4px_24px_rgba(255,255,255,0.15)] hover:shadow-[0_6px_30px_rgba(255,255,255,0.25)] transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2"
+              >
+                <span>Bắt đầu khám phá</span>
+                <ArrowRight size={15} strokeWidth={2} />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleEnterApp(false)}
+                className="text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer py-1"
+              >
+                Tôi đã có tài khoản? <span className="text-zinc-200 underline underline-offset-4 font-medium">Đăng nhập</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* ------------------------------------------------------------- */}
+        {/* CSS KEYFRAMES CHO CHUYỂN ĐỘNG NHỊP THỞ ÊM ÁI CỦA 3 THẺ KÍNH   */}
         {/* ------------------------------------------------------------- */}
         <style>{`
-          /* Tia sáng 1 chém xiên góc -22 độ */
-          @keyframes laserSlice1 {
-            0% {
-              transform: translate3d(-140%, -80%, 0) rotate(-22deg);
-              opacity: 0;
-            }
-            15% {
-              opacity: 1;
-            }
-            65% {
-              opacity: 1;
-            }
-            100% {
-              transform: translate3d(140%, 80%, 0) rotate(-22deg);
-              opacity: 0;
-            }
-          }
-
-          /* Tia sáng 2 chém xiên góc 22 độ tạo hình thập xẹt qua */
-          @keyframes laserSlice2 {
-            0% {
-              transform: translate3d(-140%, 80%, 0) rotate(22deg);
-              opacity: 0;
-            }
-            15% {
-              opacity: 1;
-            }
-            65% {
-              opacity: 1;
-            }
-            100% {
-              transform: translate3d(140%, -80%, 0) rotate(22deg);
-              opacity: 0;
-            }
-          }
-
-          /* Bùng sáng tại tâm điểm giao nhau */
-          @keyframes centerBurst {
-            0% {
-              transform: scale(0.2);
-              opacity: 0;
-            }
-            35% {
-              transform: scale(1.3);
-              opacity: 0.9;
-            }
-            60% {
-              transform: scale(1);
-              opacity: 0.45;
-            }
-            100% {
-              transform: scale(0.8);
-              opacity: 0.15;
-            }
-          }
-
-          /* Vòng sóng chấn lan tỏa từ tâm */
-          @keyframes shockwave {
-            0% {
-              transform: scale(0.4);
-              opacity: 0.8;
-            }
-            100% {
-              transform: scale(2.2);
-              opacity: 0;
-            }
-          }
-
-          /* Logo xuất hiện sau tia sáng (0.45s) */
-          @keyframes logoEmergence {
-            0% {
-              transform: scale(0.7) translateY(10px);
-              opacity: 0;
-              filter: blur(8px) brightness(1.6);
-            }
-            60% {
-              transform: scale(1.04) translateY(-2px);
-              opacity: 1;
-              filter: blur(0px) brightness(1.2);
-            }
-            100% {
-              transform: scale(1) translateY(0);
-              opacity: 1;
-              filter: blur(0px) brightness(1);
-            }
-          }
-
-          /* Nội dung text giới thiệu xuất hiện mượt mà (0.8s) */
-          @keyframes textReveal {
-            0% {
-              transform: translateY(14px);
-              opacity: 0;
-            }
-            100% {
-              transform: translateY(0);
-              opacity: 1;
-            }
-          }
-
-          /* Sóng âm thanh nhảy nhẹ */
-          @keyframes talovinIntroWave {
+          @keyframes gentleBreathe1 {
             0%, 100% {
-              transform: scaleY(0.35);
-              opacity: 0.4;
+              transform: translateY(0px) rotate(-3deg);
             }
             50% {
-              transform: scaleY(1);
-              opacity: 0.95;
+              transform: translateY(-5px) rotate(-2deg);
             }
           }
 
-          .animate-laser-slice-1 {
-            animation: laserSlice1 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+          @keyframes gentleBreathe2 {
+            0%, 100% {
+              transform: translateY(0px) rotate(2deg);
+            }
+            50% {
+              transform: translateY(-6px) rotate(2.8deg);
+            }
           }
-          .animate-laser-slice-2 {
-            animation: laserSlice2 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.08s forwards;
+
+          @keyframes gentleBreathe3 {
+            0%, 100% {
+              transform: translateY(0px);
+            }
+            50% {
+              transform: translateY(-4px);
+            }
           }
-          .animate-center-burst {
-            animation: centerBurst 1s ease-out 0.25s forwards;
+
+          .animate-gentle-breathe-1 {
+            animation: gentleBreathe1 6s ease-in-out infinite;
           }
-          .animate-shockwave {
-            animation: shockwave 1.1s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards;
+          .animate-gentle-breathe-2 {
+            animation: gentleBreathe2 7s ease-in-out infinite 0.4s;
           }
-          .animate-shockwave-delay {
-            animation: shockwave 1.3s cubic-bezier(0.16, 1, 0.3, 1) 0.45s forwards;
-          }
-          .animate-logo-emergence {
-            animation: logoEmergence 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.35s both;
-          }
-          .animate-text-reveal {
-            animation: textReveal 0.85s cubic-bezier(0.16, 1, 0.3, 1) 0.75s both;
+          .animate-gentle-breathe-3 {
+            animation: gentleBreathe3 8s ease-in-out infinite 0.8s;
           }
         `}</style>
       </div>
@@ -450,7 +497,7 @@ const Login = () => {
   // 2. FORM ĐĂNG NHẬP / ĐĂNG KÝ: MODERN DARK CRAFT (ARC / RAYCAST STYLE)
   // =========================================================================
   return (
-    <div className="min-h-[100dvh] w-full bg-[#08090C] text-[#F4F4F5] flex flex-col justify-center items-center px-4 py-8 select-none relative overflow-hidden font-sans animate-in fade-in duration-400">
+    <div className="min-h-[100dvh] w-full bg-[#08090C] text-[#F4F4F5] flex flex-col justify-center items-center px-4 py-8 select-none relative overflow-hidden font-sans animate-in fade-in duration-300">
       {/* 1. Nguồn sáng khuếch tán cực dịu từ đỉnh màn hình xuống */}
       <div 
         className="absolute inset-0 pointer-events-none"
@@ -460,7 +507,7 @@ const Login = () => {
       />
 
       {/* 2. Khối thẻ trung tâm (w-full max-w-[420px]) có chiều sâu vật lý */}
-      <div className="w-full max-w-[420px] bg-[#11131A] rounded-2xl border-t border-white/[0.14] border-x border-b border-white/[0.06] shadow-[0_24px_64px_rgba(0,0,0,0.75)] p-6 sm:p-8 relative z-10 animate-in zoom-in-95 duration-300">
+      <div className="w-full max-w-[420px] bg-[#11131A] rounded-2xl border-t border-white/[0.14] border-x border-b border-white/[0.06] shadow-[0_24px_64px_rgba(0,0,0,0.75)] p-6 sm:p-8 relative z-10 animate-in zoom-in-95 duration-200">
         
         {/* Phần đầu thẻ: Logo Talovin + Status Pill "Sảnh đang mở" */}
         <div className="flex items-center justify-between pb-4">
