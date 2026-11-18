@@ -291,6 +291,19 @@ const CallPage = () => {
     return `${mins < 10 ? '0' : ''}${mins}:${remSecs < 10 ? '0' : ''}${remSecs}`;
   };
 
+  // Helper dập tắt toàn bộ chuông reo trên TẤT CẢ các Tab / Cửa sổ trình duyệt
+  const broadcastStopRing = useCallback(() => {
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        const bc = new BroadcastChannel('talovin_call_signal_sync');
+        bc.postMessage({ type: 'STOP_ALL_RING_AUDIO', timestamp: Date.now() });
+        bc.close();
+      }
+      localStorage.setItem('talovin_stop_ring_audio_ts', String(Date.now()));
+    } catch (_) {}
+    window.dispatchEvent(new CustomEvent('talovin_stop_all_ring_audio'));
+  }, []);
+
   // 3. Ring audio sound generator (Web Audio API)
   const stopRingAudio = useCallback(() => {
     try {
@@ -311,13 +324,16 @@ const CallPage = () => {
         try { audioContextRef.current.close(); } catch (_) { }
         audioContextRef.current = null;
       }
-      // Dập tắt bất kỳ chuông nào còn sót lại từ banner toàn cục hoặc component khác
-      window.dispatchEvent(new CustomEvent('talovin_stop_all_ring_audio'));
+      // Dập tắt bất kỳ chuông nào còn sót lại trên TẤT CẢ các Tab & Cửa sổ
+      broadcastStopRing();
     } catch (e) { }
-  }, []);
+  }, [broadcastStopRing]);
 
   const startRingAudio = useCallback(() => {
+    // Tuyệt đối không phát chuông nếu là người nhận máy hoặc cuộc gọi đã kết nối
     if (isIncomingRef.current || isConnected || isCallConnectedRef.current) return;
+    if (searchParams.get('autoAnswer') === 'true' || searchParams.get('incoming') === 'true') return;
+
     try {
       // Dọn dẹp phiên âm thanh cũ nếu còn
       stopRingAudio();
@@ -358,7 +374,7 @@ const CallPage = () => {
         } catch (_) { }
       }, 1400);
     } catch (e) { }
-  }, [isConnected, stopRingAudio]);
+  }, [isConnected, stopRingAudio, searchParams]);
 
   // 4. Cleanup Call Resources (Zero-Lag + An toàn WebSocket)
   const cleanupCall = useCallback(() => {
@@ -596,12 +612,7 @@ const CallPage = () => {
         if (!peerConnectionRef.current) return;
         const pc = peerConnectionRef.current;
 
-        // 1. Chống race condition nếu đang xử lý một gói tin OFFER khác
-        if (isProcessingOfferRef.current) {
-          return;
-        }
-
-        // 2. Nếu OFFER này trùng lặp với OFFER đã nhận và đã có ANSWER sẵn, gửi lại ANSWER cũ ngay lập tức
+        // 1. Nếu OFFER này trùng lặp với OFFER đã nhận và đã có ANSWER sẵn, gửi lại ANSWER cũ ngay lập tức
         if (lastOfferSdpRef.current === msg.offer?.sdp && lastAnswerRef.current) {
           sendCallSignal({
             type: 'ANSWER',
@@ -612,6 +623,10 @@ const CallPage = () => {
           return;
         }
 
+        // 2. Chống race condition
+        if (isProcessingOfferRef.current) {
+          return;
+        }
         isProcessingOfferRef.current = true;
         lastOfferSdpRef.current = msg.offer?.sdp;
 
@@ -622,12 +637,10 @@ const CallPage = () => {
           } catch (_) { }
         }
 
-        if (pc.signalingState !== 'stable') {
-          isProcessingOfferRef.current = false;
-          return;
+        // 4. Nếu pc đang ở trạng thái stable, setRemoteDescription
+        if (pc.signalingState === 'stable') {
+          await pc.setRemoteDescription(new RTCSessionDescription(msg.offer));
         }
-
-        await pc.setRemoteDescription(new RTCSessionDescription(msg.offer));
 
         // Đổ toàn bộ ICE candidate đã lưu trong hàng đợi
         while (iceCandidateQueueRef.current.length > 0) {
@@ -637,20 +650,28 @@ const CallPage = () => {
           } catch (_) { }
         }
 
-        // 4. Chỉ tạo và gán Answer nếu pc đang ở đúng trạng thái have-remote-offer
+        // 5. Tạo và gửi Answer chuẩn WebRTC (không bao giờ lỗi Called in wrong state: stable)
+        let answerToSend = null;
         if (pc.signalingState === 'have-remote-offer') {
           const answer = await pc.createAnswer();
           if (pc.signalingState === 'have-remote-offer') {
             await pc.setLocalDescription(answer);
-            const answerPayload = { type: answer.type, sdp: answer.sdp };
-            lastAnswerRef.current = answerPayload;
-            sendCallSignal({
-              type: 'ANSWER',
-              answer: answerPayload,
-              isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled),
-              isVideoEnabled: Boolean(isVideoEnabled)
-            });
+            answerToSend = { type: answer.type, sdp: answer.sdp };
           }
+        } else if (pc.localDescription && pc.localDescription.type === 'answer') {
+          answerToSend = { type: pc.localDescription.type, sdp: pc.localDescription.sdp };
+        } else if (lastAnswerRef.current) {
+          answerToSend = lastAnswerRef.current;
+        }
+
+        if (answerToSend) {
+          lastAnswerRef.current = answerToSend;
+          sendCallSignal({
+            type: 'ANSWER',
+            answer: answerToSend,
+            isVideo: Boolean(isVideoParam || isVideoCall || isVideoEnabled),
+            isVideoEnabled: Boolean(isVideoEnabled)
+          });
         }
       } catch (e) {
         console.error("Lỗi xử lý OFFER:", e);
@@ -712,7 +733,7 @@ const CallPage = () => {
         }
         if (msg.isVideo) setIsVideoCall(true);
         const pc = peerConnectionRef.current;
-        if (pc && pc.signalingState !== 'stable') {
+        if (pc && pc.signalingState === 'have-local-offer') {
           await pc.setRemoteDescription(new RTCSessionDescription(msg.answer));
           // Đổ toàn bộ ICE candidate trong hàng đợi
           while (iceCandidateQueueRef.current.length > 0) {
@@ -786,8 +807,8 @@ const CallPage = () => {
   useEffect(() => {
     let isActive = true;
 
-    // Ngay khi mount CallPage, dập tắt toàn bộ chuông reo từ banner hoặc component khác
-    window.dispatchEvent(new CustomEvent('talovin_stop_all_ring_audio'));
+    // Ngay khi mount CallPage, dập tắt toàn bộ chuông reo từ banner hoặc component khác trên TẤT CẢ các Tab
+    broadcastStopRing();
     if (isIncomingRef.current) {
       stopRingAudioRef.current?.();
     }
@@ -1008,7 +1029,9 @@ const CallPage = () => {
             }
 
             if (isIncomingRef.current) {
-              // Là người nhận máy: gửi tín hiệu ACCEPT để người gọi biết và gửi OFFER
+              // Là người nhận máy: dập chuông toàn diện và gửi tín hiệu ACCEPT để người gọi biết và gửi OFFER
+              broadcastStopRing();
+              stopRingAudioRef.current?.();
               setCallStatusText('Đang thiết lập kênh đàm thoại...');
               sendCallSignalRef.current?.({ type: 'ACCEPT' });
 

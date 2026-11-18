@@ -69,8 +69,24 @@ const GlobalCallBanner = () => {
     };
   }, [effectiveUserId, getStoredUserId]);
 
+  // Helper dập tắt toàn bộ chuông reo trên TẤT CẢ các Tab / Cửa sổ trình duyệt
+  const broadcastStopAllRing = useCallback(() => {
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        const bc = new BroadcastChannel('talovin_call_signal_sync');
+        bc.postMessage({ type: 'STOP_ALL_RING_AUDIO', timestamp: Date.now() });
+        bc.close();
+      }
+      localStorage.setItem('talovin_stop_ring_audio_ts', String(Date.now()));
+    } catch (_) {}
+    window.dispatchEvent(new CustomEvent('talovin_stop_all_ring_audio'));
+  }, []);
+
   // 1. Play Synthesized Ringtone
   const startRingingSound = useCallback(() => {
+    // Không bao giờ phát chuông nếu đang ở bất kỳ route cuộc gọi nào
+    if (window.location.pathname.includes('/call')) return;
+
     try {
       if (ringInterval.current) {
         clearInterval(ringInterval.current);
@@ -230,22 +246,52 @@ const GlobalCallBanner = () => {
 
   // Dismiss on route change to /call
   useEffect(() => {
-    if (location.pathname.startsWith('/call')) {
+    if (location.pathname.includes('/call') || window.location.pathname.includes('/call')) {
       setIncomingCall(null);
       stopRingingSound();
       clearDismissTimer();
+      broadcastStopAllRing();
     }
-  }, [location.pathname, stopRingingSound, clearDismissTimer]);
+  }, [location.pathname, stopRingingSound, clearDismissTimer, broadcastStopAllRing]);
 
-  // Lắng nghe sự kiện ngắt chuông toàn cục từ CallPage
+  // Lắng nghe sự kiện ngắt chuông toàn cục từ CallPage (CustomEvent + BroadcastChannel + Storage Event)
   useEffect(() => {
     const handleGlobalStop = () => {
       setIncomingCall(null);
       stopRingingSound();
       clearDismissTimer();
     };
+
     window.addEventListener('talovin_stop_all_ring_audio', handleGlobalStop);
-    return () => window.removeEventListener('talovin_stop_all_ring_audio', handleGlobalStop);
+
+    // Đồng bộ đa tab qua Storage
+    const handleStorage = (e) => {
+      if (e.key === 'talovin_stop_ring_audio_ts') {
+        handleGlobalStop();
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+
+    // Đồng bộ đa tab qua BroadcastChannel
+    let bc = null;
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        bc = new BroadcastChannel('talovin_call_signal_sync');
+        bc.onmessage = (ev) => {
+          if (ev.data?.type === 'STOP_ALL_RING_AUDIO') {
+            handleGlobalStop();
+          }
+        };
+      }
+    } catch (_) {}
+
+    return () => {
+      window.removeEventListener('talovin_stop_all_ring_audio', handleGlobalStop);
+      window.removeEventListener('storage', handleStorage);
+      if (bc) {
+        try { bc.close(); } catch (_) {}
+      }
+    };
   }, [stopRingingSound, clearDismissTimer]);
 
   // 4. Accept Call
@@ -265,6 +311,7 @@ const GlobalCallBanner = () => {
     } catch (_) {}
 
     stopRingingSound();
+    broadcastStopAllRing();
     clearDismissTimer();
     setIncomingCall(null);
 
@@ -357,6 +404,7 @@ const GlobalCallBanner = () => {
     } catch (_) {}
 
     stopRingingSound();
+    broadcastStopAllRing();
     clearDismissTimer();
     setIncomingCall(null);
   };
