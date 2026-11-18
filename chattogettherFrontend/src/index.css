@@ -136,6 +136,17 @@ div:has(> [role="status"]) {
   }
 }
 
+@keyframes soundwavePulse {
+  0%, 100% { transform: scaleY(0.35); }
+  50% { transform: scaleY(1); }
+}
+
+@keyframes splashRipple {
+  0% { transform: scale(0.85); opacity: 0.8; }
+  50% { transform: scale(1.18); opacity: 0.35; }
+  100% { transform: scale(1.45); opacity: 0; }
+}
+
 .animate-fade-in {
   animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
 }

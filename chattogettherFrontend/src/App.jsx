@@ -110,7 +110,7 @@ class ErrorBoundary extends Component {
             )}
 
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexDirection: 'column' }}>
-              <button 
+              <button
                 onClick={this.handleReload}
                 style={{
                   background: '#f4f4f5',
@@ -126,7 +126,7 @@ class ErrorBoundary extends Component {
               >
                 Tải lại trang ngay
               </button>
-              <button 
+              <button
                 onClick={this.handleResetCache}
                 style={{
                   background: 'transparent',
@@ -240,11 +240,11 @@ function App() {
           <Routes>
             <Route 
               path="/login" 
-              element={<PublicRoute><div className="auth-wrapper"><Login /></div></PublicRoute>} 
+              element={<PublicRoute><Login /></PublicRoute>} 
             />
             <Route 
               path="/register" 
-              element={<PublicRoute><div className="auth-wrapper"><Register /></div></PublicRoute>} 
+              element={<PublicRoute><Register /></PublicRoute>} 
             />
             <Route 
               path="/" 
