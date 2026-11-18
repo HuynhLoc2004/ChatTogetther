@@ -40,22 +40,22 @@ export const TalovinLogo = ({ size = 28, showText = true, brandName = 'Talovin',
           </linearGradient>
         </defs>
 
-        {/* Khung Squircle Deep Obsidian */}
+        {/* Khung Squircle Deep Obsidian với viền sáng tinh tế */}
         <rect
           x="2"
           y="2"
           width="44"
           height="44"
           rx="12"
-          fill="url(#taloObsidianPlate)"
-          stroke="url(#taloBorderGlow)"
-          strokeWidth="1.2"
+          fill="#141722"
+          stroke="rgba(255, 255, 255, 0.16)"
+          strokeWidth="1.5"
         />
 
         {/* Monogram T Titanium nguyên khối cân xứng chuẩn mực */}
         <path
           d="M13 13.5C13 12.67 13.67 12 14.5 12H33.5C34.33 12 35 12.67 35 13.5V17C35 17.83 34.33 18.5 33.5 18.5H27V33.5C27 34.6 26.1 35.5 25 35.5H23C21.9 35.5 21 34.6 21 33.5V18.5H14.5C13.67 18.5 13 17.83 13 17V13.5Z"
-          fill="url(#taloTitaniumT)"
+          fill="#FFFFFF"
         />
       </svg>
 

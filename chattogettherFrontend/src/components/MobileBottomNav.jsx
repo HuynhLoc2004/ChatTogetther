@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Compass, Users, Radio, MessageSquare } from 'lucide-react';
+import { Compass, Users, Radio, MessageSquare, User } from 'lucide-react';
+import UserAvatar from './UserAvatar';
 
 export const MobileBottomNav = ({
-  activeTab = 'feed', // 'feed' | 'groups' | 'fm' | 'messages'
+  activeTab = 'feed', // 'feed' | 'groups' | 'rooms' | 'saved'
   unreadMessagesCount = 0,
-  onOpenFm = null,
+  hasActiveRooms = false,
+  currentUser = null,
   onSwitchTab = null
 }) => {
   const navigate = useNavigate();
@@ -54,11 +56,11 @@ export const MobileBottomNav = ({
     }
   };
 
-  const handleFmClick = () => {
-    if (onOpenFm) {
-      onOpenFm();
+  const handleRoomsClick = () => {
+    if (onSwitchTab) {
+      onSwitchTab('rooms');
     } else {
-      navigate('/', { state: { openFm: true } });
+      navigate('/?tab=rooms');
     }
   };
 
@@ -66,69 +68,96 @@ export const MobileBottomNav = ({
     navigate('/messages');
   };
 
+  const handleProfileClick = () => {
+    navigate('/profile');
+  };
+
   return (
     <nav
-      className="mobile-bottom-nav lg:hidden fixed bottom-0 left-0 right-0 bg-[#111319]/95 backdrop-blur-md border-t border-white/[0.08] grid grid-cols-4 items-center justify-items-center z-50 px-2 select-none"
+      className="mobile-bottom-nav lg:hidden fixed bottom-0 inset-x-0 z-40 h-16 bg-[#0B0D12]/95 backdrop-blur-md border-t border-white/[0.08] flex items-center justify-around px-1 select-none"
       style={{
-        paddingBottom: 'max(8px, env(safe-area-inset-bottom))',
-        height: 'calc(58px + env(safe-area-inset-bottom, 0px))'
+        paddingBottom: 'max(4px, env(safe-area-inset-bottom, 0px))'
       }}
     >
       {/* 1. Sảnh */}
       <button 
         type="button"
-        className={`w-full min-h-[44px] flex flex-col items-center justify-center gap-1 transition-colors cursor-pointer ${
+        className={`flex-1 min-h-[48px] flex flex-col items-center justify-center gap-1 transition-colors cursor-pointer ${
           activeTab === 'feed' ? 'text-[#F3F4F6] font-semibold' : 'text-[#9CA3AF] hover:text-[#F3F4F6]'
         }`}
         onClick={handleSanhClick}
         title="Sảnh trực tuyến"
       >
-        <Compass size={20} strokeWidth={1.75} />
-        <span className="text-[11px] font-medium tracking-tight">Sảnh</span>
+        <Compass size={20} strokeWidth={activeTab === 'feed' ? 2.2 : 1.75} />
+        <span className="text-[10.5px] font-medium tracking-tight">Sảnh</span>
       </button>
 
       {/* 2. Cộng đồng */}
       <button 
         type="button"
-        className={`w-full min-h-[44px] flex flex-col items-center justify-center gap-1 transition-colors cursor-pointer ${
+        className={`flex-1 min-h-[48px] flex flex-col items-center justify-center gap-1 transition-colors cursor-pointer ${
           activeTab === 'groups' ? 'text-[#F3F4F6] font-semibold' : 'text-[#9CA3AF] hover:text-[#F3F4F6]'
         }`}
         onClick={handleCommunityClick}
         title="Cộng đồng"
       >
-        <Users size={20} strokeWidth={1.75} />
-        <span className="text-[11px] font-medium tracking-tight">Cộng đồng</span>
+        <Users size={20} strokeWidth={activeTab === 'groups' ? 2.2 : 1.75} />
+        <span className="text-[10.5px] font-medium tracking-tight">Cộng đồng</span>
       </button>
 
-      {/* 3. Sóng FM */}
+      {/* 3. Đàm thoại (Có chấm xanh khi có phòng hoạt động) */}
       <button 
         type="button"
-        className={`w-full min-h-[44px] flex flex-col items-center justify-center gap-1 transition-colors cursor-pointer ${
-          activeTab === 'fm' ? 'text-[#F3F4F6] font-semibold' : 'text-[#9CA3AF] hover:text-[#F3F4F6]'
+        className={`flex-1 min-h-[48px] flex flex-col items-center justify-center gap-1 transition-colors cursor-pointer relative ${
+          activeTab === 'rooms' ? 'text-[#F3F4F6] font-semibold' : 'text-[#9CA3AF] hover:text-[#F3F4F6]'
         }`}
-        onClick={handleFmClick}
-        title="Sóng FM"
+        onClick={handleRoomsClick}
+        title="Phòng đàm thoại"
       >
-        <Radio size={20} strokeWidth={1.75} />
-        <span className="text-[11px] font-medium tracking-tight">Sóng FM</span>
+        <div className="relative flex items-center justify-center">
+          <Radio size={20} strokeWidth={activeTab === 'rooms' ? 2.2 : 1.75} />
+          {hasActiveRooms && (
+            <span className="absolute -top-0.5 -right-1 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-[#0B0D12] animate-pulse" />
+          )}
+        </div>
+        <span className="text-[10.5px] font-medium tracking-tight">Đàm thoại</span>
       </button>
 
       {/* 4. Tin nhắn */}
       <button 
         type="button"
-        className="w-full min-h-[44px] flex flex-col items-center justify-center gap-1 transition-colors cursor-pointer text-[#9CA3AF] hover:text-[#F3F4F6] relative"
+        className="flex-1 min-h-[48px] flex flex-col items-center justify-center gap-1 transition-colors cursor-pointer text-[#9CA3AF] hover:text-[#F3F4F6] relative"
         onClick={handleMessagesClick}
         title="Tin nhắn"
       >
-        <div className="relative">
+        <div className="relative flex items-center justify-center">
           <MessageSquare size={20} strokeWidth={1.75} />
           {effectiveUnreadMessages > 0 && (
-            <span className="absolute -top-1 -right-2 min-w-[15px] h-[15px] px-1 rounded-full bg-white text-zinc-950 text-[9px] font-mono font-bold flex items-center justify-center shadow-sm">
-              {effectiveUnreadMessages > 9 ? '9+' : effectiveUnreadMessages}
+            <span className="absolute -top-1 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-white text-zinc-950 text-[9px] font-mono font-bold flex items-center justify-center shadow-sm">
+              {effectiveUnreadMessages > 99 ? '99+' : effectiveUnreadMessages}
             </span>
           )}
         </div>
-        <span className="text-[11px] font-medium tracking-tight">Tin nhắn</span>
+        <span className="text-[10.5px] font-medium tracking-tight">Tin nhắn</span>
+      </button>
+
+      {/* 5. Cá nhân */}
+      <button 
+        type="button"
+        className={`flex-1 min-h-[48px] flex flex-col items-center justify-center gap-1 transition-colors cursor-pointer ${
+          activeTab === 'saved' ? 'text-[#F3F4F6] font-semibold' : 'text-[#9CA3AF] hover:text-[#F3F4F6]'
+        }`}
+        onClick={handleProfileClick}
+        title="Hồ sơ cá nhân & Đã lưu"
+      >
+        {currentUser ? (
+          <div className="w-5 h-5 rounded-full overflow-hidden border border-white/20">
+            <UserAvatar user={currentUser} size={20} />
+          </div>
+        ) : (
+          <User size={20} strokeWidth={1.75} />
+        )}
+        <span className="text-[10.5px] font-medium tracking-tight">Cá nhân</span>
       </button>
     </nav>
   );

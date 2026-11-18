@@ -3472,7 +3472,7 @@ const Home = ({ initialTab }) => {
           {/* ============================================================== */}
           {/* CỘT 2: KHUNG NỘI DUNG CHÍNH Ở GIỮA (max-w-[680px], bg-[#111319]) */}
           {/* ============================================================== */}
-          <main className="w-full max-w-[680px] min-h-screen bg-[#111319] border-x border-t border-white/[0.07] lg:rounded-t-2xl flex flex-col relative">
+          <main className="w-full max-w-[680px] min-h-screen bg-[#111319] border-x border-t border-white/[0.07] lg:rounded-t-2xl flex flex-col relative pb-28 lg:pb-12">
 
             {/* ============================================================== */}
             {/* THANH HEADER DÍNH TRÊN CÙNG (STICKY HEADER)                     */}
@@ -3481,7 +3481,7 @@ const Home = ({ initialTab }) => {
               {/* Bên trái: Logo trên mobile / Tiêu đề "Sảnh trực tuyến" trên desktop */}
               <div className="flex items-center gap-3">
                 <div className="lg:hidden flex items-center cursor-pointer" onClick={handleLogoRefresh}>
-                  <TalovinLogo size={24} showText={true} />
+                  <TalovinLogo size={28} showText={true} />
                 </div>
                 <h1 className="hidden lg:block text-base font-semibold text-[#F3F4F6] tracking-tight font-sans">
                   {activeTab === 'feed' && "Sảnh trực tuyến"}
@@ -3493,7 +3493,7 @@ const Home = ({ initialTab }) => {
                 </h1>
               </div>
 
-              {/* Bên phải: Dò sóng FM, Bốc thẻ bài, Tìm kiếm, Thông báo, Nút "+ Đăng" (trên desktop) */}
+              {/* Bên phải: Dò sóng FM, Bốc thẻ bài, Tìm kiếm, Thông báo, Nút "+ Đăng" (trên desktop), Avatar (trên mobile) */}
               <div className="flex items-center gap-2">
                 {/* Trình phát nhạc mini trên mobile */}
                 <button
@@ -3551,7 +3551,7 @@ const Home = ({ initialTab }) => {
                 >
                   <Bell size={15} strokeWidth={1.75} />
                   {notifications.filter(n => n.unread && n.type !== 'MESSAGE' && n.type !== 'CHAT' && n.type !== 'DM').length > 0 && (
-                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-white" />
+                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-[#111319]" />
                   )}
                 </button>
 
@@ -3564,8 +3564,104 @@ const Home = ({ initialTab }) => {
                   <Plus size={14} strokeWidth={2} />
                   <span>Đăng</span>
                 </button>
+
+                {/* Avatar tài khoản trên mobile (bấm vào mở trang cá nhân) */}
+                <button
+                  type="button"
+                  onClick={() => navigate('/profile')}
+                  className="lg:hidden w-7 h-7 rounded-full overflow-hidden border border-white/20 ml-0.5 cursor-pointer flex-shrink-0 hover:opacity-80 transition-opacity"
+                  title="Trang cá nhân"
+                >
+                  <UserAvatar user={currentUser} size={28} />
+                </button>
               </div>
             </header>
+
+            {/* DẢI CÔNG CỤ DI ĐỘNG CUỘN NGANG (MOBILE TOOLBAR - DÒ SÓNG, BỐC BÀI, LỌC NHANH) */}
+            <div className="lg:hidden flex items-center gap-2 px-3 sm:px-4 py-2.5 bg-[#111319]/95 backdrop-blur-md border-b border-white/[0.06] overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden shrink-0 z-20 select-none">
+              {/* Nút Dò sóng FM */}
+              <button
+                type="button"
+                onClick={() => setIsSpeedMatchOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.06] active:bg-white/[0.12] text-zinc-200 border border-white/[0.08] text-xs font-medium shrink-0 transition-colors cursor-pointer"
+              >
+                <Radio size={13} className="text-emerald-400 animate-pulse" strokeWidth={2} />
+                <span>Dò sóng FM</span>
+              </button>
+
+              {/* Nút Bốc thẻ bài */}
+              <button
+                type="button"
+                onClick={() => setIsPartyWheelOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.06] active:bg-white/[0.12] text-zinc-200 border border-white/[0.08] text-xs font-medium shrink-0 transition-colors cursor-pointer"
+              >
+                <Dices size={13} className="text-amber-400" strokeWidth={2} />
+                <span>Bốc thẻ bài</span>
+              </button>
+
+              <div className="w-px h-4 bg-white/10 shrink-0 mx-0.5" />
+
+              {/* Bộ lọc nhanh bài viết */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (activeTab !== 'feed') handleSwitchTab('feed');
+                  setQuickFilter('all');
+                }}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium shrink-0 transition-all cursor-pointer ${
+                  activeTab === 'feed' && quickFilter === 'all'
+                    ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                    : 'bg-white/[0.04] text-zinc-400 hover:text-zinc-200 border border-white/[0.06]'
+                }`}
+              >
+                Tất cả
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (activeTab !== 'feed') handleSwitchTab('feed');
+                  setQuickFilter('challenge');
+                }}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium shrink-0 transition-all cursor-pointer ${
+                  activeTab === 'feed' && quickFilter === 'challenge'
+                    ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                    : 'bg-white/[0.04] text-zinc-400 hover:text-zinc-200 border border-white/[0.06]'
+                }`}
+              >
+                Thử thách
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (activeTab !== 'feed') handleSwitchTab('feed');
+                  setQuickFilter('confession');
+                }}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium shrink-0 transition-all cursor-pointer ${
+                  activeTab === 'feed' && quickFilter === 'confession'
+                    ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                    : 'bg-white/[0.04] text-zinc-400 hover:text-zinc-200 border border-white/[0.06]'
+                }`}
+              >
+                Tâm sự
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (activeTab !== 'feed') handleSwitchTab('feed');
+                  setQuickFilter('audio');
+                }}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium shrink-0 transition-all cursor-pointer ${
+                  activeTab === 'feed' && quickFilter === 'audio'
+                    ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                    : 'bg-white/[0.04] text-zinc-400 hover:text-zinc-200 border border-white/[0.06]'
+                }`}
+              >
+                Âm thanh
+              </button>
+            </div>
 
           {/* Thanh Search di động / xổ xuống (khi bấm kính lúp) */}
           {showMobileSearchBar && (
@@ -4906,13 +5002,23 @@ const Home = ({ initialTab }) => {
         </div>
       </div>
 
+      {/* NÚT TẠO BÀI VIẾT NỔI (+ ĐĂNG) TRÊN MOBILE */}
+      <button
+        type="button"
+        onClick={() => setIsComposerModalOpen(true)}
+        className="lg:hidden fixed bottom-20 right-4 z-40 w-12 h-12 rounded-full bg-white text-zinc-950 shadow-[0_8px_30px_rgba(0,0,0,0.6)] border border-white/20 flex items-center justify-center hover:scale-105 active:scale-95 transition-all cursor-pointer"
+        title="Tạo bài viết mới"
+        aria-label="Tạo bài viết mới"
+      >
+        <Plus size={22} strokeWidth={2.5} />
+      </button>
+
       {/* THANH ĐIỀU HƯỚNG DÀNH CHO MOBILE - 5 TAB CHUẨN THỰC DỤNG */}
       <MobileBottomNav
-        activeTab={activeTab === 'friends' ? 'friends' : (activeTab === 'groups' ? 'groups' : 'feed')}
+        activeTab={activeTab}
         unreadMessagesCount={unreadMessagesCount}
-        pendingFriendsCount={pendingFriendsCount}
-        onOpenFm={() => setIsSpeedMatchOpen(true)}
-        onOpenFriends={() => handleSwitchTab('friends')}
+        hasActiveRooms={Boolean(activeRoom || (safeRooms && safeRooms.length > 0))}
+        currentUser={currentUser}
         onSwitchTab={handleSwitchTab}
       />
 
@@ -4921,7 +5027,7 @@ const Home = ({ initialTab }) => {
       {/* ============================================================== */}
       {currentTrack && isPlayingRadio && (
         <div
-          className="fixed bottom-[68px] left-3 right-3 sm:hidden z-[75] bg-zinc-900/95 backdrop-blur-md border border-zinc-800 rounded-2xl p-2.5 flex items-center justify-between shadow-2xl animate-fade-in"
+          className="fixed bottom-[72px] left-3 right-18 sm:hidden z-[75] bg-zinc-900/95 backdrop-blur-md border border-zinc-800 rounded-2xl p-2.5 flex items-center justify-between shadow-2xl animate-fade-in"
           onClick={() => setShowMobileMusicSheet(true)}
         >
           <div className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer">
