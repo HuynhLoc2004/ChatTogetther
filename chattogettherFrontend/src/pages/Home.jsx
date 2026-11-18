@@ -5322,10 +5322,12 @@ const Home = ({ initialTab }) => {
                       Tham gia các không gian voice call âm thanh đa chiều độ trễ cực thấp
                     </p>
                   </div>
-                  <button onClick={() => setIsCreateModalOpen(true)} className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-black font-semibold text-xs shadow-md transition-all active:scale-95 w-full sm:w-auto">
-                    <Plus size={14} strokeWidth={2} />
-                    <span>Tạo phòng mới</span>
-                  </button>
+                  {safeRooms.length > 0 && (
+                    <button onClick={() => setIsCreateModalOpen(true)} className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-black font-semibold text-xs shadow-md transition-all active:scale-95 w-full sm:w-auto">
+                      <Plus size={14} strokeWidth={2} />
+                      <span>Tạo phòng mới</span>
+                    </button>
+                  )}
                 </div>
 
                 {loadingRooms ? (
@@ -5411,16 +5413,18 @@ const Home = ({ initialTab }) => {
         </main>
       </div>
 
-      {/* NÚT TẠO BÀI VIẾT NỔI (+ ĐĂNG) TRÊN MOBILE */}
-      <button
-        type="button"
-        onClick={() => setIsComposerModalOpen(true)}
-        className="lg:hidden fixed bottom-20 right-4 z-40 w-12 h-12 rounded-full bg-white text-zinc-950 shadow-[0_8px_30px_rgba(0,0,0,0.6)] border border-white/20 flex items-center justify-center hover:scale-105 active:scale-95 transition-all cursor-pointer"
-        title="Tạo bài viết mới"
-        aria-label="Tạo bài viết mới"
-      >
-        <Plus size={22} strokeWidth={2.5} />
-      </button>
+      {/* NÚT TẠO BÀI VIẾT NỔI (+ ĐĂNG) TRÊN MOBILE - CHỈ HIỂN THỊ KHI Ở TAB SẢNH (feed) */}
+      {activeTab === 'feed' && (
+        <button
+          type="button"
+          onClick={() => setIsComposerModalOpen(true)}
+          className="lg:hidden fixed bottom-20 right-4 z-40 w-12 h-12 rounded-full bg-white text-zinc-950 shadow-[0_8px_30px_rgba(0,0,0,0.6)] border border-white/20 flex items-center justify-center hover:scale-105 active:scale-95 transition-all cursor-pointer"
+          title="Tạo bài viết mới"
+          aria-label="Tạo bài viết mới"
+        >
+          <Plus size={22} strokeWidth={2.5} />
+        </button>
+      )}
 
       {/* THANH ĐIỀU HƯỚNG DÀNH CHO MOBILE - 5 TAB CHUẨN THỰC DỤNG */}
       <MobileBottomNav
@@ -6512,7 +6516,7 @@ const Home = ({ initialTab }) => {
       )}
 
       {/* ============================================================== */}
-      {/* SLIDE-OVER NOTIFICATION DRAWER (Trượt mượt mà 60/120fps chuẩn Native App) */}
+      {/* NOTIFICATION DRAWER / MODAL (Mobile Bottom Sheet / Desktop Slide-Over) */}
       {/* ============================================================== */}
       <AnimatePresence>
         {isNotifOpen && (
@@ -6521,29 +6525,21 @@ const Home = ({ initialTab }) => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-[120] flex justify-end bg-black/70 sm:backdrop-blur-sm"
+            className="fixed inset-0 z-[120] flex justify-center md:justify-end items-start md:items-stretch bg-black/70 backdrop-blur-sm p-3 md:p-0"
             onClick={() => setIsNotifOpen(false)}
           >
             <motion.div
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              transition={{ type: "tween", duration: 0.22, ease: [0.25, 1, 0.5, 1] }}
-              drag="x"
-              dragConstraints={{ left: 0, right: 0 }}
-              dragElastic={0.15}
-              onDragEnd={(e, { offset, velocity }) => {
-                if (offset.x > 70 || velocity.x > 250) {
-                  setIsNotifOpen(false);
-                }
-              }}
-              className="w-full sm:w-[420px] max-w-full h-full bg-zinc-950 border-l border-zinc-800 shadow-2xl flex flex-col will-change-transform transform-gpu touch-pan-y"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+              className="fixed md:static inset-x-3 md:inset-x-auto top-16 md:top-0 w-auto md:w-[420px] max-w-full max-h-[70dvh] md:max-h-full h-auto md:h-full bg-[#13161E] md:bg-zinc-950 border border-white/10 md:border-l md:border-t-0 md:border-r-0 md:border-b-0 md:border-zinc-800 rounded-2xl md:rounded-none shadow-2xl flex flex-col overflow-hidden z-50 select-none"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Header Drawer */}
-              <div className="flex items-center justify-between px-4 py-3.5 border-b border-zinc-800 bg-zinc-900 flex-shrink-0">
+              {/* Header Drawer / Modal */}
+              <div className="flex items-center justify-between px-4 py-3.5 border-b border-white/[0.06] md:border-zinc-800 bg-[#13161E] md:bg-zinc-900 flex-shrink-0">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-200">
+                  <div className="w-8 h-8 rounded-xl bg-zinc-800/80 border border-zinc-700/60 flex items-center justify-center text-zinc-200">
                     <Bell size={16} strokeWidth={1.8} />
                   </div>
                   <div>
@@ -6564,15 +6560,15 @@ const Home = ({ initialTab }) => {
                     <button
                       type="button"
                       onClick={handleMarkAllNotificationsRead}
-                      className="text-xs text-zinc-400 hover:text-white px-2 py-1 rounded-lg hover:bg-zinc-800/50 transition-colors"
+                      className="text-xs text-zinc-300 hover:text-white px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] transition-colors"
                     >
-                      Đã đọc hết
+                      Đánh dấu đã đọc
                     </button>
                   )}
                   <button
                     type="button"
                     onClick={() => setIsNotifOpen(false)}
-                    className="w-8 h-8 rounded-xl hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center transition-colors"
+                    className="w-8 h-8 rounded-xl hover:bg-white/10 text-zinc-400 hover:text-white flex items-center justify-center transition-colors"
                     title="Đóng"
                   >
                     <X size={18} />

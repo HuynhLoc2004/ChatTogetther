@@ -2297,14 +2297,16 @@ export const CommunitySection = ({
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setIsCreateOpen(true)}
-              className="h-10 px-4 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs sm:text-sm shadow-sm transition-all active:scale-95 flex items-center justify-center gap-1.5 shrink-0 self-start sm:self-auto"
-            >
-              <Plus size={16} />
-              <span>Tạo cộng đồng</span>
-            </button>
+            {groups && groups.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setIsCreateOpen(true)}
+                className="h-10 px-4 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-medium text-xs sm:text-sm shadow-sm transition-all active:scale-95 flex items-center justify-center gap-1.5 shrink-0 self-start sm:self-auto"
+              >
+                <Plus size={16} />
+                <span>Tạo cộng đồng</span>
+              </button>
+            )}
           </div>
 
           {/* THANH TÌM KIẾM & DẢI LỌC DANH MỤC ĐỘNG (ẨN THANH CUỘN NGANG) */}
@@ -2611,10 +2613,10 @@ export const CommunitySection = ({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
               transition={{ type: "spring", damping: 25, stiffness: 350 }}
-              className="relative w-full max-w-lg rounded-2xl bg-zinc-900 border border-zinc-800 p-5 sm:p-6 shadow-2xl flex flex-col space-y-4"
+              className="relative w-full max-w-lg max-h-[82dvh] rounded-2xl bg-[#13161E] border border-white/10 shadow-2xl flex flex-col overflow-hidden z-50"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+              <div className="flex items-center justify-between p-4 sm:p-5 border-b border-white/[0.06] shrink-0 bg-[#13161E]">
                 <div className="flex items-center gap-2">
                   <Users size={18} className="text-zinc-300" />
                   <h3 className="text-zinc-100 font-bold text-sm tracking-tight">Tạo Không Gian Cộng Đồng Mới</h3>
@@ -2622,13 +2624,14 @@ export const CommunitySection = ({
                 <button
                   type="button"
                   onClick={() => setIsCreateOpen(false)}
-                  className="text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition-colors"
+                  className="text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-white/[0.06] transition-colors"
                 >
                   <X size={16} />
                 </button>
               </div>
 
-              <form onSubmit={handleCreateSubmit} className="space-y-3.5">
+              <form onSubmit={handleCreateSubmit} className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3.5 custom-dark-scrollbar">
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-zinc-300 text-xs font-semibold">Tên cộng đồng *</label>
@@ -2907,8 +2910,9 @@ export const CommunitySection = ({
                     </div>
                   </div>
                 </div>
+              </div>
 
-                <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-zinc-800">
+              <div className="shrink-0 p-4 border-t border-white/[0.06] bg-[#13161E] flex items-center justify-end gap-2.5">
                   <button
                     type="button"
                     onClick={() => setIsCreateOpen(false)}

@@ -240,8 +240,8 @@ const PostReactionDock = ({
       {/* Dock Chọn Biểu Tượng Cảm Xúc (Desktop Hover / Mobile Long-Press) */}
       {isPickerOpen && (
         <div
-          className="reactions-popup-menu absolute bottom-[calc(100%+10px)] left-0 bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/80 rounded-full px-2 sm:px-2.5 py-1.5 shadow-2xl flex items-center gap-1 sm:gap-1.5 z-50 select-none"
-          style={{ touchAction: 'none', overflow: 'visible', scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          className="reactions-popup-menu absolute bottom-[calc(100%+8px)] left-0 max-w-[calc(100vw-48px)] sm:max-w-none bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/80 rounded-full px-2 sm:px-2.5 py-1 sm:py-1.5 shadow-2xl flex items-center gap-1 sm:gap-1.5 z-50 select-none overflow-x-auto [scrollbar-width:none]"
+          style={{ touchAction: 'pan-x', msOverflowStyle: 'none' }}
           onClick={(e) => e.stopPropagation()}
           onMouseEnter={() => {
             if (hoverCloseTimerRef.current) clearTimeout(hoverCloseTimerRef.current);
@@ -271,7 +271,7 @@ const PostReactionDock = ({
                   if (handledTouchRef.current) return;
                   commitReaction(item.type);
                 }}
-                className={`reaction-emoji-item relative p-1.5 sm:p-2 rounded-full transition-all duration-150 select-none cursor-pointer flex items-center justify-center shrink-0 ${
+                className={`reaction-emoji-item relative p-1 sm:p-1.5 rounded-full transition-all duration-150 select-none cursor-pointer flex items-center justify-center shrink-0 ${
                   isHovered ? 'is-hovered' : ''
                 } ${isSelected ? 'bg-zinc-800 ring-1 ring-zinc-500' : ''}`}
                 title={item.label}
@@ -282,7 +282,7 @@ const PostReactionDock = ({
                     {item.label}
                   </span>
                 )}
-                <span className="pointer-events-none text-2xl sm:text-[26px] leading-none block">
+                <span className="pointer-events-none text-xl sm:text-2xl leading-none block">
                   {item.emoji}
                 </span>
               </button>

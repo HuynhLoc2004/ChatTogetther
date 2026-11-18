@@ -2329,68 +2329,65 @@ export const DirectMessagePage = () => {
 
                         return (
                           <div
-                            className={`w-full max-w-[280px] rounded-2xl p-3.5 shadow-sm border bg-zinc-900 border-zinc-800 ${isMe ? 'rounded-tr-sm' : 'rounded-tl-sm'}`}
+                            key={msg.id || index}
+                            className={`w-full max-w-[270px] rounded-2xl bg-[#141720] border border-white/[0.08] p-3.5 shadow-sm ${isMe ? 'rounded-tr-sm' : 'rounded-tl-sm'}`}
                           >
-                            <div
-                              className={`w-72 rounded-2xl p-3.5 shadow-sm border bg-zinc-900 border-zinc-800 ${isMe ? 'rounded-tr-sm' : 'rounded-tl-sm'}`}
-                            >
-                              {/* Tiêu đề & Icon loại cuộc gọi */}
-                              <div className="flex items-center justify-between gap-2 mb-2.5 pb-2.5 border-b border-zinc-800/80">
-                                <div className="flex items-center gap-2.5">
-                                  <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-zinc-800">
-                                    {isMissed ? (
-                                      <PhoneMissed size={15} className="text-rose-400" />
-                                    ) : isVideo ? (
-                                      <Video size={15} className="text-emerald-400" />
-                                    ) : (
-                                      <PhoneCall size={15} className="text-emerald-400" />
-                                    )}
-                                  </div>
-                                  <div className="flex flex-col">
-                                    <span className="font-semibold text-xs text-zinc-100 font-sans">
-                                      {isVideo ? 'Cuộc gọi video' : 'Cuộc gọi thoại'}
-                                    </span>
-                                    <span className={`text-[11px] font-sans ${isMissed ? 'text-rose-400 font-medium' : 'text-zinc-400'}`}>
-                                      {isMissed
-                                        ? (isMe ? 'Đối phương nhỡ' : 'Cuộc gọi nhỡ')
-                                        : (isMe ? 'Cuộc gọi đi' : 'Cuộc gọi đến')}
-                                    </span>
-                                  </div>
+                            {/* Tiêu đề & Icon loại cuộc gọi */}
+                            <div className="flex items-center justify-between gap-2 mb-2.5 pb-2.5 border-b border-white/[0.06]">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-white/[0.06]">
+                                  {isMissed ? (
+                                    <PhoneMissed size={15} className="text-rose-400" />
+                                  ) : isVideo ? (
+                                    <Video size={15} className="text-emerald-400" />
+                                  ) : (
+                                    <PhoneCall size={15} className="text-emerald-400" />
+                                  )}
                                 </div>
-                                {timeStr && (
-                                  <span className="text-[10px] text-zinc-500 font-sans shrink-0">
-                                    {timeStr}
+                                <div className="flex flex-col">
+                                  <span className="font-semibold text-xs text-zinc-100 font-sans">
+                                    {isVideo ? 'Cuộc gọi video' : 'Cuộc gọi thoại'}
                                   </span>
-                                )}
-                              </div>
-
-                              {/* Thời lượng đàm thoại & Nút gọi lại */}
-                              <div className="flex items-center justify-between pt-0.5">
-                                <div className="flex items-center gap-1.5 text-xs text-zinc-400 font-sans">
-                                  <Clock size={12} className="text-zinc-500" />
-                                  <span className="text-[11px]">Thời lượng:</span>
-                                  <span className="font-mono text-[11px] text-zinc-300">
-                                    {durationStr || (isMissed ? '00:00' : 'Đã kết thúc')}
+                                  <span className={`text-[11px] font-sans ${isMissed ? 'text-rose-400 font-medium' : 'text-zinc-400'}`}>
+                                    {isMissed
+                                      ? (isMe ? 'Đối phương nhỡ' : 'Cuộc gọi nhỡ')
+                                      : (isMe ? 'Cuộc gọi đi' : 'Cuộc gọi đến')}
                                   </span>
                                 </div>
-
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const safeTargetId = activePartner?.id || urlTargetUserId;
-                                    if (safeTargetId) {
-                                      const currentFrom = encodeURIComponent(location.pathname + (location.search || ''));
-                                      const nameParam = activePartner?.nickname || activePartner?.account ? `&name=${encodeURIComponent(activePartner.nickname || activePartner.account)}` : '';
-                                      const avatarParam = activePartner?.avatar ? `&avatar=${encodeURIComponent(activePartner.avatar)}` : '';
-                                      navigate(`/call/direct/${safeTargetId}?type=${isVideo ? 'video' : 'audio'}&from=${currentFrom}${nameParam}${avatarParam}`);
-                                    }
-                                  }}
-                                  className="bg-zinc-800 hover:bg-zinc-700 text-white font-sans text-xs font-medium px-3 h-8 rounded-lg flex items-center gap-1.5 transition-colors border border-zinc-700/60"
-                                >
-                                  {isVideo ? <Video size={12} /> : <PhoneCall size={12} />}
-                                  <span>Gọi lại</span>
-                                </button>
                               </div>
+                              {timeStr && (
+                                <span className="text-[10px] text-zinc-500 font-sans shrink-0">
+                                  {timeStr}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Thời lượng đàm thoại & Nút gọi lại */}
+                            <div className="flex items-center justify-between pt-0.5">
+                              <div className="flex items-center gap-1.5 text-xs text-zinc-400 font-sans">
+                                <Clock size={12} className="text-zinc-500" />
+                                <span className="text-[11px]">Thời lượng:</span>
+                                <span className="font-mono text-[11px] text-zinc-300">
+                                  {durationStr || (isMissed ? '00:00' : 'Đã kết thúc')}
+                                </span>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const safeTargetId = activePartner?.id || urlTargetUserId;
+                                  if (safeTargetId) {
+                                    const currentFrom = encodeURIComponent(location.pathname + (location.search || ''));
+                                    const nameParam = activePartner?.nickname || activePartner?.account ? `&name=${encodeURIComponent(activePartner.nickname || activePartner.account)}` : '';
+                                    const avatarParam = activePartner?.avatar ? `&avatar=${encodeURIComponent(activePartner.avatar)}` : '';
+                                    navigate(`/call/direct/${safeTargetId}?type=${isVideo ? 'video' : 'audio'}&from=${currentFrom}${nameParam}${avatarParam}`);
+                                  }
+                                }}
+                                className="bg-zinc-800 hover:bg-zinc-700 text-white font-sans text-xs font-medium px-3 h-8 rounded-lg flex items-center gap-1.5 transition-colors border border-white/[0.08]"
+                              >
+                                {isVideo ? <Video size={12} /> : <PhoneCall size={12} />}
+                                <span>Gọi lại</span>
+                              </button>
                             </div>
                           </div>
                         );
