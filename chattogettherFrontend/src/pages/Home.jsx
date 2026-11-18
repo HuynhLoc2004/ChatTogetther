@@ -468,6 +468,7 @@ const Home = ({ initialTab }) => {
       return false;
     }
   });
+  const [postsLoadError, setPostsLoadError] = useState(null);
 
   // Phân trang tự động Infinite Scroll (Lướt tới đâu tải tới đó)
   const [page, setPage] = useState(0);
@@ -1286,9 +1287,10 @@ const Home = ({ initialTab }) => {
   };
 
   // ====================== BẢNG TIN / POSTS ======================
-  // Tải danh sách bài viết ban đầu (chỉ tải 10 bài đầu tiên: page = 0, size = 10)
+  // Tải danh sách bài viết ban đầu (chỉ tải 25 bài đầu tiên: page = 0, size = 25)
   const fetchPosts = useCallback(async (isSilent = false) => {
     try {
+      setPostsLoadError(null);
       if (!isSilent) {
         setPosts(prev => {
           if (prev.length === 0) setLoadingPosts(true);
@@ -1296,13 +1298,13 @@ const Home = ({ initialTab }) => {
         });
       }
       const response = await axiosClient.get('/posts', {
-        params: { page: 0, size: 10 }
+        params: { page: 0, size: 25 }
       });
       if (response.data && response.data.data) {
         const freshPosts = response.data.data;
         if (isSilent) {
           setPosts(prev => {
-            if (prev.length <= 10) return freshPosts;
+            if (prev.length <= 25) return freshPosts;
             const freshMap = new Map(freshPosts.map(p => [p.id, p]));
             const updated = prev.map(p => freshMap.get(p.id) || p);
             const existingIds = new Set(prev.map(p => p.id));
@@ -1312,7 +1314,7 @@ const Home = ({ initialTab }) => {
         } else {
           setPosts(freshPosts);
           setPage(0);
-          setHasMore(freshPosts.length === 10);
+          setHasMore(freshPosts.length === 25);
         }
         try {
           const cacheKey = currentUserId ? `talovin_cached_posts_${currentUserId}` : 'talovin_cached_posts';
@@ -1322,6 +1324,13 @@ const Home = ({ initialTab }) => {
       }
     } catch (err) {
       console.error("Lỗi khi nạp bài viết:", err);
+      if (err.response?.status === 401) {
+        setPostsLoadError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+      } else if (err.code === 'ERR_NETWORK' || !navigator.onLine) {
+        setPostsLoadError('Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng.');
+      } else {
+        setPostsLoadError('Không thể tải bài viết lúc này. Vui lòng thử lại.');
+      }
     } finally {
       setLoadingPosts(false);
     }
@@ -3221,7 +3230,7 @@ const Home = ({ initialTab }) => {
   const displayedPosts = basePostsList
     .filter(p => {
       if (!p) return false;
-      if (activeFilterTag) {
+      if (activeFilterTag && activeFilterTag !== 'all' && activeFilterTag.toLowerCase() !== 'tất cả') {
         const pVibe = (p.vibe || '').toLowerCase();
         const pContent = (p.content || '').toLowerCase();
         const tagLower = activeFilterTag.toLowerCase();
@@ -3229,18 +3238,18 @@ const Home = ({ initialTab }) => {
       }
 
       // Bộ lọc nhanh dạng viên thuốc
-      if (quickFilter === 'challenge') {
+      if (quickFilter === 'challenge' || quickFilter === 'thuthach') {
         const isChallenge = (p.content || '').includes('[Thử thách]') ||
           (p.content || '').includes('[Challenge]') ||
           (p.vibe || '').toLowerCase().includes('thử thách') ||
           p.challengeQuestion;
         if (!isChallenge) return false;
-      } else if (quickFilter === 'confession') {
+      } else if (quickFilter === 'confession' || quickFilter === 'tamsu') {
         const isConfession = (p.content || '').toLowerCase().includes('tâm sự') ||
           (p.vibe || '').toLowerCase().includes('tâm sự') ||
           (p.vibe || '').toLowerCase().includes('cảm xúc');
         if (!isConfession) return false;
-      } else if (quickFilter === 'audio') {
+      } else if (quickFilter === 'audio' || quickFilter === 'amthanh') {
         const hasAudio = p.voiceUrl || p.voiceBioUrl || p.hasAudio || p.audioDuration ||
           (p.imageUrl && p.imageUrl.includes('audioUrl')) ||
           (p.content || '').includes('Ghi âm') ||
@@ -4229,8 +4238,48 @@ const Home = ({ initialTab }) => {
               {/* ============================================================== */}
               {!activeSearchQuery && (
                 <div className="mb-6 space-y-4">
-                  {/* HÀNG 1: 2 THẺ TƯƠNG TÁC SẢNH (ĐANG TRỰC TUYẾN & THẺ BÀI HÔM NAY) */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* THANH TƯƠNG TÁC SẢNH SIÊU GỌN TRÊN MOBILE (h-11) */}
+                  <div className="flex md:hidden items-center justify-between h-11 px-3 mb-4 rounded-xl bg-[#12151D] border border-white/[0.06] select-none">
+                    {/* Bên trái: Trực tuyến & avatar nhỏ */}
+                    <div
+                      className="flex items-center gap-2 cursor-pointer min-w-0"
+                      onClick={() => handleSwitchTab('rooms')}
+                      title="Xem người trực tuyến và phòng đàm thoại"
+                    >
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                      {activeLoungeUsers.length > 0 ? (
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <div className="flex -space-x-1.5 overflow-hidden shrink-0">
+                            {activeLoungeUsers.slice(0, 3).map((u) => (
+                              <div key={`mob-mini-${u.id}`} className="w-5 h-5 rounded-full ring-1 ring-[#12151D] overflow-hidden">
+                                <UserAvatar avatarUrl={u.avatar} username={u.account} name={u.name} userId={u.id} size={20} />
+                              </div>
+                            ))}
+                          </div>
+                          <span className="text-[11px] text-zinc-300 font-medium truncate">
+                            {activeLoungeUsers.length} online
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-[11px] text-zinc-400 font-medium truncate">
+                          Đang trực tuyến
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Bên phải: Nút pill gọn "Thẻ bài hôm nay" */}
+                    <button
+                      type="button"
+                      onClick={() => setShowMobileActionDrawer(true)}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-zinc-200 text-xs font-medium transition-all active:scale-95 cursor-pointer shrink-0"
+                    >
+                      <Dices size={12} className="text-zinc-400" />
+                      <span>Thẻ bài hôm nay</span>
+                    </button>
+                  </div>
+
+                  {/* 2 KHỐI THẺ LỚN TRÊN DESKTOP (hidden md:grid) */}
+                  <div className="hidden md:grid grid-cols-1 lg:grid-cols-2 gap-4">
                     {/* THẺ 1: THÀNH VIÊN TRỰC TUYẾN */}
                     <div className="p-4 rounded-2xl bg-[#12151D] border border-white/[0.07] flex flex-col justify-between gap-3 shadow-sm">
                       <div className="flex items-center justify-between">
@@ -4312,7 +4361,7 @@ const Home = ({ initialTab }) => {
                             className="w-full py-2 px-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-200 border border-white/[0.06] text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
                           >
                             <Plus size={13} className="text-zinc-400" />
-                            <span>+ Mở phòng mới</span>
+                            <span>Mở phòng mới</span>
                           </button>
                         )}
                       </div>
@@ -4375,8 +4424,8 @@ const Home = ({ initialTab }) => {
                     </div>
                   </div>
 
-                  {/* HÀNG 2: BỘ LỌC CHỦ ĐỀ NHANH (TẤT CẢ, THỬ THÁCH, TÂM SỰ, ÂM THANH) */}
-                  <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+                  {/* HÀNG 2: BỘ LỌC CHỦ ĐỀ NHANH (ẨN TRÊN MOBILE, CHỈ HIỂN THỊ TRÊN DESKTOP hidden md:flex) */}
+                  <div className="hidden md:flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
                     {[
                       { id: 'all', label: 'Tất cả' },
                       { id: 'challenge', label: 'Thử thách' },
@@ -4452,6 +4501,22 @@ const Home = ({ initialTab }) => {
                       </div>
                     </div>
                   ))}
+                </div>
+              ) : postsLoadError ? (
+                <div className="py-12 px-4 text-center rounded-2xl bg-[#12151D] border border-white/[0.06] my-4 max-w-md mx-auto">
+                  <div className="w-10 h-10 rounded-full bg-rose-500/10 text-rose-400 flex items-center justify-center mx-auto mb-3">
+                    <AlertTriangle size={20} />
+                  </div>
+                  <p className="text-xs text-zinc-300 font-medium mb-1">Không thể tải bài viết</p>
+                  <p className="text-[11px] text-zinc-400 mb-4">{postsLoadError}</p>
+                  <button
+                    type="button"
+                    onClick={() => fetchPosts(false)}
+                    className="px-4 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.15] text-zinc-200 hover:text-white border border-white/10 text-xs font-semibold transition-all cursor-pointer inline-flex items-center gap-1.5 active:scale-95"
+                  >
+                    <RotateCcw size={13} />
+                    <span>Thử lại</span>
+                  </button>
                 </div>
               ) : displayedPosts.length === 0 ? (
                 <div className="feed-status-box">
