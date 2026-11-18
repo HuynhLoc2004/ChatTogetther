@@ -3077,6 +3077,7 @@ const Home = ({ initialTab }) => {
   const [quickChallengeIdx, setQuickChallengeIdx] = useState(0);
   const [quickChallengeAnswer, setQuickChallengeAnswer] = useState('');
   const [isSubmittingQuickAnswer, setIsSubmittingQuickAnswer] = useState(false);
+  const [showMobileChallengeModal, setShowMobileChallengeModal] = useState(false);
 
   // Gửi câu trả lời nhanh cho thẻ bài hôm nay trực tiếp vào Sảnh
   const handleQuickChallengeAnswer = async (e) => {
@@ -3096,6 +3097,7 @@ const Home = ({ initialTab }) => {
       if (res.data && res.data.data) {
         setPosts(prev => [res.data.data, ...prev]);
         setQuickChallengeAnswer('');
+        setShowMobileChallengeModal(false);
         toast.success("Đã chia sẻ góc nhìn thử thách vào Sảnh!");
       }
     } catch (err) {
@@ -4228,259 +4230,275 @@ const Home = ({ initialTab }) => {
               {/* TẦNG 1: KHU VỰC TRỰC TUYẾN & TƯƠNG TÁC NHANH (LIVE LOUNGE DECK) */}
               {/* ============================================================== */}
               {activeTab === 'feed' && !activeSearchQuery && !activeFilterTag && (
-                <div className="mb-7">
-                  <div className="flex items-center justify-between mb-3 px-1">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                      <h2 className="text-xs font-bold text-zinc-300 uppercase tracking-wider font-mono">
-                        Live Social Lounge Deck
-                      </h2>
+                <>
+                  {/* THANH TRẠNG THÁI GỌN 1 DÒNG TRÊN MOBILE (< 768px) */}
+                  <div className="md:hidden flex items-center justify-between h-11 px-3 mb-4 rounded-xl bg-[#12151D] border border-white/[0.07]">
+                    {/* Bên trái: Avatar những người đang online */}
+                    <div
+                      className="flex items-center gap-2 cursor-pointer min-w-0"
+                      onClick={() => handleSwitchTab('rooms')}
+                      title="Xem danh sách sảnh & người online"
+                    >
+                      <div className="flex items-center -space-x-1.5 shrink-0">
+                        {activeLoungeUsers.slice(0, 3).map((u) => (
+                          <div key={u.id} className="w-6 h-6 rounded-full ring-2 ring-[#12151D] overflow-hidden">
+                            <UserAvatar
+                              avatarUrl={u.avatar}
+                              username={u.account}
+                              name={u.name}
+                              userId={u.id}
+                              size={24}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      <span className="text-xs font-medium text-zinc-300 truncate">
+                        {activeLoungeUsers.length > 0 ? `${activeLoungeUsers.length} người đang online` : "Sảnh trực tuyến"}
+                      </span>
                     </div>
-                    <span className="text-[11px] text-zinc-500 font-mono hidden sm:inline">
-                      Không gian tương tác trực tiếp
-                    </span>
+
+                    {/* Bên phải: 2 nút pill nhỏ gọn "Sóng FM 5s" và "Thẻ bài" */}
+                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsSpeedMatchOpen(true)}
+                        className="h-7 px-2.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-zinc-200 border border-white/[0.08] text-[11px] font-medium flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
+                      >
+                        <Radio size={12} className="text-zinc-400" />
+                        <span>Sóng FM 5s</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowMobileChallengeModal(true)}
+                        className="h-7 px-2.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-zinc-200 border border-white/[0.08] text-[11px] font-medium flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
+                      >
+                        <Dices size={12} className="text-zinc-400" />
+                        <span>Thẻ bài</span>
+                      </button>
+                    </div>
                   </div>
 
-                  {/* 3 khối thẻ ngang: Mobile vuốt trượt ngang mượt mà, Desktop xếp 3 cột */}
-                  <div className="flex gap-3.5 overflow-x-auto no-scrollbar snap-x snap-mandatory pb-2 -mx-3 px-3 sm:mx-0 sm:px-0 md:grid md:grid-cols-3 md:gap-4 md:overflow-visible">
-                    {/* KHỐI 1: SÓNG FM 5 GIÂY */}
-                    <div className="w-[84vw] max-w-[320px] shrink-0 snap-start md:w-auto p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-[#121620] via-[#0E121B] to-[#0A0D14] border border-emerald-500/20 shadow-lg flex flex-col justify-between relative overflow-hidden group">
-                      <div className="absolute -top-10 -right-10 w-28 h-28 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
-
-                      <div>
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center text-emerald-400 shrink-0">
-                              <Radio size={16} className={isPlayingRadio ? "animate-pulse" : ""} />
-                            </div>
-                            <div>
-                              <h3 className="text-xs font-bold text-white uppercase tracking-wider font-sans">
-                                Sóng FM 5 Giây
-                              </h3>
-                              <p className="text-[10px] text-emerald-400 font-mono">
-                                {isPlayingRadio ? "96.4 MHz • Đang phát trực tiếp" : "96.4 MHz • Voice ngẫu nhiên"}
-                              </p>
-                            </div>
-                          </div>
-                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0" />
-                        </div>
-
-                        {/* Thanh sóng âm & bài hát */}
-                        <div className="py-2.5 px-3 rounded-xl bg-black/40 border border-white/[0.05] mb-3 flex items-center justify-between">
-                          <div className="flex items-center gap-1 h-5">
-                            <span className={`w-1 rounded-full bg-emerald-400 transition-all ${isPlayingRadio ? "h-5 animate-pulse" : "h-2"}`} />
-                            <span className={`w-1 rounded-full bg-emerald-400/80 transition-all ${isPlayingRadio ? "h-3 animate-bounce" : "h-2.5"}`} />
-                            <span className={`w-1 rounded-full bg-emerald-400 transition-all ${isPlayingRadio ? "h-4 animate-pulse" : "h-1.5"}`} />
-                            <span className={`w-1 rounded-full bg-emerald-400/70 transition-all ${isPlayingRadio ? "h-3 animate-bounce" : "h-3"}`} />
-                            <span className={`w-1 rounded-full bg-emerald-400 transition-all ${isPlayingRadio ? "h-5 animate-pulse" : "h-2"}`} />
-                          </div>
-                          <p className="text-xs font-medium text-zinc-300 truncate max-w-[130px] px-2">
-                            {currentTrack ? (currentTrack.title || currentTrack.name) : "Sunset Coffee Vibe"}
-                          </p>
-                          <button
-                            type="button"
-                            onClick={togglePlayRadio}
-                            className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 flex items-center justify-center text-white transition-colors cursor-pointer shrink-0"
-                            title={isPlayingRadio ? "Tạm dừng" : "Nghe nhạc"}
-                          >
-                            {isPlayingRadio ? <Pause size={11} /> : <Play size={11} className="ml-0.5" />}
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Nút Dò sóng & Thu âm */}
-                      <div className="grid grid-cols-2 gap-2 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => setIsSpeedMatchOpen(true)}
-                          className="py-2 px-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
-                        >
-                          <Radio size={13} />
-                          <span>Dò sóng 5s</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsComposerModalOpen(true);
-                            setTimeout(() => startVoiceRecording?.(), 300);
-                          }}
-                          className="py-2 px-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-zinc-200 border border-white/10 text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
-                        >
-                          <Mic size={13} className="text-emerald-400" />
-                          <span>Thu âm 5s</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* KHỐI 2: THẺ BÀI HÔM NAY (CÓ Ô TRẢ LỜI TRỰC TIẾP TẠI CHỖ) */}
-                    <div className="w-[84vw] max-w-[320px] shrink-0 snap-start md:w-auto p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-[#1C1812] via-[#15121B] to-[#0E0C14] border border-amber-500/20 shadow-lg flex flex-col justify-between relative overflow-hidden group">
-                      <div className="absolute -top-10 -right-10 w-28 h-28 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
-
-                      <div>
-                        <div className="flex items-center justify-between mb-2.5">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/25 flex items-center justify-center text-amber-400 shrink-0">
-                              <Dices size={16} />
-                            </div>
-                            <div>
-                              <h3 className="text-xs font-bold text-white uppercase tracking-wider font-sans">
-                                Thẻ Bài Hôm Nay
-                              </h3>
-                              <p className="text-[10px] text-amber-400/90 font-mono">
-                                Phá tan khoảng cách
-                              </p>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setQuickChallengeIdx((prev) => (prev + 1) % QUICK_CHALLENGES.length)}
-                            className="text-[11px] text-zinc-400 hover:text-amber-300 transition-colors flex items-center gap-1 cursor-pointer bg-white/[0.04] px-2 py-1 rounded-lg border border-white/[0.06]"
-                            title="Đổi thẻ câu hỏi khác"
-                          >
-                            <RotateCcw size={11} />
-                            <span>Đổi thẻ</span>
-                          </button>
-                        </div>
-
-                        {/* Câu hỏi lớn rõ nét */}
-                        <div className="p-3 rounded-xl bg-black/40 border border-white/[0.06] mb-3 min-h-[58px] flex items-center">
-                          <p className="text-xs text-zinc-200 font-medium leading-relaxed italic line-clamp-2">
-                            "{QUICK_CHALLENGES[quickChallengeIdx]}"
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Ô nhập câu trả lời nhanh trực tiếp ngay bên dưới */}
-                      <form onSubmit={handleQuickChallengeAnswer} className="flex items-center gap-1.5 pt-1">
-                        <input
-                          type="text"
-                          placeholder="Nhập nhanh câu trả lời..."
-                          value={quickChallengeAnswer}
-                          onChange={(e) => setQuickChallengeAnswer(e.target.value)}
-                          className="flex-1 min-w-0 bg-white/[0.05] border border-white/[0.08] focus:border-amber-400/50 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none transition-colors font-sans"
-                        />
-                        <button
-                          type="submit"
-                          disabled={isSubmittingQuickAnswer}
-                          className="py-2 px-3 rounded-xl bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-zinc-950 text-xs font-bold transition-all shrink-0 cursor-pointer shadow-sm active:scale-95 flex items-center gap-1"
-                        >
-                          {isSubmittingQuickAnswer ? (
-                            <Loader2 size={13} className="animate-spin" />
-                          ) : (
-                            <>
-                              <span>Gửi</span>
-                              <Send size={11} />
-                            </>
-                          )}
-                        </button>
-                      </form>
-                    </div>
-
-                    {/* KHỐI 3: PHÒNG & NGƯỜI ĐANG ONLINE (1-CHẠM NHẮN TIN / VÀO PHÒNG) */}
-                    <div className="w-[84vw] max-w-[320px] shrink-0 snap-start md:w-auto p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-[#111726] via-[#0E1320] to-[#0A0E18] border border-sky-500/20 shadow-lg flex flex-col justify-between relative overflow-hidden group">
-                      <div className="absolute -top-10 -right-10 w-28 h-28 bg-sky-500/10 rounded-full blur-2xl pointer-events-none" />
-
-                      <div>
-                        <div className="flex items-center justify-between mb-2.5">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-xl bg-sky-500/15 border border-sky-500/25 flex items-center justify-center text-sky-400 shrink-0">
-                              <Users size={16} />
-                            </div>
-                            <div>
-                              <h3 className="text-xs font-bold text-white uppercase tracking-wider font-sans">
-                                Đang Trực Tuyến
-                              </h3>
-                              <p className="text-[10px] text-sky-400 font-mono">
-                                {activeLoungeUsers.length} người • {publicRooms.length} phòng mở
-                              </p>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleSwitchTab('rooms')}
-                            className="text-[11px] text-sky-400 hover:text-sky-300 font-medium transition-colors cursor-pointer"
-                          >
-                            Tất cả →
-                          </button>
-                        </div>
-
-                        {/* Danh sách người online 1-chạm để nhắn tin */}
-                        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1 mb-2.5">
-                          {activeLoungeUsers.length === 0 ? (
-                            <p className="text-xs text-zinc-500 italic py-1">Chưa có thành viên khác online</p>
-                          ) : (
-                            activeLoungeUsers.slice(0, 6).map((u) => (
-                              <div
-                                key={u.id}
-                                onClick={() => navigate(`/messages/${u.id}`, { state: { from: location.pathname + location.search } })}
-                                className="relative cursor-pointer group shrink-0"
-                                title={`${u.name} (@${u.account}) - Bấm để nhắn tin 1-chạm`}
-                              >
-                                <div className="w-8 h-8 rounded-full ring-2 ring-transparent group-hover:ring-sky-400 transition-all overflow-hidden">
-                                  <UserAvatar
-                                    avatarUrl={u.avatar}
-                                    username={u.account}
-                                    name={u.name}
-                                    userId={u.id}
-                                    size={32}
-                                  />
-                                </div>
-                                <span className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-[#0E1320]" />
+                  {/* KHU VỰC TƯƠNG TÁC TRÊN DESKTOP (3 KHỐI THẺ TỐI GIẢN TRUNG TÍNH) */}
+                  <div className="hidden md:block mb-6">
+                    <div className="grid grid-cols-3 gap-4">
+                      {/* KHỐI 1: SÓNG FM 5 GIÂY */}
+                      <div className="p-4 rounded-2xl bg-[#12151D] border border-white/[0.07] shadow-sm flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-xl bg-white/[0.06] border border-white/[0.08] flex items-center justify-center text-zinc-300 shrink-0">
+                                <Radio size={14} />
                               </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Phòng đàm thoại nổi bật nhất hoặc nút tạo phòng */}
-                      <div className="pt-1">
-                        {publicRooms.length > 0 ? (
-                          <div
-                            onClick={() => onRoomCardClick(publicRooms[0])}
-                            className="p-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.07] transition-all cursor-pointer flex items-center justify-between"
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              <div className="w-6 h-6 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center shrink-0">
-                                <Radio size={12} className="animate-pulse" />
-                              </div>
-                              <div className="min-w-0">
-                                <p className="text-xs font-semibold text-white truncate max-w-[130px]">
-                                  #{publicRooms[0].nameroom || publicRooms[0].name || "Phòng thảo luận"}
-                                </p>
+                              <div>
+                                <h3 className="text-xs font-semibold text-zinc-200">
+                                  Sóng FM 5 Giây
+                                </h3>
                                 <p className="text-[10px] text-zinc-400 font-mono">
-                                  {publicRooms[0].soluong || 1} người đang nghe
+                                  96.4 MHz • Voice ngẫu nhiên
                                 </p>
                               </div>
                             </div>
-                            <span className="text-[11px] font-semibold text-sky-400 shrink-0">Vào →</span>
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
                           </div>
-                        ) : (
+
+                          {/* Thanh sóng âm voice thực tế */}
+                          <div className="py-2.5 px-3 rounded-xl bg-black/40 border border-white/[0.05] mb-3 flex items-center justify-between">
+                            <div className="flex items-center gap-1 h-5">
+                              <span className="w-1 rounded-full bg-zinc-400 h-2 animate-pulse" />
+                              <span className="w-1 rounded-full bg-zinc-300 h-4 animate-pulse [animation-delay:150ms]" />
+                              <span className="w-1 rounded-full bg-zinc-400 h-5 animate-pulse [animation-delay:300ms]" />
+                              <span className="w-1 rounded-full bg-zinc-300 h-3 animate-pulse [animation-delay:200ms]" />
+                              <span className="w-1 rounded-full bg-zinc-400 h-2 animate-pulse [animation-delay:100ms]" />
+                            </div>
+                            <p className="text-xs text-zinc-400 truncate px-2 font-mono">
+                              Khoảnh khắc thoại 5s
+                            </p>
+                            <span className="text-[10px] text-zinc-500 font-mono">00:05</span>
+                          </div>
+                        </div>
+
+                        {/* Nút Dò sóng & Thu âm (Màu trung tính) */}
+                        <div className="grid grid-cols-2 gap-2 pt-1">
                           <button
                             type="button"
-                            onClick={() => setIsCreateModalOpen(true)}
-                            className="w-full py-2 px-3 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-zinc-200 border border-white/10 text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                            onClick={() => setIsSpeedMatchOpen(true)}
+                            className="py-2 px-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-zinc-200 border border-white/[0.1] text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
                           >
-                            <Plus size={13} className="text-sky-400" />
-                            <span>+ Mở phòng mới</span>
+                            <Radio size={13} className="text-zinc-400" />
+                            <span>Dò sóng 5s</span>
                           </button>
-                        )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsComposerModalOpen(true);
+                              setTimeout(() => startVoiceRecording?.(), 300);
+                            }}
+                            className="py-2 px-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-zinc-200 border border-white/[0.1] text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                          >
+                            <Mic size={13} className="text-zinc-400" />
+                            <span>Thu âm 5s</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* KHỐI 2: THẺ BÀI HÔM NAY (NỀN TRUNG TÍNH, NÚT TRẮNG NGÀ) */}
+                      <div className="p-4 rounded-2xl bg-[#12151D] border border-white/[0.07] shadow-sm flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-xl bg-white/[0.06] border border-white/[0.08] flex items-center justify-center text-zinc-300 shrink-0">
+                                <Dices size={14} />
+                              </div>
+                              <div>
+                                <h3 className="text-xs font-semibold text-zinc-200">
+                                  Thẻ Bài Hôm Nay
+                                </h3>
+                                <p className="text-[10px] text-zinc-400 font-mono">
+                                  Phá tan khoảng cách
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setQuickChallengeIdx((prev) => (prev + 1) % QUICK_CHALLENGES.length)}
+                              className="text-[11px] text-zinc-400 hover:text-white transition-colors flex items-center gap-1 cursor-pointer bg-white/[0.04] px-2 py-1 rounded-lg border border-white/[0.06]"
+                              title="Đổi thẻ câu hỏi khác"
+                            >
+                              <RotateCcw size={11} />
+                              <span>Đổi thẻ</span>
+                            </button>
+                          </div>
+
+                          <div className="p-2.5 rounded-xl bg-black/40 border border-white/[0.06] mb-3 min-h-[54px] flex items-center">
+                            <p className="text-xs text-zinc-200 font-medium leading-relaxed italic line-clamp-2">
+                              "{QUICK_CHALLENGES[quickChallengeIdx]}"
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Ô nhập câu trả lời nhanh & Nút Gửi trắng ngà */}
+                        <form onSubmit={handleQuickChallengeAnswer} className="flex items-center gap-1.5 pt-1">
+                          <input
+                            type="text"
+                            placeholder="Nhập nhanh câu trả lời..."
+                            value={quickChallengeAnswer}
+                            onChange={(e) => setQuickChallengeAnswer(e.target.value)}
+                            className="flex-1 min-w-0 bg-white/[0.05] border border-white/[0.08] focus:border-white/20 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none transition-colors"
+                          />
+                          <button
+                            type="submit"
+                            disabled={isSubmittingQuickAnswer}
+                            className="py-2 px-3 rounded-xl bg-[#F4F4F5] hover:bg-white text-[#090A0F] font-medium text-xs transition-all shrink-0 cursor-pointer shadow-sm active:scale-95 disabled:opacity-50"
+                          >
+                            {isSubmittingQuickAnswer ? (
+                              <Loader2 size={13} className="animate-spin" />
+                            ) : (
+                              "Gửi"
+                            )}
+                          </button>
+                        </form>
+                      </div>
+
+                      {/* KHỐI 3: PHÒNG & NGƯỜI ĐANG ONLINE (MÀU TRUNG TÍNH) */}
+                      <div className="p-4 rounded-2xl bg-[#12151D] border border-white/[0.07] shadow-sm flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-xl bg-white/[0.06] border border-white/[0.08] flex items-center justify-center text-zinc-300 shrink-0">
+                                <Users size={14} />
+                              </div>
+                              <div>
+                                <h3 className="text-xs font-semibold text-zinc-200">
+                                  Đang Trực Tuyến
+                                </h3>
+                                <p className="text-[10px] text-zinc-400 font-mono">
+                                  {activeLoungeUsers.length} người • {publicRooms.length} phòng mở
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleSwitchTab('rooms')}
+                              className="text-[11px] text-zinc-400 hover:text-white font-medium transition-colors cursor-pointer"
+                            >
+                              Tất cả →
+                            </button>
+                          </div>
+
+                          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1 mb-2">
+                            {activeLoungeUsers.length === 0 ? (
+                              <p className="text-xs text-zinc-500 italic py-1">Chưa có thành viên khác online</p>
+                            ) : (
+                              activeLoungeUsers.slice(0, 6).map((u) => (
+                                <div
+                                  key={u.id}
+                                  onClick={() => navigate(`/messages/${u.id}`, { state: { from: location.pathname + location.search } })}
+                                  className="relative cursor-pointer group shrink-0"
+                                  title={`${u.name} (@${u.account}) - Bấm để nhắn tin`}
+                                >
+                                  <div className="w-8 h-8 rounded-full ring-1 ring-white/10 group-hover:ring-white/40 transition-all overflow-hidden">
+                                    <UserAvatar
+                                      avatarUrl={u.avatar}
+                                      username={u.account}
+                                      name={u.name}
+                                      userId={u.id}
+                                      size={32}
+                                    />
+                                  </div>
+                                  <span className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-[#12151D]" />
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="pt-1">
+                          {publicRooms.length > 0 ? (
+                            <div
+                              onClick={() => onRoomCardClick(publicRooms[0])}
+                              className="p-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.07] transition-all cursor-pointer flex items-center justify-between"
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className="w-6 h-6 rounded-lg bg-white/[0.06] text-zinc-300 flex items-center justify-center shrink-0">
+                                  <Radio size={12} />
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-medium text-zinc-200 truncate max-w-[130px]">
+                                    #{publicRooms[0].nameroom || publicRooms[0].name || "Phòng thảo luận"}
+                                  </p>
+                                  <p className="text-[10px] text-zinc-400 font-mono">
+                                    {publicRooms[0].soluong || 1} người đang nghe
+                                  </p>
+                                </div>
+                              </div>
+                              <span className="text-[11px] font-medium text-zinc-400 hover:text-white shrink-0">Vào →</span>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setIsCreateModalOpen(true)}
+                              className="w-full py-2 px-3 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-zinc-200 border border-white/10 text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                            >
+                              <Plus size={13} className="text-zinc-400" />
+                              <span>+ Mở phòng mới</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
+                </>
               )}
 
               {/* ============================================================== */}
-              {/* TẦNG 2: BẢNG KHOẢNH KHẮC CỘNG ĐỒNG (LƯỚI 2 CỘT NOTE CARDS)     */}
+              {/* TẦNG 2: BẢNG KHOẢNH KHẮC CỘNG ĐỒNG (MASONRY 2 CỘT TỰ NHIÊN)    */}
               {/* ============================================================== */}
               {!activeSearchQuery && (
                 <div className="flex items-center justify-between mb-4 px-1">
-                  <div className="flex items-center gap-2">
-                    <Sparkles size={15} className="text-indigo-400" />
-                    <h2 className="text-xs font-bold text-zinc-300 uppercase tracking-wider font-mono">
-                      Bảng Khoảnh Khắc Cộng Đồng
-                    </h2>
-                  </div>
+                  <h2 className="text-xs font-medium text-zinc-400">
+                    Khoảnh khắc cộng đồng
+                  </h2>
                   <span className="text-[11px] text-zinc-500 font-mono">
                     {displayedPosts.length} khoảnh khắc
                   </span>
@@ -4495,10 +4513,10 @@ const Home = ({ initialTab }) => {
                   <p className="text-[11px] text-zinc-600 mt-1">Áp dụng thuật toán đối soát ngữ nghĩa & xếp hạng tương tác</p>
                 </div>
               ) : (loadingPosts && posts.length === 0) ? (
-                /* SKELETON LƯỚI 2 CỘT CHO NOTE CARDS */
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-5 w-full">
+                /* SKELETON MASONRY 2 CỘT */
+                <div className="columns-1 lg:columns-2 gap-5 space-y-5 w-full">
                   {[1, 2, 3, 4].map((i) => (
-                    <div key={`skel-init-${i}`} className="p-5 rounded-2xl bg-[#12151D] border border-white/[0.06] animate-pulse space-y-3.5">
+                    <div key={`skel-init-${i}`} className="break-inside-avoid mb-5 p-5 rounded-2xl bg-[#12151D] border border-white/[0.06] animate-pulse space-y-3.5">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-white/[0.04] shrink-0" />
                         <div className="space-y-1.5 flex-1">
@@ -4536,7 +4554,7 @@ const Home = ({ initialTab }) => {
                 </div>
               ) : (
                 <div className="w-full">
-                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-5 w-full">
+                  <div className="columns-1 lg:columns-2 gap-5 space-y-5 w-full">
                   {displayedPosts.map((post) => {
                     const currentReaction = REACTION_EMOJIS.find(e => e.type === post.myReaction);
                     const isSaved = Array.isArray(savedPostIds) && savedPostIds.includes(post.id);
@@ -4552,7 +4570,7 @@ const Home = ({ initialTab }) => {
                       <article
                         key={post.id}
                         id={`post-${post.id}`}
-                        className="rounded-2xl bg-[#12151D]/90 hover:bg-[#161A24] border border-white/[0.07] hover:border-white/[0.14] p-4 sm:p-5 shadow-lg transition-all duration-200 cursor-pointer flex flex-col justify-between group"
+                        className="break-inside-avoid mb-5 rounded-2xl bg-[#12151D]/90 hover:bg-[#161A24] border border-white/[0.07] hover:border-white/[0.14] p-4 sm:p-5 shadow-lg transition-all duration-200 cursor-pointer flex flex-col justify-between group w-full"
                         onClick={(e) => handlePostCardClick(e, post)}
                       >
                         {/* Bố cục Note Card Sảnh tương tác trực tiếp */}
@@ -5119,9 +5137,9 @@ const Home = ({ initialTab }) => {
 
                   {/* SKELETON KHI ĐANG TẢI THÊM BÀI VIẾT (INFINITE SCROLL) */}
                   {isFetchingMore && (
-                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-5 w-full mt-4">
+                    <div className="columns-1 lg:columns-2 gap-5 space-y-5 w-full mt-4">
                       {[1, 2].map((i) => (
-                        <div key={`skel-more-${i}`} className="p-5 rounded-2xl bg-[#12151D] border border-white/[0.06] animate-pulse space-y-3">
+                        <div key={`skel-more-${i}`} className="break-inside-avoid mb-5 p-5 rounded-2xl bg-[#12151D] border border-white/[0.06] animate-pulse space-y-3">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-white/[0.04] shrink-0" />
                             <div className="flex-1 space-y-1.5">
@@ -6482,6 +6500,81 @@ const Home = ({ initialTab }) => {
           </div>
         </div>
       )}
+
+      {/* ============================================================== */}
+      {/* MODAL THẺ BÀI HÔM NAY CHO MOBILE (< 768px)                     */}
+      {/* ============================================================== */}
+      <AnimatePresence>
+        {showMobileChallengeModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+            onClick={() => setShowMobileChallengeModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.2 }}
+              className="w-full max-w-sm rounded-2xl bg-[#12151D] border border-white/10 p-4 shadow-2xl flex flex-col space-y-3.5 select-none"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between pb-2.5 border-b border-white/[0.06]">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-xl bg-white/[0.06] border border-white/[0.08] flex items-center justify-center text-zinc-300">
+                    <Dices size={14} />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-semibold text-zinc-200">Thẻ bài hôm nay</h3>
+                    <p className="text-[10px] text-zinc-400 font-mono">Phá tan khoảng cách</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setQuickChallengeIdx((prev) => (prev + 1) % QUICK_CHALLENGES.length)}
+                    className="text-[11px] text-zinc-400 hover:text-white px-2 py-1 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center gap-1"
+                    title="Đổi thẻ câu hỏi khác"
+                  >
+                    <RotateCcw size={11} />
+                    <span>Đổi thẻ</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowMobileChallengeModal(false)}
+                    className="w-7 h-7 rounded-lg hover:bg-white/[0.06] text-zinc-400 hover:text-white flex items-center justify-center transition-colors"
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-black/40 border border-white/[0.06]">
+                <p className="text-xs text-zinc-200 font-medium leading-relaxed italic">
+                  "{QUICK_CHALLENGES[quickChallengeIdx]}"
+                </p>
+              </div>
+
+              <form onSubmit={handleQuickChallengeAnswer} className="flex items-center gap-2 pt-1">
+                <input
+                  type="text"
+                  placeholder="Nhập nhanh góc nhìn..."
+                  value={quickChallengeAnswer}
+                  onChange={(e) => setQuickChallengeAnswer(e.target.value)}
+                  className="flex-1 min-w-0 bg-white/[0.05] border border-white/[0.08] focus:border-white/20 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none transition-colors"
+                  autoFocus
+                />
+                <button
+                  type="submit"
+                  disabled={isSubmittingQuickAnswer}
+                  className="py-2 px-3.5 rounded-xl bg-[#F4F4F5] hover:bg-white text-[#090A0F] font-medium text-xs transition-all shrink-0 cursor-pointer shadow-sm active:scale-95 disabled:opacity-50"
+                >
+                  {isSubmittingQuickAnswer ? <Loader2 size={13} className="animate-spin" /> : "Gửi"}
+                </button>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* ============================================================== */}
       {/* NOTIFICATION DRAWER / MODAL (Mobile Bottom Sheet / Desktop Slide-Over) */}
