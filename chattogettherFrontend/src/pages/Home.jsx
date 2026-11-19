@@ -4139,7 +4139,7 @@ const Home = ({ initialTab }) => {
           {/* TAB: DANH SÁCH BÀI VIẾT (LIVE SOCIAL LOUNGE)                  */}
           {/* ============================================================== */}
           {(activeTab === 'feed' || activeTab === 'trending' || activeTab === 'saved') && (
-            <div className="posts-stream-container w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
+            <div className="posts-stream-container w-full max-w-[740px] mx-auto px-3 sm:px-4 py-4 sm:py-6">
               {/* BANNER KẾT QUẢ TÌM KIẾM THÔNG MINH */}
               {activeSearchQuery && (
                 <div className="search-status-banner flex items-center justify-between p-3.5 mb-5 rounded-2xl bg-[#141414] border border-[#222222] shadow-sm animate-fade-in">
@@ -4279,7 +4279,7 @@ const Home = ({ initialTab }) => {
                   </div>
 
                   {/* 2 KHỐI THẺ LỚN TRÊN DESKTOP (hidden md:grid) */}
-                  <div className="hidden md:grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="hidden md:grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* THẺ 1: THÀNH VIÊN TRỰC TUYẾN */}
                     <div className="p-4 rounded-2xl bg-[#12151D] border border-white/[0.07] flex flex-col justify-between gap-3 shadow-sm">
                       <div className="flex items-center justify-between">
@@ -4476,14 +4476,12 @@ const Home = ({ initialTab }) => {
                   <p className="text-[11px] text-zinc-600 mt-1">Áp dụng thuật toán đối soát ngữ nghĩa & xếp hạng tương tác</p>
                 </div>
               ) : (loadingPosts && posts.length === 0) ? (
-                /* SKELETON LƯỚI TRẢI ĐỀU */
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 w-full">
-                  {[1, 2, 3, 4].map((i) => (
+                /* SKELETON 1 CỘT DỌC NỐI TIẾP */
+                <div className="flex flex-col gap-4 w-full">
+                  {[1, 2, 3].map((i) => (
                     <div
                       key={`skel-init-${i}`}
-                      className={`rounded-2xl bg-[#141821] border-t border-white/[0.12] border-x border-b border-white/[0.06] p-5 shadow-[0_8px_24px_rgba(0,0,0,0.35)] animate-pulse space-y-3.5 w-full ${
-                        i === 1 ? 'md:col-span-2' : 'col-span-1'
-                      }`}
+                      className="rounded-2xl bg-[#13161F] border border-white/[0.07] p-5 shadow-[0_8px_24px_rgba(0,0,0,0.35)] animate-pulse space-y-3.5 w-full"
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-white/[0.05] shrink-0" />
@@ -4497,7 +4495,7 @@ const Home = ({ initialTab }) => {
                         <div className="h-3.5 w-4/5 bg-white/[0.04] rounded-md" />
                       </div>
                       {i === 1 && (
-                        <div className="h-44 w-full bg-white/[0.03] rounded-xl border border-white/[0.05]" />
+                        <div className="h-48 w-full bg-white/[0.03] rounded-xl border border-white/[0.05]" />
                       )}
                       <div className="pt-3 flex items-center justify-between border-t border-white/[0.05]">
                         <div className="h-4 w-16 bg-white/[0.04] rounded-md" />
@@ -4538,7 +4536,7 @@ const Home = ({ initialTab }) => {
                 </div>
               ) : (
                 <div className="w-full">
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 w-full items-start">
+                  <div className="flex flex-col gap-4 w-full">
                     {displayedPosts.map((post) => {
                       const currentReaction = REACTION_EMOJIS.find(e => e.type === post.myReaction);
                       const isSaved = Array.isArray(savedPostIds) && savedPostIds.includes(post.id);
@@ -4563,8 +4561,8 @@ const Home = ({ initialTab }) => {
                         <article
                           key={post.id}
                           id={`post-${post.id}`}
-                          className={`w-full rounded-2xl bg-[#141821] hover:bg-[#171B26] border-t border-white/[0.12] border-x border-b border-white/[0.06] hover:border-white/[0.15] p-4 sm:p-5 shadow-[0_8px_24px_rgba(0,0,0,0.35)] transition-all duration-200 hover:-translate-y-0.5 cursor-pointer flex flex-col justify-between group ${
-                            isFeaturedPost ? 'md:col-span-2 border-l-2 border-l-white/20' : 'col-span-1'
+                          className={`w-full rounded-2xl bg-[#13161F] hover:bg-[#161A24] border border-white/[0.07] hover:border-white/[0.14] p-4 sm:p-5 shadow-[0_8px_24px_rgba(0,0,0,0.35)] transition-all duration-200 hover:-translate-y-0.5 cursor-pointer flex flex-col justify-between group ${
+                            isFeaturedPost ? 'border-l-2 border-l-white/20' : ''
                           }`}
                           onClick={(e) => handlePostCardClick(e, post)}
                         >
@@ -4721,8 +4719,8 @@ const Home = ({ initialTab }) => {
                               <div className="space-y-3 mb-3">
                                 {/* Nếu là bài Thử thách: cắt bỏ chữ [Thử thách]: thô và hiển thị trong khối quote tinh tế */}
                                 {isChallengePost ? (
-                                  <div className="p-3.5 sm:p-4 rounded-xl bg-white/[0.03] border-l-2 border-white/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 min-h-[64px]">
-                                    <p className="text-[15px] sm:text-[16px] font-normal leading-relaxed text-[#F4F4F5] break-words">
+                                  <div className="p-3.5 sm:p-4 rounded-xl bg-white/[0.03] border-l-2 border-white/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 min-h-[52px]">
+                                    <p className="text-[15.5px] font-normal leading-relaxed text-[#F4F4F5] break-words">
                                       {(post.content || '')
                                         .replace(/^\[Thử thách\]:?\s*/i, '')
                                         .replace(/^\[Challenge\]:?\s*/i, '')
@@ -4742,8 +4740,8 @@ const Home = ({ initialTab }) => {
                                   </div>
                                 ) : (
                                   post.content && (post.content.trim() !== 'Ghi âm giọng nói' || !parsedMedia.audioUrl) && (
-                                    <div className="min-h-[64px] flex items-center">
-                                      <p className="text-[16px] font-normal leading-relaxed text-[#F4F4F5] whitespace-pre-line break-words w-full">
+                                    <div className="py-0.5">
+                                      <p className="text-[15.5px] font-normal leading-relaxed text-[#F4F4F5] whitespace-pre-line break-words w-full">
                                         {post.content}
                                       </p>
                                     </div>
@@ -4753,7 +4751,7 @@ const Home = ({ initialTab }) => {
                                 {/* Media preview (Ảnh hoặc Video) */}
                                 {parsedMedia.mediaUrl && (
                                   <div
-                                    className="relative rounded-xl overflow-hidden bg-black/40 border border-white/[0.06] w-full max-w-full cursor-pointer group/media my-2 flex items-center justify-center"
+                                    className="relative rounded-xl overflow-hidden bg-black/30 border border-white/[0.06] w-full max-w-full cursor-pointer group/media my-2 flex items-center justify-center"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       setLightboxMedia({
@@ -4765,7 +4763,7 @@ const Home = ({ initialTab }) => {
                                     }}
                                   >
                                     {parsedMedia.mediaType === 'video' ? (
-                                      <div className="relative w-full flex items-center justify-center bg-black/40">
+                                      <div className="relative w-full flex items-center justify-center bg-black/30">
                                         <video
                                           key={`vid-${post.id}-${unmutedVideoPosts[post.id] ? 'unmuted' : 'muted'}`}
                                           src={parsedMedia.mediaUrl}
@@ -4774,7 +4772,7 @@ const Home = ({ initialTab }) => {
                                           muted={!unmutedVideoPosts[post.id]}
                                           playsInline
                                           preload="none"
-                                          className="w-full h-auto max-h-[460px] object-contain rounded-xl"
+                                          className="w-full h-auto max-h-[520px] object-contain rounded-xl"
                                         />
                                         <div className="absolute bottom-2.5 left-2.5 flex items-center gap-2 z-10">
                                           <button
@@ -4804,7 +4802,7 @@ const Home = ({ initialTab }) => {
                                         loading="lazy"
                                         decoding="async"
                                         onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                        className="w-full h-auto max-h-[460px] object-contain bg-black/40 rounded-xl border border-white/[0.06]"
+                                        className="w-full h-auto max-h-[520px] object-contain bg-black/30 rounded-xl"
                                       />
                                     )}
                                   </div>
@@ -5144,9 +5142,9 @@ const Home = ({ initialTab }) => {
 
                   {/* SKELETON KHI ĐANG TẢI THÊM BÀI VIẾT (INFINITE SCROLL) */}
                   {isFetchingMore && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 w-full mt-5">
+                    <div className="flex flex-col gap-4 w-full mt-4">
                       {[1, 2].map((i) => (
-                        <div key={`skel-more-${i}`} className="rounded-2xl bg-[#141821] border-t border-white/[0.12] border-x border-b border-white/[0.06] p-5 shadow-[0_8px_24px_rgba(0,0,0,0.35)] animate-pulse space-y-3 w-full">
+                        <div key={`skel-more-${i}`} className="rounded-2xl bg-[#13161F] border border-white/[0.07] p-5 shadow-[0_8px_24px_rgba(0,0,0,0.35)] animate-pulse space-y-3 w-full">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-white/[0.05] shrink-0" />
                             <div className="flex-1 space-y-1.5">

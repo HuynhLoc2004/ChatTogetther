@@ -175,207 +175,208 @@ const ProtectedRoute = ({ children }) => {
   return children;
 };
 
-// Component ngăn truy cập Register khi đã có phiên đăng nhập hợp lệ
-const PublicRoute = ({ children }) => {
-  const token = localStorage.getItem('accesstoken');
-  if (token && isTokenValid(token)) {
-    return <Navigate to="/" replace />;
-  }
-  return children;
-};
-
-// Component tự động lưu màn hình gốc (Screen A) trước khi người dùng chuyển vào /messages hoặc /call
-const RouteTracker = () => {
-  const location = useLocation();
-
-  useEffect(() => {
-    const p = location.pathname;
-    // Bỏ qua các route tạm thời như /messages, /call, /login, /register
-    if (
-      !p.startsWith('/messages') &&
-      !p.startsWith('/call') &&
-      !p.startsWith('/login') &&
-      !p.startsWith('/register')
-    ) {
-      const fullPath = p + location.search + location.hash;
-      sessionStorage.setItem('talovin_origin_screen_a', fullPath);
+  // Component ngăn truy cập Login/Register khi đã đăng nhập
+  // Component ngăn truy cập Register khi đã có phiên đăng nhập hợp lệ
+  const PublicRoute = ({ children }) => {
+    const token = localStorage.getItem('accesstoken');
+    if (token && isTokenValid(token)) {
+      return <Navigate to="/" replace />;
     }
-  }, [location]);
+    return children;
+  };
 
-  return null;
-};
+    // Component tự động lưu màn hình gốc (Screen A) trước khi người dùng chuyển vào /messages hoặc /call
+    const RouteTracker = () => {
+      const location = useLocation();
 
-function App() {
-  return (
+      useEffect(() => {
+        const p = location.pathname;
+        // Bỏ qua các route tạm thời như /messages, /call, /login, /register
+        if (
+          !p.startsWith('/messages') &&
+          !p.startsWith('/call') &&
+          !p.startsWith('/login') &&
+          !p.startsWith('/register')
+        ) {
+          const fullPath = p + location.search + location.hash;
+          sessionStorage.setItem('talovin_origin_screen_a', fullPath);
+        }
+      }, [location]);
+
+      return null;
+    };
+
+    function App() {
+      return (
     <ErrorBoundary>
       <AuthProvider>
         <PresenceProvider>
           <Router>
-          <RouteTracker />
-          <div className="app-root">
-          <Toaster 
-            position="bottom-right" 
-            reverseOrder={false}
-            toastOptions={{
-              duration: 3000,
-              style: {
-                background: 'rgba(20, 24, 33, 0.95)',
-                color: '#F8FAFC',
-                border: '1px solid rgba(255, 255, 255, 0.12)',
-                borderRadius: '14px',
-                fontSize: '13px',
-                fontWeight: '500',
-                padding: '10px 16px',
-                backdropFilter: 'blur(16px)',
-                WebkitBackdropFilter: 'blur(16px)',
-                boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.05)',
-                maxWidth: '92vw',
-                fontFamily: "'Plus Jakarta Sans', 'Inter', sans-serif"
-              },
-              success: {
-                iconTheme: {
-                  primary: '#10B981',
-                  secondary: '#0D0F14',
-                },
-              },
-              error: {
-                iconTheme: {
-                  primary: '#F43F5E',
-                  secondary: '#0D0F14',
-                },
-              },
-            }}
-          />
-          <GlobalCallBanner />
-          <Routes>
-            <Route 
-              path="/login" 
-              element={<Login />} 
-            />
-            <Route 
-              path="/register" 
-              element={<PublicRoute><Register /></PublicRoute>} 
-            />
-            <Route 
-              path="/" 
-              element={
-                <ProtectedRoute>
-                  <Home />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/communities" 
-              element={
-                <ProtectedRoute>
-                  <Home initialTab="groups" />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/communities/:id" 
-              element={
-                <ProtectedRoute>
-                  <Home initialTab="groups" />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/friends" 
-              element={
-                <ProtectedRoute>
-                  <Home initialTab="friends" />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/room/:roomId" 
-              element={
-                <ProtectedRoute>
-                  <ChatRoom />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/admin" 
-              element={
-                <ProtectedRoute>
-                  <AdminDashboard />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/profile/:userId" 
-              element={
-                <ProtectedRoute>
-                  <ProfilePage />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/profile" 
-              element={
-                <ProtectedRoute>
-                  <ProfilePage />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/messages/:userId" 
-              element={
-                <ProtectedRoute>
-                  <DirectMessagePage />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/messages" 
-              element={
-                <ProtectedRoute>
-                  <DirectMessagePage />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/call/direct/:userId" 
-              element={
-                <ProtectedRoute>
-                  <CallPage />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/call/direct" 
-              element={
-                <ProtectedRoute>
-                  <CallPage />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/call/room/:roomId" 
-              element={
-                <ProtectedRoute>
-                  <CallPage />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/call" 
-              element={
-                <ProtectedRoute>
-                  <CallPage />
-                </ProtectedRoute>
-              } 
-            />
-            {/* Fallback cho các route không tồn tại */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </div>
-      </Router>
-      </PresenceProvider>
-    </AuthProvider>
-  </ErrorBoundary>
+            <RouteTracker />
+            <div className="app-root">
+              <Toaster
+                position="bottom-right"
+                reverseOrder={false}
+                toastOptions={{
+                  duration: 3000,
+                  style: {
+                    background: 'rgba(20, 24, 33, 0.95)',
+                    color: '#F8FAFC',
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    borderRadius: '14px',
+                    fontSize: '13px',
+                    fontWeight: '500',
+                    padding: '10px 16px',
+                    backdropFilter: 'blur(16px)',
+                    WebkitBackdropFilter: 'blur(16px)',
+                    boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.05)',
+                    maxWidth: '92vw',
+                    fontFamily: "'Plus Jakarta Sans', 'Inter', sans-serif"
+                  },
+                  success: {
+                    iconTheme: {
+                      primary: '#10B981',
+                      secondary: '#0D0F14',
+                    },
+                  },
+                  error: {
+                    iconTheme: {
+                      primary: '#F43F5E',
+                      secondary: '#0D0F14',
+                    },
+                  },
+                }}
+              />
+              <GlobalCallBanner />
+              <Routes>
+                <Route
+                  path="/login"
+                  element={<PublicRoute><Login /></PublicRoute>}
+                />
+                <Route
+                  path="/register"
+                  element={<PublicRoute><Register /></PublicRoute>}
+                />
+                <Route
+                  path="/"
+                  element={
+                    <ProtectedRoute>
+                      <Home />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/communities"
+                  element={
+                    <ProtectedRoute>
+                      <Home initialTab="groups" />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/communities/:id"
+                  element={
+                    <ProtectedRoute>
+                      <Home initialTab="groups" />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/friends"
+                  element={
+                    <ProtectedRoute>
+                      <Home initialTab="friends" />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/room/:roomId"
+                  element={
+                    <ProtectedRoute>
+                      <ChatRoom />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin"
+                  element={
+                    <ProtectedRoute>
+                      <AdminDashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/profile/:userId"
+                  element={
+                    <ProtectedRoute>
+                      <ProfilePage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/profile"
+                  element={
+                    <ProtectedRoute>
+                      <ProfilePage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/messages/:userId"
+                  element={
+                    <ProtectedRoute>
+                      <DirectMessagePage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/messages"
+                  element={
+                    <ProtectedRoute>
+                      <DirectMessagePage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/call/direct/:userId"
+                  element={
+                    <ProtectedRoute>
+                      <CallPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/call/direct"
+                  element={
+                    <ProtectedRoute>
+                      <CallPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/call/room/:roomId"
+                  element={
+                    <ProtectedRoute>
+                      <CallPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/call"
+                  element={
+                    <ProtectedRoute>
+                      <CallPage />
+                    </ProtectedRoute>
+                  }
+                />
+                {/* Fallback cho các route không tồn tại */}
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </div>
+          </Router>
+        </PresenceProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 
