@@ -97,11 +97,23 @@ body {
   border-radius: 12px;
 }
 
-/* Responsive Toaster Positioning - Chuẩn hóa kính mờ pill shape & Safe Area */
+/* Responsive Toaster Positioning - Desktop bottom-6 right-6, Mobile bottom-20 inset-x-4 */
 div[data-toaster-container],
 div:has(> [role="status"]) {
-  top: calc(16px + env(safe-area-inset-top, 0px)) !important;
-  bottom: auto !important;
+  top: auto !important;
+  bottom: calc(80px + env(safe-area-inset-bottom, 0px)) !important;
+  left: 16px !important;
+  right: 16px !important;
+  z-index: 99999 !important;
+}
+
+@media (min-width: 768px) {
+  div[data-toaster-container],
+  div:has(> [role="status"]) {
+    bottom: 24px !important;
+    right: 24px !important;
+    left: auto !important;
+  }
 }
 
 /* Linear/Vercel Micro-interactions & Smooth Transitions */

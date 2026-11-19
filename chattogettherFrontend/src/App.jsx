@@ -214,20 +214,14 @@ function App() {
           <RouteTracker />
           <div className="app-root">
           <Toaster 
-            position="top-center" 
+            position="bottom-right" 
             reverseOrder={false}
-            containerStyle={{
-              top: 'calc(16px + env(safe-area-inset-top, 0px))',
-              left: 12,
-              right: 12,
-              zIndex: 99999
-            }}
             toastOptions={{
               duration: 3000,
               style: {
-                background: 'rgba(22, 25, 34, 0.92)',
+                background: 'rgba(20, 24, 33, 0.95)',
                 color: '#F8FAFC',
-                border: '1px solid rgba(255, 255, 255, 0.10)',
+                border: '1px solid rgba(255, 255, 255, 0.12)',
                 borderRadius: '14px',
                 fontSize: '13px',
                 fontWeight: '500',

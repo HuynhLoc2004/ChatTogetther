@@ -4442,11 +4442,10 @@ const Home = ({ initialTab }) => {
                           else if (tab.id === 'audio') setActiveFilterTag('amthanh');
                           else setActiveFilterTag(null);
                         }}
-                        className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer shrink-0 ${
-                          quickFilter === tab.id
-                            ? 'bg-white text-zinc-950 font-semibold shadow-sm'
-                            : 'bg-white/[0.04] text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.08] border border-white/[0.06]'
-                        }`}
+                        className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer shrink-0 ${quickFilter === tab.id
+                          ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                          : 'bg-white/[0.04] text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.08] border border-white/[0.06]'
+                          }`}
                       >
                         {tab.label}
                       </button>
@@ -4477,25 +4476,30 @@ const Home = ({ initialTab }) => {
                   <p className="text-[11px] text-zinc-600 mt-1">Áp dụng thuật toán đối soát ngữ nghĩa & xếp hạng tương tác</p>
                 </div>
               ) : (loadingPosts && posts.length === 0) ? (
-                /* SKELETON MASONRY ĐA CỘT */
-                <div className="columns-1 md:columns-2 xl:columns-3 gap-5 space-y-5 w-full">
+                /* SKELETON LƯỚI TRẢI ĐỀU */
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 w-full">
                   {[1, 2, 3, 4].map((i) => (
-                    <div key={`skel-init-${i}`} className="break-inside-avoid mb-5 p-5 rounded-2xl bg-[#12151D] border border-white/[0.06] animate-pulse space-y-3.5">
+                    <div
+                      key={`skel-init-${i}`}
+                      className={`rounded-2xl bg-[#141821] border-t border-white/[0.12] border-x border-b border-white/[0.06] p-5 shadow-[0_8px_24px_rgba(0,0,0,0.35)] animate-pulse space-y-3.5 w-full ${
+                        i === 1 ? 'md:col-span-2' : 'col-span-1'
+                      }`}
+                    >
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-white/[0.04] shrink-0" />
+                        <div className="w-10 h-10 rounded-full bg-white/[0.05] shrink-0" />
                         <div className="space-y-1.5 flex-1">
-                          <div className="h-3.5 w-28 bg-white/[0.06] rounded-md" />
-                          <div className="h-2.5 w-16 bg-white/[0.03] rounded-md" />
+                          <div className="h-3.5 w-28 bg-white/[0.08] rounded-md" />
+                          <div className="h-2.5 w-16 bg-white/[0.04] rounded-md" />
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <div className="h-3 w-full bg-white/[0.04] rounded-md" />
-                        <div className="h-3 w-4/5 bg-white/[0.03] rounded-md" />
+                        <div className="h-3.5 w-full bg-white/[0.05] rounded-md" />
+                        <div className="h-3.5 w-4/5 bg-white/[0.04] rounded-md" />
                       </div>
-                      {i % 2 === 0 && (
-                        <div className="h-40 w-full bg-white/[0.03] rounded-xl border border-white/[0.04]" />
+                      {i === 1 && (
+                        <div className="h-44 w-full bg-white/[0.03] rounded-xl border border-white/[0.05]" />
                       )}
-                      <div className="pt-2 flex items-center justify-between border-t border-white/[0.04]">
+                      <div className="pt-3 flex items-center justify-between border-t border-white/[0.05]">
                         <div className="h-4 w-16 bg-white/[0.04] rounded-md" />
                         <div className="h-4 w-20 bg-white/[0.04] rounded-md" />
                       </div>
@@ -4534,132 +4538,168 @@ const Home = ({ initialTab }) => {
                 </div>
               ) : (
                 <div className="w-full">
-                  <div className="columns-1 md:columns-2 xl:columns-3 gap-5 space-y-5 w-full">
-                  {displayedPosts.map((post) => {
-                    const currentReaction = REACTION_EMOJIS.find(e => e.type === post.myReaction);
-                    const isSaved = Array.isArray(savedPostIds) && savedPostIds.includes(post.id);
-                    const isMe = currentUserId && post.authorId?.toString() === currentUserId.toString();
-                    const isFounder = post.authorVipTier === 'FOUNDER' || post.authorRoles?.includes('ROLE_ADMIN') || post.authorRoles?.includes('ROLE_AMDIN') || post.authorBadge;
-                    const parsedMedia = parsePostMedia(post.imageUrl, post);
-                    const isChallengePost = (post.content || '').includes('[Thử thách]') ||
-                      (post.content || '').includes('[Challenge]') ||
-                      (post.vibe || '').toLowerCase().includes('thử thách') ||
-                      post.challengeQuestion;
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 w-full items-start">
+                    {displayedPosts.map((post) => {
+                      const currentReaction = REACTION_EMOJIS.find(e => e.type === post.myReaction);
+                      const isSaved = Array.isArray(savedPostIds) && savedPostIds.includes(post.id);
+                      const isMe = currentUserId && post.authorId?.toString() === currentUserId.toString();
+                      const isFounder = post.authorVipTier === 'FOUNDER' || post.authorRoles?.includes('ROLE_ADMIN') || post.authorRoles?.includes('ROLE_AMDIN') || post.authorBadge;
+                      const parsedMedia = parsePostMedia(post.imageUrl, post);
+                      const isChallengePost = (post.content || '').includes('[Thử thách]') ||
+                        (post.content || '').includes('[Challenge]') ||
+                        (post.vibe || '').toLowerCase().includes('thử thách') ||
+                        post.challengeQuestion;
+                      const isVoicePost = Boolean(
+                        parsedMedia.audioUrl ||
+                        post.voiceUrl ||
+                        post.voiceBioUrl ||
+                        (post.content || '').includes('Ghi âm') ||
+                        (post.content || '').includes('[Voice')
+                      );
+                      const isImagePost = Boolean(parsedMedia.mediaUrl);
+                      const isFeaturedPost = Boolean(isImagePost || isVoicePost || isChallengePost);
 
-                    return (
-                      <article
-                        key={post.id}
-                        id={`post-${post.id}`}
-                        className="break-inside-avoid mb-5 rounded-2xl bg-[#12151D]/90 hover:bg-[#161A24] border border-white/[0.07] hover:border-white/[0.14] p-4 sm:p-5 shadow-lg transition-all duration-200 cursor-pointer flex flex-col justify-between group w-full"
-                        onClick={(e) => handlePostCardClick(e, post)}
-                      >
-                        {/* Bố cục Note Card Sảnh tương tác trực tiếp */}
-                        <div className="flex items-start gap-3.5">
-                          {/* Cột trái (40px): Avatar tròn của người đăng */}
-                          <div
-                            className="w-10 h-10 min-w-10 rounded-full cursor-pointer hover:opacity-90 transition-opacity flex-shrink-0"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigateToProfile(post.authorId || post.userId);
-                            }}
-                          >
-                            <UserAvatar
-                              avatar={post.authorAvatar}
-                              name={post.authorNickname || post.authorAccount}
-                              size={40}
-                            />
-                          </div>
+                      return (
+                        <article
+                          key={post.id}
+                          id={`post-${post.id}`}
+                          className={`w-full rounded-2xl bg-[#141821] hover:bg-[#171B26] border-t border-white/[0.12] border-x border-b border-white/[0.06] hover:border-white/[0.15] p-4 sm:p-5 shadow-[0_8px_24px_rgba(0,0,0,0.35)] transition-all duration-200 hover:-translate-y-0.5 cursor-pointer flex flex-col justify-between group ${
+                            isFeaturedPost ? 'md:col-span-2 border-l-2 border-l-white/20' : 'col-span-1'
+                          }`}
+                          onClick={(e) => handlePostCardClick(e, post)}
+                        >
+                          {/* Bố cục Note Card Sảnh tương tác trực tiếp */}
+                          <div className="flex items-start gap-3.5">
+                            {/* Cột trái (40px): Avatar tròn của người đăng */}
+                            <div
+                              className="w-10 h-10 min-w-10 rounded-full cursor-pointer hover:opacity-90 transition-opacity flex-shrink-0"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigateToProfile(post.authorId || post.userId);
+                              }}
+                            >
+                              <UserAvatar
+                                avatar={post.authorAvatar}
+                                name={post.authorNickname || post.authorAccount}
+                                size={40}
+                              />
+                            </div>
 
-                          {/* Cột phải: Chiếm toàn bộ không gian còn lại */}
-                          <div className="flex-1 min-w-0">
-                            {/* Dòng 1: Tên hiển thị (in đậm), @username, thời gian, nút lưu & menu 3 chấm */}
-                            <div className="flex items-center justify-between gap-2 mb-1.5">
-                              <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                                <span
-                                  className="font-bold text-sm text-[#F3F4F6] hover:underline cursor-pointer truncate max-w-[160px] sm:max-w-[220px]"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    navigateToProfile(post.authorId || post.userId);
-                                  }}
-                                >
-                                  {post.authorNickname || post.authorAccount || "Thành viên"}
-                                </span>
-
-                                {isFounder && (
-                                  <span className="font-mono text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700/80">
-                                    PRO
-                                  </span>
-                                )}
-
-                                <span
-                                  className="font-mono text-xs text-zinc-400 hover:text-zinc-300 cursor-pointer truncate"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    navigateToProfile(post.authorId || post.userId);
-                                  }}
-                                >
-                                  @{post.authorAccount || "user"}
-                                </span>
-                                <span className="text-zinc-600 text-xs">·</span>
-                                <span className="font-mono text-xs text-zinc-400 whitespace-nowrap">
-                                  {post.formattedTime || "Vừa xong"}
-                                </span>
-
-                                {post.groupId && (
+                            {/* Cột phải: Chiếm toàn bộ không gian còn lại */}
+                            <div className="flex-1 min-w-0">
+                              {/* Dòng 1: Tên hiển thị (in đậm), @username, thời gian, nút lưu & menu 3 chấm */}
+                              <div className="flex items-center justify-between gap-2 mb-1.5">
+                                <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                                   <span
-                                    className="text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer truncate hidden sm:inline"
+                                    className="font-bold text-sm text-[#F3F4F6] hover:underline cursor-pointer truncate max-w-[160px] sm:max-w-[220px]"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      navigate(`/communities/${post.groupId}`);
+                                      navigateToProfile(post.authorId || post.userId);
                                     }}
                                   >
-                                    trong <strong className="font-medium text-zinc-300">{post.groupName || 'Cộng đồng'}</strong>
+                                    {post.authorNickname || post.authorAccount || "Thành viên"}
                                   </span>
-                                )}
-                              </div>
 
-                              {/* Nút lưu bài & menu 3 chấm */}
-                              <div className="flex items-center gap-1 flex-shrink-0">
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleToggleSavePost(post.id);
-                                  }}
-                                  className={`p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.05] transition-colors cursor-pointer ${isSaved ? 'text-amber-400' : ''
-                                    }`}
-                                  title={isSaved ? "Bỏ lưu bài viết" : "Lưu bài viết"}
-                                >
-                                  <Bookmark size={15} strokeWidth={1.5} fill={isSaved ? "currentColor" : "none"} />
-                                </button>
+                                  {isFounder && (
+                                    <span className="font-mono text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700/80">
+                                      PRO
+                                    </span>
+                                  )}
 
-                                <div className="relative">
+                                  <span
+                                    className="font-mono text-xs text-zinc-400 hover:text-zinc-300 cursor-pointer truncate"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      navigateToProfile(post.authorId || post.userId);
+                                    }}
+                                  >
+                                    @{post.authorAccount || "user"}
+                                  </span>
+                                  <span className="text-zinc-600 text-xs">·</span>
+                                  <span className="font-mono text-xs text-zinc-400 whitespace-nowrap">
+                                    {post.formattedTime || "Vừa xong"}
+                                  </span>
+
+                                  {post.groupId && (
+                                    <span
+                                      className="text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer truncate hidden sm:inline"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        navigate(`/communities/${post.groupId}`);
+                                      }}
+                                    >
+                                      trong <strong className="font-medium text-zinc-300">{post.groupName || 'Cộng đồng'}</strong>
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Nút lưu bài & menu 3 chấm */}
+                                <div className="flex items-center gap-1 flex-shrink-0">
                                   <button
                                     type="button"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setPostMenuOpenId(postMenuOpenId === post.id ? null : post.id);
+                                      handleToggleSavePost(post.id);
                                     }}
-                                    className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.05] transition-colors cursor-pointer"
-                                    title="Tùy chọn"
+                                    className={`p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.05] transition-colors cursor-pointer ${isSaved ? 'text-amber-400' : ''
+                                      }`}
+                                    title={isSaved ? "Bỏ lưu bài viết" : "Lưu bài viết"}
                                   >
-                                    <MoreVertical size={15} strokeWidth={1.5} />
+                                    <Bookmark size={15} strokeWidth={1.5} fill={isSaved ? "currentColor" : "none"} />
                                   </button>
 
-                                  {postMenuOpenId === post.id && (
-                                    <div className="post-menu-dropdown animate-fade-in absolute right-0 top-full mt-1 z-50 bg-[#161922] border border-white/10 rounded-xl shadow-xl py-1 min-w-[140px]" onClick={(e) => e.stopPropagation()}>
-                                      {isMe ? (
-                                        <>
+                                  <div className="relative">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setPostMenuOpenId(postMenuOpenId === post.id ? null : post.id);
+                                      }}
+                                      className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.05] transition-colors cursor-pointer"
+                                      title="Tùy chọn"
+                                    >
+                                      <MoreVertical size={15} strokeWidth={1.5} />
+                                    </button>
+
+                                    {postMenuOpenId === post.id && (
+                                      <div className="post-menu-dropdown animate-fade-in absolute right-0 top-full mt-1 z-50 bg-[#161922] border border-white/10 rounded-xl shadow-xl py-1 min-w-[140px]" onClick={(e) => e.stopPropagation()}>
+                                        {isMe ? (
+                                          <>
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleOpenEditPost(post);
+                                              }}
+                                              className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 text-zinc-300 hover:bg-white/[0.06] hover:text-white"
+                                            >
+                                              <Edit3 size={13} /> Sửa bài viết
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleDeletePost(post.id);
+                                              }}
+                                              className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 text-rose-400 hover:bg-rose-500/10"
+                                            >
+                                              <Trash2 size={13} /> Xóa bài viết
+                                            </button>
+                                          </>
+                                        ) : (
                                           <button
                                             type="button"
                                             onClick={(e) => {
                                               e.stopPropagation();
-                                              handleOpenEditPost(post);
+                                              handleOpenReportModal(post.id);
                                             }}
-                                            className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 text-zinc-300 hover:bg-white/[0.06] hover:text-white"
+                                            className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 text-amber-400 hover:bg-amber-500/10"
                                           >
-                                            <Edit3 size={13} /> Sửa bài viết
+                                            <Flag size={13} /> Báo cáo vi phạm
                                           </button>
+                                        )}
+
+                                        {isAdminUser && !isMe && (
                                           <button
                                             type="button"
                                             onClick={(e) => {
@@ -4668,468 +4708,455 @@ const Home = ({ initialTab }) => {
                                             }}
                                             className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 text-rose-400 hover:bg-rose-500/10"
                                           >
-                                            <Trash2 size={13} /> Xóa bài viết
+                                            <Trash2 size={13} /> Xóa bài (Admin)
                                           </button>
-                                        </>
-                                      ) : (
-                                        <button
-                                          type="button"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleOpenReportModal(post.id);
-                                          }}
-                                          className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 text-amber-400 hover:bg-amber-500/10"
-                                        >
-                                          <Flag size={13} /> Báo cáo vi phạm
-                                        </button>
-                                      )}
-
-                                      {isAdminUser && !isMe && (
-                                        <button
-                                          type="button"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleDeletePost(post.id);
-                                          }}
-                                          className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 text-rose-400 hover:bg-rose-500/10"
-                                        >
-                                          <Trash2 size={13} /> Xóa bài (Admin)
-                                        </button>
-                                      )}
-                                    </div>
-                                  )}
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
 
-                            {/* Dòng 2: Nội dung bài viết */}
-                            <div className="space-y-3 mb-3">
-                              {/* Nếu là bài Thử thách: cắt bỏ chữ [Thử thách]: thô và hiển thị trong khối quote tinh tế */}
-                              {isChallengePost ? (
-                                <div className="p-3 sm:p-3.5 rounded-lg bg-white/[0.03] border-l-2 border-white/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                                  <p className="text-[13.5px] leading-relaxed text-[#F3F4F6]">
-                                    {(post.content || '')
-                                      .replace(/^\[Thử thách\]:?\s*/i, '')
-                                      .replace(/^\[Challenge\]:?\s*/i, '')
-                                      .trim()}
-                                  </p>
+                              {/* Dòng 2: Nội dung bài viết */}
+                              <div className="space-y-3 mb-3">
+                                {/* Nếu là bài Thử thách: cắt bỏ chữ [Thử thách]: thô và hiển thị trong khối quote tinh tế */}
+                                {isChallengePost ? (
+                                  <div className="p-3.5 sm:p-4 rounded-xl bg-white/[0.03] border-l-2 border-white/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 min-h-[64px]">
+                                    <p className="text-[15px] sm:text-[16px] font-normal leading-relaxed text-[#F4F4F5] break-words">
+                                      {(post.content || '')
+                                        .replace(/^\[Thử thách\]:?\s*/i, '')
+                                        .replace(/^\[Challenge\]:?\s*/i, '')
+                                        .trim()}
+                                    </p>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setNewPostContent(`[Hưởng ứng Thử thách của @${post.authorNickname || post.authorAccount || 'bạn'}]: `);
+                                        setIsComposerModalOpen(true);
+                                      }}
+                                      className="self-start sm:self-center px-3.5 py-1.5 rounded-full bg-white text-zinc-950 text-xs font-semibold hover:bg-zinc-200 transition-colors shrink-0 shadow-sm"
+                                    >
+                                      Trả lời
+                                    </button>
+                                  </div>
+                                ) : (
+                                  post.content && (post.content.trim() !== 'Ghi âm giọng nói' || !parsedMedia.audioUrl) && (
+                                    <div className="min-h-[64px] flex items-center">
+                                      <p className="text-[16px] font-normal leading-relaxed text-[#F4F4F5] whitespace-pre-line break-words w-full">
+                                        {post.content}
+                                      </p>
+                                    </div>
+                                  )
+                                )}
+
+                                {/* Media preview (Ảnh hoặc Video) */}
+                                {parsedMedia.mediaUrl && (
+                                  <div
+                                    className="relative rounded-xl overflow-hidden bg-black/40 border border-white/[0.06] w-full max-w-full cursor-pointer group/media my-2 flex items-center justify-center"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setLightboxMedia({
+                                        url: parsedMedia.mediaUrl,
+                                        type: parsedMedia.mediaType,
+                                        author: post.authorNickname || post.authorName || post.author,
+                                        title: post.content
+                                      });
+                                    }}
+                                  >
+                                    {parsedMedia.mediaType === 'video' ? (
+                                      <div className="relative w-full flex items-center justify-center bg-black/40">
+                                        <video
+                                          key={`vid-${post.id}-${unmutedVideoPosts[post.id] ? 'unmuted' : 'muted'}`}
+                                          src={parsedMedia.mediaUrl}
+                                          autoPlay
+                                          loop
+                                          muted={!unmutedVideoPosts[post.id]}
+                                          playsInline
+                                          preload="none"
+                                          className="w-full h-auto max-h-[460px] object-contain rounded-xl"
+                                        />
+                                        <div className="absolute bottom-2.5 left-2.5 flex items-center gap-2 z-10">
+                                          <button
+                                            type="button"
+                                            onClick={(e) => togglePostVideoSound(post.id, e)}
+                                            className="px-2.5 py-1 rounded-lg bg-black/80 backdrop-blur-md text-[11px] font-mono text-white/95 flex items-center gap-1.5 shadow-lg border border-white/10 hover:bg-black transition-all"
+                                            title={unmutedVideoPosts[post.id] ? "Tắt tiếng" : "Bật âm thanh video gốc"}
+                                          >
+                                            {unmutedVideoPosts[post.id] ? (
+                                              <>
+                                                <Volume2 size={13} className="text-emerald-400" />
+                                                <span>Bật tiếng</span>
+                                              </>
+                                            ) : (
+                                              <>
+                                                <VolumeX size={13} className="text-zinc-400" />
+                                                <span>Tắt tiếng</span>
+                                              </>
+                                            )}
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <img
+                                        src={parsedMedia.mediaUrl}
+                                        alt="Ảnh bài viết"
+                                        loading="lazy"
+                                        decoding="async"
+                                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                        className="w-full h-auto max-h-[460px] object-contain bg-black/40 rounded-xl border border-white/[0.06]"
+                                      />
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* Khung trình phát Voice Note nổi bật trên thẻ */}
+                                {parsedMedia.audioUrl && (
+                                  <div
+                                    className="w-full my-2.5 p-3 sm:p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08] hover:border-white/[0.14] transition-all flex items-center justify-between gap-3 shadow-inner"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleTogglePlayPostVoice(post.id, parsedMedia.audioUrl)}
+                                        className="w-10 h-10 min-w-10 rounded-full bg-[#F4F4F5] hover:bg-white text-zinc-950 flex items-center justify-center shadow-md hover:scale-105 active:scale-95 transition-all cursor-pointer shrink-0"
+                                        title={playingVoicePostId === post.id ? "Tạm dừng" : "Nghe ghi âm"}
+                                      >
+                                        {playingVoicePostId === post.id ? <Pause size={17} className="fill-current" /> : <Play size={17} className="fill-current ml-0.5" />}
+                                      </button>
+                                      <div className="flex items-center gap-1 h-6 flex-1 max-w-[200px]">
+                                        {[40, 70, 30, 90, 50, 100, 60, 85, 45, 95, 55, 75, 35, 65].map((heightPct, barIdx) => (
+                                          <span
+                                            key={barIdx}
+                                            className={`w-1 rounded-full transition-all duration-200 ${
+                                              playingVoicePostId === post.id
+                                                ? 'bg-[#F4F4F5] animate-pulse'
+                                                : 'bg-zinc-600'
+                                            }`}
+                                            style={{
+                                              height: playingVoicePostId === post.id ? `${heightPct}%` : `${Math.max(25, heightPct * 0.4)}%`,
+                                              animationDelay: `${(barIdx * 0.08).toFixed(2)}s`
+                                            }}
+                                          />
+                                        ))}
+                                      </div>
+                                    </div>
+                                    <span className="font-mono text-xs font-medium text-zinc-300 bg-white/[0.06] px-2.5 py-1 rounded-md border border-white/[0.06] shrink-0">
+                                      {parsedMedia.audioDuration ? `00:${parsedMedia.audioDuration < 10 ? `0${parsedMedia.audioDuration}` : parsedMedia.audioDuration}` : '00:15'}
+                                    </span>
+                                  </div>
+                                )}
+
+                                {/* Vibes / Chủ đề */}
+                                {post.vibe && typeof post.vibe === 'string' && (
+                                  <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                                    {parsePostVibes(post.vibe).map((item, idx) => {
+                                      const meta = getVibeIcon(item.text);
+                                      const IconComponent = item.isTag ? Tag : meta.icon;
+                                      const isActive = activeFilterTag === item.text;
+                                      return (
+                                        <button
+                                          key={idx}
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setActiveFilterTag(isActive ? null : item.text);
+                                          }}
+                                          className={`post-topic-chip ${isActive ? 'active' : ''}`}
+                                          title={`Lọc theo chủ đề: ${item.text}`}
+                                        >
+                                          {item.isTag ? (
+                                            <span className="text-zinc-500 font-mono text-[10px]">#</span>
+                                          ) : (
+                                            <IconComponent size={12} className={meta.color || 'text-zinc-400'} />
+                                          )}
+                                          <span>{item.text}</span>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Thanh Tương Tác Dưới Đáy Thẻ Bài Viết (1 hàng ngang tinh gọn) */}
+                              <div className="flex items-center justify-between pt-3 border-t border-white/[0.05]" onClick={(e) => e.stopPropagation()}>
+                                {/* Cụm bên trái: Thả cảm xúc & Bình luận */}
+                                <div className="flex items-center gap-5">
+                                  <PostReactionDock
+                                    post={post}
+                                    onReact={handleReactPost}
+                                    activePickerId={activeReactionPicker}
+                                    setActivePickerId={setActiveReactionPicker}
+                                  />
+
                                   <button
                                     type="button"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setNewPostContent(`[Hưởng ứng Thử thách của @${post.authorNickname || post.authorAccount || 'bạn'}]: `);
-                                      setIsComposerModalOpen(true);
+                                      handlePostCardClick(e, post, true);
                                     }}
-                                    className="self-start sm:self-center px-3 py-1 rounded-full bg-white text-zinc-950 text-xs font-semibold hover:bg-zinc-200 transition-colors shrink-0 shadow-sm"
+                                    className={`flex items-center gap-1.5 text-zinc-400 hover:text-white transition-colors cursor-pointer text-xs font-medium group ${selectedThreadPost?.id === post.id ? 'text-white' : ''}`}
+                                    title="Xem thảo luận"
                                   >
-                                    Trả lời
+                                    <MessageSquare size={16} strokeWidth={1.7} className="transition-transform group-hover:scale-110" />
+                                    <span className="font-mono text-xs">{post.commentsCount || 0}</span>
                                   </button>
                                 </div>
-                              ) : (
-                                post.content && (post.content.trim() !== 'Ghi âm giọng nói' || !parsedMedia.audioUrl) && (
-                                  <p className="text-[14px] leading-relaxed text-[#E5E7EB] whitespace-pre-line break-words">
-                                    {post.content}
-                                  </p>
-                                )
-                              )}
 
-                              {/* Media preview (Ảnh hoặc Video) */}
-                              {parsedMedia.mediaUrl && (
-                                <div
-                                  className="relative rounded-xl overflow-hidden bg-black/40 border border-white/[0.06] w-full max-w-full cursor-pointer group/media my-2 flex items-center justify-center"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setLightboxMedia({
-                                      url: parsedMedia.mediaUrl,
-                                      type: parsedMedia.mediaType,
-                                      author: post.authorNickname || post.authorName || post.author,
-                                      title: post.content
-                                    });
-                                  }}
-                                >
-                                  {parsedMedia.mediaType === 'video' ? (
-                                    <div className="relative w-full flex items-center justify-center bg-black/40">
-                                      <video
-                                        key={`vid-${post.id}-${unmutedVideoPosts[post.id] ? 'unmuted' : 'muted'}`}
-                                        src={parsedMedia.mediaUrl}
-                                        autoPlay
-                                        loop
-                                        muted={!unmutedVideoPosts[post.id]}
-                                        playsInline
-                                        preload="none"
-                                        className="w-full h-auto max-h-[460px] object-contain rounded-xl"
-                                      />
-                                      <div className="absolute bottom-2.5 left-2.5 flex items-center gap-2 z-10">
-                                        <button
-                                          type="button"
-                                          onClick={(e) => togglePostVideoSound(post.id, e)}
-                                          className="px-2.5 py-1 rounded-lg bg-black/80 backdrop-blur-md text-[11px] font-mono text-white/95 flex items-center gap-1.5 shadow-lg border border-white/10 hover:bg-black transition-all"
-                                          title={unmutedVideoPosts[post.id] ? "Tắt tiếng" : "Bật âm thanh video gốc"}
-                                        >
-                                          {unmutedVideoPosts[post.id] ? (
-                                            <>
-                                              <Volume2 size={13} className="text-emerald-400" />
-                                              <span>Bật tiếng</span>
-                                            </>
-                                          ) : (
-                                            <>
-                                              <VolumeX size={13} className="text-zinc-400" />
-                                              <span>Tắt tiếng</span>
-                                            </>
-                                          )}
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <img
-                                      src={parsedMedia.mediaUrl}
-                                      alt="Ảnh bài viết"
-                                      loading="lazy"
-                                      decoding="async"
-                                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                      className="w-full h-auto max-h-[460px] object-contain bg-black/40 rounded-xl border border-white/[0.06]"
-                                    />
-                                  )}
-                                </div>
-                              )}
-
-                              {/* Trình phát Voice Note ngắn trên thẻ */}
-                              {parsedMedia.audioUrl && (
-                                <div
-                                  className="post-voice-player-pill"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <button
-                                    type="button"
-                                    onClick={() => handleTogglePlayPostVoice(post.id, parsedMedia.audioUrl)}
-                                    className="btn-play-card-voice"
-                                    title={playingVoicePostId === post.id ? "Tạm dừng" : "Nghe ghi âm"}
-                                  >
-                                    {playingVoicePostId === post.id ? <Pause size={13} /> : <Play size={13} />}
-                                  </button>
-                                  <div className="card-voice-waveform">
-                                    <span className={`card-wave-bar ${playingVoicePostId === post.id ? 'active' : ''}`}></span>
-                                    <span className={`card-wave-bar ${playingVoicePostId === post.id ? 'active' : ''}`}></span>
-                                    <span className={`card-wave-bar ${playingVoicePostId === post.id ? 'active' : ''}`}></span>
-                                    <span className={`card-wave-bar ${playingVoicePostId === post.id ? 'active' : ''}`}></span>
-                                    <span className={`card-wave-bar ${playingVoicePostId === post.id ? 'active' : ''}`}></span>
-                                    <span className={`card-wave-bar ${playingVoicePostId === post.id ? 'active' : ''}`}></span>
-                                  </div>
-                                  <span className="font-mono text-xs text-zinc-300">
-                                    {parsedMedia.audioDuration ? `00:${parsedMedia.audioDuration < 10 ? `0${parsedMedia.audioDuration}` : parsedMedia.audioDuration}` : '00:15'}
-                                  </span>
-                                </div>
-                              )}
-
-                              {/* Vibes / Chủ đề */}
-                              {post.vibe && typeof post.vibe === 'string' && (
-                                <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-                                  {parsePostVibes(post.vibe).map((item, idx) => {
-                                    const meta = getVibeIcon(item.text);
-                                    const IconComponent = item.isTag ? Tag : meta.icon;
-                                    const isActive = activeFilterTag === item.text;
-                                    return (
-                                      <button
-                                        key={idx}
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setActiveFilterTag(isActive ? null : item.text);
-                                        }}
-                                        className={`post-topic-chip ${isActive ? 'active' : ''}`}
-                                        title={`Lọc theo chủ đề: ${item.text}`}
-                                      >
-                                        {item.isTag ? (
-                                          <span className="text-zinc-500 font-mono text-[10px]">#</span>
-                                        ) : (
-                                          <IconComponent size={12} className={meta.color || 'text-zinc-400'} />
-                                        )}
-                                        <span>{item.text}</span>
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Thanh Tương Tác Dưới Đáy Thẻ Bài Viết (1 hàng ngang tinh gọn) */}
-                            <div className="flex items-center justify-between pt-3 border-t border-white/[0.05]" onClick={(e) => e.stopPropagation()}>
-                              {/* Cụm bên trái: Thả cảm xúc & Bình luận */}
-                              <div className="flex items-center gap-5">
-                                <PostReactionDock
-                                  post={post}
-                                  onReact={handleReactPost}
-                                  activePickerId={activeReactionPicker}
-                                  setActivePickerId={setActiveReactionPicker}
-                                />
-
+                                {/* Cụm bên phải: Chia sẻ */}
                                 <button
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handlePostCardClick(e, post, true);
+                                    setSharePost(post);
                                   }}
-                                  className={`flex items-center gap-1.5 text-zinc-400 hover:text-white transition-colors cursor-pointer text-xs font-medium group ${selectedThreadPost?.id === post.id ? 'text-white' : ''}`}
-                                  title="Xem thảo luận"
+                                  className="flex items-center justify-center p-1.5 text-zinc-400 hover:text-white transition-colors cursor-pointer group"
+                                  title="Chia sẻ bài viết"
                                 >
-                                  <MessageSquare size={16} strokeWidth={1.7} className="transition-transform group-hover:scale-110" />
-                                  <span className="font-mono text-xs">{post.commentsCount || 0}</span>
+                                  <Share2 size={16} strokeWidth={1.7} className="transition-transform group-hover:scale-110" />
                                 </button>
                               </div>
 
-                              {/* Cụm bên phải: Chia sẻ */}
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSharePost(post);
-                                }}
-                                className="flex items-center justify-center p-1.5 text-zinc-400 hover:text-white transition-colors cursor-pointer group"
-                                title="Chia sẻ bài viết"
-                              >
-                                <Share2 size={16} strokeWidth={1.7} className="transition-transform group-hover:scale-110" />
-                              </button>
-                            </div>
+                              {/* Khu vực bình luận: Chỉ mở khi người dùng click */}
+                              {expandedComments[post.id] && (
+                                <div className="post-comments-container">
+                                  <div className="comments-stack">
+                                    {(!commentsMap[post.id] || commentsMap[post.id].length === 0) ? (
+                                      <p className="empty-cmt-notice">Chưa có phản hồi nào. Hãy là người đầu tiên chia sẻ góc nhìn!</p>
+                                    ) : (
+                                      buildCommentThreads(commentsMap[post.id]).map((thread) => {
+                                        const renderCommentBubble = (cmt, isReply = false) => {
+                                          const isCmtMe = currentUserId && cmt.authorId?.toString() === currentUserId.toString();
+                                          const canDeleteCmt = isCmtMe || (currentUserId && post.authorId?.toString() === currentUserId.toString());
+                                          const isEditingThisCmt = editingCommentId === cmt.id;
 
-                            {/* Khu vực bình luận: Chỉ mở khi người dùng click */}
-                            {expandedComments[post.id] && (
-                              <div className="post-comments-container">
-                                <div className="comments-stack">
-                                  {(!commentsMap[post.id] || commentsMap[post.id].length === 0) ? (
-                                    <p className="empty-cmt-notice">Chưa có phản hồi nào. Hãy là người đầu tiên chia sẻ góc nhìn!</p>
-                                  ) : (
-                                    buildCommentThreads(commentsMap[post.id]).map((thread) => {
-                                      const renderCommentBubble = (cmt, isReply = false) => {
-                                        const isCmtMe = currentUserId && cmt.authorId?.toString() === currentUserId.toString();
-                                        const canDeleteCmt = isCmtMe || (currentUserId && post.authorId?.toString() === currentUserId.toString());
-                                        const isEditingThisCmt = editingCommentId === cmt.id;
+                                          return (
+                                            <div key={cmt.id} className={isReply ? "cmt-reply-item" : "cmt-row cmt-root-row"}>
+                                              <div
+                                                className="cursor-pointer flex-shrink-0"
+                                                onClick={() => navigateToProfile(cmt.authorId)}
+                                                title="Xem hồ sơ cá nhân"
+                                              >
+                                                <UserAvatar
+                                                  avatar={cmt.authorAvatar}
+                                                  name={cmt.authorNickname || cmt.authorAccount}
+                                                  size={isReply ? 24 : 30}
+                                                />
+                                              </div>
+                                              <div className={`cmt-bubble-content ${isReply ? 'reply-bubble' : 'root-bubble'}`}>
+                                                <div className="cmt-header-row">
+                                                  <div className="cmt-author-info min-w-0">
+                                                    <span
+                                                      className={`cmt-user-name ${isReply ? 'reply-name' : ''} cursor-pointer hover:underline truncate`}
+                                                      onClick={() => navigateToProfile(cmt.authorId)}
+                                                    >
+                                                      {cmt.authorNickname || cmt.authorAccount || 'Thành viên'}
+                                                    </span>
+                                                    <span className={`cmt-user-handle ${isReply ? 'reply-handle' : ''} truncate`}>
+                                                      @{cmt.authorAccount || 'user'}
+                                                    </span>
+                                                    <span className="cmt-meta-dot flex-shrink-0">·</span>
+                                                    <span className="cmt-time-label flex-shrink-0">{cmt.formattedTime || 'Vừa xong'}</span>
+                                                  </div>
+                                                </div>
+
+                                                {isEditingThisCmt ? (
+                                                  <div className="cmt-inline-edit-box">
+                                                    <input
+                                                      type="text"
+                                                      value={editingCommentText}
+                                                      onChange={(e) => setEditingCommentText(e.target.value)}
+                                                      className="cmt-inline-edit-input"
+                                                      autoFocus
+                                                      onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') handleSaveEditComment(post.id, cmt.id);
+                                                        if (e.key === 'Escape') setEditingCommentId(null);
+                                                      }}
+                                                    />
+                                                    <div className="cmt-inline-edit-actions">
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => setEditingCommentId(null)}
+                                                        className="btn-cancel-inline-cmt"
+                                                      >
+                                                        Hủy
+                                                      </button>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => handleSaveEditComment(post.id, cmt.id)}
+                                                        disabled={isSavingComment}
+                                                        className="btn-save-inline-cmt"
+                                                      >
+                                                        {isSavingComment ? 'Đang lưu...' : 'Lưu'}
+                                                      </button>
+                                                    </div>
+                                                  </div>
+                                                ) : (
+                                                  <>
+                                                    <p className="cmt-body-text">
+                                                      {cmt.replyToUser && (
+                                                        <span className="cmt-mention-badge font-mono">
+                                                          @{cmt.replyToUser}{' '}
+                                                        </span>
+                                                      )}
+                                                      {cmt.content}
+                                                    </p>
+
+                                                    {/* Footer thao tác bình luận: Like, Trả lời, Sửa, Xóa */}
+                                                    <div className="cmt-footer-row">
+                                                      {/* Nút Thả tim / Cảm xúc */}
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => handleToggleLikeComment(post.id, cmt.id)}
+                                                        className={`btn-cmt-act reaction ${cmt.isLiked ? 'liked text-rose-500 font-bold' : ''}`}
+                                                        title={cmt.isLiked ? 'Bỏ thích phản hồi' : 'Thích phản hồi'}
+                                                      >
+                                                        <Heart
+                                                          size={11.5}
+                                                          className={cmt.isLiked ? "fill-rose-500 text-rose-500 transition-all scale-105" : "transition-all"}
+                                                        />
+                                                        {Number(cmt.likesCount || 0) > 0 && (
+                                                          <span className="cmt-like-count font-mono text-[10.5px]">{cmt.likesCount}</span>
+                                                        )}
+                                                      </button>
+
+                                                      {/* Nút Trả lời */}
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                          setReplyTargetMap(prev => ({
+                                                            ...prev,
+                                                            [post.id]: {
+                                                              commentId: cmt.id,
+                                                              authorAccount: cmt.authorAccount || 'user',
+                                                              authorNickname: cmt.authorNickname || cmt.authorAccount || 'Thành viên'
+                                                            }
+                                                          }));
+                                                          const inputEl = document.getElementById(`comment-input-${post.id}`);
+                                                          if (inputEl) inputEl.focus();
+                                                        }}
+                                                        className="btn-cmt-act reply"
+                                                        title="Trả lời phản hồi này"
+                                                      >
+                                                        <CornerDownRight size={11.5} className="flex-shrink-0" />
+                                                        <span>Trả lời</span>
+                                                      </button>
+
+                                                      {isCmtMe && !isEditingThisCmt && (
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => handleStartEditComment(cmt)}
+                                                          className="btn-cmt-act"
+                                                          title="Sửa phản hồi"
+                                                        >
+                                                          <Edit3 size={11} />
+                                                          <span>Sửa</span>
+                                                        </button>
+                                                      )}
+                                                      {canDeleteCmt && (
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => handleDeleteComment(post.id, cmt.id)}
+                                                          className="btn-cmt-act danger text-zinc-500 hover:text-rose-400"
+                                                          title="Xóa phản hồi"
+                                                        >
+                                                          <Trash2 size={11} />
+                                                          <span>Xóa</span>
+                                                        </button>
+                                                      )}
+                                                    </div>
+                                                  </>
+                                                )}
+                                              </div>
+                                            </div>
+                                          );
+                                        };
 
                                         return (
-                                          <div key={cmt.id} className={isReply ? "cmt-reply-item" : "cmt-row cmt-root-row"}>
-                                            <div
-                                              className="cursor-pointer flex-shrink-0"
-                                              onClick={() => navigateToProfile(cmt.authorId)}
-                                              title="Xem hồ sơ cá nhân"
-                                            >
-                                              <UserAvatar
-                                                avatar={cmt.authorAvatar}
-                                                name={cmt.authorNickname || cmt.authorAccount}
-                                                size={isReply ? 24 : 30}
-                                              />
-                                            </div>
-                                            <div className={`cmt-bubble-content ${isReply ? 'reply-bubble' : 'root-bubble'}`}>
-                                              <div className="cmt-header-row">
-                                                <div className="cmt-author-info min-w-0">
-                                                  <span
-                                                    className={`cmt-user-name ${isReply ? 'reply-name' : ''} cursor-pointer hover:underline truncate`}
-                                                    onClick={() => navigateToProfile(cmt.authorId)}
-                                                  >
-                                                    {cmt.authorNickname || cmt.authorAccount || 'Thành viên'}
-                                                  </span>
-                                                  <span className={`cmt-user-handle ${isReply ? 'reply-handle' : ''} truncate`}>
-                                                    @{cmt.authorAccount || 'user'}
-                                                  </span>
-                                                  <span className="cmt-meta-dot flex-shrink-0">·</span>
-                                                  <span className="cmt-time-label flex-shrink-0">{cmt.formattedTime || 'Vừa xong'}</span>
-                                                </div>
+                                          <div key={thread.id} className="cmt-thread-group">
+                                            {/* 1. Bình luận gốc cấp 1 */}
+                                            {renderCommentBubble(thread, false)}
+
+                                            {/* 2. Nhánh các phản hồi con có đường kẻ dọc phân cấp rõ rệt */}
+                                            {thread.replies && thread.replies.length > 0 && (
+                                              <div className="cmt-replies-branch-thread">
+                                                {thread.replies.map((replyCmt) => renderCommentBubble(replyCmt, true))}
                                               </div>
-
-                                              {isEditingThisCmt ? (
-                                                <div className="cmt-inline-edit-box">
-                                                  <input
-                                                    type="text"
-                                                    value={editingCommentText}
-                                                    onChange={(e) => setEditingCommentText(e.target.value)}
-                                                    className="cmt-inline-edit-input"
-                                                    autoFocus
-                                                    onKeyDown={(e) => {
-                                                      if (e.key === 'Enter') handleSaveEditComment(post.id, cmt.id);
-                                                      if (e.key === 'Escape') setEditingCommentId(null);
-                                                    }}
-                                                  />
-                                                  <div className="cmt-inline-edit-actions">
-                                                    <button
-                                                      type="button"
-                                                      onClick={() => setEditingCommentId(null)}
-                                                      className="btn-cancel-inline-cmt"
-                                                    >
-                                                      Hủy
-                                                    </button>
-                                                    <button
-                                                      type="button"
-                                                      onClick={() => handleSaveEditComment(post.id, cmt.id)}
-                                                      disabled={isSavingComment}
-                                                      className="btn-save-inline-cmt"
-                                                    >
-                                                      {isSavingComment ? 'Đang lưu...' : 'Lưu'}
-                                                    </button>
-                                                  </div>
-                                                </div>
-                                              ) : (
-                                                <>
-                                                  <p className="cmt-body-text">
-                                                    {cmt.replyToUser && (
-                                                      <span className="cmt-mention-badge font-mono">
-                                                        @{cmt.replyToUser}{' '}
-                                                      </span>
-                                                    )}
-                                                    {cmt.content}
-                                                  </p>
-
-                                                  {/* Footer thao tác bình luận: Like, Trả lời, Sửa, Xóa */}
-                                                  <div className="cmt-footer-row">
-                                                    {/* Nút Thả tim / Cảm xúc */}
-                                                    <button
-                                                      type="button"
-                                                      onClick={() => handleToggleLikeComment(post.id, cmt.id)}
-                                                      className={`btn-cmt-act reaction ${cmt.isLiked ? 'liked text-rose-500 font-bold' : ''}`}
-                                                      title={cmt.isLiked ? 'Bỏ thích phản hồi' : 'Thích phản hồi'}
-                                                    >
-                                                      <Heart
-                                                        size={11.5}
-                                                        className={cmt.isLiked ? "fill-rose-500 text-rose-500 transition-all scale-105" : "transition-all"}
-                                                      />
-                                                      {Number(cmt.likesCount || 0) > 0 && (
-                                                        <span className="cmt-like-count font-mono text-[10.5px]">{cmt.likesCount}</span>
-                                                      )}
-                                                    </button>
-
-                                                    {/* Nút Trả lời */}
-                                                    <button
-                                                      type="button"
-                                                      onClick={() => {
-                                                        setReplyTargetMap(prev => ({
-                                                          ...prev,
-                                                          [post.id]: {
-                                                            commentId: cmt.id,
-                                                            authorAccount: cmt.authorAccount || 'user',
-                                                            authorNickname: cmt.authorNickname || cmt.authorAccount || 'Thành viên'
-                                                          }
-                                                        }));
-                                                        const inputEl = document.getElementById(`comment-input-${post.id}`);
-                                                        if (inputEl) inputEl.focus();
-                                                      }}
-                                                      className="btn-cmt-act reply"
-                                                      title="Trả lời phản hồi này"
-                                                    >
-                                                      <CornerDownRight size={11.5} className="flex-shrink-0" />
-                                                      <span>Trả lời</span>
-                                                    </button>
-
-                                                    {isCmtMe && !isEditingThisCmt && (
-                                                      <button
-                                                        type="button"
-                                                        onClick={() => handleStartEditComment(cmt)}
-                                                        className="btn-cmt-act"
-                                                        title="Sửa phản hồi"
-                                                      >
-                                                        <Edit3 size={11} />
-                                                        <span>Sửa</span>
-                                                      </button>
-                                                    )}
-                                                    {canDeleteCmt && (
-                                                      <button
-                                                        type="button"
-                                                        onClick={() => handleDeleteComment(post.id, cmt.id)}
-                                                        className="btn-cmt-act danger text-zinc-500 hover:text-rose-400"
-                                                        title="Xóa phản hồi"
-                                                      >
-                                                        <Trash2 size={11} />
-                                                        <span>Xóa</span>
-                                                      </button>
-                                                    )}
-                                                  </div>
-                                                </>
-                                              )}
-                                            </div>
+                                            )}
                                           </div>
                                         );
-                                      };
+                                      })
+                                    )}
+                                  </div>
 
-                                      return (
-                                        <div key={thread.id} className="cmt-thread-group">
-                                          {/* 1. Bình luận gốc cấp 1 */}
-                                          {renderCommentBubble(thread, false)}
-
-                                          {/* 2. Nhánh các phản hồi con có đường kẻ dọc phân cấp rõ rệt */}
-                                          {thread.replies && thread.replies.length > 0 && (
-                                            <div className="cmt-replies-branch-thread">
-                                              {thread.replies.map((replyCmt) => renderCommentBubble(replyCmt, true))}
-                                            </div>
-                                          )}
-                                        </div>
-                                      );
-                                    })
-                                  )}
-                                </div>
-
-                                {/* Thanh thông báo mục tiêu đang trả lời */}
-                                {replyTargetMap[post.id] && (
-                                  <div className="replying-to-banner">
-                                    <div className="flex items-center gap-1.5 text-xs text-zinc-300">
-                                      <CornerDownRight size={12} className="text-sky-400" />
-                                      <span>Đang trả lời <strong>@{replyTargetMap[post.id].authorAccount}</strong></span>
+                                  {/* Thanh thông báo mục tiêu đang trả lời */}
+                                  {replyTargetMap[post.id] && (
+                                    <div className="replying-to-banner">
+                                      <div className="flex items-center gap-1.5 text-xs text-zinc-300">
+                                        <CornerDownRight size={12} className="text-sky-400" />
+                                        <span>Đang trả lời <strong>@{replyTargetMap[post.id].authorAccount}</strong></span>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => setReplyTargetMap(prev => ({ ...prev, [post.id]: null }))}
+                                        className="btn-cancel-reply"
+                                        title="Hủy trả lời"
+                                      >
+                                        <X size={12} />
+                                      </button>
                                     </div>
+                                  )}
+
+                                  {/* Khung nhập phản hồi */}
+                                  <div className="cmt-input-form">
+                                    <input
+                                      id={`comment-input-${post.id}`}
+                                      type="text"
+                                      placeholder={replyTargetMap[post.id] ? `Trả lời @${replyTargetMap[post.id].authorAccount}...` : "Viết phản hồi ngắn..."}
+                                      value={commentInputs[post.id] || ''}
+                                      onChange={(e) => setCommentInputs({ ...commentInputs, [post.id]: e.target.value })}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          e.preventDefault();
+                                          handleAddComment(post.id);
+                                        }
+                                      }}
+                                    />
                                     <button
                                       type="button"
-                                      onClick={() => setReplyTargetMap(prev => ({ ...prev, [post.id]: null }))}
-                                      className="btn-cancel-reply"
-                                      title="Hủy trả lời"
+                                      onClick={() => handleAddComment(post.id)}
+                                      disabled={submittingComment[post.id] || !commentInputs[post.id]?.trim()}
+                                      className="btn-submit-cmt"
+                                      title="Gửi phản hồi"
                                     >
-                                      <X size={12} />
+                                      <Send size={13} />
                                     </button>
                                   </div>
-                                )}
-
-                                {/* Khung nhập phản hồi */}
-                                <div className="cmt-input-form">
-                                  <input
-                                    id={`comment-input-${post.id}`}
-                                    type="text"
-                                    placeholder={replyTargetMap[post.id] ? `Trả lời @${replyTargetMap[post.id].authorAccount}...` : "Viết phản hồi ngắn..."}
-                                    value={commentInputs[post.id] || ''}
-                                    onChange={(e) => setCommentInputs({ ...commentInputs, [post.id]: e.target.value })}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        handleAddComment(post.id);
-                                      }
-                                    }}
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => handleAddComment(post.id)}
-                                    disabled={submittingComment[post.id] || !commentInputs[post.id]?.trim()}
-                                    className="btn-submit-cmt"
-                                    title="Gửi phản hồi"
-                                  >
-                                    <Send size={13} />
-                                  </button>
                                 </div>
-                              </div>
-                            )}
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      </article>
-                    );
-                  })}
+                        </article>
+                      );
+                    })}
                   </div>
 
                   {/* SKELETON KHI ĐANG TẢI THÊM BÀI VIẾT (INFINITE SCROLL) */}
                   {isFetchingMore && (
-                    <div className="columns-1 md:columns-2 xl:columns-3 gap-5 space-y-5 w-full mt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 w-full mt-5">
                       {[1, 2].map((i) => (
-                        <div key={`skel-more-${i}`} className="break-inside-avoid mb-5 p-5 rounded-2xl bg-[#12151D] border border-white/[0.06] animate-pulse space-y-3">
+                        <div key={`skel-more-${i}`} className="rounded-2xl bg-[#141821] border-t border-white/[0.12] border-x border-b border-white/[0.06] p-5 shadow-[0_8px_24px_rgba(0,0,0,0.35)] animate-pulse space-y-3 w-full">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-white/[0.04] shrink-0" />
+                            <div className="w-10 h-10 rounded-full bg-white/[0.05] shrink-0" />
                             <div className="flex-1 space-y-1.5">
-                              <div className="h-3.5 w-28 bg-white/[0.06] rounded-md" />
-                              <div className="h-2.5 w-16 bg-white/[0.03] rounded-md" />
+                              <div className="h-3.5 w-28 bg-white/[0.08] rounded-md" />
+                              <div className="h-2.5 w-16 bg-white/[0.04] rounded-md" />
                             </div>
                           </div>
                           <div className="space-y-1.5">
-                            <div className="h-3 w-full bg-white/[0.04] rounded-md" />
-                            <div className="h-3 w-3/4 bg-white/[0.03] rounded-md" />
+                            <div className="h-3.5 w-full bg-white/[0.05] rounded-md" />
+                            <div className="h-3.5 w-3/4 bg-white/[0.04] rounded-md" />
                           </div>
                         </div>
                       ))}
